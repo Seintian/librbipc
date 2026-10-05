@@ -86,6 +86,7 @@ typedef struct {
     _Alignas(RBIPC_CACHE_LINE) _Atomic uint32_t write_ticket;     /**< Monotonic ticket claimed by producers */
     _Alignas(RBIPC_CACHE_LINE) _Atomic uint32_t read_ticket;      /**< Monotonic ticket claimed by consumers */
     _Alignas(RBIPC_CACHE_LINE) _Atomic uint32_t futex_seq;        /**< Futex word for blocking synchronization */
+    _Alignas(RBIPC_CACHE_LINE) _Atomic uint32_t futex_waiters;    /**< Count of threads waiting in futex sleep */
     _Alignas(RBIPC_CACHE_LINE) _Atomic uint32_t active_producers; /**< Count of attached producers */
     _Alignas(RBIPC_CACHE_LINE) _Atomic uint32_t active_consumers; /**< Count of attached consumers */
     _Alignas(RBIPC_CACHE_LINE) _Atomic uint32_t shutdown_flag;    /**< 1 if shutdown was signaled, else 0 */
@@ -104,8 +105,29 @@ typedef struct {
     uint32_t read_ticket;        /**< Next ticket to be claimed by consumers */
     uint32_t active_producers;   /**< Currently attached producers */
     uint32_t active_consumers;   /**< Currently attached consumers */
+    uint32_t futex_waiters;      /**< Current threads suspended in futex sleep */
     bool is_shutdown;            /**< True if shutdown has been signaled */
 } rbipc_stats_t;
+
+/**
+ * @struct rbipc_iovec_t
+ * @brief Batch write reservation vector descriptor.
+ */
+typedef struct {
+    void *buf;           /**< Direct pointer to payload buffer in double-mapped memory */
+    uint32_t ticket;     /**< Monotonic ticket assigned to this slot */
+    uint32_t max_len;    /**< Maximum allowable byte length for this slot */
+} rbipc_iovec_t;
+
+/**
+ * @struct rbipc_rovec_t
+ * @brief Batch read acquire vector descriptor.
+ */
+typedef struct {
+    const void *buf;     /**< Direct pointer to payload in double-mapped memory */
+    uint32_t ticket;     /**< Monotonic ticket assigned to this slot */
+    uint32_t len;        /**< Actual payload byte length */
+} rbipc_rovec_t;
 
 /* ============================================================================
  * Opaque Local Handle
@@ -273,6 +295,59 @@ int rbipc_read_acquire_nonblock(rbipc_ring_t *ring, const void **out_buf, uint32
  * @return RBIPC_OK on success, negative error code otherwise.
  */
 int rbipc_read_release(rbipc_ring_t *ring, uint32_t ticket);
+
+/**
+ * @brief Reserve a batch of contiguous slots for writing (Zero-Copy, B-Queue Batching).
+ *
+ * Atomically reserves up to `count` slots in a single atomic operation,
+ * amortizing CAS synchronization overhead across multiple elements.
+ *
+ * @param ring Ring buffer handle.
+ * @param count Desired number of slots to reserve (must be > 0 and <= capacity).
+ * @param iovecs Array of at least `count` rbipc_iovec_t elements.
+ * @param[out] out_reserved Returns number of slots reserved (at least 1 on success).
+ * @return RBIPC_OK on success, RBIPC_ERR_FULL, RBIPC_ERR_SHUTDOWN, or negative error code.
+ */
+int rbipc_reserve_write_batch(rbipc_ring_t *ring, uint32_t count,
+                              rbipc_iovec_t *iovecs, uint32_t *out_reserved);
+
+/**
+ * @brief Commit a batch of previously reserved slots.
+ *
+ * Publishes the slots to consumers in ticket order.
+ *
+ * @param ring Ring buffer handle.
+ * @param count Number of slots to commit.
+ * @param tickets Array of ticket numbers from rbipc_reserve_write_batch().
+ * @param lens Array of written payload lengths for each slot.
+ * @return RBIPC_OK on success, negative error code otherwise.
+ */
+int rbipc_commit_write_batch(rbipc_ring_t *ring, uint32_t count,
+                             const uint32_t *tickets, const uint32_t *lens);
+
+/**
+ * @brief Acquire a batch of committed messages for reading (Zero-Copy, B-Queue Batching).
+ *
+ * Atomically claims up to `count` committed messages in a single atomic operation.
+ *
+ * @param ring Ring buffer handle.
+ * @param count Maximum number of messages to acquire.
+ * @param rovecs Array of at least `count` rbipc_rovec_t elements.
+ * @param[out] out_acquired Returns number of messages acquired.
+ * @return RBIPC_OK on success, RBIPC_ERR_EMPTY, RBIPC_ERR_SHUTDOWN, or negative error code.
+ */
+int rbipc_read_acquire_batch(rbipc_ring_t *ring, uint32_t count,
+                             rbipc_rovec_t *rovecs, uint32_t *out_acquired);
+
+/**
+ * @brief Release a batch of consumed slots back to the ring buffer.
+ *
+ * @param ring Ring buffer handle.
+ * @param count Number of slots to release.
+ * @param tickets Array of tickets from rbipc_read_acquire_batch().
+ * @return RBIPC_OK on success, negative error code otherwise.
+ */
+int rbipc_read_release_batch(rbipc_ring_t *ring, uint32_t count, const uint32_t *tickets);
 
 /**
  * @brief Signal shutdown to all waiting producers and consumers.

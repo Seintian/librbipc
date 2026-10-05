@@ -27,7 +27,8 @@ void rbipc_sync_state_init(rbipc_sync_state_t *state, uint64_t timeout_ns) {
     }
 }
 
-int rbipc_sync_backoff(rbipc_sync_state_t *state, _Atomic uint32_t *futex_word) {
+int rbipc_sync_backoff(rbipc_sync_state_t *state, _Atomic uint32_t *futex_word,
+                       _Atomic uint32_t *futex_waiters) {
     if (!state || !futex_word) return RBIPC_ERR_INVAL;
 
     if (state->has_deadline) {
@@ -67,21 +68,33 @@ int rbipc_sync_backoff(rbipc_sync_state_t *state, _Atomic uint32_t *futex_word) 
         ts.tv_nsec = 20000000L;
     }
 
+    if (futex_waiters) {
+        atomic_fetch_add_explicit(futex_waiters, 1, memory_order_seq_cst);
+    }
+
     uint32_t current_val = atomic_load_explicit(futex_word, memory_order_relaxed);
     rbipc_futex_wait(futex_word, current_val, pts);
+
+    if (futex_waiters) {
+        atomic_fetch_sub_explicit(futex_waiters, 1, memory_order_seq_cst);
+    }
 
     state->spin_count = 0;
     return 0;
 }
 
-void rbipc_sync_wake_one(_Atomic uint32_t *futex_word) {
+void rbipc_sync_wake_one(_Atomic uint32_t *futex_word, _Atomic uint32_t *futex_waiters) {
     if (!futex_word) return;
     atomic_fetch_add_explicit(futex_word, 1, memory_order_release);
-    rbipc_futex_wake(futex_word, 1);
+    if (!futex_waiters || atomic_load_explicit(futex_waiters, memory_order_seq_cst) > 0) {
+        rbipc_futex_wake(futex_word, 1);
+    }
 }
 
-void rbipc_sync_wake_all(_Atomic uint32_t *futex_word) {
+void rbipc_sync_wake_all(_Atomic uint32_t *futex_word, _Atomic uint32_t *futex_waiters) {
     if (!futex_word) return;
     atomic_fetch_add_explicit(futex_word, 1, memory_order_release);
-    rbipc_futex_wake(futex_word, INT32_MAX);
+    if (!futex_waiters || atomic_load_explicit(futex_waiters, memory_order_seq_cst) > 0) {
+        rbipc_futex_wake(futex_word, INT32_MAX);
+    }
 }

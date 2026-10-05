@@ -35,22 +35,29 @@ void rbipc_sync_state_init(rbipc_sync_state_t *state, uint64_t timeout_ns);
  *
  * @param state Current sync state.
  * @param futex_word Futex sequence atomic counter.
+ * @param futex_waiters Optional atomic counter of threads sleeping in futex.
  * @return 0 on continued wait, RBIPC_ERR_TIMEOUT if deadline exceeded.
  */
-int rbipc_sync_backoff(rbipc_sync_state_t *state, _Atomic uint32_t *futex_word);
+int rbipc_sync_backoff(rbipc_sync_state_t *state, _Atomic uint32_t *futex_word,
+                       _Atomic uint32_t *futex_waiters);
 
 /**
  * @brief Wake one waiter on the given futex word after state changes.
  *
+ * Checks futex_waiters before invoking the kernel futex syscall to avoid
+ * expensive context switches when no threads are sleeping.
+ *
  * @param futex_word Futex sequence atomic counter.
+ * @param futex_waiters Optional atomic counter of threads sleeping in futex.
  */
-void rbipc_sync_wake_one(_Atomic uint32_t *futex_word);
+void rbipc_sync_wake_one(_Atomic uint32_t *futex_word, _Atomic uint32_t *futex_waiters);
 
 /**
  * @brief Wake all waiters on the given futex word (e.g. for shutdown).
  *
  * @param futex_word Futex sequence atomic counter.
+ * @param futex_waiters Optional atomic counter of threads sleeping in futex.
  */
-void rbipc_sync_wake_all(_Atomic uint32_t *futex_word);
+void rbipc_sync_wake_all(_Atomic uint32_t *futex_word, _Atomic uint32_t *futex_waiters);
 
 #endif /* RBIPC_SYNC_H */

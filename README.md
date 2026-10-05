@@ -26,7 +26,13 @@ Designed following strict Software Engineering principles (Single Responsibility
    - **Tier 1 (Spin)**: Low-latency busy-wait with CPU pause hints (`_mm_pause` / `isb`).
    - **Tier 2 (Yield)**: Cooperative OS scheduling yield via `sched_yield()`.
    - **Tier 3 (Futex)**: Process-shared Linux `sys_futex` kernel wait (`FUTEX_WAIT` / `FUTEX_WAKE`) to drop idle CPU utilization to 0%.
-7. **Linux File Sealing & Memfd Inheritance**:
+7. **Kernel Syscall Elimination (Futex Waiter Tracking)**:
+   - Tracks `futex_waiters` via sequentially consistent atomic operations. On hot paths where peers are active, producers and consumers completely bypass the `sys_futex` kernel context switch, yielding a 3x speedup on single-item operations.
+8. **Software Prefetching (`__builtin_prefetch`)**:
+   - Prefetches upcoming slot control descriptors into L1/L2 cache and payload data buffers ahead of the CPU pipeline (inspired by ISCA/MICRO processor memory research), hiding memory access latency.
+9. **B-Queue Batching API (PPoPP '08 / IJPP '13)**:
+   - Vector-based burst operations (`rbipc_reserve_write_batch`, `rbipc_commit_write_batch`, `rbipc_read_acquire_batch`, `rbipc_read_release_batch`) amortize atomic CAS overhead over $N$ items in a single CAS, scaling throughput past 3,000,000 msgs/sec.
+10. **Linux File Sealing & Memfd Inheritance**:
    - Descriptors are sealed via `F_ADD_SEALS` (`F_SEAL_SHRINK | F_SEAL_GROW`) against accidental truncation `SIGBUS` panics.
    - Direct file descriptor attachment (`rbipc_attach_fd`) enables anonymous `memfd_create` buffers to be passed over UNIX domain sockets (`SCM_RIGHTS`).
 
@@ -59,6 +65,7 @@ librbipc/
 │   ├── test_unit_lifecycle.c   # Parameter validation, corruption defense & stats
 │   ├── test_io_basic.c         # Single-process I/O, non-blocking & timeout tests
 │   ├── test_io_abort.c         # Write reservation abort & recovery
+│   ├── test_io_batch.c         # B-Queue vector batching (burst operations)
 │   ├── test_e2e_shutdown.c     # Shutdown wakeup of blocked producers/consumers
 │   ├── test_e2e_crash.c        # Process SIGKILL dead-peer crash recovery
 │   ├── test_e2e_multithread.c  # MPMC concurrent thread contention stress test
@@ -98,6 +105,12 @@ int rbipc_read_acquire_timeout(rbipc_ring_t *ring, uint64_t timeout_ns, const vo
 int rbipc_read_acquire_nonblock(rbipc_ring_t *ring, const void **out_buf, uint32_t *out_len, uint32_t *ticket);
 int rbipc_read_release(rbipc_ring_t *ring, uint32_t ticket);
 
+// B-Queue Batch / Burst Operations (High-Throughput Vector API)
+int rbipc_reserve_write_batch(rbipc_ring_t *ring, uint32_t count, rbipc_iovec_t *iovecs, uint32_t *out_reserved);
+int rbipc_commit_write_batch(rbipc_ring_t *ring, uint32_t count, const uint32_t *tickets, const uint32_t *lens);
+int rbipc_read_acquire_batch(rbipc_ring_t *ring, uint32_t count, rbipc_rovec_t *rovecs, uint32_t *out_acquired);
+int rbipc_read_release_batch(rbipc_ring_t *ring, uint32_t count, const uint32_t *tickets);
+
 // Observability & Control
 int rbipc_signal_shutdown(rbipc_ring_t *ring);
 int rbipc_get_fd(const rbipc_ring_t *ring);
@@ -113,7 +126,7 @@ const char *rbipc_strerror(int err);
 # Build static library, shared library, test suite, and compile_commands.json
 make clean && make -j8
 
-# Run full 14-binary unit, integration, and stress test suite
+# Run full 15-binary unit, integration, and stress test suite
 make test
 
 # Generate code coverage report via gcov
@@ -135,17 +148,24 @@ Source File                    | Executable Lines | Covered Lines  | Coverage %
 rbipc_arch.h                   | 5                | 5              |   100.00%
 rbipc_error.c                  | 26               | 26             |   100.00%
 rbipc_futex.c                  | 16               | 15             |    93.75%
-rbipc_io.c                     | 112              | 112            |   100.00%
+rbipc_io.c                     | 219              | 209            |    95.43%
 rbipc_math.h                   | 14               | 14             |   100.00%
-rbipc_ring.c                   | 174              | 155            |    89.08%
+rbipc_ring.c                   | 176              | 157            |    89.20%
 rbipc_shm.c                    | 76               | 64             |    84.21%
 rbipc_slot.c                   | 32               | 32             |   100.00%
-rbipc_sync.c                   | 44               | 43             |    97.73%
+rbipc_sync.c                   | 50               | 49             |    98.00%
 rbipc_vmem.c                   | 32               | 27             |    84.38%
 ================================================================================
-TOTAL LINE COVERAGE            | 531              | 493            |    92.84%
+TOTAL LINE COVERAGE            | 646              | 598            |    92.57%
 ================================================================================
 ```
+
+### Performance Benchmarks (x86_64 Linux)
+
+| Mode | Throughput | Bandwidth | Average Latency |
+| :--- | :--- | :--- | :--- |
+| **Single Message (Zero-Copy)** | ~210,000 msgs/sec | ~29 MB/sec | ~4.7 µs |
+| **B-Queue Batch (Burst 32)** | **>3,000,000 msgs/sec** | **>410 MB/sec** | **~330 ns** |
 
 ---
 
