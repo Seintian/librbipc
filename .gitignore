@@ -1,0 +1,12 @@
+# Build artifacts
+build/
+bin/
+lib/
+*.o
+*.a
+*.so
+
+# Temporary files
+*.tmp
+*~
+.DS_Store
