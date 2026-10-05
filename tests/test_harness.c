@@ -13,7 +13,14 @@
 #ifndef _GNU_SOURCE
 #define _GNU_SOURCE
 #endif
+
+#if __has_include("rbipc.h")
 #include "rbipc.h"
+#elif __has_include("../include/rbipc.h")
+#include "../include/rbipc.h"
+#else
+#include "include/rbipc.h"
+#endif
 
 #include <stdio.h>
 #include <stdlib.h>

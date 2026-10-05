@@ -1,0 +1,10 @@
+CompileFlags:
+  Add:
+    - -Iinclude
+    - -I../include
+    - -I/home/chrst/repos/librbipc/include
+    - -std=c11
+    - -D_GNU_SOURCE
+    - -Wall
+    - -Wextra
+    - -Wpedantic
