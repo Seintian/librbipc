@@ -1,0 +1,65 @@
+/**
+ * @file rbipc_slot.c
+ * @brief Implementation of slot state transitions, sequence management, and crash detection
+ */
+
+#ifndef _GNU_SOURCE
+#define _GNU_SOURCE
+#endif
+
+#include "rbipc_slot.h"
+#include <signal.h>
+#include <errno.h>
+#include <unistd.h>
+
+void rbipc_slot_init_table(rbipc_slot_t *slots, uint32_t capacity) {
+    if (!slots) return;
+    for (uint32_t i = 0; i < capacity; ++i) {
+        atomic_init(&slots[i].sequence, i);
+        atomic_init(&slots[i].state, RBIPC_SLOT_EMPTY);
+        atomic_init(&slots[i].producer_pid, 0);
+        atomic_init(&slots[i].len, 0);
+    }
+}
+
+bool rbipc_slot_is_peer_alive(pid_t pid) {
+    if (pid <= 0) return false;
+    if (kill(pid, 0) == 0) {
+        return true;
+    }
+    return errno != ESRCH;
+}
+
+void rbipc_slot_mark_reserved(rbipc_slot_t *slot, pid_t pid) {
+    if (!slot) return;
+    atomic_store_explicit(&slot->producer_pid, (uint32_t)pid, memory_order_relaxed);
+    atomic_store_explicit(&slot->state, RBIPC_SLOT_RESERVED, memory_order_release);
+}
+
+void rbipc_slot_commit(rbipc_slot_t *slot, uint32_t ticket, uint32_t len) {
+    if (!slot) return;
+    atomic_store_explicit(&slot->len, len, memory_order_relaxed);
+    atomic_store_explicit(&slot->state, RBIPC_SLOT_COMMITTED, memory_order_release);
+    /* Advance sequence to ticket + 1 with release semantics to make payload visible */
+    atomic_store_explicit(&slot->sequence, ticket + 1, memory_order_release);
+}
+
+bool rbipc_slot_poison(rbipc_slot_t *slot, uint32_t ticket) {
+    if (!slot) return false;
+    uint32_t expected = RBIPC_SLOT_RESERVED;
+    if (atomic_compare_exchange_strong_explicit(&slot->state, &expected,
+                                                RBIPC_SLOT_POISONED,
+                                                memory_order_release,
+                                                memory_order_relaxed)) {
+        atomic_store_explicit(&slot->sequence, ticket + 1, memory_order_release);
+        return true;
+    }
+    return false;
+}
+
+void rbipc_slot_release(rbipc_slot_t *slot, uint32_t ticket, uint32_t capacity) {
+    if (!slot) return;
+    atomic_store_explicit(&slot->state, RBIPC_SLOT_EMPTY, memory_order_release);
+    /* Advance slot sequence by capacity to allow the next cycle turn */
+    atomic_store_explicit(&slot->sequence, ticket + capacity, memory_order_release);
+}

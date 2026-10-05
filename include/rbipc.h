@@ -24,14 +24,17 @@ extern "C" {
  * Constants & Error Codes
  * ============================================================================ */
 
-#define RBIPC_OK             0  /**< Success */
-#define RBIPC_ERR_INVAL     -1  /**< Invalid argument or configuration */
-#define RBIPC_ERR_NOMEM     -2  /**< Memory allocation / mapping failure */
-#define RBIPC_ERR_SYS       -3  /**< OS / System call error (inspect errno) */
-#define RBIPC_ERR_FULL      -4  /**< Ring buffer is currently full */
-#define RBIPC_ERR_EMPTY     -5  /**< Ring buffer is currently empty */
-#define RBIPC_ERR_POISONED  -6  /**< Slot producer crashed; slot poisoned */
-#define RBIPC_ERR_SHUTDOWN  -7  /**< Ring buffer signaled shutdown */
+#define RBIPC_OK               0  /**< Success */
+#define RBIPC_ERR_INVAL      (-1) /**< Invalid argument or configuration */
+#define RBIPC_ERR_NOMEM      (-2) /**< Memory allocation / mapping failure */
+#define RBIPC_ERR_SYS        (-3) /**< OS / System call error (inspect errno) */
+#define RBIPC_ERR_FULL       (-4) /**< Ring buffer is currently full */
+#define RBIPC_ERR_EMPTY      (-5) /**< Ring buffer is currently empty */
+#define RBIPC_ERR_POISONED   (-6) /**< Slot producer crashed; slot poisoned */
+#define RBIPC_ERR_SHUTDOWN   (-7) /**< Ring buffer signaled shutdown */
+#define RBIPC_ERR_TIMEOUT    (-8) /**< Operation timed out */
+#define RBIPC_ERR_BUSY       (-9) /**< Resource is busy / contention */
+#define RBIPC_ERR_OVERFLOW  (-10) /**< Calculation / buffer overflow */
 
 #define RBIPC_MAGIC         0x5242495043323032ULL /**< "RBIPC202" magic identifier */
 #define RBIPC_VERSION       1
@@ -88,6 +91,22 @@ typedef struct {
     _Alignas(RBIPC_CACHE_LINE) _Atomic uint32_t shutdown_flag;    /**< 1 if shutdown was signaled, else 0 */
 } rbipc_shm_header_t;
 
+/**
+ * @struct rbipc_stats_t
+ * @brief Snapshot of ring buffer statistics and operational state.
+ */
+typedef struct {
+    uint64_t total_shm_size;     /**< Total size in bytes of the shared memory region */
+    uint64_t data_size;          /**< Single circular buffer byte size */
+    uint32_t capacity;           /**< Slot capacity */
+    uint32_t slot_size;          /**< Byte capacity per slot */
+    uint32_t write_ticket;       /**< Next ticket to be claimed by producers */
+    uint32_t read_ticket;        /**< Next ticket to be claimed by consumers */
+    uint32_t active_producers;   /**< Currently attached producers */
+    uint32_t active_consumers;   /**< Currently attached consumers */
+    bool is_shutdown;            /**< True if shutdown has been signaled */
+} rbipc_stats_t;
+
 /* ============================================================================
  * Opaque Local Handle
  * ============================================================================ */
@@ -122,6 +141,17 @@ int rbipc_create(const char *name, size_t capacity, uint32_t slot_size, rbipc_ri
 int rbipc_attach(const char *name, rbipc_ring_t **out_ring);
 
 /**
+ * @brief Attach to an existing shared-memory IPC ring buffer via open file descriptor.
+ *
+ * Useful when receiving an anonymous memfd via UNIX domain socket SCM_RIGHTS or inheritance.
+ *
+ * @param fd Open file descriptor to shared memory object.
+ * @param[out] out_ring Returns pointer to allocated ring buffer handle.
+ * @return RBIPC_OK on success, negative error code otherwise.
+ */
+int rbipc_attach_fd(int fd, rbipc_ring_t **out_ring);
+
+/**
  * @brief Detach from the ring buffer, unmapping virtual memory and closing descriptors.
  *
  * @param ring Ring buffer handle.
@@ -138,7 +168,7 @@ int rbipc_detach(rbipc_ring_t *ring);
 int rbipc_destroy(const char *name);
 
 /**
- * @brief Reserve a slot in the ring buffer for writing (Zero-Copy).
+ * @brief Reserve a slot in the ring buffer for writing (Zero-Copy, Blocking).
  *
  * Atomically reserves the next available slot according to ticket ordering.
  * If the ring is full, executes a 3-tier hybrid wait (spin -> yield -> futex).
@@ -152,6 +182,30 @@ int rbipc_destroy(const char *name);
 int rbipc_reserve_write(rbipc_ring_t *ring, uint32_t len, void **out_buf, uint32_t *ticket);
 
 /**
+ * @brief Reserve a slot in the ring buffer with timeout (Zero-Copy).
+ *
+ * @param ring Ring buffer handle.
+ * @param len Requested payload length.
+ * @param timeout_ns Timeout duration in nanoseconds (0 for non-blocking).
+ * @param[out] out_buf Direct pointer into virtual buffer.
+ * @param[out] ticket Returns assigned ticket ID.
+ * @return RBIPC_OK on success, RBIPC_ERR_TIMEOUT, RBIPC_ERR_FULL, or negative error code.
+ */
+int rbipc_reserve_write_timeout(rbipc_ring_t *ring, uint32_t len, uint64_t timeout_ns,
+                                void **out_buf, uint32_t *ticket);
+
+/**
+ * @brief Non-blocking write reservation attempt (Zero-Copy).
+ *
+ * @param ring Ring buffer handle.
+ * @param len Requested payload length.
+ * @param[out] out_buf Direct pointer into virtual buffer.
+ * @param[out] ticket Returns assigned ticket ID.
+ * @return RBIPC_OK on success, RBIPC_ERR_FULL if no space immediately available, or negative error code.
+ */
+int rbipc_reserve_write_nonblock(rbipc_ring_t *ring, uint32_t len, void **out_buf, uint32_t *ticket);
+
+/**
  * @brief Commit a previously reserved slot, publishing it to consumers.
  *
  * @param ring Ring buffer handle.
@@ -162,7 +216,18 @@ int rbipc_reserve_write(rbipc_ring_t *ring, uint32_t len, void **out_buf, uint32
 int rbipc_commit_write(rbipc_ring_t *ring, uint32_t ticket, uint32_t written_len);
 
 /**
- * @brief Acquire the next committed message for reading (Zero-Copy).
+ * @brief Abort a previously reserved slot without publishing payload.
+ *
+ * Transitions slot to POISONED so consumers can safely bypass it without stalling.
+ *
+ * @param ring Ring buffer handle.
+ * @param ticket Ticket obtained from rbipc_reserve_write().
+ * @return RBIPC_OK on success, negative error code otherwise.
+ */
+int rbipc_abort_write(rbipc_ring_t *ring, uint32_t ticket);
+
+/**
+ * @brief Acquire the next committed message for reading (Zero-Copy, Blocking).
  *
  * Blocks using hybrid backoff until a message is committed.
  * If the holding producer crashed before committing, detects ESRCH, poisons
@@ -175,6 +240,30 @@ int rbipc_commit_write(rbipc_ring_t *ring, uint32_t ticket, uint32_t written_len
  * @return RBIPC_OK on success, RBIPC_ERR_POISONED if skipped, RBIPC_ERR_SHUTDOWN, etc.
  */
 int rbipc_read_acquire(rbipc_ring_t *ring, const void **out_buf, uint32_t *out_len, uint32_t *ticket);
+
+/**
+ * @brief Acquire the next committed message with timeout (Zero-Copy).
+ *
+ * @param ring Ring buffer handle.
+ * @param timeout_ns Timeout duration in nanoseconds (0 for non-blocking).
+ * @param[out] out_buf Direct pointer to payload.
+ * @param[out] out_len Returns byte length of payload.
+ * @param[out] ticket Returns ticket ID.
+ * @return RBIPC_OK on success, RBIPC_ERR_TIMEOUT, RBIPC_ERR_EMPTY, or negative error code.
+ */
+int rbipc_read_acquire_timeout(rbipc_ring_t *ring, uint64_t timeout_ns,
+                               const void **out_buf, uint32_t *out_len, uint32_t *ticket);
+
+/**
+ * @brief Non-blocking read acquire attempt (Zero-Copy).
+ *
+ * @param ring Ring buffer handle.
+ * @param[out] out_buf Direct pointer to payload.
+ * @param[out] out_len Returns byte length of payload.
+ * @param[out] ticket Returns ticket ID.
+ * @return RBIPC_OK on success, RBIPC_ERR_EMPTY if no committed message, or negative error code.
+ */
+int rbipc_read_acquire_nonblock(rbipc_ring_t *ring, const void **out_buf, uint32_t *out_len, uint32_t *ticket);
 
 /**
  * @brief Release a consumed slot back to the ring buffer for reuse.
@@ -194,12 +283,29 @@ int rbipc_read_release(rbipc_ring_t *ring, uint32_t ticket);
 int rbipc_signal_shutdown(rbipc_ring_t *ring);
 
 /**
- * @brief Retrieve underlying shared memory file descriptor (for memfd inheritance).
+ * @brief Retrieve underlying shared memory file descriptor.
  *
  * @param ring Ring buffer handle.
  * @return File descriptor or -1 on error.
  */
 int rbipc_get_fd(const rbipc_ring_t *ring);
+
+/**
+ * @brief Collect a point-in-time snapshot of ring buffer metrics.
+ *
+ * @param ring Ring buffer handle.
+ * @param[out] out_stats Output statistics struct.
+ * @return RBIPC_OK on success, negative error code otherwise.
+ */
+int rbipc_get_stats(const rbipc_ring_t *ring, rbipc_stats_t *out_stats);
+
+/**
+ * @brief Convert an error code into a human-readable description string.
+ *
+ * @param err Return code from any rbipc function.
+ * @return Static string describing the error.
+ */
+const char *rbipc_strerror(int err);
 
 #ifdef __cplusplus
 }

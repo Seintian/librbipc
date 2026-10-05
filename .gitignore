@@ -6,6 +6,15 @@ lib/
 *.a
 *.so
 
+# Coverage & Profiling
+*.gcda
+*.gcno
+*.gcov
+
+# Language Server / Tooling
+compile_commands.json
+.cache/
+
 # Temporary files
 *.tmp
 *~
