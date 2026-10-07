@@ -22,8 +22,8 @@ static void test_batch_validation(void) {
     uint32_t reserved = 0;
     rbipc_rovec_t rovecs[16];
     uint32_t acquired = 0;
-    uint32_t tickets[16];
-    uint32_t lens[16];
+    uint32_t tickets[16] = {0};
+    uint32_t lens[16] = {0};
 
     /* NULL / invalid argument tests */
     assert(rbipc_reserve_write_batch(NULL, 4, iovecs, &reserved) == RBIPC_ERR_INVAL);

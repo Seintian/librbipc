@@ -163,7 +163,7 @@ RBIPC_INLINE RBIPC_CONST bool rbipc_slot_state_is_poisoned(uint32_t state) {
  * ============================================================================ */
 
 /**
- * @brief Predicate: Validate header magic, version, and core configuration invariants.
+ * @brief Predicate: Validate header signature, version, and structural configuration invariants.
  */
 RBIPC_INLINE RBIPC_PURE bool rbipc_header_is_valid(const rbipc_shm_header_t *hdr) {
     if (!hdr) return false;

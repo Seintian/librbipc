@@ -1,6 +1,6 @@
 /**
  * @file rbipc_ring.c
- * @brief Lifecycle management, attachment, and statistics for librbipc
+ * @brief Shared-memory lifecycle management, handle allocation, and diagnostics
  */
 
 #ifndef _GNU_SOURCE
@@ -26,8 +26,12 @@
 
 #define DEFAULT_SPIN_THRESHOLD 50000
 
+/* ============================================================================
+ * Atomic Lifecycle Initialization and Teardown Subroutines
+ * ============================================================================ */
+
 /**
- * @brief Atomic helper: Validate user parameters for ring buffer creation.
+ * @brief Atomic procedure: Validate user configuration arguments and resolve host page boundary.
  */
 static int rbipc_ring_validate_create_params(size_t capacity, uint32_t slot_size,
                                              size_t *out_page_size, uint32_t *out_cap) {
@@ -50,7 +54,7 @@ static int rbipc_ring_validate_create_params(size_t capacity, uint32_t slot_size
 }
 
 /**
- * @brief Atomic helper: Populate and initialize shared control header fields and atomics.
+ * @brief Atomic procedure: Initialize structural header control words and atomic variables.
  */
 static void rbipc_ring_init_header_fields(rbipc_shm_header_t *hdr, const rbipc_layout_t *layout, uint32_t cap) {
     hdr->magic = RBIPC_MAGIC;
@@ -75,6 +79,9 @@ static void rbipc_ring_init_header_fields(rbipc_shm_header_t *hdr, const rbipc_l
     atomic_init(&hdr->shutdown_flag, 0);
 }
 
+/**
+ * @brief Atomic procedure: Allocate heap descriptor and populate runtime ring metadata.
+ */
 rbipc_ring_t *rbipc_ring_alloc_handle(int fd, const char *name,
                                       rbipc_shm_header_t *hdr,
                                       rbipc_slot_t *slots,
@@ -102,6 +109,25 @@ rbipc_ring_t *rbipc_ring_alloc_handle(int fd, const char *name,
     return ring;
 }
 
+/**
+ * @brief Atomic procedure: Abort creation and rollback allocated memory mappings and file descriptors.
+ */
+static void rbipc_ring_abort_create(int fd, const char *name, void *ctrl_map,
+                                    size_t ctrl_size, void *data_map, size_t data_size) {
+    if (data_map && data_size > 0) {
+        rbipc_vmem_unmap_double(data_map, data_size);
+    }
+    if (ctrl_map && ctrl_size > 0) {
+        rbipc_vmem_unmap_ctrl(ctrl_map, ctrl_size);
+    }
+    if (fd >= 0) {
+        rbipc_shm_close(fd);
+    }
+    if (name) {
+        rbipc_shm_unlink(name);
+    }
+}
+
 int rbipc_create(const char *name, size_t capacity, uint32_t slot_size, rbipc_ring_t **out_ring) {
     if (RBIPC_UNLIKELY(!out_ring)) {
         return RBIPC_ERR_INVAL;
@@ -126,33 +152,25 @@ int rbipc_create(const char *name, size_t capacity, uint32_t slot_size, rbipc_ri
         return rc;
     }
 
-    /* Apply file sealing */
     rbipc_shm_seal(fd);
 
-    /* Map control metadata region */
     void *ctrl_map = NULL;
     rc = rbipc_vmem_map_ctrl(fd, layout.data_offset, &ctrl_map);
     if (RBIPC_UNLIKELY(rc != RBIPC_OK)) {
-        rbipc_shm_close(fd);
-        if (name) rbipc_shm_unlink(name);
+        rbipc_ring_abort_create(fd, name, NULL, 0, NULL, 0);
         return rc;
     }
 
-    /* Initialize control header */
     rbipc_shm_header_t *hdr = (rbipc_shm_header_t *)ctrl_map;
     rbipc_ring_init_header_fields(hdr, &layout, cap);
 
-    /* Initialize slot array */
     rbipc_slot_t *slots = (rbipc_slot_t *)((char *)ctrl_map + sizeof(rbipc_shm_header_t));
     rbipc_slot_init_table(slots, cap);
 
-    /* Double-map circular data buffer for zero-copy mirroring */
     void *data_map = NULL;
     rc = rbipc_vmem_map_double(fd, layout.data_offset, layout.data_size, &data_map);
     if (RBIPC_UNLIKELY(rc != RBIPC_OK)) {
-        rbipc_vmem_unmap_ctrl(ctrl_map, layout.data_offset);
-        rbipc_shm_close(fd);
-        if (name) rbipc_shm_unlink(name);
+        rbipc_ring_abort_create(fd, name, ctrl_map, layout.data_offset, NULL, 0);
         return rc;
     }
 
@@ -160,10 +178,7 @@ int rbipc_create(const char *name, size_t capacity, uint32_t slot_size, rbipc_ri
                                                  layout.data_offset, data_map,
                                                  layout.data_size, true);
     if (RBIPC_UNLIKELY(!ring)) {
-        rbipc_vmem_unmap_double(data_map, layout.data_size);
-        rbipc_vmem_unmap_ctrl(ctrl_map, layout.data_offset);
-        rbipc_shm_close(fd);
-        if (name) rbipc_shm_unlink(name);
+        rbipc_ring_abort_create(fd, name, ctrl_map, layout.data_offset, data_map, layout.data_size);
         return RBIPC_ERR_NOMEM;
     }
 
@@ -214,7 +229,6 @@ int rbipc_attach_fd(int fd, rbipc_ring_t **out_ring) {
         return rc;
     }
 
-    /* Map full control region */
     void *ctrl_map = NULL;
     rc = rbipc_vmem_map_ctrl(fd, layout.data_offset, &ctrl_map);
     if (RBIPC_UNLIKELY(rc != RBIPC_OK)) {
@@ -224,7 +238,6 @@ int rbipc_attach_fd(int fd, rbipc_ring_t **out_ring) {
     rbipc_shm_header_t *hdr = (rbipc_shm_header_t *)ctrl_map;
     rbipc_slot_t *slots = (rbipc_slot_t *)((char *)ctrl_map + sizeof(rbipc_shm_header_t));
 
-    /* Double-map circular data buffer for zero-copy mirroring */
     void *data_map = NULL;
     rc = rbipc_vmem_map_double(fd, layout.data_offset, layout.data_size, &data_map);
     if (RBIPC_UNLIKELY(rc != RBIPC_OK)) {
@@ -283,7 +296,7 @@ void rbipc_ring_unmap_regions(rbipc_ring_t *ring) {
 }
 
 /**
- * @brief Atomic helper: Deregister producer or consumer count.
+ * @brief Atomic procedure: Decrement active participant counter depending on role.
  */
 static void rbipc_ring_deregister(rbipc_ring_t *ring) {
     if (!ring || !ring->hdr) return;
@@ -330,7 +343,7 @@ int rbipc_get_fd(const rbipc_ring_t *ring) {
     return ring ? ring->fd : -1;
 }
 
-int rbipc_get_stats(const rbipc_ring_t *ring, rbipc_stats_t *out_stats) {
+int rbipc_get_stats(const rbipc_ring_t * RBIPC_RESTRICT ring, rbipc_stats_t * RBIPC_RESTRICT out_stats) {
     if (RBIPC_UNLIKELY(!ring || !ring->hdr || !out_stats)) {
         return RBIPC_ERR_INVAL;
     }
