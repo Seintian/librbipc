@@ -16,7 +16,6 @@
 #include <unistd.h>
 #include <errno.h>
 
-#define PEER_CHECK_INTERVAL 500
 
 int rbipc_reserve_write_timeout(rbipc_ring_t *ring, uint32_t len, uint64_t timeout_ns,
                                 void **out_buf, uint32_t *ticket) {
@@ -44,7 +43,7 @@ int rbipc_reserve_write_timeout(rbipc_ring_t *ring, uint32_t len, uint64_t timeo
             /* Slot is vacant and ready for write reservation */
             if (__builtin_expect(atomic_compare_exchange_weak_explicit(&hdr->write_ticket, &t, t + 1,
                                                                       memory_order_relaxed, memory_order_relaxed), 1)) {
-                rbipc_slot_mark_reserved(slot, getpid());
+                rbipc_slot_mark_reserved(slot, ring->cached_pid);
 
                 /* Zero-copy virtual pointer calculation */
                 *out_buf = (char *)ring->data_map + ((size_t)(t & mask) * hdr->slot_size);
@@ -64,7 +63,7 @@ int rbipc_reserve_write_timeout(rbipc_ring_t *ring, uint32_t len, uint64_t timeo
                 return RBIPC_ERR_FULL;
             }
 
-            int rc = rbipc_sync_backoff(&sync_state, &hdr->futex_seq, &hdr->futex_waiters);
+            int rc = rbipc_sync_backoff(&sync_state, &hdr->write_futex_seq, &hdr->write_waiters);
             if (rc != 0) {
                 return rc;
             }
@@ -94,7 +93,9 @@ int rbipc_commit_write(rbipc_ring_t *ring, uint32_t ticket, uint32_t written_len
     rbipc_slot_t *slot = &ring->slots[ticket & hdr->capacity_mask];
 
     rbipc_slot_commit(slot, ticket, written_len);
-    rbipc_sync_wake_one(&hdr->futex_seq, &hdr->futex_waiters);
+    if (__builtin_expect(atomic_load_explicit(&hdr->futex_waiters, memory_order_seq_cst) > 0, 0)) {
+        rbipc_sync_wake_one(&hdr->futex_seq, &hdr->futex_waiters);
+    }
 
     return RBIPC_OK;
 }
@@ -127,7 +128,6 @@ int rbipc_read_acquire_timeout(rbipc_ring_t *ring, uint64_t timeout_ns,
     rbipc_sync_state_t sync_state;
     rbipc_sync_state_init(&sync_state, timeout_ns);
 
-    uint32_t reserved_wait_count = 0;
 
     for (;;) {
         rbipc_slot_t *slot = &ring->slots[t & mask];
@@ -158,24 +158,17 @@ int rbipc_read_acquire_timeout(rbipc_ring_t *ring, uint64_t timeout_ns,
                 }
             }
             sync_state.spin_count = 0;
-            reserved_wait_count = 0;
         } else if (diff < 0) {
             /* Slot not yet committed. Probe if holding producer crashed */
             uint32_t state = atomic_load_explicit(&slot->state, memory_order_acquire);
             if (state == RBIPC_SLOT_RESERVED) {
-                reserved_wait_count++;
-                if (reserved_wait_count >= PEER_CHECK_INTERVAL) {
-                    uint32_t pid = atomic_load_explicit(&slot->producer_pid, memory_order_relaxed);
-                    if (pid > 0 && !rbipc_slot_is_peer_alive((pid_t)pid)) {
-                        /* Dead peer detected! Atomically transition to POISONED */
-                        if (rbipc_slot_poison(slot, t)) {
-                            rbipc_sync_wake_one(&hdr->futex_seq, &hdr->futex_waiters);
-                        }
+                uint32_t pid = atomic_load_explicit(&slot->producer_pid, memory_order_relaxed);
+                if (pid > 0 && !rbipc_slot_is_peer_alive((pid_t)pid)) {
+                    /* Dead peer detected! Atomically transition to POISONED */
+                    if (rbipc_slot_poison(slot, t)) {
+                        rbipc_sync_wake_one(&hdr->futex_seq, &hdr->futex_waiters);
                     }
-                    reserved_wait_count = 0;
                 }
-            } else {
-                reserved_wait_count = 0;
             }
 
             /* Check shutdown state */
@@ -199,7 +192,6 @@ int rbipc_read_acquire_timeout(rbipc_ring_t *ring, uint64_t timeout_ns,
             /* Another consumer claimed ticket t */
             t = atomic_load_explicit(&hdr->read_ticket, memory_order_relaxed);
             sync_state.spin_count = 0;
-            reserved_wait_count = 0;
         }
     }
 }
@@ -221,7 +213,9 @@ int rbipc_read_release(rbipc_ring_t *ring, uint32_t ticket) {
     rbipc_slot_t *slot = &ring->slots[ticket & hdr->capacity_mask];
 
     rbipc_slot_release(slot, ticket, hdr->capacity);
-    rbipc_sync_wake_one(&hdr->futex_seq, &hdr->futex_waiters);
+    if (__builtin_expect(atomic_load_explicit(&hdr->write_waiters, memory_order_seq_cst) > 0, 0)) {
+        rbipc_sync_wake_one(&hdr->write_futex_seq, &hdr->write_waiters);
+    }
 
     return RBIPC_OK;
 }
@@ -243,7 +237,7 @@ int rbipc_reserve_write_batch(rbipc_ring_t *ring, uint32_t count,
     rbipc_sync_state_t sync_state;
     rbipc_sync_state_init(&sync_state, UINT64_MAX);
 
-    pid_t my_pid = getpid();
+    pid_t my_pid = ring->cached_pid;
 
     for (;;) {
         if (__builtin_expect(atomic_load_explicit(&hdr->shutdown_flag, memory_order_relaxed) != 0, 0)) {
@@ -279,7 +273,7 @@ int rbipc_reserve_write_batch(rbipc_ring_t *ring, uint32_t count,
             }
             sync_state.spin_count = 0;
         } else {
-            int rc = rbipc_sync_backoff(&sync_state, &hdr->futex_seq, &hdr->futex_waiters);
+            int rc = rbipc_sync_backoff(&sync_state, &hdr->write_futex_seq, &hdr->write_waiters);
             if (rc != 0) {
                 return rc;
             }
@@ -308,7 +302,9 @@ int rbipc_commit_write_batch(rbipc_ring_t *ring, uint32_t count,
         rbipc_slot_commit(slot, tickets[i], lens[i]);
     }
 
-    rbipc_sync_wake_one(&hdr->futex_seq, &hdr->futex_waiters);
+    if (__builtin_expect(atomic_load_explicit(&hdr->futex_waiters, memory_order_seq_cst) > 0, 0)) {
+        rbipc_sync_wake_one(&hdr->futex_seq, &hdr->futex_waiters);
+    }
     return RBIPC_OK;
 }
 
@@ -393,6 +389,8 @@ int rbipc_read_release_batch(rbipc_ring_t *ring, uint32_t count, const uint32_t 
         rbipc_slot_release(slot, tickets[i], hdr->capacity);
     }
 
-    rbipc_sync_wake_one(&hdr->futex_seq, &hdr->futex_waiters);
+    if (__builtin_expect(atomic_load_explicit(&hdr->write_waiters, memory_order_seq_cst) > 0, 0)) {
+        rbipc_sync_wake_one(&hdr->write_futex_seq, &hdr->write_waiters);
+    }
     return RBIPC_OK;
 }

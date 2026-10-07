@@ -22,12 +22,12 @@ Designed following strict Software Engineering principles (Single Responsibility
    - Nanosecond-precision timeout variants (`rbipc_reserve_write_timeout`, `rbipc_read_acquire_timeout`) guard mission-critical systems against indefinite hangs.
 5. **Cache-Line Isolated Synchronization (No False Sharing)**:
    - Producers head (`write_ticket`), consumer tail (`read_ticket`), and per-slot descriptors are strictly 64-byte aligned (`_Alignas(64)`), eliminating cache ping-pong across CPU cores.
-6. **3-Tier Adaptive Hybrid Backoff**:
-   - **Tier 1 (Spin)**: Low-latency busy-wait with CPU pause hints (`_mm_pause` / `isb`).
-   - **Tier 2 (Yield)**: Cooperative OS scheduling yield via `sched_yield()`.
-   - **Tier 3 (Futex)**: Process-shared Linux `sys_futex` kernel wait (`FUTEX_WAIT` / `FUTEX_WAKE`) to drop idle CPU utilization to 0%.
-7. **Kernel Syscall Elimination (Futex Waiter Tracking)**:
-   - Tracks `futex_waiters` via sequentially consistent atomic operations. On hot paths where peers are active, producers and consumers completely bypass the `sys_futex` kernel context switch, yielding a 3x speedup on single-item operations.
+6. **Zero-Spin Passive Waiting Synchronization**:
+   - Zero active waiting: eliminates CPU spinning and busy-wait loops (`_mm_pause` / `sched_yield`) completely.
+   - Immediate passive suspension via process-shared Linux `sys_futex` kernel wait (`FUTEX_WAIT` / `FUTEX_WAKE`) to drop idle CPU utilization to strictly 0.0%.
+7. **Kernel Syscall Elimination & Asymmetric Channels**:
+   - Asymmetric synchronization channels (`read_futex_seq` for consumers, `write_futex_seq` for producers) isolate wakeups and eliminate cross-channel false wakeups.
+   - Waiter tracking via atomic counters (`futex_waiters`, `write_waiters`). On hot streaming paths where peers are active, producers and consumers completely bypass `sys_futex` syscalls, achieving sub-microsecond in-memory operations.
 8. **Software Prefetching (`__builtin_prefetch`)**:
    - Prefetches upcoming slot control descriptors into L1/L2 cache and payload data buffers ahead of the CPU pipeline (inspired by ISCA/MICRO processor memory research), hiding memory access latency.
 9. **B-Queue Batching API (PPoPP '08 / IJPP '13)**:
@@ -71,11 +71,16 @@ librbipc/
 │   ├── test_e2e_multithread.c  # MPMC concurrent thread contention stress test
 │   ├── test_e2e_throughput.c   # Multi-process fork throughput & latency benchmark
 │   └── test_harness.c          # Master verification harness
+├── benchmarks/
+│   ├── bench_suite.c           # Comprehensive benchmark harness (throughput, latency, batching, payload)
+│   └── results/                # Versioned baseline and zero-spin JSON benchmark telemetry
 ├── scripts/
 │   ├── gen_compile_commands.py # Generates compile_commands.json for clangd/LSP
 │   └── coverage_summary.py     # Parses gcov metrics and prints summary table
-├── Makefile                    # Warning-free builds, tests, coverage, valgrind, clang-tidy
+├── Makefile                    # Warning-free builds, tests, benchmarks, coverage, valgrind, clang-tidy
+├── BENCHMARK_REPORT.md         # In-depth perf profiling & benchmark analysis
 └── README.md
+
 ```
 
 ---
@@ -129,6 +134,9 @@ make clean && make -j8
 # Run full 15-binary unit, integration, and stress test suite
 make test
 
+# Run comprehensive benchmark suite
+make bench
+
 # Generate code coverage report via gcov
 make coverage
 
@@ -160,12 +168,17 @@ TOTAL LINE COVERAGE            | 646              | 598            |    92.57%
 ================================================================================
 ```
 
-### Performance Benchmarks (x86_64 Linux)
+### Performance Benchmarks (x86_64 Linux, Zero-Spin Passive IPC)
 
 | Mode | Throughput | Bandwidth | Average Latency |
 | :--- | :--- | :--- | :--- |
-| **Single Message (Zero-Copy)** | ~210,000 msgs/sec | ~29 MB/sec | ~4.7 µs |
-| **B-Queue Batch (Burst 32)** | **>3,000,000 msgs/sec** | **>410 MB/sec** | **~330 ns** |
+| **Single-Item (Zero-Copy)** | **1,151,240 msgs/sec** | ~73.7 MB/sec | **868 ns** |
+| **Streaming (Hot Cache)** | **12,149,497 msgs/sec** | ~778 MB/sec | **82.3 ns** |
+| **B-Queue Vector (Burst 128)** | **30,226,449 msgs/sec** | **1,844.9 MB/sec** | **33.1 ns** |
+| **Large Payload (64 KB)** | **1,161,555 msgs/sec** | **72.6 GB/sec** | **860 ns** |
+
+*For complete profiling methodology, hardware counter analysis, and `perf` breakdown, see [BENCHMARK_REPORT.md](BENCHMARK_REPORT.md).*
+
 
 ---
 

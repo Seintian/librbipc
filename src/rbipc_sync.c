@@ -38,16 +38,7 @@ int rbipc_sync_backoff(rbipc_sync_state_t *state, _Atomic uint32_t *futex_word,
         }
     }
 
-    state->spin_count++;
-    if (state->spin_count < RBIPC_DEFAULT_SPIN_PAUSE) {
-        rbipc_cpu_pause();
-        return 0;
-    } else if (state->spin_count < RBIPC_DEFAULT_SPIN_YIELD) {
-        sched_yield();
-        return 0;
-    }
-
-    /* Tier 3: Futex Sleep */
+    /* Zero-spin passive waiting: proceed directly to futex sleep */
     struct timespec ts;
     struct timespec *pts = &ts;
 

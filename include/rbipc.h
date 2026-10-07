@@ -4,8 +4,8 @@
  *
  * Designed for ultra-low latency, zero-copy inter-process communication in modern C (C11/C23).
  * Utilizes the virtual memory double-mapping mirror trick for seamless wraparound,
- * cache-line padded atomics to eliminate false sharing, and a 3-tier hybrid
- * synchronization strategy with dead-peer crash recovery.
+ * cache-line padded atomics to eliminate false sharing, and a zero-spin passive
+ * waiting synchronization strategy with dead-peer crash recovery.
  */
 
 #ifndef RBIPC_H
@@ -85,8 +85,10 @@ typedef struct {
     /* Cache-line isolated hot atomic synchronization variables */
     _Alignas(RBIPC_CACHE_LINE) _Atomic uint32_t write_ticket;     /**< Monotonic ticket claimed by producers */
     _Alignas(RBIPC_CACHE_LINE) _Atomic uint32_t read_ticket;      /**< Monotonic ticket claimed by consumers */
-    _Alignas(RBIPC_CACHE_LINE) _Atomic uint32_t futex_seq;        /**< Futex word for blocking synchronization */
-    _Alignas(RBIPC_CACHE_LINE) _Atomic uint32_t futex_waiters;    /**< Count of threads waiting in futex sleep */
+    _Alignas(RBIPC_CACHE_LINE) _Atomic uint32_t futex_seq;        /**< Futex word for consumer wakeups (data ready) */
+    _Alignas(RBIPC_CACHE_LINE) _Atomic uint32_t futex_waiters;    /**< Count of threads waiting for messages */
+    _Alignas(RBIPC_CACHE_LINE) _Atomic uint32_t write_futex_seq;  /**< Futex word for producer wakeups (space ready) */
+    _Alignas(RBIPC_CACHE_LINE) _Atomic uint32_t write_waiters;    /**< Count of threads waiting for space */
     _Alignas(RBIPC_CACHE_LINE) _Atomic uint32_t active_producers; /**< Count of attached producers */
     _Alignas(RBIPC_CACHE_LINE) _Atomic uint32_t active_consumers; /**< Count of attached consumers */
     _Alignas(RBIPC_CACHE_LINE) _Atomic uint32_t shutdown_flag;    /**< 1 if shutdown was signaled, else 0 */
@@ -193,7 +195,7 @@ int rbipc_destroy(const char *name);
  * @brief Reserve a slot in the ring buffer for writing (Zero-Copy, Blocking).
  *
  * Atomically reserves the next available slot according to ticket ordering.
- * If the ring is full, executes a 3-tier hybrid wait (spin -> yield -> futex).
+ * If the ring is full, executes a zero-spin passive wait via Linux sys_futex.
  *
  * @param ring Ring buffer handle.
  * @param len Requested payload length (must be <= slot_size).
@@ -251,7 +253,7 @@ int rbipc_abort_write(rbipc_ring_t *ring, uint32_t ticket);
 /**
  * @brief Acquire the next committed message for reading (Zero-Copy, Blocking).
  *
- * Blocks using hybrid backoff until a message is committed.
+ * Blocks using zero-spin passive futex wait until a message is committed.
  * If the holding producer crashed before committing, detects ESRCH, poisons
  * the slot, and returns RBIPC_ERR_POISONED while safely advancing the pipeline.
  *

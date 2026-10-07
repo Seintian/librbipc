@@ -80,6 +80,8 @@ int rbipc_create(const char *name, size_t capacity, uint32_t slot_size, rbipc_ri
     atomic_init(&hdr->read_ticket, 0);
     atomic_init(&hdr->futex_seq, 0);
     atomic_init(&hdr->futex_waiters, 0);
+    atomic_init(&hdr->write_futex_seq, 0);
+    atomic_init(&hdr->write_waiters, 0);
     atomic_init(&hdr->active_producers, 1);
     atomic_init(&hdr->active_consumers, 0);
     atomic_init(&hdr->shutdown_flag, 0);
@@ -118,6 +120,7 @@ int rbipc_create(const char *name, size_t capacity, uint32_t slot_size, rbipc_ri
     ring->data_map = data_map;
     ring->data_size = layout.data_size;
     ring->is_creator = true;
+    ring->cached_pid = getpid();
 
     *out_ring = ring;
     return RBIPC_OK;
@@ -192,6 +195,7 @@ int rbipc_attach_fd(int fd, rbipc_ring_t **out_ring) {
     ring->data_map = data_map;
     ring->data_size = data_size;
     ring->is_creator = false;
+    ring->cached_pid = getpid();
 
     atomic_fetch_add_explicit(&hdr->active_consumers, 1, memory_order_relaxed);
 
@@ -263,6 +267,7 @@ int rbipc_signal_shutdown(rbipc_ring_t *ring) {
 
     atomic_store_explicit(&ring->hdr->shutdown_flag, 1, memory_order_release);
     rbipc_sync_wake_all(&ring->hdr->futex_seq, &ring->hdr->futex_waiters);
+    rbipc_sync_wake_all(&ring->hdr->write_futex_seq, &ring->hdr->write_waiters);
     return RBIPC_OK;
 }
 
@@ -284,7 +289,8 @@ int rbipc_get_stats(const rbipc_ring_t *ring, rbipc_stats_t *out_stats) {
     out_stats->read_ticket = atomic_load_explicit(&hdr->read_ticket, memory_order_relaxed);
     out_stats->active_producers = atomic_load_explicit(&hdr->active_producers, memory_order_relaxed);
     out_stats->active_consumers = atomic_load_explicit(&hdr->active_consumers, memory_order_relaxed);
-    out_stats->futex_waiters = atomic_load_explicit(&hdr->futex_waiters, memory_order_relaxed);
+    out_stats->futex_waiters = atomic_load_explicit(&hdr->futex_waiters, memory_order_relaxed) +
+                               atomic_load_explicit(&hdr->write_waiters, memory_order_relaxed);
     out_stats->is_shutdown = (atomic_load_explicit(&hdr->shutdown_flag, memory_order_relaxed) != 0);
 
     return RBIPC_OK;

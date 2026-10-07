@@ -9,6 +9,7 @@
 #include "rbipc.h"
 #include <stdbool.h>
 #include <stddef.h>
+#include <sys/types.h>
 
 struct rbipc_ring {
     int fd;                       /**< Shared memory file descriptor */
@@ -20,6 +21,7 @@ struct rbipc_ring {
     void *data_map;               /**< Contiguous 2x double-mapped virtual buffer */
     size_t data_size;             /**< Size of single buffer */
     bool is_creator;              /**< True if created by this process */
+    pid_t cached_pid;             /**< Cached PID of current process (avoids SYS_getpid syscalls) */
 };
 
 #endif /* RBIPC_INTERNAL_H */

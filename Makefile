@@ -1,10 +1,11 @@
 CC ?= gcc
 CFLAGS ?= -std=c11 -Wall -Wextra -Wpedantic -Werror -O3 -fPIC -Iinclude -pthread -D_GNU_SOURCE
-LDFLAGS ?= -pthread -lrt
+LDFLAGS ?= -pthread -lrt -lm
 
 SRCDIR = src
 INCDIR = include
 TESTDIR = tests
+BENCHDIR = benchmarks
 BUILDDIR = build
 BINDIR = bin
 LIBDIR = lib
@@ -18,7 +19,10 @@ SHARED_LIB = $(LIBDIR)/librbipc.so
 TEST_SRCS = $(wildcard $(TESTDIR)/*.c)
 TEST_BINS = $(patsubst $(TESTDIR)/%.c, $(BINDIR)/%, $(TEST_SRCS))
 
-.PHONY: all clean test coverage valgrind clang-tidy compile_commands
+BENCH_SRCS = $(wildcard $(BENCHDIR)/*.c)
+BENCH_BINS = $(patsubst $(BENCHDIR)/%.c, $(BINDIR)/%, $(BENCH_SRCS))
+
+.PHONY: all clean test bench coverage valgrind clang-tidy compile_commands
 
 all: $(STATIC_LIB) $(SHARED_LIB) $(TEST_BINS) compile_commands.json
 
@@ -37,6 +41,9 @@ $(SHARED_LIB): $(OBJS) | $(LIBDIR)
 $(BINDIR)/%: $(TESTDIR)/%.c $(STATIC_LIB) | $(BINDIR)
 	$(CC) $(CFLAGS) $< $(STATIC_LIB) $(LDFLAGS) -o $@
 
+$(BINDIR)/%: $(BENCHDIR)/%.c $(STATIC_LIB) | $(BINDIR)
+	$(CC) $(CFLAGS) $< $(STATIC_LIB) $(LDFLAGS) -o $@
+
 test: $(STATIC_LIB) $(TEST_BINS)
 	@echo "=================================================="
 	@echo "           Running Full Test Suite                "
@@ -49,6 +56,17 @@ test: $(STATIC_LIB) $(TEST_BINS)
 	@echo "=================================================="
 	@echo "           All Tests Passed Successfully!         "
 	@echo "=================================================="
+
+bench: $(STATIC_LIB) $(BENCH_BINS)
+	@echo "=================================================="
+	@echo "           Running Benchmark Suite                "
+	@echo "=================================================="
+	@for b in $(BENCH_BINS); do \
+		echo "--> Running $$b ..."; \
+		$$b || exit 1; \
+		echo ""; \
+	done
+
 
 coverage: CFLAGS = -std=c11 -Wall -Wextra -Wpedantic -Werror -O0 -g --coverage -fPIC -Iinclude -pthread -D_GNU_SOURCE
 coverage: LDFLAGS += --coverage
@@ -75,7 +93,7 @@ clang-tidy:
 	clang-tidy -checks='bugprone-*,clang-analyzer-*,performance-*,-clang-analyzer-optin.performance.Padding' $(SRCS) -- -Iinclude -D_GNU_SOURCE
 	@echo "Clang-Tidy analysis passed with 0 errors!"
 
-compile_commands.json: Makefile $(SRCS) $(TEST_SRCS)
+compile_commands.json: Makefile $(SRCS) $(TEST_SRCS) $(BENCH_SRCS)
 	@python3 scripts/gen_compile_commands.py
 
 compile_commands: compile_commands.json

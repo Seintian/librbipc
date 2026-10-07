@@ -10,8 +10,8 @@
 #include <stdatomic.h>
 #include <stdbool.h>
 
-#define RBIPC_DEFAULT_SPIN_PAUSE 2000
-#define RBIPC_DEFAULT_SPIN_YIELD 2050
+#define RBIPC_DEFAULT_SPIN_PAUSE 0
+#define RBIPC_DEFAULT_SPIN_YIELD 0
 
 typedef struct {
     uint32_t spin_count;
@@ -28,10 +28,8 @@ typedef struct {
 void rbipc_sync_state_init(rbipc_sync_state_t *state, uint64_t timeout_ns);
 
 /**
- * @brief Execute one backoff step according to the 3-tier hybrid strategy:
- *   Tier 1: Hardware CPU pause
- *   Tier 2: Cooperative sched_yield()
- *   Tier 3: sys_futex sleep
+ * @brief Execute passive wait step:
+ *   Zero active spinning, immediate suspension via sys_futex sleep.
  *
  * @param state Current sync state.
  * @param futex_word Futex sequence atomic counter.
