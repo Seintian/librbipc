@@ -6,6 +6,9 @@
 #ifndef RBIPC_VMEM_H
 #define RBIPC_VMEM_H
 
+#include "rbipc.h"
+#include "rbipc_attr.h"
+
 #include <stddef.h>
 
 /**
@@ -16,6 +19,7 @@
  * @param[out] out_map Pointer to mapped virtual address.
  * @return RBIPC_OK on success, negative error code otherwise.
  */
+RBIPC_NODISCARD
 int rbipc_vmem_map_ctrl(int fd, size_t size, void **out_map);
 
 /**
@@ -38,6 +42,7 @@ void rbipc_vmem_unmap_ctrl(void *map, size_t size);
  * @param[out] out_data_map Contiguous double-mapped base pointer.
  * @return RBIPC_OK on success, negative error code otherwise.
  */
+RBIPC_NODISCARD
 int rbipc_vmem_map_double(int fd, size_t offset, size_t data_size, void **out_data_map);
 
 /**

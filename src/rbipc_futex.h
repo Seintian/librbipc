@@ -6,12 +6,18 @@
 #ifndef RBIPC_FUTEX_H
 #define RBIPC_FUTEX_H
 
+#include "rbipc.h"
+#include "rbipc_attr.h"
+
 #include <stdint.h>
 #include <stdatomic.h>
 #include <time.h>
 
 /**
  * @brief Convert nanoseconds to a struct timespec.
+ *
+ * @param ns Duration in nanoseconds.
+ * @param[out] ts Output timespec structure.
  */
 void rbipc_ns_to_timespec(uint64_t ns, struct timespec *ts);
 

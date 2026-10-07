@@ -1,10 +1,13 @@
 /**
  * @file rbipc_sync.h
- * @brief Hybrid 3-tier backoff synchronization engine
+ * @brief Zero-spin passive IPC synchronization engine with Linux futex
  */
 
 #ifndef RBIPC_SYNC_H
 #define RBIPC_SYNC_H
+
+#include "rbipc.h"
+#include "rbipc_attr.h"
 
 #include <stdint.h>
 #include <stdatomic.h>
@@ -12,11 +15,16 @@
 
 #define RBIPC_DEFAULT_SPIN_PAUSE 0
 #define RBIPC_DEFAULT_SPIN_YIELD 0
+#define RBIPC_FUTEX_PERIOD_NS    20000000ULL /* 20ms capped wait to audit shutdown & peer status */
 
+/**
+ * @struct rbipc_sync_state_t
+ * @brief Thread-local state tracking for backoff and deadline management.
+ */
 typedef struct {
-    uint32_t spin_count;
-    uint64_t deadline_ns;
-    bool has_deadline;
+    uint32_t spin_count;    /**< Legacy spin counter (zero in passive mode) */
+    uint64_t deadline_ns;   /**< Monotonic timestamp deadline in nanoseconds */
+    bool has_deadline;      /**< True if bounded timeout is active */
 } rbipc_sync_state_t;
 
 /**
@@ -36,6 +44,7 @@ void rbipc_sync_state_init(rbipc_sync_state_t *state, uint64_t timeout_ns);
  * @param futex_waiters Optional atomic counter of threads sleeping in futex.
  * @return 0 on continued wait, RBIPC_ERR_TIMEOUT if deadline exceeded.
  */
+RBIPC_NODISCARD
 int rbipc_sync_backoff(rbipc_sync_state_t *state, _Atomic uint32_t *futex_word,
                        _Atomic uint32_t *futex_waiters);
 

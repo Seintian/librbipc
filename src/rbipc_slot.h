@@ -7,6 +7,8 @@
 #define RBIPC_SLOT_H
 
 #include "rbipc.h"
+#include "rbipc_attr.h"
+
 #include <sys/types.h>
 #include <stdbool.h>
 
@@ -24,6 +26,7 @@ void rbipc_slot_init_table(rbipc_slot_t *slots, uint32_t capacity);
  * @param pid Process ID to probe.
  * @return true if process exists or permissions prevent signal, false if ESRCH (dead).
  */
+RBIPC_NODISCARD
 bool rbipc_slot_is_peer_alive(pid_t pid);
 
 /**

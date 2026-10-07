@@ -21,6 +21,32 @@ extern "C" {
 #endif
 
 /* ============================================================================
+ * Compiler Annotations & Attributes
+ * ============================================================================ */
+
+#if defined(__GNUC__) || defined(__clang__)
+#define RBIPC_NODISCARD         __attribute__((warn_unused_result))
+#define RBIPC_RETURNS_NONNULL   __attribute__((returns_nonnull))
+#define RBIPC_PURE              __attribute__((pure))
+#define RBIPC_CONST             __attribute__((const))
+#define RBIPC_HOT               __attribute__((hot))
+#define RBIPC_COLD              __attribute__((cold))
+#define RBIPC_LIKELY(x)         (__builtin_expect(!!(x), 1))
+#define RBIPC_UNLIKELY(x)       (__builtin_expect(!!(x), 0))
+#define RBIPC_RESTRICT          restrict
+#else
+#define RBIPC_NODISCARD
+#define RBIPC_RETURNS_NONNULL
+#define RBIPC_PURE
+#define RBIPC_CONST
+#define RBIPC_HOT
+#define RBIPC_COLD
+#define RBIPC_LIKELY(x)         (x)
+#define RBIPC_UNLIKELY(x)       (x)
+#define RBIPC_RESTRICT
+#endif
+
+/* ============================================================================
  * Constants & Error Codes
  * ============================================================================ */
 
@@ -153,6 +179,7 @@ typedef struct rbipc_ring rbipc_ring_t;
  * @param[out] out_ring Returns pointer to allocated ring buffer handle.
  * @return RBIPC_OK on success, negative error code otherwise.
  */
+RBIPC_NODISCARD
 int rbipc_create(const char *name, size_t capacity, uint32_t slot_size, rbipc_ring_t **out_ring);
 
 /**
@@ -162,6 +189,7 @@ int rbipc_create(const char *name, size_t capacity, uint32_t slot_size, rbipc_ri
  * @param[out] out_ring Returns pointer to allocated ring buffer handle.
  * @return RBIPC_OK on success, negative error code otherwise.
  */
+RBIPC_NODISCARD
 int rbipc_attach(const char *name, rbipc_ring_t **out_ring);
 
 /**
@@ -173,6 +201,7 @@ int rbipc_attach(const char *name, rbipc_ring_t **out_ring);
  * @param[out] out_ring Returns pointer to allocated ring buffer handle.
  * @return RBIPC_OK on success, negative error code otherwise.
  */
+RBIPC_NODISCARD
 int rbipc_attach_fd(int fd, rbipc_ring_t **out_ring);
 
 /**
@@ -203,6 +232,7 @@ int rbipc_destroy(const char *name);
  * @param[out] ticket Returns assigned monotonically increasing ticket ID.
  * @return RBIPC_OK on success, RBIPC_ERR_SHUTDOWN, or negative error code.
  */
+RBIPC_NODISCARD RBIPC_HOT
 int rbipc_reserve_write(rbipc_ring_t *ring, uint32_t len, void **out_buf, uint32_t *ticket);
 
 /**
@@ -215,6 +245,7 @@ int rbipc_reserve_write(rbipc_ring_t *ring, uint32_t len, void **out_buf, uint32
  * @param[out] ticket Returns assigned ticket ID.
  * @return RBIPC_OK on success, RBIPC_ERR_TIMEOUT, RBIPC_ERR_FULL, or negative error code.
  */
+RBIPC_NODISCARD
 int rbipc_reserve_write_timeout(rbipc_ring_t *ring, uint32_t len, uint64_t timeout_ns,
                                 void **out_buf, uint32_t *ticket);
 
@@ -227,6 +258,7 @@ int rbipc_reserve_write_timeout(rbipc_ring_t *ring, uint32_t len, uint64_t timeo
  * @param[out] ticket Returns assigned ticket ID.
  * @return RBIPC_OK on success, RBIPC_ERR_FULL if no space immediately available, or negative error code.
  */
+RBIPC_NODISCARD RBIPC_HOT
 int rbipc_reserve_write_nonblock(rbipc_ring_t *ring, uint32_t len, void **out_buf, uint32_t *ticket);
 
 /**
@@ -237,6 +269,7 @@ int rbipc_reserve_write_nonblock(rbipc_ring_t *ring, uint32_t len, void **out_bu
  * @param written_len Actual number of bytes written.
  * @return RBIPC_OK on success, negative error code otherwise.
  */
+RBIPC_HOT
 int rbipc_commit_write(rbipc_ring_t *ring, uint32_t ticket, uint32_t written_len);
 
 /**
@@ -248,6 +281,7 @@ int rbipc_commit_write(rbipc_ring_t *ring, uint32_t ticket, uint32_t written_len
  * @param ticket Ticket obtained from rbipc_reserve_write().
  * @return RBIPC_OK on success, negative error code otherwise.
  */
+RBIPC_COLD
 int rbipc_abort_write(rbipc_ring_t *ring, uint32_t ticket);
 
 /**
@@ -263,6 +297,7 @@ int rbipc_abort_write(rbipc_ring_t *ring, uint32_t ticket);
  * @param[out] ticket Returns ticket ID to be passed to rbipc_read_release().
  * @return RBIPC_OK on success, RBIPC_ERR_POISONED if skipped, RBIPC_ERR_SHUTDOWN, etc.
  */
+RBIPC_NODISCARD RBIPC_HOT
 int rbipc_read_acquire(rbipc_ring_t *ring, const void **out_buf, uint32_t *out_len, uint32_t *ticket);
 
 /**
@@ -275,6 +310,7 @@ int rbipc_read_acquire(rbipc_ring_t *ring, const void **out_buf, uint32_t *out_l
  * @param[out] ticket Returns ticket ID.
  * @return RBIPC_OK on success, RBIPC_ERR_TIMEOUT, RBIPC_ERR_EMPTY, or negative error code.
  */
+RBIPC_NODISCARD
 int rbipc_read_acquire_timeout(rbipc_ring_t *ring, uint64_t timeout_ns,
                                const void **out_buf, uint32_t *out_len, uint32_t *ticket);
 
@@ -287,6 +323,7 @@ int rbipc_read_acquire_timeout(rbipc_ring_t *ring, uint64_t timeout_ns,
  * @param[out] ticket Returns ticket ID.
  * @return RBIPC_OK on success, RBIPC_ERR_EMPTY if no committed message, or negative error code.
  */
+RBIPC_NODISCARD RBIPC_HOT
 int rbipc_read_acquire_nonblock(rbipc_ring_t *ring, const void **out_buf, uint32_t *out_len, uint32_t *ticket);
 
 /**
@@ -296,6 +333,7 @@ int rbipc_read_acquire_nonblock(rbipc_ring_t *ring, const void **out_buf, uint32
  * @param ticket Ticket obtained from rbipc_read_acquire().
  * @return RBIPC_OK on success, negative error code otherwise.
  */
+RBIPC_HOT
 int rbipc_read_release(rbipc_ring_t *ring, uint32_t ticket);
 
 /**
@@ -310,6 +348,7 @@ int rbipc_read_release(rbipc_ring_t *ring, uint32_t ticket);
  * @param[out] out_reserved Returns number of slots reserved (at least 1 on success).
  * @return RBIPC_OK on success, RBIPC_ERR_FULL, RBIPC_ERR_SHUTDOWN, or negative error code.
  */
+RBIPC_NODISCARD RBIPC_HOT
 int rbipc_reserve_write_batch(rbipc_ring_t *ring, uint32_t count,
                               rbipc_iovec_t *iovecs, uint32_t *out_reserved);
 
@@ -324,6 +363,7 @@ int rbipc_reserve_write_batch(rbipc_ring_t *ring, uint32_t count,
  * @param lens Array of written payload lengths for each slot.
  * @return RBIPC_OK on success, negative error code otherwise.
  */
+RBIPC_HOT
 int rbipc_commit_write_batch(rbipc_ring_t *ring, uint32_t count,
                              const uint32_t *tickets, const uint32_t *lens);
 
@@ -338,6 +378,7 @@ int rbipc_commit_write_batch(rbipc_ring_t *ring, uint32_t count,
  * @param[out] out_acquired Returns number of messages acquired.
  * @return RBIPC_OK on success, RBIPC_ERR_EMPTY, RBIPC_ERR_SHUTDOWN, or negative error code.
  */
+RBIPC_NODISCARD RBIPC_HOT
 int rbipc_read_acquire_batch(rbipc_ring_t *ring, uint32_t count,
                              rbipc_rovec_t *rovecs, uint32_t *out_acquired);
 
@@ -349,6 +390,7 @@ int rbipc_read_acquire_batch(rbipc_ring_t *ring, uint32_t count,
  * @param tickets Array of tickets from rbipc_read_acquire_batch().
  * @return RBIPC_OK on success, negative error code otherwise.
  */
+RBIPC_HOT
 int rbipc_read_release_batch(rbipc_ring_t *ring, uint32_t count, const uint32_t *tickets);
 
 /**
@@ -365,6 +407,7 @@ int rbipc_signal_shutdown(rbipc_ring_t *ring);
  * @param ring Ring buffer handle.
  * @return File descriptor or -1 on error.
  */
+RBIPC_NODISCARD RBIPC_PURE
 int rbipc_get_fd(const rbipc_ring_t *ring);
 
 /**
@@ -374,6 +417,7 @@ int rbipc_get_fd(const rbipc_ring_t *ring);
  * @param[out] out_stats Output statistics struct.
  * @return RBIPC_OK on success, negative error code otherwise.
  */
+RBIPC_NODISCARD
 int rbipc_get_stats(const rbipc_ring_t *ring, rbipc_stats_t *out_stats);
 
 /**
@@ -382,6 +426,7 @@ int rbipc_get_stats(const rbipc_ring_t *ring, rbipc_stats_t *out_stats);
  * @param err Return code from any rbipc function.
  * @return Static string describing the error.
  */
+RBIPC_RETURNS_NONNULL RBIPC_CONST RBIPC_COLD
 const char *rbipc_strerror(int err);
 
 #ifdef __cplusplus

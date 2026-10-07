@@ -8,22 +8,32 @@
 #endif
 
 #include "rbipc_slot.h"
+#include "rbipc_attr.h"
+#include "rbipc_predicate.h"
+
 #include <signal.h>
 #include <errno.h>
 #include <unistd.h>
 
+/**
+ * @brief Atomic helper: Initialize a single slot descriptor.
+ */
+RBIPC_INLINE void rbipc_slot_init_single(rbipc_slot_t *slot, uint32_t index) {
+    atomic_init(&slot->sequence, index);
+    atomic_init(&slot->state, RBIPC_SLOT_EMPTY);
+    atomic_init(&slot->producer_pid, 0);
+    atomic_init(&slot->len, 0);
+}
+
 void rbipc_slot_init_table(rbipc_slot_t *slots, uint32_t capacity) {
-    if (!slots) return;
+    if (RBIPC_UNLIKELY(rbipc_is_null(slots))) return;
     for (uint32_t i = 0; i < capacity; ++i) {
-        atomic_init(&slots[i].sequence, i);
-        atomic_init(&slots[i].state, RBIPC_SLOT_EMPTY);
-        atomic_init(&slots[i].producer_pid, 0);
-        atomic_init(&slots[i].len, 0);
+        rbipc_slot_init_single(&slots[i], i);
     }
 }
 
 bool rbipc_slot_is_peer_alive(pid_t pid) {
-    if (pid <= 0) return false;
+    if (RBIPC_UNLIKELY(pid <= 0)) return false;
     if (kill(pid, 0) == 0) {
         return true;
     }
@@ -31,13 +41,13 @@ bool rbipc_slot_is_peer_alive(pid_t pid) {
 }
 
 void rbipc_slot_mark_reserved(rbipc_slot_t *slot, pid_t pid) {
-    if (!slot) return;
+    if (RBIPC_UNLIKELY(rbipc_is_null(slot))) return;
     atomic_store_explicit(&slot->producer_pid, (uint32_t)pid, memory_order_relaxed);
     atomic_store_explicit(&slot->state, RBIPC_SLOT_RESERVED, memory_order_release);
 }
 
 void rbipc_slot_commit(rbipc_slot_t *slot, uint32_t ticket, uint32_t len) {
-    if (!slot) return;
+    if (RBIPC_UNLIKELY(rbipc_is_null(slot))) return;
     atomic_store_explicit(&slot->len, len, memory_order_relaxed);
     atomic_store_explicit(&slot->state, RBIPC_SLOT_COMMITTED, memory_order_release);
     /* Advance sequence to ticket + 1 with release semantics to make payload visible */
@@ -45,7 +55,7 @@ void rbipc_slot_commit(rbipc_slot_t *slot, uint32_t ticket, uint32_t len) {
 }
 
 bool rbipc_slot_poison(rbipc_slot_t *slot, uint32_t ticket) {
-    if (!slot) return false;
+    if (RBIPC_UNLIKELY(rbipc_is_null(slot))) return false;
     uint32_t expected = RBIPC_SLOT_RESERVED;
     if (atomic_compare_exchange_strong_explicit(&slot->state, &expected,
                                                 RBIPC_SLOT_POISONED,
@@ -58,7 +68,7 @@ bool rbipc_slot_poison(rbipc_slot_t *slot, uint32_t ticket) {
 }
 
 void rbipc_slot_release(rbipc_slot_t *slot, uint32_t ticket, uint32_t capacity) {
-    if (!slot) return;
+    if (RBIPC_UNLIKELY(rbipc_is_null(slot))) return;
     atomic_store_explicit(&slot->state, RBIPC_SLOT_EMPTY, memory_order_release);
     /* Advance slot sequence by capacity to allow the next cycle turn */
     atomic_store_explicit(&slot->sequence, ticket + capacity, memory_order_release);

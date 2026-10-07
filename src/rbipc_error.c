@@ -4,7 +4,9 @@
  */
 
 #include "rbipc.h"
+#include "rbipc_error.h"
 
+RBIPC_RETURNS_NONNULL RBIPC_CONST RBIPC_COLD
 const char *rbipc_strerror(int err) {
     switch (err) {
         case RBIPC_OK:

@@ -6,17 +6,24 @@
 #ifndef RBIPC_SHM_H
 #define RBIPC_SHM_H
 
+#include "rbipc.h"
+#include "rbipc_attr.h"
+
 #include <stddef.h>
 #include <stdint.h>
 #include <stdbool.h>
 
+/**
+ * @struct rbipc_layout_t
+ * @brief Precomputed geometric memory layout offsets and sizes.
+ */
 typedef struct {
-    uint32_t capacity;
-    uint32_t aligned_slot_size;
-    size_t header_and_slots_size;
-    size_t data_offset;
-    size_t data_size;
-    size_t total_shm_size;
+    uint32_t capacity;              /**< Validated slot capacity (power of two) */
+    uint32_t aligned_slot_size;     /**< Cache-line aligned payload size */
+    size_t header_and_slots_size;   /**< Exact byte size of header + slot table */
+    size_t data_offset;             /**< Page-aligned offset to ring data buffer */
+    size_t data_size;               /**< Page-aligned byte size of single circular buffer */
+    size_t total_shm_size;          /**< Total shared memory file allocation size */
 } rbipc_layout_t;
 
 /**
@@ -28,6 +35,7 @@ typedef struct {
  * @param[out] layout Computed layout metrics.
  * @return RBIPC_OK on success, negative error code on overflow or invalid arguments.
  */
+RBIPC_NODISCARD
 int rbipc_shm_calc_layout(uint32_t capacity, uint32_t slot_size, size_t page_size, rbipc_layout_t *layout);
 
 /**
@@ -38,6 +46,7 @@ int rbipc_shm_calc_layout(uint32_t capacity, uint32_t slot_size, size_t page_siz
  * @param[out] out_fd Receives opened file descriptor.
  * @return RBIPC_OK on success, negative error code otherwise.
  */
+RBIPC_NODISCARD
 int rbipc_shm_create(const char *name, size_t total_size, int *out_fd);
 
 /**
@@ -47,6 +56,7 @@ int rbipc_shm_create(const char *name, size_t total_size, int *out_fd);
  * @param[out] out_fd Receives opened file descriptor.
  * @return RBIPC_OK on success, negative error code otherwise.
  */
+RBIPC_NODISCARD
 int rbipc_shm_open(const char *name, int *out_fd);
 
 /**

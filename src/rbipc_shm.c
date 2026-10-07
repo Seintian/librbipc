@@ -1,6 +1,6 @@
 /**
  * @file rbipc_shm.c
- * @brief Implementation of shared memory descriptor management
+ * @brief Implementation of shared memory descriptor management and layout geometry
  */
 
 #ifndef _GNU_SOURCE
@@ -10,6 +10,8 @@
 #include "rbipc.h"
 #include "rbipc_shm.h"
 #include "rbipc_math.h"
+#include "rbipc_attr.h"
+#include "rbipc_predicate.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -31,47 +33,76 @@
 #define F_SEAL_GROW   0x0004
 #endif
 
-int rbipc_shm_calc_layout(uint32_t capacity, uint32_t slot_size, size_t page_size, rbipc_layout_t *layout) {
-    if (!layout || capacity < 2 || slot_size == 0 || page_size == 0) {
-        return RBIPC_ERR_INVAL;
-    }
-
-    /* Check capacity is a power of two */
-    if ((capacity & (capacity - 1)) != 0) {
-        return RBIPC_ERR_INVAL;
-    }
-
+/**
+ * @brief Atomic helper: Compute aligned slot size and check for integer overflow.
+ */
+RBIPC_INLINE int rbipc_shm_calc_aligned_slot_size(uint32_t slot_size, size_t *out_aligned) {
     if (slot_size > UINT32_MAX - RBIPC_CACHE_LINE) {
         return RBIPC_ERR_OVERFLOW;
     }
-    size_t aligned_slot_size = rbipc_align_up(slot_size, RBIPC_CACHE_LINE);
-    if (aligned_slot_size == 0 || aligned_slot_size > UINT32_MAX) {
+    size_t aligned = rbipc_align_up(slot_size, RBIPC_CACHE_LINE);
+    if (aligned == 0 || aligned > UINT32_MAX) {
         return RBIPC_ERR_OVERFLOW;
     }
+    *out_aligned = aligned;
+    return RBIPC_OK;
+}
 
-    /* Check for overflow in capacity * aligned_slot_size */
+/**
+ * @brief Atomic helper: Compute circular buffer data size and page alignment.
+ */
+RBIPC_INLINE int rbipc_shm_calc_data_geometry(uint32_t capacity, size_t aligned_slot_size,
+                                              size_t page_size, size_t *out_data_size) {
     if (aligned_slot_size > SIZE_MAX / capacity) {
         return RBIPC_ERR_OVERFLOW;
     }
     size_t raw_data_size = (size_t)capacity * aligned_slot_size;
-
     size_t data_size = rbipc_align_up(raw_data_size, page_size);
     if (data_size < raw_data_size) {
         return RBIPC_ERR_OVERFLOW;
     }
+    *out_data_size = data_size;
+    return RBIPC_OK;
+}
 
-    /* Check slots table size overflow */
+/**
+ * @brief Atomic helper: Compute metadata region size and data offset alignment.
+ */
+RBIPC_INLINE int rbipc_shm_calc_metadata_geometry(uint32_t capacity, size_t page_size,
+                                                  size_t *out_hdr_and_slots,
+                                                  size_t *out_data_offset) {
     if (sizeof(rbipc_slot_t) > (SIZE_MAX - sizeof(rbipc_shm_header_t)) / capacity) {
         return RBIPC_ERR_OVERFLOW;
     }
     size_t header_and_slots = sizeof(rbipc_shm_header_t) + ((size_t)capacity * sizeof(rbipc_slot_t));
-
     size_t data_offset = rbipc_align_up(header_and_slots, page_size);
     if (data_offset < header_and_slots) {
         return RBIPC_ERR_OVERFLOW;
     }
+    *out_hdr_and_slots = header_and_slots;
+    *out_data_offset = data_offset;
+    return RBIPC_OK;
+}
 
-    if (data_size > SIZE_MAX - data_offset) {
+int rbipc_shm_calc_layout(uint32_t capacity, uint32_t slot_size, size_t page_size, rbipc_layout_t *layout) {
+    if (RBIPC_UNLIKELY(!layout || !rbipc_is_power_of_two(capacity) || capacity < 2 || slot_size == 0 || page_size == 0)) {
+        return RBIPC_ERR_INVAL;
+    }
+
+    size_t aligned_slot_size = 0;
+    int rc = rbipc_shm_calc_aligned_slot_size(slot_size, &aligned_slot_size);
+    if (RBIPC_UNLIKELY(rc != RBIPC_OK)) return rc;
+
+    size_t data_size = 0;
+    rc = rbipc_shm_calc_data_geometry(capacity, aligned_slot_size, page_size, &data_size);
+    if (RBIPC_UNLIKELY(rc != RBIPC_OK)) return rc;
+
+    size_t header_and_slots = 0;
+    size_t data_offset = 0;
+    rc = rbipc_shm_calc_metadata_geometry(capacity, page_size, &header_and_slots, &data_offset);
+    if (RBIPC_UNLIKELY(rc != RBIPC_OK)) return rc;
+
+    if (RBIPC_UNLIKELY(data_size > SIZE_MAX - data_offset)) {
         return RBIPC_ERR_OVERFLOW;
     }
     size_t total_shm_size = data_offset + data_size;
@@ -86,33 +117,63 @@ int rbipc_shm_calc_layout(uint32_t capacity, uint32_t slot_size, size_t page_siz
     return RBIPC_OK;
 }
 
+/**
+ * @brief Atomic helper: Create an anonymous memory file descriptor via Linux memfd_create.
+ */
+RBIPC_INLINE int rbipc_shm_create_anonymous(int *out_fd) {
+    int fd = memfd_create("rbipc_anon", MFD_CLOEXEC | MFD_ALLOW_SEALING);
+    if (fd < 0) {
+        return RBIPC_ERR_SYS;
+    }
+    *out_fd = fd;
+    return RBIPC_OK;
+}
+
+/**
+ * @brief Atomic helper: Create and exclusively open a POSIX shared memory object.
+ */
+RBIPC_INLINE int rbipc_shm_create_named(const char *name, int *out_fd) {
+    if (RBIPC_UNLIKELY(!rbipc_is_valid_shm_name(name))) {
+        return RBIPC_ERR_INVAL;
+    }
+    /* Clean up pre-existing stale file if any */
+    shm_unlink(name);
+    int fd = shm_open(name, O_CREAT | O_EXCL | O_RDWR, 0660);
+    if (fd < 0) {
+        return RBIPC_ERR_SYS;
+    }
+    *out_fd = fd;
+    return RBIPC_OK;
+}
+
+/**
+ * @brief Atomic helper: Truncate file descriptor to desired byte capacity.
+ */
+RBIPC_INLINE int rbipc_shm_truncate_file(int fd, size_t total_size) {
+    if (ftruncate(fd, (off_t)total_size) != 0) {
+        return RBIPC_ERR_SYS;
+    }
+    return RBIPC_OK;
+}
+
 int rbipc_shm_create(const char *name, size_t total_size, int *out_fd) {
-    if (!out_fd || total_size == 0) {
+    if (RBIPC_UNLIKELY(!out_fd || total_size == 0)) {
         return RBIPC_ERR_INVAL;
     }
 
     int fd = -1;
-    if (name) {
-        if (name[0] != '/' || strlen(name) > 255) {
-            return RBIPC_ERR_INVAL;
-        }
-        /* Remove any preexisting shm object with the same name */
-        shm_unlink(name);
-        fd = shm_open(name, O_CREAT | O_EXCL | O_RDWR, 0660);
-    } else {
-        fd = memfd_create("rbipc_anon", MFD_CLOEXEC | MFD_ALLOW_SEALING);
+    int rc = name ? rbipc_shm_create_named(name, &fd) : rbipc_shm_create_anonymous(&fd);
+    if (RBIPC_UNLIKELY(rc != RBIPC_OK)) {
+        return rc;
     }
 
-    if (fd < 0) {
-        return RBIPC_ERR_SYS;
-    }
-
-    if (ftruncate(fd, (off_t)total_size) != 0) {
+    rc = rbipc_shm_truncate_file(fd, total_size);
+    if (RBIPC_UNLIKELY(rc != RBIPC_OK)) {
         int err = errno;
         close(fd);
         if (name) shm_unlink(name);
         errno = err;
-        return RBIPC_ERR_SYS;
+        return rc;
     }
 
     *out_fd = fd;
@@ -120,7 +181,7 @@ int rbipc_shm_create(const char *name, size_t total_size, int *out_fd) {
 }
 
 int rbipc_shm_open(const char *name, int *out_fd) {
-    if (!name || !out_fd || name[0] != '/' || strlen(name) > 255) {
+    if (RBIPC_UNLIKELY(!out_fd || !rbipc_is_valid_shm_name(name))) {
         return RBIPC_ERR_INVAL;
     }
 
@@ -134,12 +195,12 @@ int rbipc_shm_open(const char *name, int *out_fd) {
 }
 
 int rbipc_shm_seal(int fd) {
-    if (fd < 0) {
+    if (RBIPC_UNLIKELY(!rbipc_is_valid_fd(fd))) {
         return RBIPC_ERR_INVAL;
     }
 #ifdef F_ADD_SEALS
     if (fcntl(fd, F_ADD_SEALS, F_SEAL_SHRINK | F_SEAL_GROW) < 0) {
-        /* Not fatal on all filesystems / kernels, but return RBIPC_OK or error */
+        /* Not fatal on all filesystems / kernels */
         return RBIPC_OK;
     }
 #endif
@@ -147,7 +208,7 @@ int rbipc_shm_seal(int fd) {
 }
 
 int rbipc_shm_unlink(const char *name) {
-    if (!name || name[0] != '/') {
+    if (RBIPC_UNLIKELY(!rbipc_is_valid_shm_name(name))) {
         return RBIPC_ERR_INVAL;
     }
     if (shm_unlink(name) != 0) {
@@ -157,7 +218,7 @@ int rbipc_shm_unlink(const char *name) {
 }
 
 void rbipc_shm_close(int fd) {
-    if (fd >= 0) {
+    if (rbipc_is_valid_fd(fd)) {
         close(fd);
     }
 }
