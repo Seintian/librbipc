@@ -184,4 +184,4 @@ TOTAL LINE COVERAGE            | 646              | 598            |    92.57%
 
 ## License
 
-MIT License / Apache-2.0.
+[Apache-2.0](LICENSE).
