@@ -79,6 +79,7 @@ librbipc/
 │   └── coverage_summary.py     # Parses gcov metrics and prints summary table
 ├── Makefile                    # Warning-free builds, tests, benchmarks, coverage, valgrind, clang-tidy
 ├── BENCHMARK_REPORT.md         # In-depth perf profiling & benchmark analysis
+├── BENCHMARK_ICEORYX2_COMPARISON.md # Metric-by-metric comparison against Eclipse iceoryx2
 └── README.md
 
 ```
@@ -177,7 +178,8 @@ TOTAL LINE COVERAGE            | 646              | 598            |    92.57%
 | **B-Queue Vector (Burst 128)** | **30,226,449 msgs/sec** | **1,844.9 MB/sec** | **33.1 ns** |
 | **Large Payload (64 KB)** | **1,161,555 msgs/sec** | **72.6 GB/sec** | **860 ns** |
 
-*For complete profiling methodology, hardware counter analysis, and `perf` breakdown, see [BENCHMARK_REPORT.md](BENCHMARK_REPORT.md).*
+*For complete profiling methodology, hardware counter analysis, and `perf` breakdown, see [BENCHMARK_REPORT.md](BENCHMARK_REPORT.md).*  
+*For an exhaustive metric-by-metric comparison with Eclipse `iceoryx2`, see [BENCHMARK_ICEORYX2_COMPARISON.md](BENCHMARK_ICEORYX2_COMPARISON.md).*
 
 
 ---
