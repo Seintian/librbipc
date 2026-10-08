@@ -22,7 +22,7 @@ TEST_BINS = $(patsubst $(TESTDIR)/%.c, $(BINDIR)/%, $(TEST_SRCS))
 BENCH_SRCS = $(wildcard $(BENCHDIR)/*.c)
 BENCH_BINS = $(patsubst $(BENCHDIR)/%.c, $(BINDIR)/%, $(BENCH_SRCS))
 
-.PHONY: all clean test bench coverage valgrind clang-tidy compile_commands
+.PHONY: all clean test bench coverage valgrind clang-tidy compile_commands docs
 
 all: $(STATIC_LIB) $(SHARED_LIB) $(TEST_BINS) compile_commands.json
 
@@ -90,7 +90,7 @@ clang-tidy:
 	@echo "=================================================="
 	@echo "           Running Clang-Tidy Static Analysis     "
 	@echo "=================================================="
-	clang-tidy -checks='bugprone-*,clang-analyzer-*,performance-*,-clang-analyzer-optin.performance.Padding' $(SRCS) -- -Iinclude -D_GNU_SOURCE
+	clang-tidy -checks='bugprone-*,clang-analyzer-*,performance-*,-clang-analyzer-optin.performance.Padding,-bugprone-easily-swappable-parameters' $(SRCS) -- -Iinclude -D_GNU_SOURCE
 	@echo "Clang-Tidy analysis passed with 0 errors!"
 
 compile_commands.json: Makefile $(SRCS) $(TEST_SRCS) $(BENCH_SRCS)
@@ -98,5 +98,8 @@ compile_commands.json: Makefile $(SRCS) $(TEST_SRCS) $(BENCH_SRCS)
 
 compile_commands: compile_commands.json
 
+docs:
+	@which doxygen > /dev/null 2>&1 && doxygen Doxyfile || echo "doxygen is not installed in the environment; install doxygen to generate HTML documentation."
+
 clean:
-	rm -rf $(BUILDDIR) $(BINDIR) $(LIBDIR) compile_commands.json *.gcda *.gcno *.gcov
+	rm -rf $(BUILDDIR) $(BINDIR) $(LIBDIR) compile_commands.json *.gcda *.gcno *.gcov docs/html

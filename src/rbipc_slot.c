@@ -1,6 +1,13 @@
 /**
  * @file rbipc_slot.c
- * @brief Implementation of slot state transitions, sequence management, and crash detection
+ * @brief Implementation of slot state transitions, sequence management, and crash detection.
+ *
+ * @details Implements atomic memory ordering synchronization for slot transitions,
+ * sequence progression under modular ring turns, and POSIX process auditing.
+ *
+ * @author Christian Santarelli
+ * @date 2026
+ * @copyright Apache License 2.0
  */
 
 #ifndef _GNU_SOURCE
@@ -16,7 +23,10 @@
 #include <unistd.h>
 
 /**
- * @brief Atomic helper: Initialize a single slot descriptor.
+ * @brief Initialize an individual slot control descriptor in shared memory.
+ *
+ * @param[out] slot  Direct pointer to slot descriptor.
+ * @param[in]  index Linear index corresponding to initial sequence position.
  */
 RBIPC_INLINE void rbipc_slot_init_single(rbipc_slot_t *slot, uint32_t index) {
     atomic_init(&slot->sequence, index);

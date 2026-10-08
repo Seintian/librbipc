@@ -1,6 +1,13 @@
 /**
  * @file rbipc_math.h
- * @brief Integer arithmetic, alignment, and sequence math helpers
+ * @brief Discrete mathematics, alignment geometry, and modular sequence arithmetic.
+ *
+ * @details Implements bitwise power-of-two rounding, address alignment, and modulo-2^32
+ * sequence difference calculations based on RFC 1982 serial number arithmetic.
+ *
+ * @author Christian Santarelli
+ * @date 2026
+ * @copyright Apache License 2.0
  */
 
 #ifndef RBIPC_MATH_H
@@ -13,11 +20,19 @@
 #include <stdint.h>
 
 /**
- * @brief Round up a 32-bit unsigned integer to the nearest power of two.
- * Returns 0 on overflow (e.g. if v > 0x80000000).
+ * @brief Round an unsigned 32-bit integer up to the nearest power of two.
  *
- * @param v Input 32-bit integer.
- * @return Nearest power of two >= v, or 0 on overflow.
+ * @details Emits branch-free bit-smearing operations:
+ * \f[
+ *   v' = v - 1, \quad v' \leftarrow v' \mid (v' \gg 1), \dots, \quad v' \leftarrow v' \mid (v' \gg 16), \quad \text{result} = v' + 1
+ * \f]
+ * Safely guards against integer overflow when @p v exceeds \f$2^{31}\f$ (0x80000000).
+ *
+ * @param[in] v Unsigned 32-bit integer input.
+ *
+ * @return Nearest power of two greater than or equal to @p v.
+ * @retval 1 if @p v is 0.
+ * @retval 0 if @p v exceeds 0x80000000 (overflow).
  */
 RBIPC_INLINE RBIPC_CONST RBIPC_NODISCARD uint32_t rbipc_round_up_pow2_32(uint32_t v) {
     if (v == 0) return 1;
@@ -32,23 +47,36 @@ RBIPC_INLINE RBIPC_CONST RBIPC_NODISCARD uint32_t rbipc_round_up_pow2_32(uint32_
 }
 
 /**
- * @brief Align value up to the specified power-of-two alignment boundary.
+ * @brief Align an integer value up to the next power-of-two boundary.
  *
- * @param val Base value.
- * @param alignment Power-of-two alignment boundary.
- * @return Aligned value.
+ * @details Utilizes two's complement bitwise masking:
+ * \f[
+ *   \text{aligned} = (val + alignment - 1) \ \& \ \sim(alignment - 1)
+ * \f]
+ *
+ * @param[in] val       Base integer value to align.
+ * @param[in] alignment Power-of-two alignment boundary (e.g. 64 for cache line, 4096 for page).
+ *
+ * @return Value rounded up to the nearest multiple of @p alignment.
  */
 RBIPC_INLINE RBIPC_CONST RBIPC_NODISCARD size_t rbipc_align_up(size_t val, size_t alignment) {
     return (val + alignment - 1) & ~(alignment - 1);
 }
 
 /**
- * @brief Signed difference between two 32-bit sequence numbers.
- * Handles modulo-2^32 wrap-around correctly as long as difference < 2^31.
+ * @brief Calculate the signed difference between two 32-bit sequence numbers under modular arithmetic.
  *
- * @param a Sequence number A.
- * @param b Sequence number B.
- * @return Signed difference (int32_t)(a - b).
+ * @details Adheres to RFC 1982 Serial Number Arithmetic rules. Correctly handles unsigned
+ * 32-bit overflow and wrap-around as long as the absolute difference is strictly less than \f$2^{31}\f$:
+ * \f[
+ *   \Delta = (\text{int32\_t})(a - b)
+ * \f]
+ *
+ * @param[in] a Monotonic sequence number A.
+ * @param[in] b Monotonic sequence number B.
+ *
+ * @return Signed 32-bit integer representing the distance from @p b to @p a.
+ *         A positive value indicates @p a is ahead of @p b; negative indicates @p a is behind @p b.
  */
 RBIPC_INLINE RBIPC_CONST RBIPC_NODISCARD int32_t rbipc_seq_diff(uint32_t a, uint32_t b) {
     return (int32_t)(a - b);

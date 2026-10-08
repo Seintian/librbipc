@@ -1,6 +1,13 @@
 /**
  * @file rbipc_sync.c
- * @brief Implementation of zero-spin passive futex synchronization engine
+ * @brief Implementation of the zero-spin passive futex synchronization engine.
+ *
+ * @details Manages thread-local monotonic deadlines, waiter registration with sequential
+ * consistency, and futex suspension and wake dispatches.
+ *
+ * @author Christian Santarelli
+ * @date 2026
+ * @copyright Apache License 2.0
  */
 
 #ifndef _GNU_SOURCE
@@ -31,12 +38,14 @@ void rbipc_sync_state_init(rbipc_sync_state_t * RBIPC_RESTRICT state, uint64_t t
 }
 
 /**
- * @brief Atomic helper: Compute futex wait timeout timespec.
+ * @brief Compute relative timeout timespec capped by RBIPC_FUTEX_PERIOD_NS.
  *
- * @param state Sync state with deadline.
- * @param now Current monotonic timestamp.
- * @param[out] out_ts Output timespec.
- * @return 0 on success, RBIPC_ERR_TIMEOUT if deadline already expired.
+ * @param[in]  state  Sync state with configured deadline.
+ * @param[in]  now    Current monotonic timestamp in nanoseconds.
+ * @param[out] out_ts Timespec structure receiving the calculated timeout.
+ *
+ * @return 0 on success.
+ * @retval RBIPC_ERR_TIMEOUT if deadline has already expired.
  */
 RBIPC_INLINE int rbipc_sync_calc_timeout_spec(const rbipc_sync_state_t * RBIPC_RESTRICT state,
                                                 uint64_t now,
@@ -58,7 +67,9 @@ RBIPC_INLINE int rbipc_sync_calc_timeout_spec(const rbipc_sync_state_t * RBIPC_R
 }
 
 /**
- * @brief Atomic helper: Increment waiter counter.
+ * @brief Increment active waiter counter using sequential consistency.
+ *
+ * @param[in,out] futex_waiters Atomic counter in shared memory.
  */
 RBIPC_INLINE void rbipc_sync_register_waiter(_Atomic uint32_t *futex_waiters) {
     if (futex_waiters) {
@@ -67,7 +78,9 @@ RBIPC_INLINE void rbipc_sync_register_waiter(_Atomic uint32_t *futex_waiters) {
 }
 
 /**
- * @brief Atomic helper: Decrement waiter counter.
+ * @brief Decrement active waiter counter using sequential consistency.
+ *
+ * @param[in,out] futex_waiters Atomic counter in shared memory.
  */
 RBIPC_INLINE void rbipc_sync_deregister_waiter(_Atomic uint32_t *futex_waiters) {
     if (futex_waiters) {
@@ -103,7 +116,11 @@ int rbipc_sync_backoff(rbipc_sync_state_t * RBIPC_RESTRICT state, _Atomic uint32
 }
 
 /**
- * @brief Atomic helper: Advance futex sequence and wake waiting threads.
+ * @brief Advance futex sequence and notify sleeping waiters if present.
+ *
+ * @param[in,out] futex_word    Atomic sequence counter in shared memory.
+ * @param[in]     futex_waiters Atomic waiter count.
+ * @param[in]     count         Number of tasks to awaken.
  */
 RBIPC_INLINE void rbipc_sync_dispatch_wake(_Atomic uint32_t *futex_word,
                                              _Atomic uint32_t *futex_waiters,

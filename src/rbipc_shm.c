@@ -1,6 +1,13 @@
 /**
  * @file rbipc_shm.c
- * @brief Implementation of shared memory descriptor management and layout geometry
+ * @brief Implementation of shared memory descriptor management and layout geometry.
+ *
+ * @details Implements overflow-safe geometric partition sizing, file descriptor creation
+ * via shm_open or memfd_create, kernel file sealing, and descriptor teardown.
+ *
+ * @author Christian Santarelli
+ * @date 2026
+ * @copyright Apache License 2.0
  */
 
 #ifndef _GNU_SOURCE
@@ -34,7 +41,12 @@
 #endif
 
 /**
- * @brief Atomic helper: Compute aligned slot size and check for integer overflow.
+ * @brief Compute cache-line aligned slot byte capacity with overflow checking.
+ *
+ * @param[in]  slot_size   Raw unaligned payload size.
+ * @param[out] out_aligned Pointer receiving aligned slot size.
+ *
+ * @return @ref RBIPC_OK on success, @ref RBIPC_ERR_OVERFLOW if value overflows 32 bits.
  */
 RBIPC_INLINE int rbipc_shm_calc_aligned_slot_size(uint32_t slot_size, size_t * RBIPC_RESTRICT out_aligned) {
     if (slot_size > UINT32_MAX - RBIPC_CACHE_LINE) {
@@ -49,7 +61,14 @@ RBIPC_INLINE int rbipc_shm_calc_aligned_slot_size(uint32_t slot_size, size_t * R
 }
 
 /**
- * @brief Atomic helper: Compute circular buffer data size and page alignment.
+ * @brief Compute page-aligned single circular data buffer size with multiplication overflow check.
+ *
+ * @param[in]  capacity          Slot count.
+ * @param[in]  aligned_slot_size Aligned slot byte size.
+ * @param[in]  page_size         System page size.
+ * @param[out] out_data_size     Pointer receiving page-aligned data buffer byte size.
+ *
+ * @return @ref RBIPC_OK on success, @ref RBIPC_ERR_OVERFLOW on overflow.
  */
 RBIPC_INLINE int rbipc_shm_calc_data_geometry(uint32_t capacity, size_t aligned_slot_size,
                                               size_t page_size, size_t * RBIPC_RESTRICT out_data_size) {
@@ -66,7 +85,14 @@ RBIPC_INLINE int rbipc_shm_calc_data_geometry(uint32_t capacity, size_t aligned_
 }
 
 /**
- * @brief Atomic helper: Compute metadata region size and data offset alignment.
+ * @brief Compute metadata structure size and page-aligned payload data offset.
+ *
+ * @param[in]  capacity          Slot count.
+ * @param[in]  page_size         System page size.
+ * @param[out] out_hdr_and_slots Pointer receiving exact header + slots byte size.
+ * @param[out] out_data_offset   Pointer receiving page-aligned offset to ring data buffer.
+ *
+ * @return @ref RBIPC_OK on success, @ref RBIPC_ERR_OVERFLOW on overflow.
  */
 RBIPC_INLINE int rbipc_shm_calc_metadata_geometry(uint32_t capacity, size_t page_size,
                                                   size_t * RBIPC_RESTRICT out_hdr_and_slots,
