@@ -53,7 +53,10 @@ PREDEFINED             = "RBIPC_NODISCARD=" \
                          "RBIPC_PACKED=" \
                          "RBIPC_EXPORT=" \
                          "__attribute__(x)=" \
-                         "_Atomic(x)=x"
+                         "_Atomic(x)=x" \
+                         "_Alignas(x)=" \
+                         "alignas(x)="
+EXCLUDE_SYMBOLS        = _GNU_SOURCE
 
 # Output formats
 GENERATE_HTML          = YES

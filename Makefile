@@ -99,7 +99,7 @@ compile_commands.json: Makefile $(SRCS) $(TEST_SRCS) $(BENCH_SRCS)
 compile_commands: compile_commands.json
 
 docs:
-	@which doxygen > /dev/null 2>&1 && doxygen Doxyfile || echo "doxygen is not installed in the environment; install doxygen to generate HTML documentation."
+	@which doxygen > /dev/null 2>&1 && doxygen Doxyfile && python3 scripts/postprocess_docs.py || echo "doxygen is not installed in the environment; install doxygen to generate HTML documentation."
 
 clean:
 	rm -rf $(BUILDDIR) $(BINDIR) $(LIBDIR) compile_commands.json *.gcda *.gcno *.gcov docs/html
