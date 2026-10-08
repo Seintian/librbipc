@@ -87,15 +87,13 @@ RBIPC_INLINE int rbipc_shm_calc_data_geometry(uint32_t capacity, size_t aligned_
 /**
  * @brief Compute metadata structure size and page-aligned payload data offset.
  *
- * @param[in]  capacity          Slot count.
- * @param[in]  page_size         System page size.
- * @param[out] out_hdr_and_slots Pointer receiving exact header + slots byte size.
- * @param[out] out_data_offset   Pointer receiving page-aligned offset to ring data buffer.
+ * @param[in]  capacity        Slot count.
+ * @param[in]  page_size       System page size.
+ * @param[out] out_data_offset Pointer receiving page-aligned offset to ring data buffer.
  *
  * @return @ref RBIPC_OK on success, @ref RBIPC_ERR_OVERFLOW on overflow.
  */
 RBIPC_INLINE int rbipc_shm_calc_metadata_geometry(uint32_t capacity, size_t page_size,
-                                                  size_t * RBIPC_RESTRICT out_hdr_and_slots,
                                                   size_t * RBIPC_RESTRICT out_data_offset) {
     if (sizeof(rbipc_slot_t) > (SIZE_MAX - sizeof(rbipc_shm_header_t)) / capacity) {
         return RBIPC_ERR_OVERFLOW;
@@ -105,7 +103,6 @@ RBIPC_INLINE int rbipc_shm_calc_metadata_geometry(uint32_t capacity, size_t page
     if (data_offset < header_and_slots) {
         return RBIPC_ERR_OVERFLOW;
     }
-    *out_hdr_and_slots = header_and_slots;
     *out_data_offset = data_offset;
     return RBIPC_OK;
 }
@@ -124,9 +121,8 @@ int rbipc_shm_calc_layout(uint32_t capacity, uint32_t slot_size, size_t page_siz
     rc = rbipc_shm_calc_data_geometry(capacity, aligned_slot_size, page_size, &data_size);
     if (RBIPC_UNLIKELY(rc != RBIPC_OK)) return rc;
 
-    size_t header_and_slots = 0;
     size_t data_offset = 0;
-    rc = rbipc_shm_calc_metadata_geometry(capacity, page_size, &header_and_slots, &data_offset);
+    rc = rbipc_shm_calc_metadata_geometry(capacity, page_size, &data_offset);
     if (RBIPC_UNLIKELY(rc != RBIPC_OK)) return rc;
 
     if (RBIPC_UNLIKELY(data_size > SIZE_MAX - data_offset)) {
@@ -136,7 +132,6 @@ int rbipc_shm_calc_layout(uint32_t capacity, uint32_t slot_size, size_t page_siz
 
     layout->capacity = capacity;
     layout->aligned_slot_size = (uint32_t)aligned_slot_size;
-    layout->header_and_slots_size = header_and_slots;
     layout->data_offset = data_offset;
     layout->data_size = data_size;
     layout->total_shm_size = total_shm_size;

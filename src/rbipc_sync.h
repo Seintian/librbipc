@@ -21,23 +21,6 @@
 #include <stdatomic.h>
 #include <stdbool.h>
 
-/**
- * @def RBIPC_DEFAULT_SPIN_PAUSE
- * @brief Number of CPU pause iterations in passive mode (strictly 0).
- */
-#define RBIPC_DEFAULT_SPIN_PAUSE 0
-
-/**
- * @def RBIPC_DEFAULT_SPIN_YIELD
- * @brief Number of sched_yield iterations in passive mode (strictly 0).
- */
-#define RBIPC_DEFAULT_SPIN_YIELD 0
-
-/**
- * @def RBIPC_FUTEX_PERIOD_NS
- * @brief Capped maximum sleep duration per futex wait invocation (20 milliseconds).
- * @details Ensures periodic wakeups to audit peer crash liveness and shutdown status.
- */
 #define RBIPC_FUTEX_PERIOD_NS    20000000ULL
 
 /**
@@ -45,7 +28,6 @@
  * @brief Thread-local state tracking for backoff progression and deadline timeout management.
  */
 typedef struct {
-    uint32_t spin_count;    /**< Legacy spin counter retained for ABI compatibility (strictly 0 in passive mode). */
     uint64_t deadline_ns;   /**< Monotonic timestamp deadline in nanoseconds (valid when @ref has_deadline is true). */
     bool has_deadline;      /**< Boolean flag indicating if an explicit operation timeout deadline is active. */
 } rbipc_sync_state_t;

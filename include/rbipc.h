@@ -154,9 +154,8 @@ extern "C" {
 #define RBIPC_VERSION               1U                    /**< Protocol layout format version number. */
 #define RBIPC_CACHE_LINE            64U                   /**< Host hardware cache-line boundary in bytes (x86_64 / arm64). */
 #define RBIPC_MIN_CAPACITY          2U                    /**< Minimum allowable ring slot capacity (power-of-two). */
-#define RBIPC_MAX_CAPACITY          (1U << 30)            /**< Maximum allowable ring slot capacity (2^30 slots, satisfying RFC 1982 sequence distance). */
+#define RBIPC_MAX_CAPACITY          (1U << 30U)           /**< Maximum allowable ring slot capacity (2^30 slots, satisfying RFC 1982 sequence distance). */
 #define RBIPC_MAX_SLOT_SIZE         (UINT32_MAX - RBIPC_CACHE_LINE) /**< Maximum permissible slot payload size before alignment overflow. */
-#define RBIPC_DEFAULT_SPIN_THRESHOLD 50000U               /**< Default active spin iterations before process liveness audit and futex backoff. */
 #define RBIPC_SHM_MODE              (S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP) /**< Default POSIX shared memory permissions (0660: rw-rw----). */
 #define RBIPC_ANON_MEMFD_NAME       "rbipc_anon"          /**< Kernel descriptor name for anonymous memory files created via memfd_create(). */
 #define RBIPC_NSEC_PER_SEC          1000000000ULL         /**< Number of nanoseconds per second. */
@@ -205,14 +204,12 @@ typedef struct {
 typedef struct {
     uint64_t magic;              /**< Structural header identification signature (@ref RBIPC_MAGIC). */
     uint32_t version;            /**< Header protocol layout format version (@ref RBIPC_VERSION). */
-    uint32_t header_size;        /**< Exact byte size of this control header structure. */
     uint64_t total_shm_size;     /**< Total file size in bytes of the shared memory region. */
     uint64_t data_offset;        /**< Page-aligned byte offset from base where payload ring data begins. */
     uint64_t data_size;          /**< Page-aligned byte size of the single circular buffer. */
     uint32_t capacity;           /**< Total number of slot descriptors (strictly a power of two). */
     uint32_t capacity_mask;      /**< Fast bitwise indexing mask, precomputed as (capacity - 1). */
     uint32_t slot_size;          /**< Maximum allowable payload byte capacity allocated per slot. */
-    uint32_t spin_threshold;     /**< Maximum iterations before evaluating peer process liveness. */
 
     /* Cache-line isolated atomic synchronization variables */
     _Alignas(RBIPC_CACHE_LINE) _Atomic uint32_t write_ticket;     /**< Monotonic ticket counter claimed by reserving producers. */

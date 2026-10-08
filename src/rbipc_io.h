@@ -41,9 +41,9 @@ RBIPC_INLINE RBIPC_PURE void *rbipc_io_calc_slot_ptr(const rbipc_ring_t *ring, u
  */
 RBIPC_INLINE void rbipc_io_prefetch_write_next(const rbipc_ring_t *ring, uint32_t next_ticket) {
     uint32_t idx = next_ticket & ring->hdr->capacity_mask;
-    RBIPC_PREFETCH(&ring->slots[idx], 1, 3);
+    RBIPC_PREFETCH(&ring->slots[idx], RBIPC_PREFETCH_WRITE, RBIPC_PREFETCH_LOCALITY_HIGH);
     void *data_map = RBIPC_ASSUME_ALIGNED(ring->data_map, RBIPC_CACHE_LINE);
-    RBIPC_PREFETCH((char *)data_map + ((size_t)idx * ring->hdr->slot_size), 1, 1);
+    RBIPC_PREFETCH((char *)data_map + ((size_t)idx * ring->hdr->slot_size), RBIPC_PREFETCH_WRITE, RBIPC_PREFETCH_LOCALITY_LOW);
 }
 
 /**
@@ -57,9 +57,9 @@ RBIPC_INLINE void rbipc_io_prefetch_write_next(const rbipc_ring_t *ring, uint32_
  */
 RBIPC_INLINE void rbipc_io_prefetch_read_next(const rbipc_ring_t *ring, uint32_t next_ticket) {
     uint32_t idx = next_ticket & ring->hdr->capacity_mask;
-    RBIPC_PREFETCH(&ring->slots[idx], 0, 3);
+    RBIPC_PREFETCH(&ring->slots[idx], RBIPC_PREFETCH_READ, RBIPC_PREFETCH_LOCALITY_HIGH);
     const void *data_map = RBIPC_ASSUME_ALIGNED(ring->data_map, RBIPC_CACHE_LINE);
-    RBIPC_PREFETCH((const char *)data_map + ((size_t)idx * ring->hdr->slot_size), 0, 1);
+    RBIPC_PREFETCH((const char *)data_map + ((size_t)idx * ring->hdr->slot_size), RBIPC_PREFETCH_READ, RBIPC_PREFETCH_LOCALITY_LOW);
 }
 
 #endif /* RBIPC_IO_H */

@@ -27,38 +27,6 @@
 #define RBIPC_INLINE            static inline __attribute__((always_inline))
 
 /**
- * @def RBIPC_NOINLINE
- * @brief Prevents the compiler from inlining the subroutine.
- * @details Applied to cold error-handling or fallback paths to preserve instruction cache (I-cache) density.
- */
-#define RBIPC_NOINLINE          __attribute__((noinline))
-
-/**
- * @def RBIPC_UNUSED
- * @brief Suppresses compiler warnings when a function or variable is intentionally unused.
- */
-#define RBIPC_UNUSED            __attribute__((unused))
-
-/**
- * @def RBIPC_FLATTEN
- * @brief Directs the compiler to inline every function called within the decorated procedure.
- * @details Used on complex dispatch loops to create a single contiguous execution trace.
- */
-#define RBIPC_FLATTEN           __attribute__((flatten))
-
-/**
- * @def RBIPC_WARN_UNUSED
- * @brief Internal alias for warn_unused_result attribute.
- */
-#define RBIPC_WARN_UNUSED       __attribute__((warn_unused_result))
-
-/**
- * @def RBIPC_INTERNAL_NONNULL(...)
- * @brief Asserts that the specified 1-based parameter indices must never receive NULL pointers.
- */
-#define RBIPC_INTERNAL_NONNULL(...) __attribute__((nonnull(__VA_ARGS__)))
-
-/**
  * @defgroup rbipc_prefetch Prefetch Parameters
  * @brief Memory access and cache hints for hardware prefetching.
  * @{
@@ -81,27 +49,15 @@
  */
 #define RBIPC_PREFETCH(addr, rw, loc) __builtin_prefetch((addr), (rw), (loc))
 
-
-/**
- * @def RBIPC_ASSUME(cond)
- * @brief Asserts an invariant condition to the compiler optimizer.
- * @details If @p cond is false, execution triggers `__builtin_unreachable()`, allowing the
- * optimizer to prune impossible dead-code branches and optimize value ranges.
- *
- * @param cond Invariant condition expression.
- */
-#define RBIPC_ASSUME(cond)      do { if (!(cond)) RBIPC_UNREACHABLE(); } while (0)
-
 #else
 #define RBIPC_INLINE            static inline
-#define RBIPC_NOINLINE
-#define RBIPC_UNUSED
-#define RBIPC_FLATTEN
-#define RBIPC_WARN_UNUSED
-#define RBIPC_INTERNAL_NONNULL(...)
+#define RBIPC_PREFETCH_READ             0
+#define RBIPC_PREFETCH_WRITE            1
+#define RBIPC_PREFETCH_LOCALITY_NONE    0
+#define RBIPC_PREFETCH_LOCALITY_LOW     1
+#define RBIPC_PREFETCH_LOCALITY_MED     2
+#define RBIPC_PREFETCH_LOCALITY_HIGH    3
 #define RBIPC_PREFETCH(addr, rw, loc) ((void)0)
-#define RBIPC_ASSUME(cond)      ((void)0)
 #endif
 
 #endif /* RBIPC_ATTR_H */
-

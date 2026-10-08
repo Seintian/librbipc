@@ -51,7 +51,7 @@
 static int rbipc_ring_validate_create_params(size_t capacity, uint32_t slot_size,
                                                size_t * RBIPC_RESTRICT out_page_size,
                                                uint32_t * RBIPC_RESTRICT out_cap) {
-    if (capacity == 0 || slot_size == 0) {
+    if (capacity == 0 || !rbipc_is_valid_slot_size(slot_size)) {
         return RBIPC_ERR_INVAL;
     }
 
@@ -60,7 +60,7 @@ static int rbipc_ring_validate_create_params(size_t capacity, uint32_t slot_size
     *out_page_size = (size_t)page_size_raw;
 
     uint32_t cap = rbipc_round_up_pow2_32((uint32_t)capacity);
-    if (cap == 0) {
+    if (cap == 0 || cap > RBIPC_MAX_CAPACITY) {
         return RBIPC_ERR_OVERFLOW;
     }
     if (cap < RBIPC_MIN_CAPACITY) cap = RBIPC_MIN_CAPACITY;
@@ -83,15 +83,12 @@ static void rbipc_ring_init_header_fields(rbipc_shm_header_t * RBIPC_RESTRICT hd
                                           uint32_t cap) {
     hdr->magic = RBIPC_MAGIC;
     hdr->version = RBIPC_VERSION;
-    hdr->header_size = (uint32_t)sizeof(*hdr);
     hdr->total_shm_size = (uint64_t)layout->total_shm_size;
     hdr->data_offset = (uint64_t)layout->data_offset;
     hdr->data_size = (uint64_t)layout->data_size;
     hdr->capacity = cap;
     hdr->capacity_mask = cap - 1;
     hdr->slot_size = layout->aligned_slot_size;
-    hdr->spin_threshold = RBIPC_DEFAULT_SPIN_THRESHOLD;
-
 
     atomic_init(&hdr->write_ticket, 0);
     atomic_init(&hdr->read_ticket, 0);

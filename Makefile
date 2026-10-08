@@ -90,7 +90,7 @@ clang-tidy:
 	@echo "=================================================="
 	@echo "           Running Clang-Tidy Static Analysis     "
 	@echo "=================================================="
-	clang-tidy -checks='bugprone-*,clang-analyzer-*,performance-*,-clang-analyzer-optin.performance.Padding,-bugprone-easily-swappable-parameters' $(SRCS) -- -Iinclude -D_GNU_SOURCE
+	clang-tidy -checks='bugprone-*,clang-analyzer-*,performance-*,-clang-analyzer-optin.performance.Padding,-bugprone-easily-swappable-parameters' $(SRCS) -- -std=c23 -Iinclude -D_GNU_SOURCE
 	@echo "Clang-Tidy analysis passed with 0 errors!"
 
 compile_commands.json: Makefile $(SRCS) $(TEST_SRCS) $(BENCH_SRCS)

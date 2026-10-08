@@ -27,7 +27,6 @@
 RBIPC_LEAF
 void rbipc_sync_state_init(rbipc_sync_state_t * RBIPC_RESTRICT state, uint64_t timeout_ns) {
     if (RBIPC_UNLIKELY(!state)) return;
-    state->spin_count = 0;
     if (timeout_ns == UINT64_MAX) {
         state->has_deadline = false;
         state->deadline_ns = 0;
@@ -111,7 +110,6 @@ int rbipc_sync_backoff(rbipc_sync_state_t * RBIPC_RESTRICT state, _Atomic uint32
     rbipc_futex_wait(futex_word, current_val, &ts);
     rbipc_sync_deregister_waiter(futex_waiters);
 
-    state->spin_count = 0;
     return 0;
 }
 

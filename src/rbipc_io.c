@@ -3,7 +3,7 @@
  * @brief Zero-copy input/output queueing operations, ticket coordination, and batching.
  * @details Implements the lock-free single-item and vectorized multi-item reservation,
  *          commit, acquisition, and release pipelines. Provides crash detection for
- *          uncommitted peer slots, hybrid adaptive spin-then-wait futex synchronization,
+ *          uncommitted peer slots, zero-spin passive futex synchronization,
  *          and memory prefetching.
  */
 
@@ -114,7 +114,7 @@ RBIPC_INLINE void rbipc_io_complete_write_reservation(rbipc_ring_t * RBIPC_RESTR
  *          delegates to rbipc_sync_backoff() waiting on @c write_futex_seq, and refreshes
  *          the producer ticket upon wakeup.
  *
- * @param[in,out] sync_state State tracking spin iterations and elapsed timeout.
+ * @param[in,out] sync_state State tracking deadline and timeout.
  * @param[in,out] hdr        Shared memory control header.
  * @param[in]     timeout_ns Nanosecond timeout budget.
  * @param[out]    t          Pointer to receive refreshed write ticket.
@@ -183,7 +183,7 @@ RBIPC_INLINE int rbipc_io_complete_read_acquisition(const rbipc_ring_t * RBIPC_R
  * @details Checks for crashed producer peers, checks shutdown drain condition,
  *          and either returns @c RBIPC_ERR_EMPTY (non-blocking) or executes futex wait.
  *
- * @param[in,out] sync_state  State tracking spin iterations and elapsed timeout.
+ * @param[in,out] sync_state  State tracking deadline and timeout.
  * @param[in,out] hdr         Shared memory control header.
  * @param[in,out] slot        Current slot descriptor.
  * @param[in]     t           Current consumer ticket.
@@ -227,8 +227,8 @@ static int rbipc_io_handle_read_backoff(rbipc_sync_state_t * RBIPC_RESTRICT sync
 
 /**
  * @brief Reserves a slot for writing with a specified nanosecond timeout.
- * @details Scans for a vacant slot at the current producer ticket. Uses an adaptive
- *          spin-then-wait loop with futex suspension if the ring is full.
+ * @details Scans for a vacant slot at the current producer ticket. Uses zero-spin
+ *          passive futex suspension if the ring is full.
  */
 int rbipc_reserve_write_timeout(rbipc_ring_t * RBIPC_RESTRICT ring, uint32_t len, uint64_t timeout_ns,
                                 void ** RBIPC_RESTRICT out_buf, uint32_t * RBIPC_RESTRICT ticket) {
@@ -257,7 +257,6 @@ int rbipc_reserve_write_timeout(rbipc_ring_t * RBIPC_RESTRICT ring, uint32_t len
                 rbipc_io_complete_write_reservation(ring, slot, t, out_buf, ticket);
                 return RBIPC_OK;
             }
-            sync_state.spin_count = 0;
         } else if (rbipc_seq_is_behind(seq, t)) {
             int rc = rbipc_io_handle_write_backoff(&sync_state, hdr, timeout_ns, &t);
             if (RBIPC_UNLIKELY(rc != RBIPC_OK)) {
@@ -265,7 +264,6 @@ int rbipc_reserve_write_timeout(rbipc_ring_t * RBIPC_RESTRICT ring, uint32_t len
             }
         } else {
             t = atomic_load_explicit(&hdr->write_ticket, memory_order_relaxed);
-            sync_state.spin_count = 0;
         }
     }
 }
@@ -335,8 +333,8 @@ int rbipc_abort_write(rbipc_ring_t * RBIPC_RESTRICT ring, uint32_t ticket) {
 
 /**
  * @brief Acquires the next committed slot for reading with a nanosecond timeout.
- * @details Reads the next slot at the consumer ticket. Supports spin-then-wait backoff
- *          with futex suspension if no data is currently available.
+ * @details Reads the next slot at the consumer ticket. Supports zero-spin passive
+ *          futex suspension if no data is currently available.
  */
 int rbipc_read_acquire_timeout(rbipc_ring_t * RBIPC_RESTRICT ring, uint64_t timeout_ns,
                                const void ** RBIPC_RESTRICT out_buf, uint32_t * RBIPC_RESTRICT out_len,
@@ -361,7 +359,6 @@ int rbipc_read_acquire_timeout(rbipc_ring_t * RBIPC_RESTRICT ring, uint64_t time
             if (RBIPC_LIKELY(rbipc_io_try_claim_read_ticket(hdr, &t, 1))) {
                 return rbipc_io_complete_read_acquisition(ring, slot, t, out_buf, out_len, ticket);
             }
-            sync_state.spin_count = 0;
         } else if (rbipc_seq_is_behind(seq, t + 1)) {
             int rc = rbipc_io_handle_read_backoff(&sync_state, hdr, slot, t, timeout_ns, &t);
             if (RBIPC_UNLIKELY(rc != RBIPC_OK)) {
@@ -369,7 +366,6 @@ int rbipc_read_acquire_timeout(rbipc_ring_t * RBIPC_RESTRICT ring, uint64_t time
             }
         } else {
             t = atomic_load_explicit(&hdr->read_ticket, memory_order_relaxed);
-            sync_state.spin_count = 0;
         }
     }
 }
@@ -504,7 +500,6 @@ int rbipc_reserve_write_batch(rbipc_ring_t * RBIPC_RESTRICT ring, uint32_t count
                 *out_reserved = avail;
                 return RBIPC_OK;
             }
-            sync_state.spin_count = 0;
         } else {
             int rc = rbipc_sync_backoff(&sync_state, &hdr->write_futex_seq, &hdr->write_waiters);
             if (RBIPC_UNLIKELY(rc != 0)) {
@@ -660,7 +655,6 @@ int rbipc_read_acquire_batch(rbipc_ring_t * RBIPC_RESTRICT ring, uint32_t count,
                 *out_acquired = avail;
                 return RBIPC_OK;
             }
-            sync_state.spin_count = 0;
         } else {
             if (RBIPC_UNLIKELY(rbipc_ring_is_drained_on_shutdown(hdr, t))) {
                 return RBIPC_ERR_SHUTDOWN;

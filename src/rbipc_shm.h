@@ -27,7 +27,6 @@
 typedef struct {
     uint32_t capacity;              /**< Validated slot count (strictly a power of two). */
     uint32_t aligned_slot_size;     /**< Payload capacity per slot aligned to cache-line boundary (64 bytes). */
-    size_t header_and_slots_size;   /**< Exact byte size of control header plus slot table. */
     size_t data_offset;             /**< Page-aligned byte offset within file where payload data begins. */
     size_t data_size;               /**< Page-aligned byte size of the single circular payload buffer. */
     size_t total_shm_size;          /**< Total shared memory file allocation size (metadata + data). */

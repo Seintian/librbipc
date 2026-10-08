@@ -111,6 +111,34 @@ static void test_header_and_sync_predicates(void) {
     hdr.total_shm_size = hdr.data_offset + hdr.data_size;
     assert(rbipc_header_is_valid(&hdr) == true);
 
+    rbipc_shm_header_t bad_hdr = hdr;
+    bad_hdr.magic = 0;
+    assert(rbipc_header_is_valid(&bad_hdr) == false);
+
+    bad_hdr = hdr;
+    bad_hdr.version = 999;
+    assert(rbipc_header_is_valid(&bad_hdr) == false);
+
+    bad_hdr = hdr;
+    bad_hdr.capacity = 1000;
+    assert(rbipc_header_is_valid(&bad_hdr) == false);
+
+    bad_hdr = hdr;
+    bad_hdr.slot_size = 0;
+    assert(rbipc_header_is_valid(&bad_hdr) == false);
+
+    bad_hdr = hdr;
+    bad_hdr.data_size = 0;
+    assert(rbipc_header_is_valid(&bad_hdr) == false);
+
+    bad_hdr = hdr;
+    bad_hdr.data_offset = 0;
+    assert(rbipc_header_is_valid(&bad_hdr) == false);
+
+    bad_hdr = hdr;
+    bad_hdr.total_shm_size = bad_hdr.data_offset;
+    assert(rbipc_header_is_valid(&bad_hdr) == false);
+
     atomic_init(&hdr.shutdown_flag, 0);
     assert(rbipc_ring_is_shutdown(&hdr) == false);
     atomic_store(&hdr.shutdown_flag, 1);

@@ -13,11 +13,9 @@
 static void test_sync_state(void) {
     rbipc_sync_state_t state;
     rbipc_sync_state_init(&state, UINT64_MAX);
-    assert(state.spin_count == 0);
     assert(state.has_deadline == false);
 
     rbipc_sync_state_init(&state, RBIPC_NSEC_PER_MSEC); /* 1ms */
-    assert(state.spin_count == 0);
     assert(state.has_deadline == true);
     assert(state.deadline_ns > 0);
 
@@ -36,7 +34,7 @@ static void test_sync_backoff_and_timeout(void) {
     rbipc_sync_state_init(&state, 1);
 
     int rc = rbipc_sync_backoff(&state, &futex_word, &futex_waiters);
-    /* Should either spin once or immediately timeout */
+    /* Should either wait or immediately timeout */
     while (rc == 0) {
         rc = rbipc_sync_backoff(&state, &futex_word, &futex_waiters);
     }

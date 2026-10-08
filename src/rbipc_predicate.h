@@ -245,8 +245,8 @@ RBIPC_INLINE RBIPC_CONST bool rbipc_slot_state_is_poisoned(uint32_t state) {
 RBIPC_INLINE RBIPC_PURE bool rbipc_header_is_valid(const rbipc_shm_header_t *hdr) {
     if (!hdr) return false;
     if (hdr->magic != RBIPC_MAGIC || hdr->version != RBIPC_VERSION) return false;
-    if (!rbipc_is_power_of_two(hdr->capacity)) return false;
-    if (hdr->capacity < 2 || hdr->slot_size == 0 || hdr->data_size == 0) return false;
+    if (!rbipc_is_valid_capacity(hdr->capacity)) return false;
+    if (!rbipc_is_valid_slot_size(hdr->slot_size) || hdr->data_size == 0) return false;
     if (hdr->data_offset == 0 || hdr->total_shm_size <= hdr->data_offset) return false;
     return true;
 }
@@ -287,7 +287,7 @@ RBIPC_INLINE bool rbipc_ring_is_drained_on_shutdown(const rbipc_shm_header_t *hd
  * @param[in] state Pointer to sync state.
  * @return true if deadline is configured, false otherwise.
  */
-RBIPC_INLINE RBIPC_CONST bool rbipc_sync_has_deadline(const rbipc_sync_state_t *state) {
+RBIPC_INLINE RBIPC_PURE bool rbipc_sync_has_deadline(const rbipc_sync_state_t *state) {
     return state != NULL && state->has_deadline;
 }
 
