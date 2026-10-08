@@ -275,7 +275,11 @@ typedef struct rbipc_ring rbipc_ring_t;
  * payload buffer), configures Linux file seals (F_SEAL_SHRINK | F_SEAL_GROW), initializes
  * slot sequence state machines, and establishes the double-mapped virtual address region.
  *
- * @param[in]  name      POSIX shared memory object path (e.g. "/my_ring"). If NULL, an anonymous
+ * @param[in]  name      POSIX shared memory object name (e.g. "/my_ring").
+ *                       Per POSIX.1-2008 (shm_open(3)), the identifier must begin with an initial
+ *                       slash followed by characters containing no further slashes. This is an
+ *                       abstract identifier backed by the kernel RAM tmpfs filesystem at /dev/shm/[name],
+ *                       NOT a file path on the root filesystem (/). If NULL, an anonymous
  *                       memfd is created that can be passed across UNIX sockets via SCM_RIGHTS.
  * @param[in]  capacity  Requested slot count. Automatically rounded up to the nearest power of two.
  *                       Must be between 2 and 2^30.
@@ -302,7 +306,8 @@ int rbipc_create(const char * RBIPC_RESTRICT name, size_t capacity, uint32_t slo
  * maps the metadata and double-mapped data regions into the caller's virtual address space,
  * and increments the active attachee counter.
  *
- * @param[in]  name     POSIX shared memory object path (e.g. "/my_ring").
+ * @param[in]  name     POSIX shared memory object name (e.g. "/my_ring").
+ *                      Must begin with an initial slash and contain no subsequent slashes (POSIX shm_open(3)).
  * @param[out] out_ring Location to store the pointer to the allocated ring handle.
  *
  * @return @ref RBIPC_OK on success.
@@ -361,7 +366,9 @@ int rbipc_detach(rbipc_ring_t *ring);
  * @details Calls shm_unlink() to dissociate the object name from the filesystem namespace.
  * Existing attached processes retain access until all handles are detached.
  *
- * @param[in] name POSIX shared memory name (e.g. "/my_ring").
+ * @param[in] name POSIX shared memory object name (e.g. "/my_ring").
+ *                 Must begin with an initial slash and contain no subsequent slashes.
+
  *
  * @return @ref RBIPC_OK on success.
  * @retval RBIPC_ERR_INVAL if @p name is NULL.

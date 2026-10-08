@@ -56,18 +56,28 @@ RBIPC_INLINE RBIPC_CONST bool rbipc_is_valid_fd(int fd) {
 /**
  * @brief Evaluate whether a string is a valid POSIX shared memory name.
  *
- * @details A compliant POSIX shared memory name must begin with a forward slash ('/'),
- * contain no additional slashes, and not exceed NAME_MAX (255 characters).
+ * @details Conforming to POSIX.1-2008 / shm_open(3), a portable shared memory object
+ * identifier must begin with an initial forward slash ('/'), contain at least one
+ * character following the slash, contain no additional slashes, and not exceed
+ * NAME_MAX (255 characters). On Linux, these objects reside in the RAM tmpfs filesystem
+ * mounted at /dev/shm, and are not filesystem paths on the root filesystem (/).
  *
  * @param[in] name NUL-terminated shared memory name string.
  * @return true if valid, false otherwise.
  */
 RBIPC_INLINE RBIPC_PURE bool rbipc_is_valid_shm_name(const char *name) {
-    if (!name || name[0] != '/') {
+    if (!name || name[0] != '/' || name[1] == '\0') {
         return false;
     }
-    return strlen(name) <= 255;
+    size_t len = 0;
+    while (name[++len] != '\0') {
+        if (name[len] == '/') {
+            return false;
+        }
+    }
+    return len <= 255;
 }
+
 
 /* ============================================================================
  * Arithmetic, Geometry, and Capacity Predicates

@@ -25,8 +25,10 @@ static void test_pointer_and_descriptor_predicates(void) {
     assert(rbipc_is_valid_fd(-99) == false);
 
     assert(rbipc_is_valid_shm_name("/my_ring") == true);
-    assert(rbipc_is_valid_shm_name("/") == true);
-    assert(rbipc_is_valid_shm_name("my_ring") == false); /* Missing leading slash */
+    assert(rbipc_is_valid_shm_name("/") == false);               /* Empty identifier after leading slash rejected */
+    assert(rbipc_is_valid_shm_name("/nested/ring") == false);     /* Nested slashes prohibited by POSIX standard */
+    assert(rbipc_is_valid_shm_name("/dev/shm/ring") == false);    /* Filesystem path with multiple slashes prohibited */
+    assert(rbipc_is_valid_shm_name("my_ring") == false);          /* Missing leading slash */
     assert(rbipc_is_valid_shm_name(NULL) == false);
 }
 
