@@ -2,5 +2,8 @@
   "clangd.arguments": [
     "--compile-commands-dir=${workspaceFolder}",
     "--header-insertion=never"
-  ]
+  ],
+  "files.associations": {
+    "*.h": "c"
+  }
 }

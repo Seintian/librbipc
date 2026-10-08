@@ -1,10 +1,24 @@
 CompileFlags:
   Add:
     - -Iinclude
-    - -I../include
-    - -I/home/chrst/repos/librbipc/include
-    - -std=c23
     - -D_GNU_SOURCE
     - -Wall
     - -Wextra
     - -Wpedantic
+
+---
+If:
+  PathMatch: .*\.h
+CompileFlags:
+  Add:
+    - -xc-header
+    - -std=c23
+
+---
+If:
+  PathMatch: .*\.c
+CompileFlags:
+  Add:
+    - -xc
+    - -std=c23
+

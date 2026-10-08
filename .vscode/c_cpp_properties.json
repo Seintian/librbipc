@@ -11,7 +11,7 @@
         "_GNU_SOURCE"
       ],
       "compilerPath": "/usr/bin/gcc",
-      "cStandard": "c11",
+      "cStandard": "c23",
       "intelliSenseMode": "linux-gcc-x64",
       "compileCommands": "${workspaceFolder}/compile_commands.json"
     }
