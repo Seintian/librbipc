@@ -1,5 +1,5 @@
 CC ?= gcc
-CFLAGS ?= -std=c11 -Wall -Wextra -Wpedantic -Werror -O3 -fPIC -Iinclude -pthread -D_GNU_SOURCE
+CFLAGS ?= -std=c23 -Wall -Wextra -Wpedantic -Werror -O3 -fPIC -Iinclude -pthread -D_GNU_SOURCE
 LDFLAGS ?= -pthread -lrt -lm
 
 SRCDIR = src
@@ -68,7 +68,7 @@ bench: $(STATIC_LIB) $(BENCH_BINS)
 	done
 
 
-coverage: CFLAGS = -std=c11 -Wall -Wextra -Wpedantic -Werror -O0 -g --coverage -fPIC -Iinclude -pthread -D_GNU_SOURCE
+coverage: CFLAGS = -std=c23 -Wall -Wextra -Wpedantic -Werror -O0 -g --coverage -fPIC -Iinclude -pthread -D_GNU_SOURCE
 coverage: LDFLAGS += --coverage
 coverage: clean test
 	@echo "=================================================="
