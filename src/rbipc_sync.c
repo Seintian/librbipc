@@ -17,7 +17,8 @@
 #include <sched.h>
 #include <errno.h>
 
-void rbipc_sync_state_init(rbipc_sync_state_t *state, uint64_t timeout_ns) {
+RBIPC_LEAF
+void rbipc_sync_state_init(rbipc_sync_state_t * RBIPC_RESTRICT state, uint64_t timeout_ns) {
     if (RBIPC_UNLIKELY(!state)) return;
     state->spin_count = 0;
     if (timeout_ns == UINT64_MAX) {
@@ -37,9 +38,9 @@ void rbipc_sync_state_init(rbipc_sync_state_t *state, uint64_t timeout_ns) {
  * @param[out] out_ts Output timespec.
  * @return 0 on success, RBIPC_ERR_TIMEOUT if deadline already expired.
  */
-RBIPC_INLINE int rbipc_sync_calc_timeout_spec(const rbipc_sync_state_t *state,
-                                              uint64_t now,
-                                              struct timespec *out_ts) {
+RBIPC_INLINE int rbipc_sync_calc_timeout_spec(const rbipc_sync_state_t * RBIPC_RESTRICT state,
+                                                uint64_t now,
+                                                struct timespec * RBIPC_RESTRICT out_ts) {
     if (state->has_deadline) {
         if (RBIPC_UNLIKELY(now >= state->deadline_ns)) {
             return RBIPC_ERR_TIMEOUT;
@@ -74,7 +75,8 @@ RBIPC_INLINE void rbipc_sync_deregister_waiter(_Atomic uint32_t *futex_waiters) 
     }
 }
 
-int rbipc_sync_backoff(rbipc_sync_state_t *state, _Atomic uint32_t *futex_word,
+RBIPC_LEAF
+int rbipc_sync_backoff(rbipc_sync_state_t * RBIPC_RESTRICT state, _Atomic uint32_t *futex_word,
                        _Atomic uint32_t *futex_waiters) {
     if (RBIPC_UNLIKELY(!state || !futex_word)) {
         return RBIPC_ERR_INVAL;
@@ -104,8 +106,8 @@ int rbipc_sync_backoff(rbipc_sync_state_t *state, _Atomic uint32_t *futex_word,
  * @brief Atomic helper: Advance futex sequence and wake waiting threads.
  */
 RBIPC_INLINE void rbipc_sync_dispatch_wake(_Atomic uint32_t *futex_word,
-                                           _Atomic uint32_t *futex_waiters,
-                                           int count) {
+                                             _Atomic uint32_t *futex_waiters,
+                                             int count) {
     if (RBIPC_UNLIKELY(!futex_word)) return;
     atomic_fetch_add_explicit(futex_word, 1, memory_order_release);
     if (rbipc_sync_should_wake(futex_waiters)) {
@@ -113,10 +115,12 @@ RBIPC_INLINE void rbipc_sync_dispatch_wake(_Atomic uint32_t *futex_word,
     }
 }
 
+RBIPC_LEAF
 void rbipc_sync_wake_one(_Atomic uint32_t *futex_word, _Atomic uint32_t *futex_waiters) {
     rbipc_sync_dispatch_wake(futex_word, futex_waiters, 1);
 }
 
+RBIPC_LEAF
 void rbipc_sync_wake_all(_Atomic uint32_t *futex_word, _Atomic uint32_t *futex_waiters) {
     rbipc_sync_dispatch_wake(futex_word, futex_waiters, INT32_MAX);
 }

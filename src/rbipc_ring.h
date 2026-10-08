@@ -16,7 +16,8 @@
 /**
  * @brief Allocate and populate a ring buffer runtime handle.
  */
-rbipc_ring_t *rbipc_ring_alloc_handle(int fd, const char *name,
+RBIPC_NODISCARD
+rbipc_ring_t *rbipc_ring_alloc_handle(int fd, const char * RBIPC_RESTRICT name,
                                       rbipc_shm_header_t *hdr,
                                       rbipc_slot_t *slots,
                                       void *ctrl_map, size_t ctrl_map_size,
@@ -26,11 +27,13 @@ rbipc_ring_t *rbipc_ring_alloc_handle(int fd, const char *name,
 /**
  * @brief Probe, inspect, and validate a shared memory object's header and layout.
  */
-int rbipc_ring_probe_and_validate_header(int fd, size_t page_size, rbipc_layout_t *out_layout);
+RBIPC_NODISCARD
+int rbipc_ring_probe_and_validate_header(int fd, size_t page_size, rbipc_layout_t * RBIPC_RESTRICT out_layout);
 
 /**
  * @brief Safely unmap virtual memory mappings associated with a ring handle.
  */
+RBIPC_LEAF
 void rbipc_ring_unmap_regions(rbipc_ring_t *ring);
 
 #endif /* RBIPC_RING_H */

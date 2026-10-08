@@ -35,8 +35,8 @@ typedef struct {
  * @param[out] layout Computed layout metrics.
  * @return RBIPC_OK on success, negative error code on overflow or invalid arguments.
  */
-RBIPC_NODISCARD
-int rbipc_shm_calc_layout(uint32_t capacity, uint32_t slot_size, size_t page_size, rbipc_layout_t *layout);
+RBIPC_NODISCARD RBIPC_LEAF
+int rbipc_shm_calc_layout(uint32_t capacity, uint32_t slot_size, size_t page_size, rbipc_layout_t * RBIPC_RESTRICT layout);
 
 /**
  * @brief Create and truncate a new shared memory file descriptor (POSIX shm or memfd).
@@ -47,7 +47,7 @@ int rbipc_shm_calc_layout(uint32_t capacity, uint32_t slot_size, size_t page_siz
  * @return RBIPC_OK on success, negative error code otherwise.
  */
 RBIPC_NODISCARD
-int rbipc_shm_create(const char *name, size_t total_size, int *out_fd);
+int rbipc_shm_create(const char * RBIPC_RESTRICT name, size_t total_size, int * RBIPC_RESTRICT out_fd);
 
 /**
  * @brief Open an existing POSIX shared memory file.
@@ -57,7 +57,7 @@ int rbipc_shm_create(const char *name, size_t total_size, int *out_fd);
  * @return RBIPC_OK on success, negative error code otherwise.
  */
 RBIPC_NODISCARD
-int rbipc_shm_open(const char *name, int *out_fd);
+int rbipc_shm_open(const char * RBIPC_RESTRICT name, int * RBIPC_RESTRICT out_fd);
 
 /**
  * @brief Apply Linux file sealing (F_SEAL_SHRINK | F_SEAL_GROW) to prevent resizing.
@@ -65,6 +65,7 @@ int rbipc_shm_open(const char *name, int *out_fd);
  * @param fd Shared memory file descriptor.
  * @return RBIPC_OK on success, negative error code if sealing fails (ignored on older kernels).
  */
+RBIPC_LEAF
 int rbipc_shm_seal(int fd);
 
 /**
@@ -73,6 +74,7 @@ int rbipc_shm_seal(int fd);
  * @param name POSIX shm name.
  * @return RBIPC_OK on success, negative error code otherwise.
  */
+RBIPC_LEAF
 int rbipc_shm_unlink(const char *name);
 
 /**
@@ -80,6 +82,7 @@ int rbipc_shm_unlink(const char *name);
  *
  * @param fd File descriptor to close.
  */
+RBIPC_LEAF
 void rbipc_shm_close(int fd);
 
 #endif /* RBIPC_SHM_H */

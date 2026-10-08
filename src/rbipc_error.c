@@ -6,7 +6,7 @@
 #include "rbipc.h"
 #include "rbipc_error.h"
 
-RBIPC_RETURNS_NONNULL RBIPC_CONST RBIPC_COLD
+RBIPC_RETURNS_NONNULL RBIPC_CONST RBIPC_COLD RBIPC_LEAF
 const char *rbipc_strerror(int err) {
     switch (err) {
         case RBIPC_OK:

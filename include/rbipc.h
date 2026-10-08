@@ -187,7 +187,7 @@ typedef struct rbipc_ring rbipc_ring_t;
  * @return RBIPC_OK on success, negative error code otherwise.
  */
 RBIPC_NODISCARD RBIPC_LEAF
-int rbipc_create(const char *name, size_t capacity, uint32_t slot_size, rbipc_ring_t **out_ring);
+int rbipc_create(const char * RBIPC_RESTRICT name, size_t capacity, uint32_t slot_size, rbipc_ring_t ** RBIPC_RESTRICT out_ring);
 
 /**
  * @brief Attach to an existing shared-memory IPC ring buffer by name.
@@ -197,7 +197,7 @@ int rbipc_create(const char *name, size_t capacity, uint32_t slot_size, rbipc_ri
  * @return RBIPC_OK on success, negative error code otherwise.
  */
 RBIPC_NODISCARD RBIPC_LEAF
-int rbipc_attach(const char *name, rbipc_ring_t **out_ring);
+int rbipc_attach(const char * RBIPC_RESTRICT name, rbipc_ring_t ** RBIPC_RESTRICT out_ring);
 
 /**
  * @brief Attach to an existing shared-memory IPC ring buffer via open file descriptor.
@@ -209,7 +209,7 @@ int rbipc_attach(const char *name, rbipc_ring_t **out_ring);
  * @return RBIPC_OK on success, negative error code otherwise.
  */
 RBIPC_NODISCARD RBIPC_LEAF
-int rbipc_attach_fd(int fd, rbipc_ring_t **out_ring);
+int rbipc_attach_fd(int fd, rbipc_ring_t ** RBIPC_RESTRICT out_ring);
 
 /**
  * @brief Detach from the ring buffer, unmapping virtual memory and closing descriptors.

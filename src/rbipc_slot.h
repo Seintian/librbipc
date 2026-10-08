@@ -18,7 +18,8 @@
  * @param slots Pointer to slot array in shared memory.
  * @param capacity Number of slots.
  */
-void rbipc_slot_init_table(rbipc_slot_t *slots, uint32_t capacity);
+RBIPC_LEAF
+void rbipc_slot_init_table(rbipc_slot_t * RBIPC_RESTRICT slots, uint32_t capacity);
 
 /**
  * @brief Check if process with given PID is still alive.
@@ -26,7 +27,7 @@ void rbipc_slot_init_table(rbipc_slot_t *slots, uint32_t capacity);
  * @param pid Process ID to probe.
  * @return true if process exists or permissions prevent signal, false if ESRCH (dead).
  */
-RBIPC_NODISCARD
+RBIPC_NODISCARD RBIPC_LEAF
 bool rbipc_slot_is_peer_alive(pid_t pid);
 
 /**
@@ -35,6 +36,7 @@ bool rbipc_slot_is_peer_alive(pid_t pid);
  * @param slot Slot descriptor.
  * @param pid Current process PID.
  */
+RBIPC_LEAF
 void rbipc_slot_mark_reserved(rbipc_slot_t *slot, pid_t pid);
 
 /**
@@ -44,6 +46,7 @@ void rbipc_slot_mark_reserved(rbipc_slot_t *slot, pid_t pid);
  * @param ticket Ticket identifier assigned to this slot.
  * @param len Byte length of committed payload.
  */
+RBIPC_LEAF
 void rbipc_slot_commit(rbipc_slot_t *slot, uint32_t ticket, uint32_t len);
 
 /**
@@ -53,6 +56,7 @@ void rbipc_slot_commit(rbipc_slot_t *slot, uint32_t ticket, uint32_t len);
  * @param ticket Ticket identifier.
  * @return true if state transitioned from RESERVED to POISONED, false otherwise.
  */
+RBIPC_LEAF
 bool rbipc_slot_poison(rbipc_slot_t *slot, uint32_t ticket);
 
 /**
@@ -62,6 +66,7 @@ bool rbipc_slot_poison(rbipc_slot_t *slot, uint32_t ticket);
  * @param ticket Ticket identifier.
  * @param capacity Total ring buffer capacity (advances sequence by capacity).
  */
+RBIPC_LEAF
 void rbipc_slot_release(rbipc_slot_t *slot, uint32_t ticket, uint32_t capacity);
 
 #endif /* RBIPC_SLOT_H */

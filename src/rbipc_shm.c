@@ -36,7 +36,7 @@
 /**
  * @brief Atomic helper: Compute aligned slot size and check for integer overflow.
  */
-RBIPC_INLINE int rbipc_shm_calc_aligned_slot_size(uint32_t slot_size, size_t *out_aligned) {
+RBIPC_INLINE int rbipc_shm_calc_aligned_slot_size(uint32_t slot_size, size_t * RBIPC_RESTRICT out_aligned) {
     if (slot_size > UINT32_MAX - RBIPC_CACHE_LINE) {
         return RBIPC_ERR_OVERFLOW;
     }
@@ -52,7 +52,7 @@ RBIPC_INLINE int rbipc_shm_calc_aligned_slot_size(uint32_t slot_size, size_t *ou
  * @brief Atomic helper: Compute circular buffer data size and page alignment.
  */
 RBIPC_INLINE int rbipc_shm_calc_data_geometry(uint32_t capacity, size_t aligned_slot_size,
-                                              size_t page_size, size_t *out_data_size) {
+                                              size_t page_size, size_t * RBIPC_RESTRICT out_data_size) {
     if (aligned_slot_size > SIZE_MAX / capacity) {
         return RBIPC_ERR_OVERFLOW;
     }
@@ -69,8 +69,8 @@ RBIPC_INLINE int rbipc_shm_calc_data_geometry(uint32_t capacity, size_t aligned_
  * @brief Atomic helper: Compute metadata region size and data offset alignment.
  */
 RBIPC_INLINE int rbipc_shm_calc_metadata_geometry(uint32_t capacity, size_t page_size,
-                                                  size_t *out_hdr_and_slots,
-                                                  size_t *out_data_offset) {
+                                                  size_t * RBIPC_RESTRICT out_hdr_and_slots,
+                                                  size_t * RBIPC_RESTRICT out_data_offset) {
     if (sizeof(rbipc_slot_t) > (SIZE_MAX - sizeof(rbipc_shm_header_t)) / capacity) {
         return RBIPC_ERR_OVERFLOW;
     }
@@ -84,7 +84,8 @@ RBIPC_INLINE int rbipc_shm_calc_metadata_geometry(uint32_t capacity, size_t page
     return RBIPC_OK;
 }
 
-int rbipc_shm_calc_layout(uint32_t capacity, uint32_t slot_size, size_t page_size, rbipc_layout_t *layout) {
+RBIPC_LEAF
+int rbipc_shm_calc_layout(uint32_t capacity, uint32_t slot_size, size_t page_size, rbipc_layout_t * RBIPC_RESTRICT layout) {
     if (RBIPC_UNLIKELY(!layout || !rbipc_is_power_of_two(capacity) || capacity < 2 || slot_size == 0 || page_size == 0)) {
         return RBIPC_ERR_INVAL;
     }
@@ -120,7 +121,7 @@ int rbipc_shm_calc_layout(uint32_t capacity, uint32_t slot_size, size_t page_siz
 /**
  * @brief Atomic helper: Create an anonymous memory file descriptor via Linux memfd_create.
  */
-RBIPC_INLINE int rbipc_shm_create_anonymous(int *out_fd) {
+RBIPC_INLINE int rbipc_shm_create_anonymous(int * RBIPC_RESTRICT out_fd) {
     int fd = memfd_create("rbipc_anon", MFD_CLOEXEC | MFD_ALLOW_SEALING);
     if (fd < 0) {
         return RBIPC_ERR_SYS;
@@ -132,7 +133,7 @@ RBIPC_INLINE int rbipc_shm_create_anonymous(int *out_fd) {
 /**
  * @brief Atomic helper: Create and exclusively open a POSIX shared memory object.
  */
-RBIPC_INLINE int rbipc_shm_create_named(const char *name, int *out_fd) {
+RBIPC_INLINE int rbipc_shm_create_named(const char * RBIPC_RESTRICT name, int * RBIPC_RESTRICT out_fd) {
     if (RBIPC_UNLIKELY(!rbipc_is_valid_shm_name(name))) {
         return RBIPC_ERR_INVAL;
     }
@@ -156,7 +157,7 @@ RBIPC_INLINE int rbipc_shm_truncate_file(int fd, size_t total_size) {
     return RBIPC_OK;
 }
 
-int rbipc_shm_create(const char *name, size_t total_size, int *out_fd) {
+int rbipc_shm_create(const char * RBIPC_RESTRICT name, size_t total_size, int * RBIPC_RESTRICT out_fd) {
     if (RBIPC_UNLIKELY(!out_fd || total_size == 0)) {
         return RBIPC_ERR_INVAL;
     }
@@ -180,7 +181,7 @@ int rbipc_shm_create(const char *name, size_t total_size, int *out_fd) {
     return RBIPC_OK;
 }
 
-int rbipc_shm_open(const char *name, int *out_fd) {
+int rbipc_shm_open(const char * RBIPC_RESTRICT name, int * RBIPC_RESTRICT out_fd) {
     if (RBIPC_UNLIKELY(!out_fd || !rbipc_is_valid_shm_name(name))) {
         return RBIPC_ERR_INVAL;
     }
@@ -194,6 +195,7 @@ int rbipc_shm_open(const char *name, int *out_fd) {
     return RBIPC_OK;
 }
 
+RBIPC_LEAF
 int rbipc_shm_seal(int fd) {
     if (RBIPC_UNLIKELY(!rbipc_is_valid_fd(fd))) {
         return RBIPC_ERR_INVAL;
@@ -207,6 +209,7 @@ int rbipc_shm_seal(int fd) {
     return RBIPC_OK;
 }
 
+RBIPC_LEAF
 int rbipc_shm_unlink(const char *name) {
     if (RBIPC_UNLIKELY(!rbipc_is_valid_shm_name(name))) {
         return RBIPC_ERR_INVAL;
@@ -217,6 +220,7 @@ int rbipc_shm_unlink(const char *name) {
     return RBIPC_OK;
 }
 
+RBIPC_LEAF
 void rbipc_shm_close(int fd) {
     if (rbipc_is_valid_fd(fd)) {
         close(fd);

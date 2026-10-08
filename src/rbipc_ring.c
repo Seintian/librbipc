@@ -34,7 +34,8 @@
  * @brief Atomic procedure: Validate user configuration arguments and resolve host page boundary.
  */
 static int rbipc_ring_validate_create_params(size_t capacity, uint32_t slot_size,
-                                             size_t *out_page_size, uint32_t *out_cap) {
+                                               size_t * RBIPC_RESTRICT out_page_size,
+                                               uint32_t * RBIPC_RESTRICT out_cap) {
     if (capacity == 0 || slot_size == 0) {
         return RBIPC_ERR_INVAL;
     }
@@ -56,7 +57,9 @@ static int rbipc_ring_validate_create_params(size_t capacity, uint32_t slot_size
 /**
  * @brief Atomic procedure: Initialize structural header control words and atomic variables.
  */
-static void rbipc_ring_init_header_fields(rbipc_shm_header_t *hdr, const rbipc_layout_t *layout, uint32_t cap) {
+static void rbipc_ring_init_header_fields(rbipc_shm_header_t * RBIPC_RESTRICT hdr,
+                                          const rbipc_layout_t * RBIPC_RESTRICT layout,
+                                          uint32_t cap) {
     hdr->magic = RBIPC_MAGIC;
     hdr->version = RBIPC_VERSION;
     hdr->header_size = (uint32_t)sizeof(*hdr);
@@ -82,7 +85,7 @@ static void rbipc_ring_init_header_fields(rbipc_shm_header_t *hdr, const rbipc_l
 /**
  * @brief Atomic procedure: Allocate heap descriptor and populate runtime ring metadata.
  */
-rbipc_ring_t *rbipc_ring_alloc_handle(int fd, const char *name,
+rbipc_ring_t *rbipc_ring_alloc_handle(int fd, const char * RBIPC_RESTRICT name,
                                       rbipc_shm_header_t *hdr,
                                       rbipc_slot_t *slots,
                                       void *ctrl_map, size_t ctrl_map_size,
@@ -128,7 +131,7 @@ static void rbipc_ring_abort_create(int fd, const char *name, void *ctrl_map,
     }
 }
 
-int rbipc_create(const char *name, size_t capacity, uint32_t slot_size, rbipc_ring_t **out_ring) {
+int rbipc_create(const char * RBIPC_RESTRICT name, size_t capacity, uint32_t slot_size, rbipc_ring_t ** RBIPC_RESTRICT out_ring) {
     if (RBIPC_UNLIKELY(!out_ring)) {
         return RBIPC_ERR_INVAL;
     }
@@ -186,7 +189,7 @@ int rbipc_create(const char *name, size_t capacity, uint32_t slot_size, rbipc_ri
     return RBIPC_OK;
 }
 
-int rbipc_ring_probe_and_validate_header(int fd, size_t page_size, rbipc_layout_t *out_layout) {
+int rbipc_ring_probe_and_validate_header(int fd, size_t page_size, rbipc_layout_t * RBIPC_RESTRICT out_layout) {
     void *probe_map = NULL;
     int rc = rbipc_vmem_map_ctrl(fd, page_size, &probe_map);
     if (RBIPC_UNLIKELY(rc != RBIPC_OK)) {
@@ -214,7 +217,7 @@ int rbipc_ring_probe_and_validate_header(int fd, size_t page_size, rbipc_layout_
     return RBIPC_OK;
 }
 
-int rbipc_attach_fd(int fd, rbipc_ring_t **out_ring) {
+int rbipc_attach_fd(int fd, rbipc_ring_t ** RBIPC_RESTRICT out_ring) {
     if (RBIPC_UNLIKELY(!rbipc_is_valid_fd(fd) || !out_ring)) {
         return RBIPC_ERR_INVAL;
     }
@@ -260,7 +263,7 @@ int rbipc_attach_fd(int fd, rbipc_ring_t **out_ring) {
     return RBIPC_OK;
 }
 
-int rbipc_attach(const char *name, rbipc_ring_t **out_ring) {
+int rbipc_attach(const char * RBIPC_RESTRICT name, rbipc_ring_t ** RBIPC_RESTRICT out_ring) {
     if (RBIPC_UNLIKELY(!name || !out_ring)) {
         return RBIPC_ERR_INVAL;
     }
@@ -281,6 +284,7 @@ int rbipc_attach(const char *name, rbipc_ring_t **out_ring) {
     return RBIPC_OK;
 }
 
+RBIPC_LEAF
 void rbipc_ring_unmap_regions(rbipc_ring_t *ring) {
     if (!ring) return;
 
@@ -339,10 +343,12 @@ int rbipc_signal_shutdown(rbipc_ring_t *ring) {
     return RBIPC_OK;
 }
 
+RBIPC_LEAF
 int rbipc_get_fd(const rbipc_ring_t *ring) {
     return ring ? ring->fd : -1;
 }
 
+RBIPC_LEAF
 int rbipc_get_stats(const rbipc_ring_t * RBIPC_RESTRICT ring, rbipc_stats_t * RBIPC_RESTRICT out_stats) {
     if (RBIPC_UNLIKELY(!ring || !ring->hdr || !out_stats)) {
         return RBIPC_ERR_INVAL;

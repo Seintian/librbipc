@@ -33,7 +33,8 @@ typedef struct {
  * @param state Pointer to sync state.
  * @param timeout_ns Timeout in nanoseconds (0 for non-blocking check, UINT64_MAX for infinite).
  */
-void rbipc_sync_state_init(rbipc_sync_state_t *state, uint64_t timeout_ns);
+RBIPC_LEAF
+void rbipc_sync_state_init(rbipc_sync_state_t * RBIPC_RESTRICT state, uint64_t timeout_ns);
 
 /**
  * @brief Execute passive wait step:
@@ -44,8 +45,8 @@ void rbipc_sync_state_init(rbipc_sync_state_t *state, uint64_t timeout_ns);
  * @param futex_waiters Optional atomic counter of threads sleeping in futex.
  * @return 0 on continued wait, RBIPC_ERR_TIMEOUT if deadline exceeded.
  */
-RBIPC_NODISCARD
-int rbipc_sync_backoff(rbipc_sync_state_t *state, _Atomic uint32_t *futex_word,
+RBIPC_NODISCARD RBIPC_LEAF
+int rbipc_sync_backoff(rbipc_sync_state_t * RBIPC_RESTRICT state, _Atomic uint32_t *futex_word,
                        _Atomic uint32_t *futex_waiters);
 
 /**
@@ -57,6 +58,7 @@ int rbipc_sync_backoff(rbipc_sync_state_t *state, _Atomic uint32_t *futex_word,
  * @param futex_word Futex sequence atomic counter.
  * @param futex_waiters Optional atomic counter of threads sleeping in futex.
  */
+RBIPC_LEAF
 void rbipc_sync_wake_one(_Atomic uint32_t *futex_word, _Atomic uint32_t *futex_waiters);
 
 /**
@@ -65,6 +67,7 @@ void rbipc_sync_wake_one(_Atomic uint32_t *futex_word, _Atomic uint32_t *futex_w
  * @param futex_word Futex sequence atomic counter.
  * @param futex_waiters Optional atomic counter of threads sleeping in futex.
  */
+RBIPC_LEAF
 void rbipc_sync_wake_all(_Atomic uint32_t *futex_word, _Atomic uint32_t *futex_waiters);
 
 #endif /* RBIPC_SYNC_H */

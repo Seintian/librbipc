@@ -17,7 +17,8 @@
 #include <sys/syscall.h>
 #include <linux/futex.h>
 
-void rbipc_ns_to_timespec(uint64_t ns, struct timespec *ts) {
+RBIPC_LEAF
+void rbipc_ns_to_timespec(uint64_t ns, struct timespec * RBIPC_RESTRICT ts) {
     if (RBIPC_UNLIKELY(rbipc_is_null(ts))) {
         return;
     }
@@ -25,7 +26,8 @@ void rbipc_ns_to_timespec(uint64_t ns, struct timespec *ts) {
     ts->tv_nsec = (long)(ns % 1000000000ULL);
 }
 
-int rbipc_futex_wait(_Atomic uint32_t *uaddr, uint32_t val, const struct timespec *timeout) {
+RBIPC_LEAF
+int rbipc_futex_wait(_Atomic uint32_t *uaddr, uint32_t val, const struct timespec * RBIPC_RESTRICT timeout) {
     if (RBIPC_UNLIKELY(rbipc_is_null(uaddr))) {
         return -EINVAL;
     }
@@ -37,6 +39,7 @@ int rbipc_futex_wait(_Atomic uint32_t *uaddr, uint32_t val, const struct timespe
     return 0;
 }
 
+RBIPC_LEAF
 int rbipc_futex_wake(_Atomic uint32_t *uaddr, int count) {
     if (RBIPC_UNLIKELY(rbipc_is_null(uaddr))) {
         return -EINVAL;

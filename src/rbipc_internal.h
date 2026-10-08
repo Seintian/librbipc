@@ -39,7 +39,7 @@ struct rbipc_ring {
  * @param dest_size Size of destination buffer in bytes.
  * @param src Null-terminated source string.
  */
-RBIPC_INLINE void rbipc_str_copy(char *dest, size_t dest_size, const char *src) {
+RBIPC_INLINE void rbipc_str_copy(char * RBIPC_RESTRICT dest, size_t dest_size, const char * RBIPC_RESTRICT src) {
     if (RBIPC_UNLIKELY(!dest || dest_size == 0)) {
         return;
     }

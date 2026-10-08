@@ -20,7 +20,7 @@
  * @return RBIPC_OK on success, negative error code otherwise.
  */
 RBIPC_NODISCARD
-int rbipc_vmem_map_ctrl(int fd, size_t size, void **out_map);
+int rbipc_vmem_map_ctrl(int fd, size_t size, void ** RBIPC_RESTRICT out_map);
 
 /**
  * @brief Unmap control header and slot metadata region.
@@ -28,6 +28,7 @@ int rbipc_vmem_map_ctrl(int fd, size_t size, void **out_map);
  * @param map Pointer to mapped virtual address.
  * @param size Size in bytes of control region.
  */
+RBIPC_LEAF
 void rbipc_vmem_unmap_ctrl(void *map, size_t size);
 
 /**
@@ -43,7 +44,7 @@ void rbipc_vmem_unmap_ctrl(void *map, size_t size);
  * @return RBIPC_OK on success, negative error code otherwise.
  */
 RBIPC_NODISCARD
-int rbipc_vmem_map_double(int fd, size_t offset, size_t data_size, void **out_data_map);
+int rbipc_vmem_map_double(int fd, size_t offset, size_t data_size, void ** RBIPC_RESTRICT out_data_map);
 
 /**
  * @brief Unmap the double-mapped virtual buffer.
@@ -51,6 +52,7 @@ int rbipc_vmem_map_double(int fd, size_t offset, size_t data_size, void **out_da
  * @param data_map Contiguous double-mapped base pointer.
  * @param data_size Size of single circular buffer (unmaps 2 * data_size).
  */
+RBIPC_LEAF
 void rbipc_vmem_unmap_double(void *data_map, size_t data_size);
 
 #endif /* RBIPC_VMEM_H */

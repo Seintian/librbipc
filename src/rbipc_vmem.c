@@ -16,7 +16,7 @@
 #include <unistd.h>
 #include <errno.h>
 
-int rbipc_vmem_map_ctrl(int fd, size_t size, void **out_map) {
+int rbipc_vmem_map_ctrl(int fd, size_t size, void ** RBIPC_RESTRICT out_map) {
     if (RBIPC_UNLIKELY(!rbipc_is_valid_fd(fd) || size == 0 || !out_map)) {
         return RBIPC_ERR_INVAL;
     }
@@ -30,6 +30,7 @@ int rbipc_vmem_map_ctrl(int fd, size_t size, void **out_map) {
     return RBIPC_OK;
 }
 
+RBIPC_LEAF
 void rbipc_vmem_unmap_ctrl(void *map, size_t size) {
     if (map && size > 0) {
         munmap(map, size);
@@ -39,7 +40,7 @@ void rbipc_vmem_unmap_ctrl(void *map, size_t size) {
 /**
  * @brief Atomic helper: Reserve 2x contiguous uncommitted virtual address space.
  */
-RBIPC_INLINE int rbipc_vmem_reserve_address_space(size_t total_size, void **out_anon) {
+RBIPC_INLINE int rbipc_vmem_reserve_address_space(size_t total_size, void ** RBIPC_RESTRICT out_anon) {
     void *anon = mmap(NULL, total_size, PROT_NONE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
     if (anon == MAP_FAILED) {
         return RBIPC_ERR_NOMEM;
@@ -68,7 +69,7 @@ RBIPC_INLINE int rbipc_vmem_bind_mirror_halves(int fd, size_t offset, size_t dat
     return RBIPC_OK;
 }
 
-int rbipc_vmem_map_double(int fd, size_t offset, size_t data_size, void **out_data_map) {
+int rbipc_vmem_map_double(int fd, size_t offset, size_t data_size, void ** RBIPC_RESTRICT out_data_map) {
     if (RBIPC_UNLIKELY(!rbipc_is_valid_fd(fd) || data_size == 0 || !out_data_map)) {
         return RBIPC_ERR_INVAL;
     }
@@ -89,6 +90,7 @@ int rbipc_vmem_map_double(int fd, size_t offset, size_t data_size, void **out_da
     return RBIPC_OK;
 }
 
+RBIPC_LEAF
 void rbipc_vmem_unmap_double(void *data_map, size_t data_size) {
     if (data_map && data_size > 0) {
         munmap(data_map, 2 * data_size);

@@ -19,7 +19,8 @@
  * @param ns Duration in nanoseconds.
  * @param[out] ts Output timespec structure.
  */
-void rbipc_ns_to_timespec(uint64_t ns, struct timespec *ts);
+RBIPC_LEAF
+void rbipc_ns_to_timespec(uint64_t ns, struct timespec * RBIPC_RESTRICT ts);
 
 /**
  * @brief Wait on a process-shared futex word until value changes or timeout expires.
@@ -29,7 +30,8 @@ void rbipc_ns_to_timespec(uint64_t ns, struct timespec *ts);
  * @param timeout Optional timeout specification (NULL for infinite).
  * @return 0 on success/wake, negative error code on failure (e.g. -ETIMEDOUT, -EWOULDBLOCK).
  */
-int rbipc_futex_wait(_Atomic uint32_t *uaddr, uint32_t val, const struct timespec *timeout);
+RBIPC_LEAF
+int rbipc_futex_wait(_Atomic uint32_t *uaddr, uint32_t val, const struct timespec * RBIPC_RESTRICT timeout);
 
 /**
  * @brief Wake up to 'count' waiters on the futex word.
@@ -38,6 +40,7 @@ int rbipc_futex_wait(_Atomic uint32_t *uaddr, uint32_t val, const struct timespe
  * @param count Number of waiting threads/processes to awaken.
  * @return Number of woken processes, or negative errno on error.
  */
+RBIPC_LEAF
 int rbipc_futex_wake(_Atomic uint32_t *uaddr, int count);
 
 #endif /* RBIPC_FUTEX_H */

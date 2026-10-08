@@ -15,7 +15,7 @@
  * @param err Return code from any rbipc function.
  * @return Static string describing the error.
  */
-RBIPC_RETURNS_NONNULL RBIPC_CONST RBIPC_COLD
+RBIPC_RETURNS_NONNULL RBIPC_CONST RBIPC_COLD RBIPC_LEAF
 const char *rbipc_strerror(int err);
 
 #endif /* RBIPC_ERROR_H */
