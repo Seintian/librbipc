@@ -2,6 +2,7 @@
 build/
 bin/
 lib/
+docs/
 *.o
 *.a
 *.so

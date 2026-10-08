@@ -1,22 +1,14 @@
 /**
  * @file rbipc_error.c
  * @brief Implementation of error string translation for librbipc.
- *
  * @details Implements a branch-table mapping of status codes to human-readable strings.
- *
- * @author Christian Santarelli
- * @date 2026
- * @copyright Apache License 2.0
  */
 
 #include "rbipc.h"
 #include "rbipc_error.h"
 
 /**
- * @brief Map an error code to a static description string.
- *
- * @param[in] err Return code from any librbipc API function.
- * @return Static constant string describing the error condition.
+ * @brief Maps an error code to a static description string.
  */
 RBIPC_RETURNS_NONNULL RBIPC_CONST RBIPC_COLD RBIPC_LEAF
 const char *rbipc_strerror(int err) {

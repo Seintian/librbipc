@@ -51,11 +51,11 @@ void rbipc_vmem_unmap_ctrl(void *map, size_t size);
  * @brief Constructs a double-mapped contiguous virtual address mirror for the ring data buffer.
  * @details To achieve zero-copy contiguous access across circular buffer wrap-around boundaries,
  *          this function:
- *          1. Reserves an uncommitted virtual address range of size \(2 \times \text{data\_size}\)
+ *          1. Reserves an uncommitted virtual address range of size (2 * data_size)
  *             using an anonymous private mapping (@c PROT_NONE, @c MAP_PRIVATE | @c MAP_ANONYMOUS).
- *          2. Overwrites the first half \([ \text{anon}, \text{anon} + \text{data\_size} )\)
+ *          2. Overwrites the first half [anon, anon + data_size)
  *             with a shared mapping of the underlying shared memory object at @p offset.
- *          3. Overwrites the second half \([ \text{anon} + \text{data\_size}, \text{anon} + 2 \times \text{data\_size} )\)
+ *          3. Overwrites the second half [anon + data_size, anon + 2 * data_size)
  *             with another shared mapping pointing to the exact same shared memory @p offset.
  *
  *          As a result, access spanning past the end of the first half seamlessly wraps
@@ -80,14 +80,15 @@ int rbipc_vmem_map_double(int fd, size_t offset, size_t data_size, void ** RBIPC
 
 /**
  * @brief Unmaps the double-mapped virtual buffer mirror.
- * @details Releases the entire \(2 \times \text{data\_size}\) contiguous virtual memory
+ * @details Releases the entire (2 * data_size) contiguous virtual memory
  *          region previously established by rbipc_vmem_map_double().
  *
  * @param[in] data_map  Contiguous double-mapped base pointer.
- * @param[in] data_size Size in bytes of a single buffer (releases \(2 \times \text{data\_size}\)).
+ * @param[in] data_size Size in bytes of a single buffer (releases 2 * data_size).
  */
 RBIPC_LEAF
 void rbipc_vmem_unmap_double(void *data_map, size_t data_size);
+
 
 #endif /* RBIPC_VMEM_H */
 

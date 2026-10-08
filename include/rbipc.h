@@ -208,9 +208,9 @@ typedef struct {
     _Alignas(RBIPC_CACHE_LINE) _Atomic uint32_t write_ticket;     /**< Monotonic ticket counter claimed by reserving producers. */
     _Alignas(RBIPC_CACHE_LINE) _Atomic uint32_t read_ticket;      /**< Monotonic ticket counter claimed by acquiring consumers. */
     _Alignas(RBIPC_CACHE_LINE) _Atomic uint32_t futex_seq;        /**< Futex word sequence counter for consumer wakeups (data ready). */
-    _Alignas(RBIPC_CACHE_LINE) _Atomic uint32_t futex_waiters;    /**< Count of consumer threads actively sleeping on @ref futex_seq. */
+    _Alignas(RBIPC_CACHE_LINE) _Atomic uint32_t futex_waiters;    /**< Count of consumer threads actively sleeping on @c futex_seq. */
     _Alignas(RBIPC_CACHE_LINE) _Atomic uint32_t write_futex_seq;  /**< Futex word sequence counter for producer wakeups (space ready). */
-    _Alignas(RBIPC_CACHE_LINE) _Atomic uint32_t write_waiters;    /**< Count of producer threads actively sleeping on @ref write_futex_seq. */
+    _Alignas(RBIPC_CACHE_LINE) _Atomic uint32_t write_waiters;    /**< Count of producer threads actively sleeping on @c write_futex_seq. */
     _Alignas(RBIPC_CACHE_LINE) _Atomic uint32_t active_producers; /**< Number of currently attached producer handles. */
     _Alignas(RBIPC_CACHE_LINE) _Atomic uint32_t active_consumers; /**< Number of currently attached consumer handles. */
     _Alignas(RBIPC_CACHE_LINE) _Atomic uint32_t shutdown_flag;    /**< Atomic flag set to 1 when cooperative shutdown is requested. */

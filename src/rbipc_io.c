@@ -229,19 +229,6 @@ static int rbipc_io_handle_read_backoff(rbipc_sync_state_t * RBIPC_RESTRICT sync
  * @brief Reserves a slot for writing with a specified nanosecond timeout.
  * @details Scans for a vacant slot at the current producer ticket. Uses an adaptive
  *          spin-then-wait loop with futex suspension if the ring is full.
- *
- * @param[in,out] ring       Pointer to active ring handle.
- * @param[in]     len        Requested maximum payload size in bytes.
- * @param[in]     timeout_ns Timeout in nanoseconds (0 = non-blocking, UINT64_MAX = infinite).
- * @param[out]    out_buf    Pointer to receive direct shared memory write buffer.
- * @param[out]    ticket     Pointer to receive assigned reservation ticket.
- *
- * @return Status code indicating reservation outcome.
- * @retval RBIPC_OK           Slot successfully reserved.
- * @retval RBIPC_ERR_INVAL    Invalid argument, null pointer, or payload exceeds slot capacity.
- * @retval RBIPC_ERR_FULL     Non-blocking mode and ring is full.
- * @retval RBIPC_ERR_TIMEDOUT Timeout expired before space became available.
- * @retval RBIPC_ERR_SHUTDOWN Ring has been flagged for shutdown.
  */
 int rbipc_reserve_write_timeout(rbipc_ring_t * RBIPC_RESTRICT ring, uint32_t len, uint64_t timeout_ns,
                                 void ** RBIPC_RESTRICT out_buf, uint32_t * RBIPC_RESTRICT ticket) {
@@ -285,13 +272,6 @@ int rbipc_reserve_write_timeout(rbipc_ring_t * RBIPC_RESTRICT ring, uint32_t len
 
 /**
  * @brief Reserves a slot for writing with indefinite blocking.
- *
- * @param[in,out] ring    Pointer to active ring handle.
- * @param[in]     len     Requested maximum payload size in bytes.
- * @param[out]    out_buf Pointer to receive write buffer.
- * @param[out]    ticket  Pointer to receive reservation ticket.
- *
- * @return Status code indicating reservation outcome (see rbipc_reserve_write_timeout()).
  */
 int rbipc_reserve_write(rbipc_ring_t * RBIPC_RESTRICT ring, uint32_t len,
                         void ** RBIPC_RESTRICT out_buf, uint32_t * RBIPC_RESTRICT ticket) {
@@ -300,13 +280,6 @@ int rbipc_reserve_write(rbipc_ring_t * RBIPC_RESTRICT ring, uint32_t len,
 
 /**
  * @brief Reserves a slot for writing non-blockingly.
- *
- * @param[in,out] ring    Pointer to active ring handle.
- * @param[in]     len     Requested maximum payload size in bytes.
- * @param[out]    out_buf Pointer to receive write buffer.
- * @param[out]    ticket  Pointer to receive reservation ticket.
- *
- * @return Status code indicating reservation outcome; returns @c RBIPC_ERR_FULL if ring is full.
  */
 int rbipc_reserve_write_nonblock(rbipc_ring_t * RBIPC_RESTRICT ring, uint32_t len,
                                  void ** RBIPC_RESTRICT out_buf, uint32_t * RBIPC_RESTRICT ticket) {
@@ -317,14 +290,6 @@ int rbipc_reserve_write_nonblock(rbipc_ring_t * RBIPC_RESTRICT ring, uint32_t le
  * @brief Commits a previously reserved slot, publishing its contents to consumers.
  * @details Stores the written length, publishes the slot sequence with release memory semantics,
  *          and wakes a suspended consumer via futex if waiters exist.
- *
- * @param[in,out] ring        Pointer to active ring handle.
- * @param[in]     ticket      Reservation ticket obtained during reservation.
- * @param[in]     written_len Actual byte count written to the payload buffer.
- *
- * @return Status code indicating commit outcome.
- * @retval RBIPC_OK        Slot successfully committed.
- * @retval RBIPC_ERR_INVAL Invalid handle or written length exceeds slot capacity.
  */
 int rbipc_commit_write(rbipc_ring_t * RBIPC_RESTRICT ring, uint32_t ticket, uint32_t written_len) {
     if (RBIPC_UNLIKELY(!ring || !ring->hdr || written_len > ring->hdr->slot_size)) {
@@ -347,13 +312,6 @@ int rbipc_commit_write(rbipc_ring_t * RBIPC_RESTRICT ring, uint32_t ticket, uint
  * @brief Aborts a reserved slot without committing meaningful payload.
  * @details Transitions the slot to poisoned state and advances sequence, allowing
  *          consumers to skip the slot without stalling progress.
- *
- * @param[in,out] ring   Pointer to active ring handle.
- * @param[in]     ticket Reservation ticket to abort.
- *
- * @return Status code indicating abort outcome.
- * @retval RBIPC_OK        Slot successfully aborted and poisoned.
- * @retval RBIPC_ERR_INVAL Invalid ring handle.
  */
 int rbipc_abort_write(rbipc_ring_t * RBIPC_RESTRICT ring, uint32_t ticket) {
     if (RBIPC_UNLIKELY(!ring || !ring->hdr)) {
@@ -379,20 +337,6 @@ int rbipc_abort_write(rbipc_ring_t * RBIPC_RESTRICT ring, uint32_t ticket) {
  * @brief Acquires the next committed slot for reading with a nanosecond timeout.
  * @details Reads the next slot at the consumer ticket. Supports spin-then-wait backoff
  *          with futex suspension if no data is currently available.
- *
- * @param[in,out] ring       Pointer to active ring handle.
- * @param[in]     timeout_ns Nanosecond timeout budget.
- * @param[out]    out_buf    Pointer to receive const direct read buffer.
- * @param[out]    out_len    Pointer to receive payload length.
- * @param[out]    ticket     Pointer to receive slot ticket.
- *
- * @return Status code indicating acquisition outcome.
- * @retval RBIPC_OK           Slot acquired successfully.
- * @retval RBIPC_ERR_INVAL    Invalid argument or null pointer.
- * @retval RBIPC_ERR_EMPTY    Non-blocking mode and ring is empty.
- * @retval RBIPC_ERR_TIMEDOUT Timeout expired without data available.
- * @retval RBIPC_ERR_POISONED Slot was aborted/poisoned by producer.
- * @retval RBIPC_ERR_SHUTDOWN Ring shut down and drained.
  */
 int rbipc_read_acquire_timeout(rbipc_ring_t * RBIPC_RESTRICT ring, uint64_t timeout_ns,
                                const void ** RBIPC_RESTRICT out_buf, uint32_t * RBIPC_RESTRICT out_len,
@@ -432,13 +376,6 @@ int rbipc_read_acquire_timeout(rbipc_ring_t * RBIPC_RESTRICT ring, uint64_t time
 
 /**
  * @brief Acquires the next committed slot for reading with indefinite blocking.
- *
- * @param[in,out] ring    Pointer to active ring handle.
- * @param[out]    out_buf Pointer to receive read buffer.
- * @param[out]    out_len Pointer to receive payload length.
- * @param[out]    ticket  Pointer to receive ticket.
- *
- * @return Status code indicating acquisition outcome.
  */
 int rbipc_read_acquire(rbipc_ring_t * RBIPC_RESTRICT ring, const void ** RBIPC_RESTRICT out_buf,
                        uint32_t * RBIPC_RESTRICT out_len, uint32_t * RBIPC_RESTRICT ticket) {
@@ -447,13 +384,6 @@ int rbipc_read_acquire(rbipc_ring_t * RBIPC_RESTRICT ring, const void ** RBIPC_R
 
 /**
  * @brief Acquires the next committed slot for reading non-blockingly.
- *
- * @param[in,out] ring    Pointer to active ring handle.
- * @param[out]    out_buf Pointer to receive read buffer.
- * @param[out]    out_len Pointer to receive payload length.
- * @param[out]    ticket  Pointer to receive ticket.
- *
- * @return Status code indicating outcome; returns @c RBIPC_ERR_EMPTY if no item available.
  */
 int rbipc_read_acquire_nonblock(rbipc_ring_t * RBIPC_RESTRICT ring, const void ** RBIPC_RESTRICT out_buf,
                                 uint32_t * RBIPC_RESTRICT out_len, uint32_t * RBIPC_RESTRICT ticket) {
@@ -464,13 +394,6 @@ int rbipc_read_acquire_nonblock(rbipc_ring_t * RBIPC_RESTRICT ring, const void *
  * @brief Releases a previously acquired slot, recycling it for future producer writes.
  * @details Increments the slot sequence by capacity to mark it vacant for the next cycle,
  *          and wakes a suspended producer via futex if write waiters exist.
- *
- * @param[in,out] ring   Pointer to active ring handle.
- * @param[in]     ticket Slot ticket to release.
- *
- * @return Status code indicating release outcome.
- * @retval RBIPC_OK        Slot successfully released.
- * @retval RBIPC_ERR_INVAL Invalid ring handle.
  */
 int rbipc_read_release(rbipc_ring_t * RBIPC_RESTRICT ring, uint32_t ticket) {
     if (RBIPC_UNLIKELY(!ring || !ring->hdr)) {
@@ -552,16 +475,6 @@ static void rbipc_io_populate_reserved_batch(rbipc_ring_t * RBIPC_RESTRICT ring,
 /**
  * @brief Reserves a contiguous batch of slots for writing using vector descriptors.
  * @details Claims up to @p count contiguous vacant slots in a single atomic CAS operation.
- *
- * @param[in,out] ring         Pointer to active ring handle.
- * @param[in]     count        Requested slot count (clamped to ring capacity).
- * @param[out]    iovecs       Array of write vector descriptors to populate.
- * @param[out]    out_reserved Pointer to receive number of slots successfully reserved.
- *
- * @return Status code indicating batch reservation outcome.
- * @retval RBIPC_OK           At least one slot successfully reserved.
- * @retval RBIPC_ERR_INVAL    Invalid arguments or zero count.
- * @retval RBIPC_ERR_SHUTDOWN Ring flagged for shutdown.
  */
 int rbipc_reserve_write_batch(rbipc_ring_t * RBIPC_RESTRICT ring, uint32_t count,
                               rbipc_iovec_t * RBIPC_RESTRICT iovecs, uint32_t * RBIPC_RESTRICT out_reserved) {
@@ -643,15 +556,6 @@ static void rbipc_io_commit_slot_batch(rbipc_ring_t * RBIPC_RESTRICT ring, uint3
 
 /**
  * @brief Commits a batch of previously reserved slots, publishing all payloads to consumers.
- *
- * @param[in,out] ring    Pointer to active ring handle.
- * @param[in]     count   Number of elements in batch.
- * @param[in]     tickets Array of reservation tickets.
- * @param[in]     lens    Array of written payload lengths.
- *
- * @return Status code indicating batch commit outcome.
- * @retval RBIPC_OK        All slots committed and consumers notified.
- * @retval RBIPC_ERR_INVAL Invalid argument or any length exceeds slot limit.
  */
 int rbipc_commit_write_batch(rbipc_ring_t * RBIPC_RESTRICT ring, uint32_t count,
                              const uint32_t * RBIPC_RESTRICT tickets, const uint32_t * RBIPC_RESTRICT lens) {
@@ -731,16 +635,6 @@ static void rbipc_io_populate_acquired_batch(const rbipc_ring_t * RBIPC_RESTRICT
 
 /**
  * @brief Acquires a contiguous batch of committed slots for reading using vector descriptors.
- *
- * @param[in,out] ring         Pointer to active ring handle.
- * @param[in]     count        Requested slot count.
- * @param[out]    rovecs       Array of read-only vector descriptors to populate.
- * @param[out]    out_acquired Pointer to receive number of slots successfully acquired.
- *
- * @return Status code indicating batch acquisition outcome.
- * @retval RBIPC_OK           At least one slot acquired.
- * @retval RBIPC_ERR_INVAL    Invalid arguments or zero count.
- * @retval RBIPC_ERR_SHUTDOWN Ring shut down and drained.
  */
 int rbipc_read_acquire_batch(rbipc_ring_t * RBIPC_RESTRICT ring, uint32_t count,
                              rbipc_rovec_t * RBIPC_RESTRICT rovecs, uint32_t * RBIPC_RESTRICT out_acquired) {
@@ -802,14 +696,6 @@ static void rbipc_io_release_slot_batch(rbipc_ring_t * RBIPC_RESTRICT ring, uint
 
 /**
  * @brief Releases a batch of previously acquired slots, recycling them for future producer writes.
- *
- * @param[in,out] ring    Pointer to active ring handle.
- * @param[in]     count   Number of elements in batch.
- * @param[in]     tickets Array of slot tickets to release.
- *
- * @return Status code indicating batch release outcome.
- * @retval RBIPC_OK        All slots released and waiting producers notified.
- * @retval RBIPC_ERR_INVAL Invalid argument or zero count.
  */
 int rbipc_read_release_batch(rbipc_ring_t * RBIPC_RESTRICT ring, uint32_t count,
                              const uint32_t * RBIPC_RESTRICT tickets) {
@@ -825,4 +711,3 @@ int rbipc_read_release_batch(rbipc_ring_t * RBIPC_RESTRICT ring, uint32_t count,
     }
     return RBIPC_OK;
 }
-

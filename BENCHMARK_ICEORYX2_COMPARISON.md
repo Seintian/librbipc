@@ -3,6 +3,7 @@
 **Date**: October 2026  
 **Benchmarking Environment**: Linux x86_64 (Intel Core i5-6300U @ 2.40 GHz, 2 Cores / 4 Threads, Skylake)  
 **Compiler & Toolchain**:  
+
 - `librbipc`: GCC 16 / Clang 23 (`-std=c23 -Wall -Wextra -Wpedantic -Werror -O3 -fPIC -pthread -lrt -lm -D_GNU_SOURCE`)  
 - `iceoryx2`: Rust 1.81+ (`cargo --release -C opt-level=3`, crates: `iceoryx2 v0.10.999`)  
 **Profiling & Hardware Counters**: Linux `perf` 6.8 (`perf stat`, `perf record`, `perf annotate`)  
@@ -30,7 +31,7 @@ The empirical answer is **an unequivocal YES**. While `iceoryx2` excels as a gen
 
 ### Metric 1: Ping-Pong Round-Trip & One-Way Latency
 
-Measures the elapsed time for bidirectional ping-pong communication ($A \to B \to A$). In `iceoryx2`, this is evaluated via `benchmark-publish-subscribe` and `benchmark-event`. In `librbipc`, it is evaluated via `bin/bench_suite` ping-pong rounds.
+Measures the elapsed time for bidirectional ping-pong communication (A -> B -> A). In `iceoryx2`, this is evaluated via `benchmark-publish-subscribe` and `benchmark-event`. In `librbipc`, it is evaluated via `bin/bench_suite` ping-pong rounds.
 
 | Implementation | Waiting Paradigm | One-Way Latency (Half-RTT) | Round-Trip Time (RTT) | Core CPU Utilization |
 | :--- | :--- | :---: | :---: | :---: |
@@ -42,7 +43,8 @@ Measures the elapsed time for bidirectional ping-pong communication ($A \to B \t
 | **`librbipc` (Zero-Spin, Median)** | Passive Wait (`sys_futex`) | **2,169.0 ns** | 4,338.0 ns | **0.08% CPU (strictly passive)** |
 | **`librbipc` (Zero-Spin, 1-Item)** | Passive Wait (`sys_futex`) | **868.6 ns** | 1,737.2 ns | **0.08% CPU (strictly passive)** |
 
-#### Architectural Analysis:
+#### Architectural Analysis
+
 - In active busy-spin polling, `iceoryx2` achieves ~505 ns by continuously burning 100% of both CPU cores in a `while !receiver.receive().is_some() {}` loop.
 - When passive waiting is enabled so the CPU can power down:
   - `iceoryx2` must route events through `UnixDatagramShmCountingBitSet` and POSIX `WaitSet` reactors, incurring the overhead of Unix domain sockets and kernel socket buffers (**12.69 µs** latency).
@@ -63,6 +65,7 @@ Measures the sustained message transmission rate when a producer continuously se
 | **Waiting Mode** | Active Spin Polling | Zero-Spin Futex Wait | Zero-Spin Futex Wait | No busy-spinning |
 
 #### Why is `librbipc` 5.9x to 16.5x faster?
+
 1. **No Chunk Allocator / Loaning Overhead**: In `iceoryx2`, publishing requires dynamically locating free chunk slots, adjusting chunk headers, and updating atomic reference counts. In `librbipc`, slots are indexed via contiguous power-of-2 sequence wrapping (`ticket & capacity_mask`), requiring only integer masking.
 2. **Branch-Predicted Futex Elision**: `librbipc` inspects `atomic_load(futex_waiters) > 0` with `RBIPC_UNLIKELY`. When the consumer is keeping up, wakeups and memory bus locks are 100% elided.
 3. **B-Queue Vector Amortization**: `librbipc`'s batching API claims and publishes $N$ items in a single atomic CAS operation, scaling to 38.1 million messages per second.
@@ -82,8 +85,9 @@ Tested across standard real-time payload sizes (64 bytes to 64 kilobytes):
 | **16,384 B (16 KB)** | 1,905,018 msgs/s | 29,765.9 MB/s | **3,417,763 msgs/s** | **53,402.6 MB/s (53.4 GB/s)** | **`librbipc` is 1.79x faster** |
 | **65,536 B (64 KB)** | 1,514,232 msgs/s | 94,639.5 MB/s | **4,396,078 msgs/s** | **274,754.9 MB/s (274.8 GB/s)** | **`librbipc` is 2.90x faster** |
 
-#### Insight on Zero-Copy Behavior:
-Both libraries achieve true zero-copy transmission. For payloads $\ge 16$ KB, memory bandwidth reaches **53 GB/s to 274 GB/s** because neither library moves payload bytes in memory.
+#### Insight on Zero-Copy Behavior
+
+Both libraries achieve true zero-copy transmission. For payloads >= 16 KB, memory bandwidth reaches **53 GB/s to 274 GB/s** because neither library moves payload bytes in memory.
 However, across small and large payloads alike, `librbipc` delivers consistently superior throughput due to zero chunk management overhead and contiguous double-mapped virtual address wrapping.
 
 ---
@@ -150,7 +154,7 @@ Comparison of hardware performance counters recorded under `perf stat` during a 
 
 ## 4. When is `iceoryx2` the Superior Choice?
 
-1. **Multicast Publish-Subscribe (1 Publisher $\to$ Many Subscribers)**:
+1. **Multicast Publish-Subscribe (1 Publisher -> Many Subscribers)**:
    - When multiple independent processes must receive identical copies of the same message. `librbipc` is a single ring queue where one consumer consumes each slot.
 2. **Request-Response & Key-Value Blackboard Middleware**:
    - When complex RPC communication patterns, client-server semantics, or shared blackboards are needed out-of-the-box.
@@ -166,6 +170,7 @@ Comparison of hardware performance counters recorded under `perf stat` during a 
 **`librbipc` is unequivocally useful and holds a distinct, powerful performance niche.**
 
 Far from being made redundant by `iceoryx2`, `librbipc` delivers:
+
 - **5.96x faster streaming** (13.7M vs 2.3M msgs/s)
 - **16.5x faster burst throughput** (38.1M msgs/s via B-Queue)
 - **3x to 16x lower passive-waiting latency** (795 ns vs 12,690 ns)

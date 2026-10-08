@@ -111,18 +111,6 @@ static void rbipc_ring_init_header_fields(rbipc_shm_header_t * RBIPC_RESTRICT hd
 /**
  * @brief Allocates heap memory and initializes a runtime ring handle descriptor.
  * @details Populates all runtime references, records creator status, and caches process PID.
- *
- * @param[in] fd            Shared memory file descriptor.
- * @param[in] name          Optional POSIX shared memory name.
- * @param[in] hdr           Mapped header pointer.
- * @param[in] slots         Mapped slot table pointer.
- * @param[in] ctrl_map      Base address of mapped control region.
- * @param[in] ctrl_map_size Size of mapped control region.
- * @param[in] data_map      Base address of double-mapped data mirror.
- * @param[in] data_size     Size of single circular data buffer.
- * @param[in] is_creator    Creator ownership flag.
- *
- * @return Allocated ring pointer on success, or @c NULL on memory exhaustion.
  */
 rbipc_ring_t *rbipc_ring_alloc_handle(int fd, const char * RBIPC_RESTRICT name,
                                       rbipc_shm_header_t *hdr,
@@ -183,17 +171,6 @@ static void rbipc_ring_abort_create(int fd, const char *name, void *ctrl_map,
  * @details Implements full initialization sequence: parameter validation, layout calculation,
  *          POSIX shared memory / memfd allocation, file sealing, virtual memory mappings,
  *          and slot initialization.
- *
- * @param[in]  name      Shared memory object name or @c NULL for anonymous memfd.
- * @param[in]  capacity  Requested slot capacity (rounded up to power of two).
- * @param[in]  slot_size Payload capacity per slot in bytes.
- * @param[out] out_ring  Pointer to receive the created ring handle.
- *
- * @return Status code indicating the outcome of the creation procedure.
- * @retval RBIPC_OK        Ring successfully created.
- * @retval RBIPC_ERR_INVAL Invalid parameters or null output pointer.
- * @retval RBIPC_ERR_NOMEM Heap or virtual memory allocation failure.
- * @retval RBIPC_ERR_SYS   Kernel error creating shared memory.
  */
 int rbipc_create(const char * RBIPC_RESTRICT name, size_t capacity, uint32_t slot_size, rbipc_ring_t ** RBIPC_RESTRICT out_ring) {
     if (RBIPC_UNLIKELY(!out_ring)) {
@@ -257,15 +234,6 @@ int rbipc_create(const char * RBIPC_RESTRICT name, size_t capacity, uint32_t slo
  * @brief Inspects and validates the header of an existing shared memory object.
  * @details Maps the initial page of the object, verifies magic, version, and layout consistency,
  *          and populates @p out_layout before unmapping the probe page.
- *
- * @param[in]  fd         Shared memory file descriptor.
- * @param[in]  page_size  System page size.
- * @param[out] out_layout Layout structure populated on validation success.
- *
- * @return Status code indicating the outcome of validation.
- * @retval RBIPC_OK        Header is valid and layout matches expectations.
- * @retval RBIPC_ERR_INVAL Corrupted header fields or mismatched layout dimensions.
- * @retval RBIPC_ERR_SYS   Kernel mapping failure during probe.
  */
 int rbipc_ring_probe_and_validate_header(int fd, size_t page_size, rbipc_layout_t * RBIPC_RESTRICT out_layout) {
     void *probe_map = NULL;
@@ -299,15 +267,6 @@ int rbipc_ring_probe_and_validate_header(int fd, size_t page_size, rbipc_layout_
  * @brief Attaches to an existing ring buffer via an open file descriptor.
  * @details Validates shared memory geometry, maps control metadata, binds the double-mapped
  *          mirror, increments consumer participant counters, and returns a runtime handle.
- *
- * @param[in]  fd       Valid, open shared memory file descriptor.
- * @param[out] out_ring Pointer to receive the attached ring handle.
- *
- * @return Status code indicating the outcome of the attachment.
- * @retval RBIPC_OK        Attachment completed successfully.
- * @retval RBIPC_ERR_INVAL Invalid descriptor or corrupted header.
- * @retval RBIPC_ERR_NOMEM Virtual memory or handle allocation failure.
- * @retval RBIPC_ERR_SYS   Kernel error querying system page size.
  */
 int rbipc_attach_fd(int fd, rbipc_ring_t ** RBIPC_RESTRICT out_ring) {
     if (RBIPC_UNLIKELY(!rbipc_is_valid_fd(fd) || !out_ring)) {
@@ -358,14 +317,6 @@ int rbipc_attach_fd(int fd, rbipc_ring_t ** RBIPC_RESTRICT out_ring) {
 /**
  * @brief Attaches to an existing ring buffer by its POSIX shared memory name.
  * @details Opens the named shared memory object and delegates to rbipc_attach_fd().
- *
- * @param[in]  name     Shared memory object name.
- * @param[out] out_ring Pointer to receive the attached ring handle.
- *
- * @return Status code indicating the outcome of the attachment.
- * @retval RBIPC_OK        Attachment succeeded.
- * @retval RBIPC_ERR_INVAL Null name or null output pointer.
- * @retval RBIPC_ERR_NOENT Named shared memory object does not exist.
  */
 int rbipc_attach(const char * RBIPC_RESTRICT name, rbipc_ring_t ** RBIPC_RESTRICT out_ring) {
     if (RBIPC_UNLIKELY(!name || !out_ring)) {
@@ -391,8 +342,6 @@ int rbipc_attach(const char * RBIPC_RESTRICT name, rbipc_ring_t ** RBIPC_RESTRIC
 /**
  * @brief Releases virtual memory mappings associated with a ring handle.
  * @details Safely unmaps the double-mapped data mirror and the control metadata mapping.
- *
- * @param[in,out] ring Pointer to ring handle.
  */
 RBIPC_LEAF
 void rbipc_ring_unmap_regions(rbipc_ring_t *ring) {
@@ -428,12 +377,6 @@ static void rbipc_ring_deregister(rbipc_ring_t *ring) {
  * @brief Detaches a process from a ring buffer and frees local runtime resources.
  * @details Updates participant counts, unmaps memory regions, closes the descriptor,
  *          and frees the heap descriptor.
- *
- * @param[in,out] ring Pointer to the ring handle to detach.
- *
- * @return Status code indicating detachment outcome.
- * @retval RBIPC_OK        Detached successfully.
- * @retval RBIPC_ERR_INVAL Null ring pointer.
  */
 int rbipc_detach(rbipc_ring_t *ring) {
     if (RBIPC_UNLIKELY(!ring)) {
@@ -455,13 +398,6 @@ int rbipc_detach(rbipc_ring_t *ring) {
 /**
  * @brief Unlinks and destroys a named shared memory object from the system.
  * @details Calls @c shm_unlink to remove the named shared memory file from @c /dev/shm.
- *
- * @param[in] name POSIX shared memory name.
- *
- * @return Status code indicating the outcome of destruction.
- * @retval RBIPC_OK        Object unlinked successfully.
- * @retval RBIPC_ERR_INVAL Null name pointer.
- * @retval RBIPC_ERR_NOENT Shared memory object does not exist.
  */
 int rbipc_destroy(const char *name) {
     return rbipc_shm_unlink(name);
@@ -471,12 +407,6 @@ int rbipc_destroy(const char *name) {
  * @brief Broadcasts a cooperative shutdown notification to all participants.
  * @details Sets shutdown_flag with @c memory_order_release and wakes all suspended
  *          readers and writers via futex broadcasts.
- *
- * @param[in] ring Pointer to ring handle.
- *
- * @return Status code indicating shutdown broadcast result.
- * @retval RBIPC_OK        Shutdown signaled and waiters awakened.
- * @retval RBIPC_ERR_INVAL Null ring handle or uninitialized header.
  */
 int rbipc_signal_shutdown(rbipc_ring_t *ring) {
     if (RBIPC_UNLIKELY(!ring || !ring->hdr)) {
@@ -491,10 +421,6 @@ int rbipc_signal_shutdown(rbipc_ring_t *ring) {
 
 /**
  * @brief Retrieves the underlying shared memory file descriptor.
- *
- * @param[in] ring Pointer to ring handle.
- *
- * @return File descriptor or -1 if invalid.
  */
 RBIPC_LEAF
 int rbipc_get_fd(const rbipc_ring_t *ring) {
@@ -504,13 +430,6 @@ int rbipc_get_fd(const rbipc_ring_t *ring) {
 /**
  * @brief Samples real-time operational metrics and diagnostic counters.
  * @details Reads shared memory dimensions, tickets, and active participant counters.
- *
- * @param[in]  ring      Pointer to ring handle.
- * @param[out] out_stats Pointer to statistics structure to populate.
- *
- * @return Status code indicating diagnostic query outcome.
- * @retval RBIPC_OK        Diagnostics retrieved successfully.
- * @retval RBIPC_ERR_INVAL Null ring or output pointer.
  */
 RBIPC_LEAF
 int rbipc_get_stats(const rbipc_ring_t * RBIPC_RESTRICT ring, rbipc_stats_t * RBIPC_RESTRICT out_stats) {
@@ -533,4 +452,3 @@ int rbipc_get_stats(const rbipc_ring_t * RBIPC_RESTRICT ring, rbipc_stats_t * RB
 
     return RBIPC_OK;
 }
-

@@ -7,11 +7,11 @@ CREATE_SUBDIRS         = NO
 OUTPUT_LANGUAGE        = English
 
 # Input configuration
-INPUT                  = include src README.md
+INPUT                  = include src README.md BENCHMARK_REPORT.md BENCHMARK_ICEORYX2_COMPARISON.md
 USE_MDFILE_AS_MAINPAGE = README.md
 RECURSIVE              = YES
 FILE_PATTERNS          = *.h *.c *.md
-EXCLUDE_PATTERNS       = */build/* */bin/* */.git/*
+EXCLUDE_PATTERNS       = */build/* */bin/* */.git/* docs/*
 
 # Extraction options
 EXTRACT_ALL            = YES
@@ -60,3 +60,6 @@ GENERATE_HTML          = YES
 HTML_OUTPUT            = html
 HTML_FILE_EXTENSION    = .html
 GENERATE_LATEX         = NO
+USE_MATHJAX            = YES
+MATHJAX_VERSION        = MathJax_3
+

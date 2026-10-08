@@ -13,7 +13,8 @@ Following the elimination of active spinloops (`_mm_pause` and `sched_yield`) in
 
 Using Linux kernel performance profiling (`perf record`, `perf annotate`, `perf report`, and hardware counter tracking with `perf stat`), coupled with atomic modularization and modern compiler optimization attributes (`RBIPC_NODISCARD`, `RBIPC_LEAF`, `RBIPC_PURE`, `RBIPC_CONST`, `RBIPC_ASSUME_ALIGNED`, and `restrict`), we conducted an exhaustive investigation and optimization of the library.
 
-### Core Discoveries & Optimizations:
+### Core Discoveries & Optimizations
+
 1. **The Uncached `getpid()` Syscall Bottleneck**:
    - `perf report` pinpointed that `rbipc_reserve_write_timeout` was invoking `getpid()` on every single write reservation. On modern glibc, `getpid()` issues a full `SYS_getpid` system call (~150–250 ns).
    - **Resolution**: Cached `cached_pid` directly in the `rbipc_ring_t` handle at attachment time, eliminating 1,000,000 syscalls from the hot path.
@@ -36,7 +37,9 @@ Using Linux kernel performance profiling (`perf record`, `perf annotate`, `perf 
 ## 2. Profiling Methodology & Findings (`perf`)
 
 ### 2.1. Initial `perf report` Hotspot Breakdown
+
 Profiling `./bin/test_e2e_throughput` before optimization revealed heavy kernel time:
+
 - **User CPU Time**: 0.434 s
 - **System CPU Time**: 0.606 s (>58% spent in kernel mode)
 - **Hardware Counter Statistics**:
@@ -44,7 +47,7 @@ Profiling `./bin/test_e2e_throughput` before optimization revealed heavy kernel 
   - `LLC-loads`: 1,056,086
   - `branch-misses`: 1,144,913
 
-```
+```txt
 # Overhead       Samples  Command          Shared Object         Symbol
 # ........  ............  ...............  ....................  ..................................
      6.98%           306  test_e2e_throug  test_e2e_throughput   [.] rbipc_reserve_write_timeout
@@ -57,6 +60,7 @@ Profiling `./bin/test_e2e_throughput` before optimization revealed heavy kernel 
 ### 2.2. Disassembly & Instruction-Level Bottleneck (`perf annotate`)
 
 Running `perf annotate rbipc_sync_wake_one`:
+
 ```asm
  Percent | Disassembly of section .text:
 --------------------------------------------------
@@ -71,6 +75,7 @@ Running `perf annotate rbipc_sync_wake_one`:
     0.00 :   jmp    3f40 <rbipc_futex_wake>
     3.49 :   ret
 ```
+
 **Insight**: Even though the `rbipc_futex_wake` syscall was bypassed when `waiters == 0`, the preceding `lock addl` atomic instruction forced a hardware memory bus lock and cross-core cache invalidation on every message.
 
 ---
@@ -144,6 +149,7 @@ Running `perf annotate rbipc_sync_wake_one`:
 ## 4. Verification & Correctness
 
 All verification targets pass cleanly with zero issues:
+
 - `make test`: All 16 unit, integration, crash recovery, and stress binaries passed.
 - `make valgrind`: 0 errors, 0 memory leaks.
 - `make clang-tidy`: 0 errors.
@@ -155,6 +161,7 @@ All verification targets pass cleanly with zero issues:
 ## 5. Benchmark Suite & Raw Datasets
 
 All raw benchmark execution results and the source harness are versioned within the repository:
+
 - **Benchmark Source Suite**: [`benchmarks/bench_suite.c`](benchmarks/bench_suite.c) (invoked via `make bench`)
 - **Baseline Benchmark (Spinlocks/Active Waiting)**: [`benchmarks/results/baseline_active_spin.json`](benchmarks/results/baseline_active_spin.json)
 - **Initial Zero-Spin Benchmark (Pre-Profiling)**: [`benchmarks/results/zero_spin_initial.json`](benchmarks/results/zero_spin_initial.json)
