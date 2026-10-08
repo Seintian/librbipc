@@ -148,7 +148,7 @@ int rbipc_shm_calc_layout(uint32_t capacity, uint32_t slot_size, size_t page_siz
  * @brief Atomic helper: Create an anonymous memory file descriptor via Linux memfd_create.
  */
 RBIPC_INLINE int rbipc_shm_create_anonymous(int * RBIPC_RESTRICT out_fd) {
-    int fd = memfd_create("rbipc_anon", MFD_CLOEXEC | MFD_ALLOW_SEALING);
+    int fd = memfd_create(RBIPC_ANON_MEMFD_NAME, MFD_CLOEXEC | MFD_ALLOW_SEALING);
     if (fd < 0) {
         return RBIPC_ERR_SYS;
     }
@@ -165,7 +165,7 @@ RBIPC_INLINE int rbipc_shm_create_named(const char * RBIPC_RESTRICT name, int * 
     }
     /* Clean up pre-existing stale file if any */
     shm_unlink(name);
-    int fd = shm_open(name, O_CREAT | O_EXCL | O_RDWR, 0660);
+    int fd = shm_open(name, O_CREAT | O_EXCL | O_RDWR, RBIPC_SHM_MODE);
     if (fd < 0) {
         return RBIPC_ERR_SYS;
     }
@@ -212,7 +212,8 @@ int rbipc_shm_open(const char * RBIPC_RESTRICT name, int * RBIPC_RESTRICT out_fd
         return RBIPC_ERR_INVAL;
     }
 
-    int fd = shm_open(name, O_RDWR, 0660);
+    int fd = shm_open(name, O_RDWR, 0);
+
     if (fd < 0) {
         return RBIPC_ERR_SYS;
     }

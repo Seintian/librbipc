@@ -60,7 +60,7 @@ static void test_nonblock_and_timeout(void) {
     assert(rbipc_read_acquire_nonblock(ring, &in_buf, &read_len, &read_ticket) == RBIPC_ERR_EMPTY);
 
     /* Read on empty ring (timeout) */
-    assert(rbipc_read_acquire_timeout(ring, 10000000ULL, &in_buf, &read_len, &read_ticket) == RBIPC_ERR_TIMEOUT);
+    assert(rbipc_read_acquire_timeout(ring, 10 * RBIPC_NSEC_PER_MSEC, &in_buf, &read_len, &read_ticket) == RBIPC_ERR_TIMEOUT);
 
     /* Fill all slots */
     void *write_buf = NULL;
@@ -77,7 +77,8 @@ static void test_nonblock_and_timeout(void) {
 
     /* Ring is now full! Next write should fail with RBIPC_ERR_FULL or timeout */
     assert(rbipc_reserve_write_nonblock(ring, 64, &write_buf, &write_ticket) == RBIPC_ERR_FULL);
-    assert(rbipc_reserve_write_timeout(ring, 64, 10000000ULL, &write_buf, &write_ticket) == RBIPC_ERR_TIMEOUT);
+    assert(rbipc_reserve_write_timeout(ring, 64, 10 * RBIPC_NSEC_PER_MSEC, &write_buf, &write_ticket) == RBIPC_ERR_TIMEOUT);
+
 
     /* Consume all slots and verify */
     for (uint32_t i = 0; i < TEST_CAPACITY; ++i) {

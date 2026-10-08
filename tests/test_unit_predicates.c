@@ -30,6 +30,15 @@ static void test_pointer_and_descriptor_predicates(void) {
     assert(rbipc_is_valid_shm_name("/dev/shm/ring") == false);    /* Filesystem path with multiple slashes prohibited */
     assert(rbipc_is_valid_shm_name("my_ring") == false);          /* Missing leading slash */
     assert(rbipc_is_valid_shm_name(NULL) == false);
+
+    char long_name[NAME_MAX + 2];
+    long_name[0] = '/';
+    memset(long_name + 1, 'a', NAME_MAX);
+    long_name[NAME_MAX + 1] = '\0';
+    assert(rbipc_is_valid_shm_name(long_name) == false);          /* Exceeds NAME_MAX characters */
+
+    long_name[NAME_MAX] = '\0';
+    assert(rbipc_is_valid_shm_name(long_name) == true);           /* Exactly NAME_MAX characters */
 }
 
 static void test_arithmetic_and_geometry_predicates(void) {
@@ -42,14 +51,19 @@ static void test_arithmetic_and_geometry_predicates(void) {
     assert(rbipc_is_power_of_two(1025) == false);
 
     assert(rbipc_is_valid_capacity(0) == false);
-    assert(rbipc_is_valid_capacity(1) == false); /* capacity must be >= 2 */
-    assert(rbipc_is_valid_capacity(2) == true);
+    assert(rbipc_is_valid_capacity(1) == false);
+    assert(rbipc_is_valid_capacity(RBIPC_MIN_CAPACITY) == true);
+    assert(rbipc_is_valid_capacity(RBIPC_MAX_CAPACITY) == true);
+    assert(rbipc_is_valid_capacity(RBIPC_MAX_CAPACITY * 2ULL) == false);
     assert(rbipc_is_valid_capacity(1024) == true);
     assert(rbipc_is_valid_capacity(1023) == false);
 
     assert(rbipc_is_valid_slot_size(0) == false);
     assert(rbipc_is_valid_slot_size(64) == true);
+    assert(rbipc_is_valid_slot_size(RBIPC_MAX_SLOT_SIZE) == true);
+    assert(rbipc_is_valid_slot_size(RBIPC_MAX_SLOT_SIZE + 1) == false);
     assert(rbipc_is_valid_slot_size(UINT32_MAX) == false);
+
 
     assert(rbipc_is_valid_page_size(0) == false);
     assert(rbipc_is_valid_page_size(4096) == true);
@@ -112,7 +126,8 @@ static void test_header_and_sync_predicates(void) {
     rbipc_sync_state_t sync_state;
     rbipc_sync_state_init(&sync_state, UINT64_MAX);
     assert(rbipc_sync_has_deadline(&sync_state) == false);
-    assert(rbipc_sync_is_expired(&sync_state, 1000000000ULL) == false);
+    assert(rbipc_sync_is_expired(&sync_state, RBIPC_NSEC_PER_SEC) == false);
+
 
     rbipc_sync_state_init(&sync_state, 100);
     assert(rbipc_sync_has_deadline(&sync_state) == true);

@@ -57,7 +57,7 @@ static void *consumer_worker(void *arg) {
         uint32_t len = 0;
         uint32_t ticket = 0;
 
-        int rc = rbipc_read_acquire_timeout(ring, 100000000ULL, &buf, &len, &ticket);
+        int rc = rbipc_read_acquire_timeout(ring, 100 * RBIPC_NSEC_PER_MSEC, &buf, &len, &ticket);
         if (rc == RBIPC_ERR_TIMEOUT || rc == RBIPC_ERR_SHUTDOWN) {
             if (atomic_load_explicit(&g_consumed_count, memory_order_relaxed) >= TOTAL_MSGS) {
                 break;

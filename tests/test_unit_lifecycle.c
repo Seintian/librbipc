@@ -120,7 +120,7 @@ static void test_corrupted_shm_detection(void) {
     assert(rc == RBIPC_OK);
 
     /* Corrupt the magic */
-    int fd = shm_open(TEST_LIFECYCLE_NAME, O_RDWR, 0660);
+    int fd = shm_open(TEST_LIFECYCLE_NAME, O_RDWR, RBIPC_SHM_MODE);
     assert(fd >= 0);
     uint64_t bad_magic = 0xDEADBEEF;
     pwrite(fd, &bad_magic, sizeof(bad_magic), 0);

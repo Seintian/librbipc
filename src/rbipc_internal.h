@@ -21,6 +21,7 @@
 #include <stddef.h>
 #include <stdint.h>
 #include <sys/types.h>
+#include <limits.h>
 
 /**
  * @struct rbipc_ring
@@ -30,7 +31,8 @@
  */
 struct rbipc_ring {
     int fd;                       /**< Open file descriptor referencing the underlying shared memory object. */
-    char name[256];               /**< POSIX shared memory name (empty string if anonymous memfd). */
+    char name[NAME_MAX + 1];      /**< POSIX shared memory name (empty string if anonymous memfd). */
+
     rbipc_shm_header_t *hdr;      /**< Direct virtual address pointer to shared memory control header. */
     rbipc_slot_t *slots;          /**< Direct virtual address pointer to slot descriptor control array. */
     void *ctrl_map;               /**< Base virtual memory address of the metadata mapping (header + slots). */

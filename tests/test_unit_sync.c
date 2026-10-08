@@ -16,7 +16,7 @@ static void test_sync_state(void) {
     assert(state.spin_count == 0);
     assert(state.has_deadline == false);
 
-    rbipc_sync_state_init(&state, 1000000ULL); /* 1ms */
+    rbipc_sync_state_init(&state, RBIPC_NSEC_PER_MSEC); /* 1ms */
     assert(state.spin_count == 0);
     assert(state.has_deadline == true);
     assert(state.deadline_ns > 0);

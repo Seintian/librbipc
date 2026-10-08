@@ -20,23 +20,30 @@
 #include <stdint.h>
 
 /**
+ * @def RBIPC_MAX_POW2_32
+ * @brief Maximum 32-bit power-of-two integer ceiling (2^31).
+ */
+#define RBIPC_MAX_POW2_32 0x80000000U
+
+/**
  * @brief Round an unsigned 32-bit integer up to the nearest power of two.
  *
  * @details Emits branch-free bit-smearing operations:
  * \f[
  *   v' = v - 1, \quad v' \leftarrow v' \mid (v' \gg 1), \dots, \quad v' \leftarrow v' \mid (v' \gg 16), \quad \text{result} = v' + 1
  * \f]
- * Safely guards against integer overflow when @p v exceeds \f$2^{31}\f$ (0x80000000).
+ * Safely guards against integer overflow when @p v exceeds \f$2^{31}\f$ (@ref RBIPC_MAX_POW2_32).
  *
  * @param[in] v Unsigned 32-bit integer input.
  *
  * @return Nearest power of two greater than or equal to @p v.
  * @retval 1 if @p v is 0.
- * @retval 0 if @p v exceeds 0x80000000 (overflow).
+ * @retval 0 if @p v exceeds @ref RBIPC_MAX_POW2_32 (overflow).
  */
 RBIPC_INLINE RBIPC_CONST RBIPC_NODISCARD uint32_t rbipc_round_up_pow2_32(uint32_t v) {
     if (v == 0) return 1;
-    if (v > 0x80000000U) return 0; /* Overflow */
+    if (v > RBIPC_MAX_POW2_32) return 0; /* Overflow */
+
     v--;
     v |= v >> 1U;
     v |= v >> 2U;

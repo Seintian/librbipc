@@ -27,8 +27,8 @@ void rbipc_ns_to_timespec(uint64_t ns, struct timespec * RBIPC_RESTRICT ts) {
     if (RBIPC_UNLIKELY(rbipc_is_null(ts))) {
         return;
     }
-    ts->tv_sec = (time_t)(ns / 1000000000ULL);
-    ts->tv_nsec = (long)(ns % 1000000000ULL);
+    ts->tv_sec = (time_t)(ns / RBIPC_NSEC_PER_SEC);
+    ts->tv_nsec = (long)(ns % RBIPC_NSEC_PER_SEC);
 }
 
 /**

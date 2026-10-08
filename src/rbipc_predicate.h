@@ -18,6 +18,8 @@
 #include <stddef.h>
 #include <stdint.h>
 #include <string.h>
+#include <limits.h>
+
 
 /* ============================================================================
  * Pointer & Descriptor Validation Predicates
@@ -75,7 +77,7 @@ RBIPC_INLINE RBIPC_PURE bool rbipc_is_valid_shm_name(const char *name) {
             return false;
         }
     }
-    return len <= 255;
+    return len <= NAME_MAX;
 }
 
 
@@ -96,13 +98,14 @@ RBIPC_INLINE RBIPC_CONST bool rbipc_is_power_of_two(uint32_t val) {
 /**
  * @brief Evaluate whether a ring buffer capacity satisfies architectural constraints.
  *
- * @details Valid capacity must be a power of two, at least 2 slots, and at most \f$2^{30}\f$ slots.
+ * @details Valid capacity must be a power of two, at least @ref RBIPC_MIN_CAPACITY slots,
+ * and at most @ref RBIPC_MAX_CAPACITY slots.
  *
  * @param[in] capacity Slot capacity count to validate.
  * @return true if within admissible operational bounds, false otherwise.
  */
 RBIPC_INLINE RBIPC_CONST bool rbipc_is_valid_capacity(size_t capacity) {
-    return (capacity >= 2) && (capacity <= 0x40000000UL) && ((capacity & (capacity - 1)) == 0);
+    return (capacity >= RBIPC_MIN_CAPACITY) && (capacity <= RBIPC_MAX_CAPACITY) && ((capacity & (capacity - 1)) == 0);
 }
 
 /**
@@ -112,8 +115,9 @@ RBIPC_INLINE RBIPC_CONST bool rbipc_is_valid_capacity(size_t capacity) {
  * @return true if @p slot_size > 0 and does not risk integer overflow, false otherwise.
  */
 RBIPC_INLINE RBIPC_CONST bool rbipc_is_valid_slot_size(uint32_t slot_size) {
-    return (slot_size > 0) && (slot_size <= (UINT32_MAX - RBIPC_CACHE_LINE));
+    return (slot_size > 0) && (slot_size <= RBIPC_MAX_SLOT_SIZE);
 }
+
 
 /**
  * @brief Evaluate whether system virtual memory page size is a valid power-of-two.

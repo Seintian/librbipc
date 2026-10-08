@@ -469,7 +469,7 @@ static void rbipc_io_populate_reserved_batch(rbipc_ring_t * RBIPC_RESTRICT ring,
         iovecs[i].ticket = ticket_i;
         iovecs[i].max_len = slot_size;
     }
-    RBIPC_PREFETCH(&slots[(t + count) & mask], 1, 3);
+    RBIPC_PREFETCH(&slots[(t + count) & mask], RBIPC_PREFETCH_WRITE, RBIPC_PREFETCH_LOCALITY_HIGH);
 }
 
 /**
@@ -630,7 +630,7 @@ static void rbipc_io_populate_acquired_batch(const rbipc_ring_t * RBIPC_RESTRICT
             rovecs[i].len = 0;
         }
     }
-    RBIPC_PREFETCH(&slots[(t + count) & mask], 0, 3);
+    RBIPC_PREFETCH(&slots[(t + count) & mask], RBIPC_PREFETCH_READ, RBIPC_PREFETCH_LOCALITY_HIGH);
 }
 
 /**

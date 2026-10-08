@@ -59,14 +59,28 @@
 #define RBIPC_INTERNAL_NONNULL(...) __attribute__((nonnull(__VA_ARGS__)))
 
 /**
+ * @defgroup rbipc_prefetch Prefetch Parameters
+ * @brief Memory access and cache hints for hardware prefetching.
+ * @{
+ */
+#define RBIPC_PREFETCH_READ             0 /**< Hardware prefetch for read access. */
+#define RBIPC_PREFETCH_WRITE            1 /**< Hardware prefetch for write access. */
+#define RBIPC_PREFETCH_LOCALITY_NONE    0 /**< No temporal cache locality. */
+#define RBIPC_PREFETCH_LOCALITY_LOW     1 /**< Low temporal cache locality. */
+#define RBIPC_PREFETCH_LOCALITY_MED     2 /**< Moderate temporal cache locality. */
+#define RBIPC_PREFETCH_LOCALITY_HIGH    3 /**< High temporal cache locality (retain in L1 cache). */
+/** @} */
+
+/**
  * @def RBIPC_PREFETCH(addr, rw, loc)
  * @brief Emits hardware prefetch instructions to prime the processor cache hierarchy.
  *
  * @param addr Address of memory buffer or structure to prefetch.
- * @param rw   0 for read access, 1 for write access.
- * @param loc  Temporal locality level (0 = none, 3 = high temporal locality in L1 cache).
+ * @param rw   Prefetch intention: @ref RBIPC_PREFETCH_READ or @ref RBIPC_PREFETCH_WRITE.
+ * @param loc  Temporal locality level (e.g. @ref RBIPC_PREFETCH_LOCALITY_HIGH).
  */
 #define RBIPC_PREFETCH(addr, rw, loc) __builtin_prefetch((addr), (rw), (loc))
+
 
 /**
  * @def RBIPC_ASSUME(cond)

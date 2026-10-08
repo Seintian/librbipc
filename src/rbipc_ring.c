@@ -27,15 +27,10 @@
 #include <string.h>
 #include <unistd.h>
 #include <errno.h>
-
-/**
- * @brief Default initial spin count executed by contending workers before futex suspension.
- */
-#define DEFAULT_SPIN_THRESHOLD 50000
-
 /* ============================================================================
  * Atomic Lifecycle Initialization and Teardown Subroutines
  * ============================================================================ */
+
 
 /**
  * @brief Validates ring creation parameters and resolves the host page boundary.
@@ -68,7 +63,7 @@ static int rbipc_ring_validate_create_params(size_t capacity, uint32_t slot_size
     if (cap == 0) {
         return RBIPC_ERR_OVERFLOW;
     }
-    if (cap < 2) cap = 2;
+    if (cap < RBIPC_MIN_CAPACITY) cap = RBIPC_MIN_CAPACITY;
     *out_cap = cap;
 
     return RBIPC_OK;
@@ -95,7 +90,8 @@ static void rbipc_ring_init_header_fields(rbipc_shm_header_t * RBIPC_RESTRICT hd
     hdr->capacity = cap;
     hdr->capacity_mask = cap - 1;
     hdr->slot_size = layout->aligned_slot_size;
-    hdr->spin_threshold = DEFAULT_SPIN_THRESHOLD;
+    hdr->spin_threshold = RBIPC_DEFAULT_SPIN_THRESHOLD;
+
 
     atomic_init(&hdr->write_ticket, 0);
     atomic_init(&hdr->read_ticket, 0);

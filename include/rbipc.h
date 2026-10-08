@@ -25,6 +25,7 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include <stdatomic.h>
+#include <sys/stat.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -145,14 +146,23 @@ extern "C" {
 /** @} */
 
 /**
- * @defgroup rbipc_constants Structural Constants
- * @brief Architecture-specific and structural constants.
+ * @defgroup rbipc_constants Structural & Operational Constants
+ * @brief Architecture-specific, operational, and structural constants.
  * @{
  */
-#define RBIPC_MAGIC         0x5242495043323032ULL /**< 64-bit structural header identifier ('RBIPC202'). */
-#define RBIPC_VERSION       1                     /**< Protocol layout format version number. */
-#define RBIPC_CACHE_LINE    64                    /**< Host hardware cache-line boundary in bytes (x86_64 / arm64). */
+#define RBIPC_MAGIC                 0x5242495043323032ULL /**< 64-bit structural header identifier ('RBIPC202'). */
+#define RBIPC_VERSION               1U                    /**< Protocol layout format version number. */
+#define RBIPC_CACHE_LINE            64U                   /**< Host hardware cache-line boundary in bytes (x86_64 / arm64). */
+#define RBIPC_MIN_CAPACITY          2U                    /**< Minimum allowable ring slot capacity (power-of-two). */
+#define RBIPC_MAX_CAPACITY          (1U << 30)            /**< Maximum allowable ring slot capacity (2^30 slots, satisfying RFC 1982 sequence distance). */
+#define RBIPC_MAX_SLOT_SIZE         (UINT32_MAX - RBIPC_CACHE_LINE) /**< Maximum permissible slot payload size before alignment overflow. */
+#define RBIPC_DEFAULT_SPIN_THRESHOLD 50000U               /**< Default active spin iterations before process liveness audit and futex backoff. */
+#define RBIPC_SHM_MODE              (S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP) /**< Default POSIX shared memory permissions (0660: rw-rw----). */
+#define RBIPC_ANON_MEMFD_NAME       "rbipc_anon"          /**< Kernel descriptor name for anonymous memory files created via memfd_create(). */
+#define RBIPC_NSEC_PER_SEC          1000000000ULL         /**< Number of nanoseconds per second. */
+#define RBIPC_NSEC_PER_MSEC         1000000ULL            /**< Number of nanoseconds per millisecond. */
 /** @} */
+
 
 /* ============================================================================
  * State Machine Constants
