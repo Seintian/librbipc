@@ -202,14 +202,16 @@ typedef struct {
  * atomic synchronization counters for coordinating producers and consumers.
  */
 typedef struct {
-    uint64_t magic;              /**< Structural header identification signature (@ref RBIPC_MAGIC). */
+    _Atomic uint64_t magic;      /**< Structural header identification signature (@ref RBIPC_MAGIC) published last with release semantics. */
     uint32_t version;            /**< Header protocol layout format version (@ref RBIPC_VERSION). */
+    uint32_t _reserved0;         /**< Explicit 32-bit alignment padding for deterministic CRC calculation. */
     uint64_t total_shm_size;     /**< Total file size in bytes of the shared memory region. */
     uint64_t data_offset;        /**< Page-aligned byte offset from base where payload ring data begins. */
     uint64_t data_size;          /**< Page-aligned byte size of the single circular buffer. */
     uint32_t capacity;           /**< Total number of slot descriptors (strictly a power of two). */
     uint32_t capacity_mask;      /**< Fast bitwise indexing mask, precomputed as (capacity - 1). */
     uint32_t slot_size;          /**< Maximum allowable payload byte capacity allocated per slot. */
+    uint32_t header_crc;         /**< Hardware-accelerated CRC32C over immutable configuration layout fields. */
 
     /* Cache-line isolated atomic synchronization variables */
     _Alignas(RBIPC_CACHE_LINE) _Atomic uint32_t write_ticket;     /**< Monotonic ticket counter claimed by reserving producers. */

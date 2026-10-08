@@ -13,6 +13,7 @@
 #include "rbipc_attr.h"
 #include "rbipc_math.h"
 #include "rbipc_sync.h"
+#include "rbipc_arch.h"
 
 #include <stdbool.h>
 #include <stddef.h>
@@ -237,14 +238,29 @@ RBIPC_INLINE RBIPC_CONST bool rbipc_slot_state_is_poisoned(uint32_t state) {
  * ============================================================================ */
 
 /**
- * @brief Validate all structural control header invariants and geometric parameters.
+ * @brief Computes the hardware-accelerated CRC32C of immutable layout geometry fields.
  *
  * @param[in] hdr Shared memory control header.
- * @return true if header matches magic signature, version, and power-of-two constraints; false otherwise.
+ * @return 32-bit CRC32C checksum.
  */
-RBIPC_INLINE RBIPC_PURE bool rbipc_header_is_valid(const rbipc_shm_header_t *hdr) {
+RBIPC_INLINE uint32_t rbipc_header_calc_crc(const rbipc_shm_header_t *hdr) {
+    const uint8_t *start = ((const uint8_t *)hdr) + offsetof(rbipc_shm_header_t, version);
+    size_t len = offsetof(rbipc_shm_header_t, header_crc) - offsetof(rbipc_shm_header_t, version);
+    return rbipc_crc32c(start, len);
+}
+
+/**
+ * @brief Validate all structural control header invariants, CRC32C checksum, and geometric parameters.
+ *
+ * @param[in] hdr Shared memory control header.
+ * @return true if header matches magic signature, version, CRC32C, and power-of-two constraints; false otherwise.
+ */
+RBIPC_INLINE bool rbipc_header_is_valid(const rbipc_shm_header_t *hdr) {
     if (!hdr) return false;
-    if (hdr->magic != RBIPC_MAGIC || hdr->version != RBIPC_VERSION) return false;
+    uint64_t magic = atomic_load_explicit(&hdr->magic, memory_order_acquire);
+    if (le64toh(magic) != RBIPC_MAGIC) return false;
+    if (le32toh(hdr->version) != RBIPC_VERSION) return false;
+    if (le32toh(hdr->header_crc) != rbipc_header_calc_crc(hdr)) return false;
     if (!rbipc_is_valid_capacity(hdr->capacity)) return false;
     if (!rbipc_is_valid_slot_size(hdr->slot_size) || hdr->data_size == 0) return false;
     if (hdr->data_offset == 0 || hdr->total_shm_size <= hdr->data_offset) return false;

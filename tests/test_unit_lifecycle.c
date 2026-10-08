@@ -136,6 +136,11 @@ static void test_corrupted_shm_detection(void) {
     pwrite(fd, &bad_offset, sizeof(bad_offset), offsetof(rbipc_shm_header_t, data_offset));
 
     assert(rbipc_attach(TEST_LIFECYCLE_NAME, &corrupt_attach) == RBIPC_ERR_INVAL);
+
+    /* Corrupt header CRC explicitly */
+    uint32_t bad_crc = 0xDEADBEEFU;
+    pwrite(fd, &bad_crc, sizeof(bad_crc), offsetof(rbipc_shm_header_t, header_crc));
+    assert(rbipc_attach(TEST_LIFECYCLE_NAME, &corrupt_attach) == RBIPC_ERR_INVAL);
     close(fd);
 
     /* Test attaching invalid device fd like /dev/null */

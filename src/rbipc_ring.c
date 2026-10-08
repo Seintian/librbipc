@@ -81,14 +81,16 @@ static int rbipc_ring_validate_create_params(size_t capacity, uint32_t slot_size
 static void rbipc_ring_init_header_fields(rbipc_shm_header_t * RBIPC_RESTRICT hdr,
                                           const rbipc_layout_t * RBIPC_RESTRICT layout,
                                           uint32_t cap) {
-    hdr->magic = RBIPC_MAGIC;
-    hdr->version = RBIPC_VERSION;
-    hdr->total_shm_size = (uint64_t)layout->total_shm_size;
-    hdr->data_offset = (uint64_t)layout->data_offset;
-    hdr->data_size = (uint64_t)layout->data_size;
-    hdr->capacity = cap;
-    hdr->capacity_mask = cap - 1;
-    hdr->slot_size = layout->aligned_slot_size;
+    atomic_init(&hdr->magic, 0);
+    hdr->version = htole32(RBIPC_VERSION);
+    hdr->_reserved0 = 0;
+    hdr->total_shm_size = htole64((uint64_t)layout->total_shm_size);
+    hdr->data_offset = htole64((uint64_t)layout->data_offset);
+    hdr->data_size = htole64((uint64_t)layout->data_size);
+    hdr->capacity = htole32(cap);
+    hdr->capacity_mask = htole32(cap - 1);
+    hdr->slot_size = htole32(layout->aligned_slot_size);
+    hdr->header_crc = htole32(rbipc_header_calc_crc(hdr));
 
     atomic_init(&hdr->write_ticket, 0);
     atomic_init(&hdr->read_ticket, 0);
@@ -218,6 +220,9 @@ int rbipc_create(const char * RBIPC_RESTRICT name, size_t capacity, uint32_t slo
         rbipc_ring_abort_create(fd, name, ctrl_map, layout.data_offset, data_map, layout.data_size);
         return RBIPC_ERR_NOMEM;
     }
+
+    /* Approach 1 & 3: Publish magic sentinel as the final step with release semantics and canonical endianness */
+    atomic_store_explicit(&hdr->magic, htole64(RBIPC_MAGIC), memory_order_release);
 
     *out_ring = ring;
     return RBIPC_OK;

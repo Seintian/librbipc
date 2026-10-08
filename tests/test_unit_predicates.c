@@ -102,23 +102,38 @@ static void test_header_and_sync_predicates(void) {
     memset(&hdr, 0, sizeof(hdr));
     assert(rbipc_header_is_valid(&hdr) == false);
 
-    hdr.magic = RBIPC_MAGIC;
-    hdr.version = RBIPC_VERSION;
-    hdr.capacity = 1024;
-    hdr.slot_size = 256;
-    hdr.data_offset = 4096;
-    hdr.data_size = 262144;
-    hdr.total_shm_size = hdr.data_offset + hdr.data_size;
+    atomic_init(&hdr.magic, htole64(RBIPC_MAGIC));
+    hdr.version = htole32(RBIPC_VERSION);
+    hdr._reserved0 = 0;
+    hdr.capacity = htole32(1024);
+    hdr.capacity_mask = htole32(1023);
+    hdr.slot_size = htole32(256);
+    hdr.data_offset = htole64(4096);
+    hdr.data_size = htole64(262144);
+    hdr.total_shm_size = htole64(hdr.data_offset + hdr.data_size);
+    hdr.header_crc = htole32(rbipc_header_calc_crc(&hdr));
     assert(rbipc_header_is_valid(&hdr) == true);
 
     rbipc_shm_header_t bad_hdr = hdr;
     bad_hdr.magic = 0;
     assert(rbipc_header_is_valid(&bad_hdr) == false);
 
+    /* Byte-swapped foreign endianness magic rejected */
+    bad_hdr = hdr;
+    bad_hdr.magic = __builtin_bswap64(RBIPC_MAGIC);
+    assert(rbipc_header_is_valid(&bad_hdr) == false);
+
+    /* Corrupted version */
     bad_hdr = hdr;
     bad_hdr.version = 999;
     assert(rbipc_header_is_valid(&bad_hdr) == false);
 
+    /* Corrupted CRC32C */
+    bad_hdr = hdr;
+    bad_hdr.header_crc = hdr.header_crc ^ 0xA5A5A5A5U;
+    assert(rbipc_header_is_valid(&bad_hdr) == false);
+
+    /* Tampered geometry (detected by CRC32C and invariant checks) */
     bad_hdr = hdr;
     bad_hdr.capacity = 1000;
     assert(rbipc_header_is_valid(&bad_hdr) == false);
@@ -173,12 +188,44 @@ static void test_header_and_sync_predicates(void) {
     assert(rbipc_sync_should_wake(&waiters) == true);
 }
 
+static void test_crc32c_and_endianness(void) {
+    /* Test standard RFC 3720 Castagnoli CRC32C test vector */
+    const char *vector = "123456789";
+    uint32_t c = rbipc_crc32c(vector, 9);
+    assert(c == 0xE3069283U);
+
+    /* Empty string checksum */
+    assert(rbipc_crc32c("", 0) == 0x00000000U);
+
+    /* Software table fallback matches for various buffer sizes */
+    uint8_t buffer[128];
+    for (size_t i = 0; i < sizeof(buffer); i++) {
+        buffer[i] = (uint8_t)(i * 37 + 13);
+    }
+
+    for (size_t len = 1; len <= sizeof(buffer); len++) {
+        uint32_t hw_or_fast = rbipc_crc32c(buffer, len);
+        uint32_t sw = ~rbipc_crc32c_sw(0xFFFFFFFFU, buffer, len);
+        assert(hw_or_fast == sw);
+    }
+
+    /* Endianness round-trip validation */
+    uint64_t magic = RBIPC_MAGIC;
+    assert(le64toh(htole64(magic)) == magic);
+    assert(be64toh(htobe64(magic)) == magic);
+
+    uint32_t ver = RBIPC_VERSION;
+    assert(le32toh(htole32(ver)) == ver);
+    assert(be32toh(htobe32(ver)) == ver);
+}
+
 int main(void) {
     printf("[test_unit_predicates] Running tests...\n");
     test_pointer_and_descriptor_predicates();
     test_arithmetic_and_geometry_predicates();
     test_sequence_and_slot_predicates();
     test_header_and_sync_predicates();
+    test_crc32c_and_endianness();
     printf("[test_unit_predicates] All tests passed!\n");
     return 0;
 }
