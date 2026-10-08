@@ -196,4 +196,4 @@ TOTAL LINE COVERAGE            | 806              | 743            |    92.18%
 
 ## License
 
-[Apache-2.0](LICENSE).
+[Apache-2.0](./LICENSE).

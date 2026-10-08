@@ -59,7 +59,9 @@ PREDEFINED             = "RBIPC_NODISCARD=" \
 GENERATE_HTML          = YES
 HTML_OUTPUT            = html
 HTML_FILE_EXTENSION    = .html
+HTML_EXTRA_FILES       = LICENSE
 GENERATE_LATEX         = NO
 USE_MATHJAX            = YES
 MATHJAX_VERSION        = MathJax_3
+
 
