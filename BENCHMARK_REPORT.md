@@ -137,7 +137,7 @@ The benchmark suite evaluates sustainable IPC throughput and effective zero-copy
 | **262,144 B (256 KB)** | 128 MiB (Exceeds L3) | 2,970,589 msgs/s | 336.63 ns | 742,647.35 MB/s (742.65 GB/s) |
 | **1,048,576 B (1 MB)** | 512 MiB (DRAM Pool) | 2,213,793 msgs/s | 451.71 ns | **2,213,793.45 MB/s (2.21 TB/s)** |
 | **4,194,304 B (4 MB)** | 2,048 MiB (DRAM Pool) | 1,195,287 msgs/s | 836.62 ns | **4,781,149.37 MB/s (4.78 TB/s)** |
-| **16,777,216 B (16 MB)**| 8,192 MiB (DRAM Pool) | 1,188,416 msgs/s | 841.45 ns | **19,014,656.24 MB/s (19.01 TB/s)** |
+| **16,777,216 B (16 MB)** | 8,192 MiB (DRAM Pool) | 1,188,416 msgs/s | 841.45 ns | **19,014,656.24 MB/s (19.01 TB/s)** |
 
 ---
 
@@ -157,15 +157,15 @@ The throughput characteristics across variable payload sizes are directly govern
    - **256 B Stride**: Slots advance by 256 = 4 x 64 bytes. Bits `[11:6]` increment by 4, utilizing only 16 of the 64 available L1 sets (sets 0, 4, 8, ...). Active sets experience 4x higher contention.
    - **1,024 B (1 KB) Stride**: Slots advance by 1024 = 16 x 64 bytes. Bits `[11:6]` increment by 16, utilizing only 4 of the 64 L1 sets (sets 0, 16, 32, 48).
    - **4,096 B (4 KB) Stride & Intel 4K Aliasing**:
-     * At 4,096 bytes (2^12), address bits `[11:0]` are identical (`0x000`) for every slot payload pointer.
-     * In L1d, bits `[11:6]` are uniformly zero: **all 512 slot payload pointers map to the exact same L1 cache set (Set 0)**! Since Set 0 is 8-way associative, it can hold only 8 cachelines before suffering 100% capacity/conflict evictions.
-     * Furthermore, Skylake execution units index memory dependencies using address bits `[11:0]` for speculative store-to-load forwarding. When different addresses share identical lower 12 bits, the CPU pipeline encounters **4K Address Aliasing**, triggering false dependency stalls of ~5–20 CPU cycles per reservation.
+     - At 4,096 bytes (2^12), address bits `[11:0]` are identical (`0x000`) for every slot payload pointer.
+     - In L1d, bits `[11:6]` are uniformly zero: **all 512 slot payload pointers map to the exact same L1 cache set (Set 0)**! Since Set 0 is 8-way associative, it can hold only 8 cachelines before suffering 100% capacity/conflict evictions.
+     - Furthermore, Skylake execution units index memory dependencies using address bits `[11:0]` for speculative store-to-load forwarding. When different addresses share identical lower 12 bits, the CPU pipeline encounters **4K Address Aliasing**, triggering false dependency stalls of ~5–20 CPU cycles per reservation.
    - **65,536 B (64 KB) Stride**:
-     * At 65,536 = 2^16 bytes, bits `[15:0]` are all zero (`0x0000`).
-     * In L2 cache, bits `[15:6]` index the 1024 sets. Because these bits are all zero, **all 512 slots map to Set 0 in both L1d and L2 caches simultaneously**. L2 is only 4-way associative, resulting in continuous eviction directly to L3 / DRAM.
+     - At 65,536 = 2^16 bytes, bits `[15:0]` are all zero (`0x0000`).
+     - In L2 cache, bits `[15:6]` index the 1024 sets. Because these bits are all zero, **all 512 slots map to Set 0 in both L1d and L2 caches simultaneously**. L2 is only 4-way associative, resulting in continuous eviction directly to L3 / DRAM.
    - **>= 4 MB Stride**:
-     * At 4 MB and 16 MB, the working set (512 x 4 MB = 2 GB; 512 x 16 MB = 8 GB) vastly exceeds both L3 cache (3 MiB) and the 6 MiB reach of the L2 STLB.
-     * Hardware performance counters (`perf stat`) confirm:
+     - At 4 MB and 16 MB, the working set (512 x 4 MB = 2 GB; 512 x 16 MB = 8 GB) vastly exceeds both L3 cache (3 MiB) and the 6 MiB reach of the L2 STLB.
+     - Hardware performance counters (`perf stat`) confirm:
        - `L1-dcache-load-misses` surge from 491k to 1,482k (+201%).
        - `dTLB-load-misses` increase from 187k to 397k (+112%).
        - `LLC-load-misses` explode from 1.9k to 150k (a 75x increase).
@@ -180,16 +180,18 @@ A common point of inquiry is why effective bandwidth scales to **167.4 GB/s at 6
 1. **Zero-Copy Pointer Semantics**:
    - `librbipc` operates as a zero-copy circular ring buffer utilizing double virtual memory mirrors.
    - The library **never copies payload bytes**. Message transmission cost is strictly O(1) ticket acquisition and sequence advancement:
-     ```
+
+     ```txt
      Effective Bandwidth = (Messages Consumed x Slot Size) / Elapsed Time
      ```
+
    - Because IPC coordination latency remains nearly constant (~115 ns to 840 ns) regardless of whether the slot represents 64 B or 16 MB, dividing a 16 MB payload by 841 ns yields an effective control-plane transfer rate of **19.01 TB/sec**.
 2. **Physical Data-Plane Saturation Verification**:
    - To investigate real data-plane hardware limits, we executed comparative end-to-end benchmarks where producers and consumers actively populated and read every cache line of the payload:
-     * **Control-Plane Only** (4-byte write, zero payload read): **1,939,283 msgs/s (118.36 GB/s)** at 64 KB.
-     * **Full Payload Memset** (Producer writes every byte, consumer reads metadata): **190,956 msgs/s (11.66 GB/s)** at 64 KB.
-     * **Full End-to-End Touch** (Producer writes every byte, consumer reads every cache line): **191,217 msgs/s (11.67 GB/s)** at 64 KB.
-     * **At 1 MB Payloads**: Data-plane throughput leveled off at **12,471 msgs/s**, yielding exactly **12.18 GB/sec**.
+     - **Control-Plane Only** (4-byte write, zero payload read): **1,939,283 msgs/s (118.36 GB/s)** at 64 KB.
+     - **Full Payload Memset** (Producer writes every byte, consumer reads metadata): **190,956 msgs/s (11.66 GB/s)** at 64 KB.
+     - **Full End-to-End Touch** (Producer writes every byte, consumer reads every cache line): **191,217 msgs/s (11.67 GB/s)** at 64 KB.
+     - **At 1 MB Payloads**: Data-plane throughput leveled off at **12,471 msgs/s**, yielding exactly **12.18 GB/sec**.
    - **Conclusion**: When application code actually touches payload memory, throughput is strictly bounded by the physical DRAM memory bus (~12.18 GB/s sustained write on DDR4). When applications operate in pure zero-copy streaming mode, `librbipc` bypasses the memory bus entirely, delivering multi-terabyte virtual bandwidth.
 
 ---

@@ -83,7 +83,7 @@ Tested across standard real-time payload sizes (64 bytes to 64 kilobytes):
 | **1,024 B (1 KB)** | 1,930,638 msgs/s | 1,885.4 MB/s | **5,827,932 msgs/s** | **5,691.3 MB/s (5.69 GB/s)** | **`librbipc` is 3.02x faster** |
 | **4,096 B (4 KB)** | 1,948,081 msgs/s | 7,609.7 MB/s | **8,695,507 msgs/s** | **33,966.8 MB/s (34.0 GB/s)** | **`librbipc` is 4.46x faster** |
 | **16,384 B (16 KB)** | 1,905,018 msgs/s | 29,765.9 MB/s | **2,935,896 msgs/s** | **45,873.4 MB/s (45.9 GB/s)** | **`librbipc` is 1.54x faster** |
-| **65,536 B (64 KB)** | 1,514,232 msgs/s | 94,639.5 MB/s | **2,678,924 msgs/s** | **167,432.8 MB/s (167.4 GB/s)**| **`librbipc` is 1.77x faster** |
+| **65,536 B (64 KB)** | 1,514,232 msgs/s | 94,639.5 MB/s | **2,678,924 msgs/s** | **167,432.8 MB/s (167.4 GB/s)** | **`librbipc` is 1.77x faster** |
 
 #### Insight on Zero-Copy Behavior
 
