@@ -7,7 +7,7 @@
  *  2. Half-Round-Trip Ping-Pong Latency Distribution (Min, Mean, p50, p90, p99, p99.9, p99.99, Max)
  *  3. Streaming Multi-Process IPC Throughput & Context Switch Audit
  *  4. B-Queue Batch Scaling (Batch Sizes 1, 4, 8, 16, 32, 64, 128)
- *  5. Variable Payload Size Throughput (64B, 256B, 1KB, 4KB, 16KB, 64KB)
+ *  5. Variable Payload Size Throughput (64B, 256B, 1KB, 4KB, 16KB, 64KB, 256KB, 1MB, 4MB, 16MB)
  *  6. MPMC Concurrent Thread Scalability (1P-1C, 2P-2C, 4P-2C, 4P-4C)
  */
 
@@ -521,7 +521,7 @@ static void run_bench_payload(uint32_t payload_size, int count, payload_result_t
     out_res->msgs_per_sec = (double)rec / elapsed;
     out_res->mb_per_sec = (out_res->msgs_per_sec * (double)payload_size) / (1024.0 * 1024.0);
 
-    printf("  Payload %5u B: %10.2f msgs/sec | %8.2f MB/sec\n",
+    printf("  Payload %8u B: %10.2f msgs/sec | %8.2f MB/sec\n",
            payload_size, out_res->msgs_per_sec, out_res->mb_per_sec);
 }
 
@@ -647,7 +647,7 @@ int main(int argc, char **argv) {
     }
 
     printf("\n[5/6] Running Payload Size Scaling (200,000 msgs each)...\n");
-    uint32_t payloads[] = { 64, 256, 1024, 4096, 16384, 65536 };
+    uint32_t payloads[] = { 64, 256, 1024, 4096, 16384, 65536, 262144, 1048576, 4194304, 16777216 };
     size_t num_payloads = sizeof(payloads) / sizeof(payloads[0]);
     payload_result_t payload_results[num_payloads];
     for (size_t i = 0; i < num_payloads; ++i) {

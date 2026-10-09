@@ -78,17 +78,17 @@ Tested across standard real-time payload sizes (64 bytes to 64 kilobytes):
 
 | Payload Size | `iceoryx2` Throughput | `iceoryx2` Bandwidth | `librbipc` Throughput | `librbipc` Bandwidth | Performance Comparison |
 | :---: | :---: | :---: | :---: | :---: | :---: |
-| **64 B** | 1,930,206 msgs/s | 117.8 MB/s | **2,397,344 msgs/s** | **146.3 MB/s** | **`librbipc` is 1.24x faster** |
-| **256 B** | 1,975,174 msgs/s | 482.2 MB/s | **1,985,393 msgs/s** | **484.7 MB/s** | **`librbipc` is comparable** |
-| **1,024 B (1 KB)** | 1,930,638 msgs/s | 1,885.4 MB/s | **17,820,508 msgs/s** | **17,402.8 MB/s (17.4 GB/s)** | **`librbipc` is 9.23x faster** |
-| **4,096 B (4 KB)** | 1,948,081 msgs/s | 7,609.7 MB/s | **4,804,503 msgs/s** | **18,767.6 MB/s (18.8 GB/s)** | **`librbipc` is 2.47x faster** |
-| **16,384 B (16 KB)** | 1,905,018 msgs/s | 29,765.9 MB/s | **3,417,763 msgs/s** | **53,402.6 MB/s (53.4 GB/s)** | **`librbipc` is 1.79x faster** |
-| **65,536 B (64 KB)** | 1,514,232 msgs/s | 94,639.5 MB/s | **4,396,078 msgs/s** | **274,754.9 MB/s (274.8 GB/s)** | **`librbipc` is 2.90x faster** |
+| **64 B** | 1,930,206 msgs/s | 117.8 MB/s | **5,342,421 msgs/s** | **326.1 MB/s** | **`librbipc` is 2.77x faster** |
+| **256 B** | 1,975,174 msgs/s | 482.2 MB/s | **5,441,106 msgs/s** | **1,328.4 MB/s (1.33 GB/s)** | **`librbipc` is 2.75x faster** |
+| **1,024 B (1 KB)** | 1,930,638 msgs/s | 1,885.4 MB/s | **5,827,932 msgs/s** | **5,691.3 MB/s (5.69 GB/s)** | **`librbipc` is 3.02x faster** |
+| **4,096 B (4 KB)** | 1,948,081 msgs/s | 7,609.7 MB/s | **8,695,507 msgs/s** | **33,966.8 MB/s (34.0 GB/s)** | **`librbipc` is 4.46x faster** |
+| **16,384 B (16 KB)** | 1,905,018 msgs/s | 29,765.9 MB/s | **2,935,896 msgs/s** | **45,873.4 MB/s (45.9 GB/s)** | **`librbipc` is 1.54x faster** |
+| **65,536 B (64 KB)** | 1,514,232 msgs/s | 94,639.5 MB/s | **2,678,924 msgs/s** | **167,432.8 MB/s (167.4 GB/s)**| **`librbipc` is 1.77x faster** |
 
 #### Insight on Zero-Copy Behavior
 
-Both libraries achieve true zero-copy transmission. For payloads >= 16 KB, memory bandwidth reaches **53 GB/s to 274 GB/s** because neither library moves payload bytes in memory.
-However, across small and large payloads alike, `librbipc` delivers consistently superior throughput due to zero chunk management overhead and contiguous double-mapped virtual address wrapping.
+Both libraries achieve true zero-copy transmission. For payloads >= 16 KB, virtual memory bandwidth reaches **45 GB/s to 167 GB/s** because neither library moves payload bytes in memory.
+However, across small and large payloads alike, `librbipc` delivers consistently superior throughput (1.54x to 4.46x faster) due to zero chunk management overhead and contiguous double-mapped virtual address wrapping.
 
 ---
 
