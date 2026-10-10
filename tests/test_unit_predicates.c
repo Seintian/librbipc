@@ -92,6 +92,7 @@ static void test_sequence_and_slot_predicates(void) {
     /* Slot states */
     assert(rbipc_slot_state_is_empty(RBIPC_SLOT_EMPTY) == true);
     assert(rbipc_slot_state_is_empty(RBIPC_SLOT_RESERVED) == false);
+    assert(rbipc_slot_state_is_reserving(RBIPC_SLOT_RESERVING) == true);
     assert(rbipc_slot_state_is_reserved(RBIPC_SLOT_RESERVED) == true);
     assert(rbipc_slot_state_is_committed(RBIPC_SLOT_COMMITTED) == true);
     assert(rbipc_slot_state_is_poisoned(RBIPC_SLOT_POISONED) == true);

@@ -88,7 +88,7 @@ static void rbipc_io_audit_and_recover_dead_peer_range(rbipc_shm_header_t *hdr,
             continue;
         }
         uint32_t state = atomic_load_explicit(&slot_i->state, memory_order_acquire);
-        if (rbipc_slot_state_is_reserved(state)) {
+        if (rbipc_slot_state_is_reserved(state) || rbipc_slot_state_is_reserving(state)) {
             uint32_t pid = atomic_load_explicit(&slot_i->producer_pid, memory_order_relaxed);
             if (pid > 0 && !rbipc_slot_is_peer_alive((pid_t)pid)) {
                 if (rbipc_slot_poison(slot_i, ticket_i)) {
@@ -106,11 +106,12 @@ static void rbipc_io_audit_and_recover_dead_peer_range(rbipc_shm_header_t *hdr,
 
 static void rbipc_io_audit_and_recover_dead_peer(rbipc_shm_header_t *hdr, rbipc_slot_t *slot, uint32_t ticket) {
     uint32_t state = atomic_load_explicit(&slot->state, memory_order_acquire);
-    if (rbipc_slot_state_is_reserved(state)) {
+    if (rbipc_slot_state_is_reserved(state) || rbipc_slot_state_is_reserving(state)) {
         uint32_t pid = atomic_load_explicit(&slot->producer_pid, memory_order_relaxed);
         if (pid > 0 && !rbipc_slot_is_peer_alive((pid_t)pid)) {
             if (rbipc_slot_poison(slot, ticket)) {
-                rbipc_sync_wake_one(&hdr->futex_seq, &hdr->futex_waiters);
+                atomic_thread_fence(memory_order_seq_cst);
+                rbipc_sync_wake_all(&hdr->futex_seq, &hdr->futex_waiters);
             }
         }
     }
@@ -299,6 +300,27 @@ static int rbipc_io_handle_read_backoff(rbipc_sync_state_t * RBIPC_RESTRICT sync
     int rc = rbipc_sync_wait_registered(sync_state, &hdr->futex_seq, &hdr->futex_waiters);
     if (RBIPC_UNLIKELY(rc != 0)) {
         return rc;
+    }
+
+    /* Timestamped ticket-hole detection: if slot remains in EMPTY state past 50ms grace period
+     * or active_producers is 0, producer crashed between CAS and slot reservation. */
+    uint32_t state = atomic_load_explicit(&slot->state, memory_order_acquire);
+    if (state == RBIPC_SLOT_EMPTY) {
+        uint32_t wt = atomic_load_explicit(&hdr->write_ticket, memory_order_acquire);
+        if (rbipc_seq_diff(wt, t) > 0) {
+            uint64_t now_ts = rbipc_clock_monotonic_ns();
+            if (sync_state->hole_first_seen_ns == 0) {
+                sync_state->hole_first_seen_ns = now_ts;
+            } else if (now_ts - sync_state->hole_first_seen_ns >= 50000000ULL ||
+                       atomic_load_explicit(&hdr->active_producers, memory_order_acquire) == 0) {
+                if (rbipc_slot_poison(slot, t)) {
+                    atomic_thread_fence(memory_order_seq_cst);
+                    rbipc_sync_wake_all(&hdr->futex_seq, &hdr->futex_waiters);
+                }
+            }
+        }
+    } else {
+        sync_state->hole_first_seen_ns = 0;
     }
 
     *out_next_t = atomic_load_explicit(&hdr->read_ticket, memory_order_relaxed);
@@ -771,6 +793,25 @@ int rbipc_read_acquire_batch(rbipc_ring_t * RBIPC_RESTRICT ring, uint32_t count,
             int rc = rbipc_sync_wait_registered(&sync_state, &hdr->futex_seq, &hdr->futex_waiters);
             if (RBIPC_UNLIKELY(rc != 0)) {
                 return rc;
+            }
+            /* Post-wait ticket hole check */
+            rbipc_slot_t *slot_t = &slots[t & hdr->capacity_mask];
+            if (atomic_load_explicit(&slot_t->state, memory_order_acquire) == RBIPC_SLOT_EMPTY) {
+                uint32_t wt = atomic_load_explicit(&hdr->write_ticket, memory_order_acquire);
+                if (rbipc_seq_diff(wt, t) > 0) {
+                    uint64_t now_ts = rbipc_clock_monotonic_ns();
+                    if (sync_state.hole_first_seen_ns == 0) {
+                        sync_state.hole_first_seen_ns = now_ts;
+                    } else if (now_ts - sync_state.hole_first_seen_ns >= 50000000ULL ||
+                               atomic_load_explicit(&hdr->active_producers, memory_order_acquire) == 0) {
+                        if (rbipc_slot_poison(slot_t, t)) {
+                            atomic_thread_fence(memory_order_seq_cst);
+                            rbipc_sync_wake_all(&hdr->futex_seq, &hdr->futex_waiters);
+                        }
+                    }
+                }
+            } else {
+                sync_state.hole_first_seen_ns = 0;
             }
             t = atomic_load_explicit(&hdr->read_ticket, memory_order_relaxed);
         }

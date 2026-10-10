@@ -28,8 +28,9 @@
  * @brief Thread-local state tracking for backoff progression and deadline timeout management.
  */
 typedef struct {
-    uint64_t deadline_ns;   /**< Monotonic timestamp deadline in nanoseconds (valid when @ref has_deadline is true). */
-    bool has_deadline;      /**< Boolean flag indicating if an explicit operation timeout deadline is active. */
+    uint64_t deadline_ns;        /**< Monotonic timestamp deadline in nanoseconds (valid when @ref has_deadline is true). */
+    bool has_deadline;           /**< Boolean flag indicating if an explicit operation timeout deadline is active. */
+    uint64_t hole_first_seen_ns; /**< Monotonic timestamp when an empty ticket-hole was first observed. */
 } rbipc_sync_state_t;
 
 /**

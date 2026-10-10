@@ -173,9 +173,10 @@ extern "C" {
  */
 enum rbipc_slot_state {
     RBIPC_SLOT_EMPTY     = 0, /**< Slot is vacant and available for write ticket reservation. */
-    RBIPC_SLOT_RESERVED  = 1, /**< Slot is reserved by a producer; active in-place write payload population. */
-    RBIPC_SLOT_COMMITTED = 2, /**< Slot payload write is committed; visible and available for reader consumption. */
-    RBIPC_SLOT_POISONED  = 3  /**< Reserving producer crashed or aborted write; slot poisoned to enable reader skip. */
+    RBIPC_SLOT_RESERVING = 1, /**< Slot is being reserved by producer; intermediate state for crash detection. */
+    RBIPC_SLOT_RESERVED  = 2, /**< Slot is reserved by a producer; active in-place write payload population. */
+    RBIPC_SLOT_COMMITTED = 3, /**< Slot payload write is committed; visible and available for reader consumption. */
+    RBIPC_SLOT_POISONED  = 4  /**< Reserving producer crashed or aborted write; slot poisoned to enable reader skip. */
 };
 
 /* ============================================================================

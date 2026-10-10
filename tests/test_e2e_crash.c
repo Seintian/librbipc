@@ -4,12 +4,15 @@
  */
 
 #include "rbipc.h"
+#include "../src/rbipc_internal.h"
+#include "../src/rbipc_slot.h"
 #include <stdio.h>
 #include <assert.h>
 #include <unistd.h>
 #include <signal.h>
 #include <string.h>
 #include <sys/wait.h>
+#include <stdatomic.h>
 
 #define TEST_CRASH_NAME "/rbipc_crash_test"
 
@@ -145,6 +148,68 @@ static void test_consumer_crash_recovery(void) {
     rbipc_destroy(shm_name);
 }
 
+static void test_ticket_hole_crash_recovery(void) {
+    const char *shm_name = "/rbipc_ticket_hole_test";
+    rbipc_destroy(shm_name);
+
+    rbipc_ring_t *ring = NULL;
+    int rc = rbipc_create(shm_name, 16, 64, &ring);
+    assert(rc == RBIPC_OK);
+
+    pid_t pid = fork();
+    if (pid == 0) {
+        rbipc_ring_t *child_ring = NULL;
+        int c_rc = rbipc_attach(shm_name, &child_ring);
+        assert(c_rc == RBIPC_OK);
+
+        /* Simulates dead producer crash: marks RESERVING, claims ticket CAS, and dies */
+        rbipc_slot_t *slots = (rbipc_slot_t *)child_ring->slots;
+        rbipc_slot_mark_reserving(&slots[0], getpid());
+        uint32_t t = 0;
+        bool claimed = atomic_compare_exchange_strong(&child_ring->hdr->write_ticket, &t, 1);
+        assert(claimed == true);
+
+        kill(getpid(), SIGKILL);
+        _exit(1);
+    }
+
+    int status;
+    waitpid(pid, &status, 0);
+
+    /* Consumer attempts to read ticket 0, which is an abandoned ticket hole */
+    const void *r_buf = NULL;
+    uint32_t r_len = 0;
+    uint32_t r_ticket = 0;
+
+    rc = rbipc_read_acquire(ring, &r_buf, &r_len, &r_ticket);
+    assert(rc == RBIPC_ERR_POISONED);
+    assert(r_ticket == 0);
+
+    /* Release recovered poisoned ticket hole */
+    rc = rbipc_read_release(ring, r_ticket);
+    assert(rc == RBIPC_OK);
+
+    /* Normal producer writes ticket 1 */
+    void *w_buf = NULL;
+    uint32_t w_ticket = 0;
+    rc = rbipc_reserve_write(ring, 32, &w_buf, &w_ticket);
+    assert(rc == RBIPC_OK);
+    assert(w_ticket == 1);
+    strcpy((char *)w_buf, "AFTER_HOLE_OK");
+    rc = rbipc_commit_write(ring, w_ticket, 32);
+    assert(rc == RBIPC_OK);
+
+    rc = rbipc_read_acquire(ring, &r_buf, &r_len, &r_ticket);
+    assert(rc == RBIPC_OK);
+    assert(r_ticket == 1);
+    assert(strcmp((const char *)r_buf, "AFTER_HOLE_OK") == 0);
+    rc = rbipc_read_release(ring, r_ticket);
+    assert(rc == RBIPC_OK);
+
+    rbipc_detach(ring);
+    rbipc_destroy(shm_name);
+}
+
 int main(void) {
     printf("[test_e2e_crash] Running dead-peer crash recovery test...\n");
     rbipc_destroy(TEST_CRASH_NAME);
@@ -210,6 +275,7 @@ int main(void) {
 
     test_batch_crash_recovery();
     test_consumer_crash_recovery();
+    test_ticket_hole_crash_recovery();
 
     printf("[test_e2e_crash] Dead-peer crash recovery test passed!\n");
     return 0;

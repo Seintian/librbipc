@@ -204,6 +204,16 @@ RBIPC_INLINE RBIPC_CONST bool rbipc_slot_state_is_empty(uint32_t state) {
 }
 
 /**
+ * @brief Evaluate whether slot state word equals RBIPC_SLOT_RESERVING.
+ *
+ * @param[in] state Slot state word.
+ * @return true if reserving, false otherwise.
+ */
+RBIPC_INLINE RBIPC_CONST bool rbipc_slot_state_is_reserving(uint32_t state) {
+    return state == RBIPC_SLOT_RESERVING;
+}
+
+/**
  * @brief Evaluate whether slot state word equals RBIPC_SLOT_RESERVED.
  *
  * @param[in] state Slot state word.

@@ -27,6 +27,7 @@
 RBIPC_LEAF
 void rbipc_sync_state_init(rbipc_sync_state_t * RBIPC_RESTRICT state, uint64_t timeout_ns) {
     if (RBIPC_UNLIKELY(!state)) return;
+    state->hole_first_seen_ns = 0;
     if (timeout_ns == UINT64_MAX) {
         state->has_deadline = false;
         state->deadline_ns = 0;

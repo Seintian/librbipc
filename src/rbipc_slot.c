@@ -56,6 +56,13 @@ bool rbipc_slot_is_peer_alive(pid_t pid) {
 }
 
 RBIPC_LEAF
+void rbipc_slot_mark_reserving(rbipc_slot_t *slot, pid_t pid) {
+    if (RBIPC_UNLIKELY(rbipc_is_null(slot))) return;
+    atomic_store_explicit(&slot->producer_pid, (uint32_t)pid, memory_order_relaxed);
+    atomic_store_explicit(&slot->state, RBIPC_SLOT_RESERVING, memory_order_release);
+}
+
+RBIPC_LEAF
 void rbipc_slot_mark_reserved(rbipc_slot_t *slot, pid_t pid) {
     if (RBIPC_UNLIKELY(rbipc_is_null(slot))) return;
     atomic_store_explicit(&slot->producer_pid, (uint32_t)pid, memory_order_relaxed);
@@ -74,13 +81,15 @@ void rbipc_slot_commit(rbipc_slot_t *slot, uint32_t ticket, uint32_t len) {
 RBIPC_LEAF
 bool rbipc_slot_poison(rbipc_slot_t *slot, uint32_t ticket) {
     if (RBIPC_UNLIKELY(rbipc_is_null(slot))) return false;
-    uint32_t expected = RBIPC_SLOT_RESERVED;
-    if (atomic_compare_exchange_strong_explicit(&slot->state, &expected,
-                                                RBIPC_SLOT_POISONED,
-                                                memory_order_release,
-                                                memory_order_relaxed)) {
-        atomic_store_explicit(&slot->sequence, ticket + 1, memory_order_release);
-        return true;
+    uint32_t state = atomic_load_explicit(&slot->state, memory_order_acquire);
+    while (state == RBIPC_SLOT_RESERVED || state == RBIPC_SLOT_RESERVING || state == RBIPC_SLOT_EMPTY) {
+        if (atomic_compare_exchange_weak_explicit(&slot->state, &state,
+                                                  RBIPC_SLOT_POISONED,
+                                                  memory_order_release,
+                                                  memory_order_relaxed)) {
+            atomic_store_explicit(&slot->sequence, ticket + 1, memory_order_release);
+            return true;
+        }
     }
     return false;
 }

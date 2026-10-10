@@ -52,6 +52,15 @@ bool rbipc_slot_is_peer_alive(pid_t pid);
  * @param[in,out] slot Direct pointer to slot descriptor.
  * @param[in]     pid  Process identifier of reserving producer.
  */
+/**
+ * @brief Atomically transition a slot descriptor to RESERVING state.
+ *
+ * @param[in,out] slot Direct pointer to slot descriptor.
+ * @param[in]     pid  Process identifier of reserving producer.
+ */
+RBIPC_LEAF
+void rbipc_slot_mark_reserving(rbipc_slot_t *slot, pid_t pid);
+
 RBIPC_LEAF
 void rbipc_slot_mark_reserved(rbipc_slot_t *slot, pid_t pid);
 
