@@ -93,6 +93,16 @@ int rbipc_sync_backoff(rbipc_sync_state_t * RBIPC_RESTRICT state, _Atomic uint32
                        _Atomic uint32_t *futex_waiters);
 
 /**
+ * @brief Wake up to @p count waiting threads on the specified futex word.
+ *
+ * @param[in] futex_word    Pointer to atomic futex sequence word in shared memory.
+ * @param[in] futex_waiters Pointer to atomic waiter count in shared memory.
+ * @param[in] count         Maximum number of waiting threads to awaken.
+ */
+RBIPC_LEAF
+void rbipc_sync_wake_n(_Atomic uint32_t *futex_word, _Atomic uint32_t *futex_waiters, uint32_t count);
+
+/**
  * @brief Wake one waiting thread on the specified futex word after state changes.
  *
  * @details Checks @p futex_waiters using atomic load with sequential consistency. If 0 waiters

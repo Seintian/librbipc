@@ -95,9 +95,14 @@ static void test_sync_backoff_and_timeout(void) {
     rbipc_sync_wake_all(&futex_word, &futex_waiters);
     assert(atomic_load(&futex_word) == 4);
 
+    /* Proportional wake_n test */
+    rbipc_sync_wake_n(&futex_word, &futex_waiters, 8);
+    assert(atomic_load(&futex_word) == 5);
+
     /* Safe NULL wake */
     rbipc_sync_wake_one(NULL, NULL);
     rbipc_sync_wake_all(NULL, NULL);
+    rbipc_sync_wake_n(NULL, NULL, 5);
 }
 
 int main(void) {
