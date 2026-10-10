@@ -27,7 +27,35 @@ The empirical answer is **an unequivocal YES**. While `iceoryx2` excels as a gen
 
 ---
 
-## 2. Metric-by-Metric Head-to-Head Comparison
+## 2. Architectural Paradigm & Delivery Semantics Alignment
+
+### Competing-Consumer Work Queue vs. Publish-Subscribe Multicast
+
+To interpret these empirical metrics with architectural precision, we must formalize the fundamental delivery contracts of both systems:
+
+| Architectural Property | `librbipc` | `iceoryx2` |
+| :--- | :--- | :--- |
+| **Delivery Model** | **MPMC Competing-Consumer Work Queue** | **1-to-N Publish-Subscribe Multicast** |
+| **Message Consumption** | Point-to-Point Handover: Each committed slot is claimed and processed by **exactly one** consumer | Broadcast: Every published message is delivered to **all** active subscribers |
+| **Slot Recycling** | Immediate: Reclaimed as soon as the single consuming peer releases it | Coordinated: Held until the slowest registered subscriber finishes reading |
+| **State Tracking** | Single global read ticket with per-slot CAS leasing | Per-subscriber cursor tracking, history buffers, and lagging subscriber detection |
+| **Primary Use Cases** | High-throughput worker pools, pipeline stages, actor mailboxes, transaction processing | Sensor streaming, event buses, telemetry broadcast, ROS2 / DDS transport |
+
+#### Where the Comparison is Informative:
+1. **Memory Engine Efficiency**: Evaluates the cost of shared-memory slot allocation, cacheline isolation (`_Alignas(64)`), and zero-copy pointer loans.
+2. **Synchronization Overhead**: Directly tests active busy-spin polling vs. kernel futex passive suspension (`sys_futex`) vs. Unix socket reactor (`WaitSet`).
+3. **Batch Amortization**: Demonstrates how vector burst primitives amortize hardware memory barriers and CAS instructions across multiple messages.
+
+#### Equivalent Competing-Consumer Architectures:
+In addition to middleware comparisons, `librbipc` has been designed and evaluated alongside equivalent competing-consumer architectures:
+- **DPDK `rte_ring`**: High-performance multi-producer multi-consumer lockless ring buffer in network datapaths.
+- **Linux POSIX `mqueue`**: Kernel-mediated IPC message queues with priority and notification support.
+- **Linux `AF_UNIX` SEQPACKET / Datagram**: Socket-based IPC with OS kernel buffering and flow control.
+- **LMAX Disruptor**: Inter-thread lock-free circular work pool architecture.
+
+---
+
+## 3. Metric-by-Metric Head-to-Head Comparison
 
 ### Metric 1: Ping-Pong Round-Trip & One-Way Latency
 

@@ -6,11 +6,20 @@ Designed following strict Software Engineering principles (Single Responsibility
 
 ---
 
+## Messaging Paradigm: MPMC Competing-Consumer Work Queue
+
+`librbipc` is formally architected as a **Multi-Producer Multi-Consumer (MPMC) Competing-Consumer Work Queue**:
+- **Point-to-Point Message Handover**: Each committed slot is claimed and processed by **exactly one** consumer thread or process, providing strict load-balancing across worker pools.
+- **Immediate Slot Reclamation**: Slots are recycled for producers as soon as their single consuming peer releases them, eliminating slow-subscriber head-of-line blocking.
+- **Decoupled Roles**: Processes explicitly declare participation roles (`RBIPC_ROLE_PRODUCER`, `RBIPC_ROLE_CONSUMER`, `RBIPC_ROLE_MONITOR`), allowing supervisory daemons to initialize queues without distorting active worker telemetry.
+
+---
+
 ## Architectural Principles & Highlights
 
-1. **Virtual Memory Double-Mapping Mirror Window**:
-   - Consecutive `mmap` calls with `MAP_FIXED` map a single underlying shared memory data region twice into contiguous virtual memory.
-   - Any slice of size up to buffer capacity straddling the circular ring boundary is contiguously accessible without split reads/writes or intermediate buffering.
+1. **Lean Single-Mapping Data Architecture**:
+   - Maps the circular shared memory data region using clean 1x virtual memory mapping (`rbipc_vmem_map_data`), cutting virtual address consumption by 50% compared to legacy double-mapping schemes while preserving zero-copy pointer loans.
+   - Dedicated double-mapping helpers (`rbipc_vmem_map_double`) are retained for byte-stream continuous boundary wrapping.
 2. **True Zero-Copy Protocol**:
    - Producers loan cache-aligned shared memory slots (`rbipc_reserve_write`) and publish them in-place (`rbipc_commit_write`).
    - Consumers acquire direct memory pointers to committed payloads without memory copying (`rbipc_read_acquire`).
