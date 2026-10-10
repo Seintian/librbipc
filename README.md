@@ -115,23 +115,23 @@ int rbipc_detach(rbipc_ring_t *ring);
 int rbipc_destroy(const char *name);
 
 // Producer Operations (Zero-Copy)
-int rbipc_reserve_write(rbipc_ring_t *ring, uint32_t len, void **out_buf, uint32_t *ticket);
-int rbipc_reserve_write_timeout(rbipc_ring_t *ring, uint32_t len, uint64_t timeout_ns, void **out_buf, uint32_t *ticket);
-int rbipc_reserve_write_nonblock(rbipc_ring_t *ring, uint32_t len, void **out_buf, uint32_t *ticket);
-int rbipc_commit_write(rbipc_ring_t *ring, uint32_t ticket, uint32_t written_len);
-int rbipc_abort_write(rbipc_ring_t *ring, uint32_t ticket);
+int rbipc_reserve_write(rbipc_ring_t *ring, uint32_t len, void **out_buf, uint64_t *ticket);
+int rbipc_reserve_write_timeout(rbipc_ring_t *ring, uint32_t len, uint64_t timeout_ns, void **out_buf, uint64_t *ticket);
+int rbipc_reserve_write_nonblock(rbipc_ring_t *ring, uint32_t len, void **out_buf, uint64_t *ticket);
+int rbipc_commit_write(rbipc_ring_t *ring, uint64_t ticket, uint32_t written_len);
+int rbipc_abort_write(rbipc_ring_t *ring, uint64_t ticket);
 
 // Consumer Operations (Zero-Copy)
-int rbipc_read_acquire(rbipc_ring_t *ring, const void **out_buf, uint32_t *out_len, uint32_t *ticket);
-int rbipc_read_acquire_timeout(rbipc_ring_t *ring, uint64_t timeout_ns, const void **out_buf, uint32_t *out_len, uint32_t *ticket);
-int rbipc_read_acquire_nonblock(rbipc_ring_t *ring, const void **out_buf, uint32_t *out_len, uint32_t *ticket);
-int rbipc_read_release(rbipc_ring_t *ring, uint32_t ticket);
+int rbipc_read_acquire(rbipc_ring_t *ring, const void **out_buf, uint32_t *out_len, uint64_t *ticket);
+int rbipc_read_acquire_timeout(rbipc_ring_t *ring, uint64_t timeout_ns, const void **out_buf, uint32_t *out_len, uint64_t *ticket);
+int rbipc_read_acquire_nonblock(rbipc_ring_t *ring, const void **out_buf, uint32_t *out_len, uint64_t *ticket);
+int rbipc_read_release(rbipc_ring_t *ring, uint64_t ticket);
 
 // B-Queue Batch / Burst Operations (High-Throughput Vector API)
 int rbipc_reserve_write_batch(rbipc_ring_t *ring, uint32_t count, rbipc_iovec_t *iovecs, uint32_t *out_reserved);
-int rbipc_commit_write_batch(rbipc_ring_t *ring, uint32_t count, const uint32_t *tickets, const uint32_t *lens);
+int rbipc_commit_write_batch(rbipc_ring_t *ring, uint32_t count, const uint64_t *tickets, const uint32_t *lens);
 int rbipc_read_acquire_batch(rbipc_ring_t *ring, uint32_t count, rbipc_rovec_t *rovecs, uint32_t *out_acquired);
-int rbipc_read_release_batch(rbipc_ring_t *ring, uint32_t count, const uint32_t *tickets);
+int rbipc_read_release_batch(rbipc_ring_t *ring, uint32_t count, const uint64_t *tickets);
 
 // Observability & Control
 int rbipc_signal_shutdown(rbipc_ring_t *ring);
@@ -200,10 +200,13 @@ TOTAL LINE COVERAGE            | 806              | 743            |    92.18%
 | **B-Queue Vector (Burst 128)** | **38,111,878 msgs/sec** | **2,326.2 MB/sec** | **26.2 ns** |
 | **Large Payload (64 KB)** | **4,396,079 msgs/sec** | **274.8 GB/sec** | **227 ns** |
 
-*For complete profiling methodology, hardware counter analysis, and `perf` breakdown, see [BENCHMARK_REPORT.md](BENCHMARK_REPORT.md).*  
-*For an exhaustive metric-by-metric comparison with Eclipse `iceoryx2`, see [BENCHMARK_ICEORYX2_COMPARISON.md](BENCHMARK_ICEORYX2_COMPARISON.md).*  
-*For an exhaustive cross-system benchmark against equivalent competing-consumer systems (DPDK `rte_ring`, LMAX Disruptor, Linux POSIX `mqueue`, Linux `AF_UNIX` datagrams), see [BENCHMARK_COMPETITORS_REPORT.md](BENCHMARK_COMPETITORS_REPORT.md).*  
-*For an in-depth investigation and empirical evaluation of non-CPU-burning wait strategies across DPDK, LMAX Disruptor, and librbipc, see [INVESTIGATION_DPDK_LMAX_IDLE_STRATEGIES.md](INVESTIGATION_DPDK_LMAX_IDLE_STRATEGIES.md).*
+### Comparative Research & Benchmark Reports
+
+- **Academic Whitepaper**: [COMPREHENSIVE_IPC_COMPARATIVE_ANALYSIS.md](COMPREHENSIVE_IPC_COMPARATIVE_ANALYSIS.md) — *Exhaustive, academic and empirical comparison evaluating `librbipc`, DPDK `rte_ring`, LMAX Disruptor, Linux POSIX `mqueue`, and `AF_UNIX` datagrams across throughput, latency distributions, payload scaling, idle CPU efficiency, MPMC contention, and non-CPU-burning wait strategies.*
+- **Cross-System Competing-Consumer Benchmarks**: [BENCHMARK_COMPETITORS_REPORT.md](BENCHMARK_COMPETITORS_REPORT.md) — *Empirical micro-benchmark suite covering 1P-1C streaming, half-RTT latency, payload scaling, idle CPU load, and B-Queue vector scaling.*
+- **Non-CPU-Burning Idle Strategies Investigation**: [INVESTIGATION_DPDK_LMAX_IDLE_STRATEGIES.md](INVESTIGATION_DPDK_LMAX_IDLE_STRATEGIES.md) — *Source-level investigation and 10-strategy empirical benchmark comparing DPDK power monitor/interrupt mode, Disruptor WaitStrategy hierarchy, and librbipc adaptive futex waiting.*
+- **Publish-Subscribe vs. Competing-Consumer Analysis**: [BENCHMARK_ICEORYX2_COMPARISON.md](BENCHMARK_ICEORYX2_COMPARISON.md) — *Architectural classification and empirical comparison qualifying delivery contracts between competing-consumer queues and 1-to-N multicast engines (`iceoryx2`).*
+- **Kernel & Micro-Architectural Profiling Report**: [BENCHMARK_REPORT.md](BENCHMARK_REPORT.md) — *Hardware performance counter profiling, CPU cache miss breakdowns, store-load reordering race remediation, and `perf` analysis.*
 
 ---
 

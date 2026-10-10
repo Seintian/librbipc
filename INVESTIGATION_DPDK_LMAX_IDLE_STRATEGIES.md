@@ -228,31 +228,32 @@ In the LMAX Disruptor (both Java and C++ versions in `disruptor` and `Disruptor-
 
 Where does `librbipc` fit into this landscape?
 
-In `librbipc`, shared-memory communication is governed by ticket-based atomic sequence counters within a mirrored ring buffer, backed by Linux low-level **`sys_futex`** primitives:
+In `librbipc`, shared-memory communication is governed by 64-bit ticket-based atomic sequence counters within a flat single-mapped POSIX shared memory ring buffer (with double-mapping virtual memory mirroring selectively reserved for continuous byte-stream boundary wrapping), backed by low-level Linux **`sys_futex`** primitives:
 
 ```
 +-------------------------------------------------------------------------------+
 |                       librbipc Futex Synchronization                          |
 +-------------------------------------------------------------------------------+
 | 1. Fast Path (Lock-Free Atomics):                                             |
-|    Consumer checks atomic ticket. If ready: returns IMMEDIATELY (0 syscalls). |
+|    Consumer checks 64-bit slot sequence. If ready: returns IMMEDIATELY (0 syscalls).
 |                                                                               |
 | 2. Adaptive Bounded Spin:                                                     |
 |    If not ready: spins for RBIPC_SPIN_LIMIT cycles with cpu_pause().          |
 |                                                                               |
-| 3. Passive Sleep (Zero User-Space Mutex Overhead):                            |
-|    If still not ready: calls sys_futex(ticket_word, FUTEX_WAIT, expected).    |
+| 3. Passive Sleep (Dedicated 32-Bit Futex Word):                               |
+|    If still unready: registers in futex_waiters with seq_cst barrier,         |
+|    re-checks sequence, and calls sys_futex(&hdr->futex_seq, FUTEX_WAIT, val). |
 |    Kernel places thread to sleep in O(1) futex hash bucket.                   |
 |    Zero pthread_mutex allocations. Zero user-space condition structures.      |
 |                                                                               |
 | 4. Selective Wakeup:                                                          |
-|    Producer calls sys_futex(FUTEX_WAKE) only when consumers are sleeping.     |
+|    Producer calls sys_futex(FUTEX_WAKE) only when futex_waiters > 0.          |
 +-------------------------------------------------------------------------------+
 ```
 
 ### Why Futex Outperforms Pthread Mutex in Competing-Consumer IPC:
-1. **No User-Space Mutex State**: Pthread mutexes require `pthread_mutexattr_setpshared(&mattr, PTHREAD_PROCESS_SHARED)`, which introduces complex robust-mutex locking logic, process-death handling, and user-space cacheline bouncing. `sys_futex` operates directly on an integer ticket embedded in the ring header.
-2. **Atomic Verification Before Sleep**: `FUTEX_WAIT` takes the expected memory value as an argument. The Linux kernel verifies that `*uaddr == val` *atomically with respect to descheduling the thread*. This completely eliminates the lost-wakeup race condition without needing an enclosing user-space mutex!
+1. **No User-Space Mutex State**: Pthread mutexes require `pthread_mutexattr_setpshared(&mattr, PTHREAD_PROCESS_SHARED)`, which introduces complex robust-mutex locking logic, process-death handling, and user-space cacheline bouncing. In contrast, `librbipc` synchronizes via dedicated, cache-line-isolated 32-bit futex sequence words (`futex_seq` for consumers, `write_futex_seq` for producers) embedded directly in the shared memory control header, completely decoupled from the 64-bit tickets.
+2. **Atomic Verification Before Sleep**: `FUTEX_WAIT` takes the expected 32-bit sequence word value as an argument. The Linux kernel verifies that `*uaddr == val` *atomically with respect to descheduling the thread*. This completely eliminates the lost-wakeup race condition without needing an enclosing user-space mutex!
 3. **Minimal Quiescent CPU**: In our empirical tests, `librbipc-Futex` demonstrated **0.17% idle CPU utilization**—the lowest idle CPU consumption of all evaluated systems.
 
 ---
