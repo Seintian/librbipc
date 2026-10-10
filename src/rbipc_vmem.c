@@ -49,6 +49,33 @@ void rbipc_vmem_unmap_ctrl(void *map, size_t size) {
 }
 
 /**
+ * @brief Maps the single 1x data buffer region into virtual memory.
+ */
+int rbipc_vmem_map_data(int fd, size_t offset, size_t data_size, void ** RBIPC_RESTRICT out_data_map) {
+    if (RBIPC_UNLIKELY(!rbipc_is_valid_fd(fd) || data_size == 0 || !out_data_map)) {
+        return RBIPC_ERR_INVAL;
+    }
+
+    void *data = mmap(NULL, data_size, PROT_READ | PROT_WRITE, MAP_SHARED, fd, (off_t)offset);
+    if (data == MAP_FAILED) {
+        return RBIPC_ERR_SYS;
+    }
+
+    *out_data_map = data;
+    return RBIPC_OK;
+}
+
+/**
+ * @brief Unmaps the single 1x data buffer region.
+ */
+RBIPC_LEAF
+void rbipc_vmem_unmap_data(void *data_map, size_t data_size) {
+    if (data_map && data_size > 0) {
+        munmap(data_map, data_size);
+    }
+}
+
+/**
  * @brief Reserves a contiguous span of uncommitted virtual address space.
  * @details Obtains a reservation of @p total_size bytes with @c PROT_NONE
  *          and @c MAP_PRIVATE | @c MAP_ANONYMOUS to guarantee that no other allocation

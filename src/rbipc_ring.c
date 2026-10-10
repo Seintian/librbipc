@@ -148,7 +148,7 @@ rbipc_ring_t *rbipc_ring_alloc_handle(int fd, const char * RBIPC_RESTRICT name,
 static void rbipc_ring_abort_create(int fd, const char *name, void *ctrl_map,
                                     size_t ctrl_size, void *data_map, size_t data_size) {
     if (data_map && data_size > 0) {
-        rbipc_vmem_unmap_double(data_map, data_size);
+        rbipc_vmem_unmap_data(data_map, data_size);
     }
     if (ctrl_map && ctrl_size > 0) {
         rbipc_vmem_unmap_ctrl(ctrl_map, ctrl_size);
@@ -210,7 +210,7 @@ int rbipc_create_ex(const char * RBIPC_RESTRICT name, size_t capacity, uint32_t 
     rbipc_slot_init_table(slots, cap);
 
     void *data_map = NULL;
-    rc = rbipc_vmem_map_double(fd, layout.data_offset, layout.data_size, &data_map);
+    rc = rbipc_vmem_map_data(fd, layout.data_offset, layout.data_size, &data_map);
     if (RBIPC_UNLIKELY(rc != RBIPC_OK)) {
         rbipc_ring_abort_create(fd, name, ctrl_map, layout.data_offset, NULL, 0);
         return rc;
@@ -298,7 +298,7 @@ int rbipc_attach_fd(int fd, rbipc_ring_t ** RBIPC_RESTRICT out_ring) {
     rbipc_slot_t *slots = (rbipc_slot_t *)((char *)ctrl_map + sizeof(rbipc_shm_header_t));
 
     void *data_map = NULL;
-    rc = rbipc_vmem_map_double(fd, layout.data_offset, layout.data_size, &data_map);
+    rc = rbipc_vmem_map_data(fd, layout.data_offset, layout.data_size, &data_map);
     if (RBIPC_UNLIKELY(rc != RBIPC_OK)) {
         rbipc_vmem_unmap_ctrl(ctrl_map, layout.data_offset);
         return rc;
@@ -308,7 +308,7 @@ int rbipc_attach_fd(int fd, rbipc_ring_t ** RBIPC_RESTRICT out_ring) {
                                                  layout.data_offset, data_map,
                                                  layout.data_size, false);
     if (RBIPC_UNLIKELY(!ring)) {
-        rbipc_vmem_unmap_double(data_map, layout.data_size);
+        rbipc_vmem_unmap_data(data_map, layout.data_size);
         rbipc_vmem_unmap_ctrl(ctrl_map, layout.data_offset);
         return RBIPC_ERR_NOMEM;
     }
@@ -353,7 +353,7 @@ void rbipc_ring_unmap_regions(rbipc_ring_t *ring) {
     if (!ring) return;
 
     if (ring->data_map && ring->data_size > 0) {
-        rbipc_vmem_unmap_double(ring->data_map, ring->data_size);
+        rbipc_vmem_unmap_data(ring->data_map, ring->data_size);
         ring->data_map = NULL;
     }
 

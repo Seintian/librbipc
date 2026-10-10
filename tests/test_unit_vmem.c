@@ -67,9 +67,32 @@ static void test_vmem_double_map(void) {
     rbipc_shm_close(fd);
 }
 
+static void test_vmem_data_map(void) {
+    void *map = NULL;
+    assert(rbipc_vmem_map_data(-1, 0, 4096, &map) == RBIPC_ERR_INVAL);
+    assert(rbipc_vmem_map_data(0, 0, 0, &map) == RBIPC_ERR_INVAL);
+    assert(rbipc_vmem_map_data(0, 0, 4096, NULL) == RBIPC_ERR_INVAL);
+
+    int fd = -1;
+    size_t data_size = 65536;
+    int rc = rbipc_shm_create(NULL, data_size, &fd);
+    assert(rc == RBIPC_OK);
+
+    rc = rbipc_vmem_map_data(fd, 0, data_size, &map);
+    assert(rc == RBIPC_OK);
+    assert(map != NULL);
+
+    memset(map, 0xAB, 128);
+    assert(((unsigned char *)map)[0] == 0xAB);
+
+    rbipc_vmem_unmap_data(map, data_size);
+    rbipc_shm_close(fd);
+}
+
 int main(void) {
     printf("[test_unit_vmem] Running tests...\n");
     test_vmem_ctrl_map();
+    test_vmem_data_map();
     test_vmem_double_map();
     printf("[test_unit_vmem] All tests passed!\n");
     return 0;

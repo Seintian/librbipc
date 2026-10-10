@@ -48,6 +48,31 @@ RBIPC_LEAF
 void rbipc_vmem_unmap_ctrl(void *map, size_t size);
 
 /**
+ * @brief Maps a single 1x continuous shared memory data region into virtual memory.
+ *
+ * @param[in]  fd           Shared memory file descriptor. Must be a valid open descriptor.
+ * @param[in]  offset       Byte offset within the shared memory object where data begins.
+ * @param[in]  data_size    Size in bytes of the data buffer. Must be non-zero and page-aligned.
+ * @param[out] out_data_map Pointer to store the mapped base virtual address.
+ *
+ * @return Status code indicating the outcome of the mapping operation.
+ * @retval RBIPC_OK        Data region successfully mapped.
+ * @retval RBIPC_ERR_INVAL Invalid descriptor, zero size, or null output pointer.
+ * @retval RBIPC_ERR_SYS   Kernel mmap system call failed.
+ */
+RBIPC_NODISCARD
+int rbipc_vmem_map_data(int fd, size_t offset, size_t data_size, void ** RBIPC_RESTRICT out_data_map);
+
+/**
+ * @brief Unmaps the single 1x shared memory data region.
+ *
+ * @param[in] data_map  Base virtual address of data region.
+ * @param[in] data_size Size in bytes of data region.
+ */
+RBIPC_LEAF
+void rbipc_vmem_unmap_data(void *data_map, size_t data_size);
+
+/**
  * @brief Constructs a double-mapped contiguous virtual address mirror for the ring data buffer.
  * @details To achieve zero-copy contiguous access across circular buffer wrap-around boundaries,
  *          this function:
