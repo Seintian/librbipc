@@ -169,17 +169,17 @@ static void test_shm_creation_flags_and_collision(void) {
     assert(ring2 == NULL);
 
     /* Explicit EXCL flag must also fail with RBIPC_ERR_EXISTS */
-    rc = rbipc_create_ex(TEST_LIFECYCLE_NAME, 32, 256, RBIPC_CREATE_EXCL, &ring2);
+    rc = rbipc_create_ex(TEST_LIFECYCLE_NAME, 32, 256, RBIPC_CREATE_EXCL, 0, &ring2);
     assert(rc == RBIPC_ERR_EXISTS);
     assert(ring2 == NULL);
 
     /* Invalid flags must fail with RBIPC_ERR_INVAL */
-    rc = rbipc_create_ex(TEST_LIFECYCLE_NAME, 32, 256, 0xFFFFU, &ring2);
+    rc = rbipc_create_ex(TEST_LIFECYCLE_NAME, 32, 256, 0xFFFFU, 0, &ring2);
     assert(rc == RBIPC_ERR_INVAL);
     assert(ring2 == NULL);
 
     /* OVERWRITE flag must succeed, unlinking and recreating the shared segment */
-    rc = rbipc_create_ex(TEST_LIFECYCLE_NAME, 32, 256, RBIPC_CREATE_OVERWRITE, &ring2);
+    rc = rbipc_create_ex(TEST_LIFECYCLE_NAME, 32, 256, RBIPC_CREATE_OVERWRITE, 0, &ring2);
     assert(rc == RBIPC_OK);
     assert(ring2 != NULL);
 
@@ -194,7 +194,7 @@ static void test_decoupled_participant_roles(void) {
 
     /* 1. Supervisor creates ring buffer with RBIPC_ROLE_MONITOR */
     rbipc_ring_t *supervisor = NULL;
-    int rc = rbipc_create_ex(TEST_LIFECYCLE_NAME, 32, 256, RBIPC_ROLE_MONITOR, &supervisor);
+    int rc = rbipc_create_ex(TEST_LIFECYCLE_NAME, 32, 256, RBIPC_ROLE_MONITOR, 0, &supervisor);
     assert(rc == RBIPC_OK);
     assert(supervisor != NULL);
 

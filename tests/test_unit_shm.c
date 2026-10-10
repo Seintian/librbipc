@@ -37,6 +37,42 @@ static void test_layout_calculation(void) {
     assert(layout.total_shm_size == layout.data_offset + layout.data_size);
 }
 
+
+static void test_shm_permissions_and_umask(void) {
+    const char *test_name = "/rbipc_shm_umask_test";
+    rbipc_shm_unlink(test_name);
+
+    /* Set restrictive umask that would normally strip group/other write permissions */
+    mode_t old_mask = umask(0077);
+
+    int fd = -1;
+    /* Create with explicit 0664 mode */
+    int rc = rbipc_shm_create_ex(test_name, 4096, RBIPC_CREATE_EXCL, 0664, &fd);
+    assert(rc == RBIPC_OK);
+    assert(fd >= 0);
+
+    struct stat st;
+    assert(fstat(fd, &st) == 0);
+    /* Verify fchmod bypassed the restrictive umask of 0077 */
+    assert((st.st_mode & 0777) == 0664);
+
+    rbipc_shm_close(fd);
+    rbipc_shm_unlink(test_name);
+
+    /* Test default mode (0) under umask 0077 -> must be RBIPC_DEFAULT_SHM_MODE (0660) */
+    rc = rbipc_shm_create_ex(test_name, 4096, RBIPC_CREATE_EXCL, 0, &fd);
+    assert(rc == RBIPC_OK);
+    assert(fd >= 0);
+    assert(fstat(fd, &st) == 0);
+    assert((st.st_mode & 0777) == RBIPC_DEFAULT_SHM_MODE);
+
+    rbipc_shm_close(fd);
+    rbipc_shm_unlink(test_name);
+
+    /* Restore umask */
+    umask(old_mask);
+}
+
 static void test_shm_lifecycle(void) {
     int fd = -1;
 
@@ -71,8 +107,8 @@ static void test_shm_lifecycle(void) {
     /* Second create without overwrite flag must fail with RBIPC_ERR_EXISTS */
     int fd_coll = -1;
     assert(rbipc_shm_create(test_name, 16384, &fd_coll) == RBIPC_ERR_EXISTS);
-    assert(rbipc_shm_create_ex(test_name, 16384, RBIPC_CREATE_EXCL, &fd_coll) == RBIPC_ERR_EXISTS);
-    assert(rbipc_shm_create_ex(test_name, 16384, 0x8000, &fd_coll) == RBIPC_ERR_INVAL);
+    assert(rbipc_shm_create_ex(test_name, 16384, RBIPC_CREATE_EXCL, 0, &fd_coll) == RBIPC_ERR_EXISTS);
+    assert(rbipc_shm_create_ex(test_name, 16384, 0x8000, 0, &fd_coll) == RBIPC_ERR_INVAL);
 
     /* Open existing */
     int fd_opened = -1;
@@ -97,6 +133,7 @@ int main(void) {
     printf("[test_unit_shm] Running tests...\n");
     test_layout_calculation();
     test_shm_lifecycle();
+    test_shm_permissions_and_umask();
     printf("[test_unit_shm] All tests passed!\n");
     return 0;
 }

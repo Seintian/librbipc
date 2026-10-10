@@ -171,7 +171,7 @@ static void rbipc_ring_abort_create(int fd, const char *name, void *ctrl_map,
  *          POSIX shared memory / memfd allocation, file sealing, virtual memory mappings,
  *          and slot initialization.
  */
-int rbipc_create_ex(const char * RBIPC_RESTRICT name, size_t capacity, uint32_t slot_size, uint32_t flags, rbipc_ring_t ** RBIPC_RESTRICT out_ring) {
+int rbipc_create_ex(const char * RBIPC_RESTRICT name, size_t capacity, uint32_t slot_size, uint32_t flags, mode_t mode, rbipc_ring_t ** RBIPC_RESTRICT out_ring) {
     if (RBIPC_UNLIKELY(!out_ring)) {
         return RBIPC_ERR_INVAL;
     }
@@ -199,7 +199,7 @@ int rbipc_create_ex(const char * RBIPC_RESTRICT name, size_t capacity, uint32_t 
 
     int fd = -1;
     uint32_t shm_flags = flags & RBIPC_CREATE_OVERWRITE;
-    rc = rbipc_shm_create_ex(name, layout.total_shm_size, shm_flags, &fd);
+    rc = rbipc_shm_create_ex(name, layout.total_shm_size, shm_flags, mode, &fd);
     if (RBIPC_UNLIKELY(rc != RBIPC_OK)) {
         return rc;
     }
@@ -242,7 +242,7 @@ int rbipc_create_ex(const char * RBIPC_RESTRICT name, size_t capacity, uint32_t 
 }
 
 int rbipc_create(const char * RBIPC_RESTRICT name, size_t capacity, uint32_t slot_size, rbipc_ring_t ** RBIPC_RESTRICT out_ring) {
-    return rbipc_create_ex(name, capacity, slot_size, RBIPC_CREATE_EXCL, out_ring);
+    return rbipc_create_ex(name, capacity, slot_size, RBIPC_CREATE_EXCL, 0, out_ring);
 }
 
 /**

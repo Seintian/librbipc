@@ -155,6 +155,12 @@ extern "C" {
 #define RBIPC_CREATE_EXCL        0x0000U /**< Fail if shared memory object already exists (default safe mode). */
 #define RBIPC_CREATE_OVERWRITE   0x0001U /**< Unlink and overwrite pre-existing shared memory object. */
 
+/**
+ * @def RBIPC_DEFAULT_SHM_MODE
+ * @brief Default POSIX shared memory permissions (0660: rw-rw----).
+ */
+#define RBIPC_DEFAULT_SHM_MODE   0660
+
 #define RBIPC_ROLE_PRODUCER      0x0002U /**< Process produces/writes messages to the ring buffer. */
 #define RBIPC_ROLE_CONSUMER      0x0004U /**< Process consumes/reads messages from the ring buffer. */
 #define RBIPC_ROLE_MONITOR       0x0008U /**< Process observes/monitors telemetry; does not increment active counters. */
@@ -339,7 +345,7 @@ typedef struct rbipc_ring rbipc_ring_t;
  * @retval RBIPC_ERR_SYS    if an underlying kernel syscall fails.
  */
 RBIPC_NODISCARD RBIPC_LEAF
-int rbipc_create_ex(const char * RBIPC_RESTRICT name, size_t capacity, uint32_t slot_size, uint32_t flags, rbipc_ring_t ** RBIPC_RESTRICT out_ring);
+int rbipc_create_ex(const char * RBIPC_RESTRICT name, size_t capacity, uint32_t slot_size, uint32_t flags, mode_t mode, rbipc_ring_t ** RBIPC_RESTRICT out_ring);
 
 RBIPC_NODISCARD RBIPC_LEAF
 int rbipc_create(const char * RBIPC_RESTRICT name, size_t capacity, uint32_t slot_size, rbipc_ring_t ** RBIPC_RESTRICT out_ring);

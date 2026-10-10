@@ -66,10 +66,10 @@ int rbipc_shm_calc_layout(uint32_t capacity, uint32_t slot_size, size_t page_siz
  * @retval RBIPC_ERR_SYS   if shm_open, memfd_create, or ftruncate fails.
  */
 RBIPC_NODISCARD
-int rbipc_shm_create_ex(const char * RBIPC_RESTRICT name, size_t total_size, uint32_t flags, int * RBIPC_RESTRICT out_fd);
+int rbipc_shm_create_ex(const char * RBIPC_RESTRICT name, size_t total_size, uint32_t flags, mode_t mode, int * RBIPC_RESTRICT out_fd);
 
 RBIPC_INLINE int rbipc_shm_create(const char * RBIPC_RESTRICT name, size_t total_size, int * RBIPC_RESTRICT out_fd) {
-    return rbipc_shm_create_ex(name, total_size, RBIPC_CREATE_EXCL, out_fd);
+    return rbipc_shm_create_ex(name, total_size, RBIPC_CREATE_EXCL, 0, out_fd);
 }
 
 /**
