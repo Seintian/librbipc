@@ -43,3 +43,46 @@ const char *rbipc_strerror(int err) {
             return "Unknown error";
     }
 }
+
+#include <errno.h>
+#include <stdio.h>
+#include <string.h>
+
+RBIPC_PURE RBIPC_LEAF
+int rbipc_errno_to_status(int err) {
+    switch (err) {
+        case 0:
+            return RBIPC_OK;
+        case EINVAL:
+            return RBIPC_ERR_INVAL;
+        case ENOMEM:
+            return RBIPC_ERR_NOMEM;
+        case EEXIST:
+            return RBIPC_ERR_EXISTS;
+        case ETIMEDOUT:
+            return RBIPC_ERR_TIMEOUT;
+        case EBUSY:
+        case EAGAIN:
+            return RBIPC_ERR_BUSY;
+        case EOPNOTSUPP:
+        case ENOSYS:
+            return RBIPC_ERR_NOTSUP;
+        default:
+            return RBIPC_ERR_SYS;
+    }
+}
+
+RBIPC_LEAF
+char *rbipc_error_format(int status, int sys_errno, char *buf, size_t buf_size) {
+    if (RBIPC_UNLIKELY(!buf || buf_size == 0)) {
+        return buf;
+    }
+    const char *status_str = rbipc_strerror(status);
+    if (sys_errno != 0) {
+        snprintf(buf, buf_size, "%s (system errno %d: %s)",
+                 status_str, sys_errno, strerror(sys_errno));
+    } else {
+        snprintf(buf, buf_size, "%s", status_str);
+    }
+    return buf;
+}
