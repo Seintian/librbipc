@@ -65,26 +65,46 @@ RBIPC_INLINE int rbipc_sync_calc_timeout_spec(const rbipc_sync_state_t * RBIPC_R
     return 0;
 }
 
-/**
- * @brief Increment active waiter counter using sequential consistency.
- *
- * @param[in,out] futex_waiters Atomic counter in shared memory.
- */
-RBIPC_INLINE void rbipc_sync_register_waiter(_Atomic uint32_t *futex_waiters) {
+RBIPC_LEAF
+void rbipc_sync_register_waiter(_Atomic uint32_t *futex_waiters) {
     if (futex_waiters) {
         atomic_fetch_add_explicit(futex_waiters, 1, memory_order_seq_cst);
     }
 }
 
-/**
- * @brief Decrement active waiter counter using sequential consistency.
- *
- * @param[in,out] futex_waiters Atomic counter in shared memory.
- */
-RBIPC_INLINE void rbipc_sync_deregister_waiter(_Atomic uint32_t *futex_waiters) {
+RBIPC_LEAF
+void rbipc_sync_deregister_waiter(_Atomic uint32_t *futex_waiters) {
     if (futex_waiters) {
         atomic_fetch_sub_explicit(futex_waiters, 1, memory_order_seq_cst);
     }
+}
+
+RBIPC_LEAF
+int rbipc_sync_wait_registered(rbipc_sync_state_t * RBIPC_RESTRICT state, _Atomic uint32_t *futex_word,
+                               _Atomic uint32_t *futex_waiters) {
+    if (RBIPC_UNLIKELY(!state || !futex_word)) {
+        rbipc_sync_deregister_waiter(futex_waiters);
+        return RBIPC_ERR_INVAL;
+    }
+
+    uint64_t now = rbipc_clock_monotonic_ns();
+    if (RBIPC_UNLIKELY(rbipc_sync_is_expired(state, now))) {
+        rbipc_sync_deregister_waiter(futex_waiters);
+        return RBIPC_ERR_TIMEOUT;
+    }
+
+    struct timespec ts;
+    int rc = rbipc_sync_calc_timeout_spec(state, now, &ts);
+    if (RBIPC_UNLIKELY(rc != 0)) {
+        rbipc_sync_deregister_waiter(futex_waiters);
+        return rc;
+    }
+
+    uint32_t current_val = atomic_load_explicit(futex_word, memory_order_relaxed);
+    rbipc_futex_wait(futex_word, current_val, &ts);
+    rbipc_sync_deregister_waiter(futex_waiters);
+
+    return 0;
 }
 
 RBIPC_LEAF
@@ -93,24 +113,8 @@ int rbipc_sync_backoff(rbipc_sync_state_t * RBIPC_RESTRICT state, _Atomic uint32
     if (RBIPC_UNLIKELY(!state || !futex_word)) {
         return RBIPC_ERR_INVAL;
     }
-
-    uint64_t now = rbipc_clock_monotonic_ns();
-    if (RBIPC_UNLIKELY(rbipc_sync_is_expired(state, now))) {
-        return RBIPC_ERR_TIMEOUT;
-    }
-
-    struct timespec ts;
-    int rc = rbipc_sync_calc_timeout_spec(state, now, &ts);
-    if (RBIPC_UNLIKELY(rc != 0)) {
-        return rc;
-    }
-
     rbipc_sync_register_waiter(futex_waiters);
-    uint32_t current_val = atomic_load_explicit(futex_word, memory_order_relaxed);
-    rbipc_futex_wait(futex_word, current_val, &ts);
-    rbipc_sync_deregister_waiter(futex_waiters);
-
-    return 0;
+    return rbipc_sync_wait_registered(state, futex_word, futex_waiters);
 }
 
 /**

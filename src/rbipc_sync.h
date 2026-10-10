@@ -54,6 +54,39 @@ void rbipc_sync_state_init(rbipc_sync_state_t * RBIPC_RESTRICT state, uint64_t t
  * @return 0 on continued wait / successful wake.
  * @retval RBIPC_ERR_TIMEOUT if deadline timestamp has been exceeded.
  */
+/**
+ * @brief Increment active waiter counter using sequential consistency.
+ *
+ * @param[in,out] futex_waiters Atomic counter in shared memory.
+ */
+RBIPC_LEAF
+void rbipc_sync_register_waiter(_Atomic uint32_t *futex_waiters);
+
+/**
+ * @brief Decrement active waiter counter using sequential consistency.
+ *
+ * @param[in,out] futex_waiters Atomic counter in shared memory.
+ */
+RBIPC_LEAF
+void rbipc_sync_deregister_waiter(_Atomic uint32_t *futex_waiters);
+
+/**
+ * @brief Execute a passive futex wait when a waiter is already registered.
+ *
+ * @details Evaluates deadline expiration. If time remains, waits on @p futex_word.
+ * Unconditionally decrements @p futex_waiters upon returning or timing out.
+ *
+ * @param[in,out] state         Thread-local synchronization state tracking deadline.
+ * @param[in]     futex_word    Pointer to atomic futex sequence word in shared memory.
+ * @param[in,out] futex_waiters Pointer to atomic waiter count in shared memory.
+ *
+ * @return 0 on continued wait / successful wake.
+ * @retval RBIPC_ERR_TIMEOUT if deadline timestamp has been exceeded.
+ */
+RBIPC_NODISCARD RBIPC_LEAF
+int rbipc_sync_wait_registered(rbipc_sync_state_t * RBIPC_RESTRICT state, _Atomic uint32_t *futex_word,
+                               _Atomic uint32_t *futex_waiters);
+
 RBIPC_NODISCARD RBIPC_LEAF
 int rbipc_sync_backoff(rbipc_sync_state_t * RBIPC_RESTRICT state, _Atomic uint32_t *futex_word,
                        _Atomic uint32_t *futex_waiters);

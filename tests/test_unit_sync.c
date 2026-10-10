@@ -23,6 +23,38 @@ static void test_sync_state(void) {
     rbipc_sync_state_init(NULL, 0);
 }
 
+static void test_asymmetric_waiter_registration(void) {
+    _Atomic uint32_t waiters;
+    atomic_init(&waiters, 0);
+
+    rbipc_sync_register_waiter(&waiters);
+    assert(atomic_load(&waiters) == 1);
+    rbipc_sync_register_waiter(&waiters);
+    assert(atomic_load(&waiters) == 2);
+
+    rbipc_sync_deregister_waiter(&waiters);
+    assert(atomic_load(&waiters) == 1);
+    rbipc_sync_deregister_waiter(&waiters);
+    assert(atomic_load(&waiters) == 0);
+
+    /* Test wait registered timeout */
+    _Atomic uint32_t futex_word;
+    atomic_init(&futex_word, 0);
+    rbipc_sync_state_t state;
+    rbipc_sync_state_init(&state, 1); /* 1ns timeout */
+
+    rbipc_sync_register_waiter(&waiters);
+    assert(atomic_load(&waiters) == 1);
+    int rc = rbipc_sync_wait_registered(&state, &futex_word, &waiters);
+    while (rc == 0) {
+        rbipc_sync_register_waiter(&waiters);
+        rc = rbipc_sync_wait_registered(&state, &futex_word, &waiters);
+    }
+    assert(rc == RBIPC_ERR_TIMEOUT);
+    /* Upon timeout return, waiter must be deregistered */
+    assert(atomic_load(&waiters) == 0);
+}
+
 static void test_sync_backoff_and_timeout(void) {
     _Atomic uint32_t futex_word;
     atomic_init(&futex_word, 0);
@@ -72,6 +104,7 @@ int main(void) {
     printf("[test_unit_sync] Running tests...\n");
     test_sync_state();
     test_sync_backoff_and_timeout();
+    test_asymmetric_waiter_registration();
     printf("[test_unit_sync] All tests passed!\n");
     return 0;
 }

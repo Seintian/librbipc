@@ -126,12 +126,27 @@ RBIPC_INLINE void rbipc_io_complete_write_reservation(rbipc_ring_t * RBIPC_RESTR
  */
 static int rbipc_io_handle_write_backoff(rbipc_sync_state_t * RBIPC_RESTRICT sync_state,
                                          rbipc_shm_header_t *hdr,
+                                         rbipc_slot_t *slot,
+                                         uint32_t t_ticket,
                                          uint64_t timeout_ns,
                                          uint32_t * RBIPC_RESTRICT t) {
     if (timeout_ns == 0) {
         return RBIPC_ERR_FULL;
     }
-    int rc = rbipc_sync_backoff(sync_state, &hdr->write_futex_seq, &hdr->write_waiters);
+
+    /* Phase A: Register intent to wait with sequential consistency barrier */
+    rbipc_sync_register_waiter(&hdr->write_waiters);
+
+    /* Phase B: Double-check slot vacancy after waiter registration */
+    uint32_t seq = atomic_load_explicit(&slot->sequence, memory_order_acquire);
+    if (RBIPC_LIKELY(rbipc_slot_is_vacant(seq, t_ticket)) || RBIPC_UNLIKELY(rbipc_ring_is_shutdown(hdr))) {
+        rbipc_sync_deregister_waiter(&hdr->write_waiters);
+        *t = atomic_load_explicit(&hdr->write_ticket, memory_order_relaxed);
+        return RBIPC_OK;
+    }
+
+    /* Phase C & D: Suspend in kernel and deregister upon return */
+    int rc = rbipc_sync_wait_registered(sync_state, &hdr->write_futex_seq, &hdr->write_waiters);
     if (RBIPC_UNLIKELY(rc != 0)) {
         return rc;
     }
@@ -212,7 +227,19 @@ static int rbipc_io_handle_read_backoff(rbipc_sync_state_t * RBIPC_RESTRICT sync
         return RBIPC_ERR_EMPTY;
     }
 
-    int rc = rbipc_sync_backoff(sync_state, &hdr->futex_seq, &hdr->futex_waiters);
+    /* Phase A: Register intent to wait with sequential consistency barrier */
+    rbipc_sync_register_waiter(&hdr->futex_waiters);
+
+    /* Phase B: Double-check condition to close lost-wakeup race window */
+    uint32_t seq = atomic_load_explicit(&slot->sequence, memory_order_acquire);
+    if (RBIPC_LIKELY(rbipc_slot_is_ready(seq, t)) || RBIPC_UNLIKELY(rbipc_ring_is_shutdown(hdr))) {
+        rbipc_sync_deregister_waiter(&hdr->futex_waiters);
+        *out_next_t = atomic_load_explicit(&hdr->read_ticket, memory_order_relaxed);
+        return RBIPC_OK;
+    }
+
+    /* Phase C & D: Suspend in kernel and deregister upon return */
+    int rc = rbipc_sync_wait_registered(sync_state, &hdr->futex_seq, &hdr->futex_waiters);
     if (RBIPC_UNLIKELY(rc != 0)) {
         return rc;
     }
@@ -258,7 +285,7 @@ int rbipc_reserve_write_timeout(rbipc_ring_t * RBIPC_RESTRICT ring, uint32_t len
                 return RBIPC_OK;
             }
         } else if (rbipc_seq_is_behind(seq, t)) {
-            int rc = rbipc_io_handle_write_backoff(&sync_state, hdr, timeout_ns, &t);
+            int rc = rbipc_io_handle_write_backoff(&sync_state, hdr, slot, t, timeout_ns, &t);
             if (RBIPC_UNLIKELY(rc != RBIPC_OK)) {
                 return rc;
             }
@@ -299,6 +326,7 @@ int rbipc_commit_write(rbipc_ring_t * RBIPC_RESTRICT ring, uint32_t ticket, uint
     rbipc_slot_t *slot = &slots[ticket & hdr->capacity_mask];
 
     rbipc_slot_commit(slot, ticket, written_len);
+    atomic_thread_fence(memory_order_seq_cst);
     if (RBIPC_UNLIKELY(rbipc_sync_has_waiters(&hdr->futex_waiters))) {
         rbipc_sync_wake_one(&hdr->futex_seq, &hdr->futex_waiters);
     }
@@ -321,6 +349,7 @@ int rbipc_abort_write(rbipc_ring_t * RBIPC_RESTRICT ring, uint32_t ticket) {
     rbipc_slot_t *slot = &slots[ticket & hdr->capacity_mask];
 
     if (rbipc_slot_poison(slot, ticket)) {
+        atomic_thread_fence(memory_order_seq_cst);
         rbipc_sync_wake_one(&hdr->futex_seq, &hdr->futex_waiters);
     }
 
@@ -401,6 +430,7 @@ int rbipc_read_release(rbipc_ring_t * RBIPC_RESTRICT ring, uint32_t ticket) {
     rbipc_slot_t *slot = &slots[ticket & hdr->capacity_mask];
 
     rbipc_slot_release(slot, ticket, hdr->capacity);
+    atomic_thread_fence(memory_order_seq_cst);
     if (RBIPC_UNLIKELY(rbipc_sync_has_waiters(&hdr->write_waiters))) {
         rbipc_sync_wake_one(&hdr->write_futex_seq, &hdr->write_waiters);
     }
@@ -501,7 +531,13 @@ int rbipc_reserve_write_batch(rbipc_ring_t * RBIPC_RESTRICT ring, uint32_t count
                 return RBIPC_OK;
             }
         } else {
-            int rc = rbipc_sync_backoff(&sync_state, &hdr->write_futex_seq, &hdr->write_waiters);
+            rbipc_sync_register_waiter(&hdr->write_waiters);
+            avail = rbipc_io_scan_vacant_slots(ring, t, count);
+            if (avail > 0 || RBIPC_UNLIKELY(rbipc_ring_is_shutdown(hdr))) {
+                rbipc_sync_deregister_waiter(&hdr->write_waiters);
+                continue;
+            }
+            int rc = rbipc_sync_wait_registered(&sync_state, &hdr->write_futex_seq, &hdr->write_waiters);
             if (RBIPC_UNLIKELY(rc != 0)) {
                 return rc;
             }
@@ -660,7 +696,13 @@ int rbipc_read_acquire_batch(rbipc_ring_t * RBIPC_RESTRICT ring, uint32_t count,
                 return RBIPC_ERR_SHUTDOWN;
             }
 
-            int rc = rbipc_sync_backoff(&sync_state, &hdr->futex_seq, &hdr->futex_waiters);
+            rbipc_sync_register_waiter(&hdr->futex_waiters);
+            avail = rbipc_io_scan_ready_slots(ring, t, count);
+            if (avail > 0 || RBIPC_UNLIKELY(rbipc_ring_is_drained_on_shutdown(hdr, t))) {
+                rbipc_sync_deregister_waiter(&hdr->futex_waiters);
+                continue;
+            }
+            int rc = rbipc_sync_wait_registered(&sync_state, &hdr->futex_seq, &hdr->futex_waiters);
             if (RBIPC_UNLIKELY(rc != 0)) {
                 return rc;
             }
