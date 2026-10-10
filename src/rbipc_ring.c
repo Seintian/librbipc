@@ -80,7 +80,7 @@ static int rbipc_ring_validate_create_params(size_t capacity, uint32_t slot_size
  */
 static void rbipc_ring_init_header_fields(rbipc_shm_header_t * RBIPC_RESTRICT hdr,
                                           const rbipc_layout_t * RBIPC_RESTRICT layout,
-                                          uint32_t cap) {
+                                          uint32_t cap, uint32_t roles) {
     atomic_init(&hdr->magic, 0);
     hdr->version = htole32(RBIPC_VERSION);
     hdr->_reserved0 = 0;
@@ -98,8 +98,8 @@ static void rbipc_ring_init_header_fields(rbipc_shm_header_t * RBIPC_RESTRICT hd
     atomic_init(&hdr->futex_waiters, 0);
     atomic_init(&hdr->write_futex_seq, 0);
     atomic_init(&hdr->write_waiters, 0);
-    atomic_init(&hdr->active_producers, 1);
-    atomic_init(&hdr->active_consumers, 0);
+    atomic_init(&hdr->active_producers, (roles & RBIPC_ROLE_PRODUCER) ? 1 : 0);
+    atomic_init(&hdr->active_consumers, (roles & RBIPC_ROLE_CONSUMER) ? 1 : 0);
     atomic_init(&hdr->shutdown_flag, 0);
 }
 
@@ -112,6 +112,7 @@ rbipc_ring_t *rbipc_ring_alloc_handle(int fd, const char * RBIPC_RESTRICT name,
                                       rbipc_slot_t *slots,
                                       void *ctrl_map, size_t ctrl_map_size,
                                       void *data_map, size_t data_size,
+                                      uint32_t roles,
                                       bool is_creator) {
     rbipc_ring_t *ring = (rbipc_ring_t *)calloc(1, sizeof(rbipc_ring_t));
     if (RBIPC_UNLIKELY(!ring)) {
@@ -128,6 +129,7 @@ rbipc_ring_t *rbipc_ring_alloc_handle(int fd, const char * RBIPC_RESTRICT name,
     ring->ctrl_map_size = ctrl_map_size;
     ring->data_map = data_map;
     ring->data_size = data_size;
+    ring->roles = roles;
     ring->is_creator = is_creator;
     ring->cached_pid = getpid();
 
@@ -171,8 +173,13 @@ int rbipc_create_ex(const char * RBIPC_RESTRICT name, size_t capacity, uint32_t 
     if (RBIPC_UNLIKELY(!out_ring)) {
         return RBIPC_ERR_INVAL;
     }
-    if (RBIPC_UNLIKELY((flags & ~RBIPC_CREATE_OVERWRITE) != 0)) {
+    uint32_t known_flags = RBIPC_CREATE_OVERWRITE | RBIPC_ROLE_PRODUCER | RBIPC_ROLE_CONSUMER | RBIPC_ROLE_MONITOR;
+    if (RBIPC_UNLIKELY((flags & ~known_flags) != 0)) {
         return RBIPC_ERR_INVAL;
+    }
+    uint32_t roles = flags & (RBIPC_ROLE_PRODUCER | RBIPC_ROLE_CONSUMER | RBIPC_ROLE_MONITOR);
+    if (roles == 0) {
+        roles = RBIPC_ROLE_PRODUCER;
     }
 
     size_t page_size = 0;
@@ -189,7 +196,8 @@ int rbipc_create_ex(const char * RBIPC_RESTRICT name, size_t capacity, uint32_t 
     }
 
     int fd = -1;
-    rc = rbipc_shm_create_ex(name, layout.total_shm_size, flags, &fd);
+    uint32_t shm_flags = flags & RBIPC_CREATE_OVERWRITE;
+    rc = rbipc_shm_create_ex(name, layout.total_shm_size, shm_flags, &fd);
     if (RBIPC_UNLIKELY(rc != RBIPC_OK)) {
         return rc;
     }
@@ -204,7 +212,7 @@ int rbipc_create_ex(const char * RBIPC_RESTRICT name, size_t capacity, uint32_t 
     }
 
     rbipc_shm_header_t *hdr = (rbipc_shm_header_t *)ctrl_map;
-    rbipc_ring_init_header_fields(hdr, &layout, cap);
+    rbipc_ring_init_header_fields(hdr, &layout, cap, roles);
 
     rbipc_slot_t *slots = (rbipc_slot_t *)((char *)ctrl_map + sizeof(rbipc_shm_header_t));
     rbipc_slot_init_table(slots, cap);
@@ -218,7 +226,7 @@ int rbipc_create_ex(const char * RBIPC_RESTRICT name, size_t capacity, uint32_t 
 
     rbipc_ring_t *ring = rbipc_ring_alloc_handle(fd, name, hdr, slots, ctrl_map,
                                                  layout.data_offset, data_map,
-                                                 layout.data_size, true);
+                                                 layout.data_size, roles, true);
     if (RBIPC_UNLIKELY(!ring)) {
         rbipc_ring_abort_create(fd, name, ctrl_map, layout.data_offset, data_map, layout.data_size);
         return RBIPC_ERR_NOMEM;
@@ -273,8 +281,12 @@ int rbipc_ring_probe_and_validate_header(int fd, size_t page_size, rbipc_layout_
  * @details Validates shared memory geometry, maps control metadata, binds the double-mapped
  *          mirror, increments consumer participant counters, and returns a runtime handle.
  */
-int rbipc_attach_fd(int fd, rbipc_ring_t ** RBIPC_RESTRICT out_ring) {
+int rbipc_attach_fd_ex(int fd, uint32_t role_flags, rbipc_ring_t ** RBIPC_RESTRICT out_ring) {
     if (RBIPC_UNLIKELY(!rbipc_is_valid_fd(fd) || !out_ring)) {
+        return RBIPC_ERR_INVAL;
+    }
+    uint32_t known_roles = RBIPC_ROLE_PRODUCER | RBIPC_ROLE_CONSUMER | RBIPC_ROLE_MONITOR;
+    if (RBIPC_UNLIKELY(role_flags == 0 || (role_flags & ~known_roles) != 0)) {
         return RBIPC_ERR_INVAL;
     }
 
@@ -306,24 +318,29 @@ int rbipc_attach_fd(int fd, rbipc_ring_t ** RBIPC_RESTRICT out_ring) {
 
     rbipc_ring_t *ring = rbipc_ring_alloc_handle(fd, NULL, hdr, slots, ctrl_map,
                                                  layout.data_offset, data_map,
-                                                 layout.data_size, false);
+                                                 layout.data_size, role_flags, false);
     if (RBIPC_UNLIKELY(!ring)) {
         rbipc_vmem_unmap_data(data_map, layout.data_size);
         rbipc_vmem_unmap_ctrl(ctrl_map, layout.data_offset);
         return RBIPC_ERR_NOMEM;
     }
 
-    atomic_fetch_add_explicit(&hdr->active_consumers, 1, memory_order_relaxed);
+    if (role_flags & RBIPC_ROLE_PRODUCER) {
+        atomic_fetch_add_explicit(&hdr->active_producers, 1, memory_order_relaxed);
+    }
+    if (role_flags & RBIPC_ROLE_CONSUMER) {
+        atomic_fetch_add_explicit(&hdr->active_consumers, 1, memory_order_relaxed);
+    }
 
     *out_ring = ring;
     return RBIPC_OK;
 }
 
-/**
- * @brief Attaches to an existing ring buffer by its POSIX shared memory name.
- * @details Opens the named shared memory object and delegates to rbipc_attach_fd().
- */
-int rbipc_attach(const char * RBIPC_RESTRICT name, rbipc_ring_t ** RBIPC_RESTRICT out_ring) {
+int rbipc_attach_fd(int fd, rbipc_ring_t ** RBIPC_RESTRICT out_ring) {
+    return rbipc_attach_fd_ex(fd, RBIPC_ROLE_CONSUMER, out_ring);
+}
+
+int rbipc_attach_ex(const char * RBIPC_RESTRICT name, uint32_t role_flags, rbipc_ring_t ** RBIPC_RESTRICT out_ring) {
     if (RBIPC_UNLIKELY(!name || !out_ring)) {
         return RBIPC_ERR_INVAL;
     }
@@ -334,7 +351,7 @@ int rbipc_attach(const char * RBIPC_RESTRICT name, rbipc_ring_t ** RBIPC_RESTRIC
         return rc;
     }
 
-    rc = rbipc_attach_fd(fd, out_ring);
+    rc = rbipc_attach_fd_ex(fd, role_flags, out_ring);
     if (RBIPC_UNLIKELY(rc != RBIPC_OK)) {
         rbipc_shm_close(fd);
         return rc;
@@ -342,6 +359,10 @@ int rbipc_attach(const char * RBIPC_RESTRICT name, rbipc_ring_t ** RBIPC_RESTRIC
 
     rbipc_str_copy((*out_ring)->name, sizeof((*out_ring)->name), name);
     return RBIPC_OK;
+}
+
+int rbipc_attach(const char * RBIPC_RESTRICT name, rbipc_ring_t ** RBIPC_RESTRICT out_ring) {
+    return rbipc_attach_ex(name, RBIPC_ROLE_CONSUMER, out_ring);
 }
 
 /**
@@ -371,9 +392,10 @@ void rbipc_ring_unmap_regions(rbipc_ring_t *ring) {
  */
 static void rbipc_ring_deregister(rbipc_ring_t *ring) {
     if (!ring || !ring->hdr) return;
-    if (ring->is_creator) {
+    if (ring->roles & RBIPC_ROLE_PRODUCER) {
         atomic_fetch_sub_explicit(&ring->hdr->active_producers, 1, memory_order_relaxed);
-    } else {
+    }
+    if (ring->roles & RBIPC_ROLE_CONSUMER) {
         atomic_fetch_sub_explicit(&ring->hdr->active_consumers, 1, memory_order_relaxed);
     }
 }

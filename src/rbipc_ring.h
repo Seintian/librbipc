@@ -39,6 +39,7 @@ rbipc_ring_t *rbipc_ring_alloc_handle(int fd, const char * RBIPC_RESTRICT name,
                                       rbipc_slot_t *slots,
                                       void *ctrl_map, size_t ctrl_map_size,
                                       void *data_map, size_t data_size,
+                                      uint32_t roles,
                                       bool is_creator);
 
 /**

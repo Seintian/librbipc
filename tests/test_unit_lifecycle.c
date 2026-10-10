@@ -189,6 +189,62 @@ static void test_shm_creation_flags_and_collision(void) {
     rbipc_destroy(TEST_LIFECYCLE_NAME);
 }
 
+static void test_decoupled_participant_roles(void) {
+    rbipc_destroy(TEST_LIFECYCLE_NAME);
+
+    /* 1. Supervisor creates ring buffer with RBIPC_ROLE_MONITOR */
+    rbipc_ring_t *supervisor = NULL;
+    int rc = rbipc_create_ex(TEST_LIFECYCLE_NAME, 32, 256, RBIPC_ROLE_MONITOR, &supervisor);
+    assert(rc == RBIPC_OK);
+    assert(supervisor != NULL);
+
+    rbipc_stats_t stats;
+    assert(rbipc_get_stats(supervisor, &stats) == RBIPC_OK);
+    assert(stats.active_producers == 0);
+    assert(stats.active_consumers == 0);
+
+    /* 2. Worker 1 attaches as PRODUCER */
+    rbipc_ring_t *prod = NULL;
+    assert(rbipc_attach_ex(TEST_LIFECYCLE_NAME, RBIPC_ROLE_PRODUCER, &prod) == RBIPC_OK);
+    assert(rbipc_get_stats(supervisor, &stats) == RBIPC_OK);
+    assert(stats.active_producers == 1);
+    assert(stats.active_consumers == 0);
+
+    /* 3. Worker 2 attaches as CONSUMER */
+    rbipc_ring_t *cons = NULL;
+    assert(rbipc_attach_ex(TEST_LIFECYCLE_NAME, RBIPC_ROLE_CONSUMER, &cons) == RBIPC_OK);
+    assert(rbipc_get_stats(supervisor, &stats) == RBIPC_OK);
+    assert(stats.active_producers == 1);
+    assert(stats.active_consumers == 1);
+
+    /* 4. Worker 3 attaches as MONITOR */
+    rbipc_ring_t *mon = NULL;
+    assert(rbipc_attach_ex(TEST_LIFECYCLE_NAME, RBIPC_ROLE_MONITOR, &mon) == RBIPC_OK);
+    assert(rbipc_get_stats(supervisor, &stats) == RBIPC_OK);
+    assert(stats.active_producers == 1);
+    assert(stats.active_consumers == 1);
+
+    /* 5. Supervisor detaches: active_producers must remain 1 */
+    assert(rbipc_detach(supervisor) == RBIPC_OK);
+    assert(rbipc_get_stats(prod, &stats) == RBIPC_OK);
+    assert(stats.active_producers == 1);
+    assert(stats.active_consumers == 1);
+
+    /* 6. Detach prod, cons, mon */
+    assert(rbipc_detach(prod) == RBIPC_OK);
+    assert(rbipc_get_stats(cons, &stats) == RBIPC_OK);
+    assert(stats.active_producers == 0);
+    assert(stats.active_consumers == 1);
+
+    assert(rbipc_detach(cons) == RBIPC_OK);
+    assert(rbipc_get_stats(mon, &stats) == RBIPC_OK);
+    assert(stats.active_producers == 0);
+    assert(stats.active_consumers == 0);
+
+    assert(rbipc_detach(mon) == RBIPC_OK);
+    assert(rbipc_destroy(TEST_LIFECYCLE_NAME) == RBIPC_OK);
+}
+
 int main(void) {
     printf("[test_unit_lifecycle] Running tests...\n");
     test_param_validation();
@@ -196,6 +252,7 @@ int main(void) {
     test_named_shm_lifecycle();
     test_corrupted_shm_detection();
     test_shm_creation_flags_and_collision();
+    test_decoupled_participant_roles();
     printf("[test_unit_lifecycle] All tests passed!\n");
     return 0;
 }

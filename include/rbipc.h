@@ -153,6 +153,10 @@ extern "C" {
  */
 #define RBIPC_CREATE_EXCL        0x0000U /**< Fail if shared memory object already exists (default safe mode). */
 #define RBIPC_CREATE_OVERWRITE   0x0001U /**< Unlink and overwrite pre-existing shared memory object. */
+
+#define RBIPC_ROLE_PRODUCER      0x0002U /**< Process produces/writes messages to the ring buffer. */
+#define RBIPC_ROLE_CONSUMER      0x0004U /**< Process consumes/reads messages from the ring buffer. */
+#define RBIPC_ROLE_MONITOR       0x0008U /**< Process observes/monitors telemetry; does not increment active counters. */
 /** @} */
 
 /**
@@ -359,6 +363,21 @@ int rbipc_create(const char * RBIPC_RESTRICT name, size_t capacity, uint32_t slo
  * @see rbipc_attach_fd
  * @see rbipc_detach
  */
+/**
+ * @brief Attach to an existing named shared-memory IPC ring buffer with participant role flags.
+ *
+ * @param[in]  name       POSIX shared memory object name (e.g. "/my_ring").
+ * @param[in]  role_flags Role flags (@ref RBIPC_ROLE_PRODUCER, @ref RBIPC_ROLE_CONSUMER, or @ref RBIPC_ROLE_MONITOR).
+ * @param[out] out_ring   Location to store the pointer to the allocated ring handle.
+ *
+ * @return @ref RBIPC_OK on success.
+ * @retval RBIPC_ERR_INVAL if @p name or @p out_ring is NULL or @p role_flags is invalid.
+ * @retval RBIPC_ERR_NOMEM if virtual address space mapping fails.
+ * @retval RBIPC_ERR_SYS   if shm_open or fstat fails.
+ */
+RBIPC_NODISCARD RBIPC_LEAF
+int rbipc_attach_ex(const char * RBIPC_RESTRICT name, uint32_t role_flags, rbipc_ring_t ** RBIPC_RESTRICT out_ring);
+
 RBIPC_NODISCARD RBIPC_LEAF
 int rbipc_attach(const char * RBIPC_RESTRICT name, rbipc_ring_t ** RBIPC_RESTRICT out_ring);
 
@@ -380,6 +399,21 @@ int rbipc_attach(const char * RBIPC_RESTRICT name, rbipc_ring_t ** RBIPC_RESTRIC
  * @see rbipc_attach
  * @see rbipc_get_fd
  */
+/**
+ * @brief Attach to an existing shared-memory IPC ring buffer via open fd with participant role flags.
+ *
+ * @param[in]  fd         Open shared memory file descriptor.
+ * @param[in]  role_flags Role flags (@ref RBIPC_ROLE_PRODUCER, @ref RBIPC_ROLE_CONSUMER, or @ref RBIPC_ROLE_MONITOR).
+ * @param[out] out_ring   Location to store the pointer to the allocated ring handle.
+ *
+ * @return @ref RBIPC_OK on success.
+ * @retval RBIPC_ERR_INVAL if @p fd or @p out_ring is invalid or @p role_flags is invalid.
+ * @retval RBIPC_ERR_NOMEM if virtual memory allocation or mmap fails.
+ * @retval RBIPC_ERR_SYS   if system calls fail.
+ */
+RBIPC_NODISCARD RBIPC_LEAF
+int rbipc_attach_fd_ex(int fd, uint32_t role_flags, rbipc_ring_t ** RBIPC_RESTRICT out_ring);
+
 RBIPC_NODISCARD RBIPC_LEAF
 int rbipc_attach_fd(int fd, rbipc_ring_t ** RBIPC_RESTRICT out_ring);
 

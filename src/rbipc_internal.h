@@ -39,6 +39,7 @@ struct rbipc_ring {
     size_t ctrl_map_size;         /**< Exact byte size of the mapped metadata region (page-aligned). */
     void *data_map;               /**< Base virtual memory address of the contiguous 2x double-mapped payload buffer. */
     size_t data_size;             /**< Byte size of a single circular data buffer (half of @ref data_map reservation). */
+    uint32_t roles;               /**< Bitmask of participant role flags (PRODUCER, CONSUMER, MONITOR). */
     bool is_creator;              /**< True if this process created the ring buffer; false if attached. */
     pid_t cached_pid;             /**< Cached process PID to avoid redundant getpid() system calls during reservations. */
 };
