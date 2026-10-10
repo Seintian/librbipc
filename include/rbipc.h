@@ -910,4 +910,6 @@ const char *rbipc_strerror(int err);
 }
 #endif
 
+#include "rbipc_ipc.h"
+
 #endif /* RBIPC_H */
