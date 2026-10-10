@@ -95,6 +95,7 @@ librbipc/
 ├── Doxyfile                    # Doxygen API configuration
 ├── BENCHMARK_REPORT.md         # In-depth perf profiling & benchmark analysis
 ├── BENCHMARK_ICEORYX2_COMPARISON.md # Metric-by-metric comparison against Eclipse iceoryx2
+├── BENCHMARK_COMPETITORS_REPORT.md # Cross-system benchmark vs DPDK rte_ring, Disruptor, mqueue, AF_UNIX
 └── README.md
 ```
 
@@ -199,7 +200,8 @@ TOTAL LINE COVERAGE            | 806              | 743            |    92.18%
 | **Large Payload (64 KB)** | **4,396,079 msgs/sec** | **274.8 GB/sec** | **227 ns** |
 
 *For complete profiling methodology, hardware counter analysis, and `perf` breakdown, see [BENCHMARK_REPORT.md](BENCHMARK_REPORT.md).*  
-*For an exhaustive metric-by-metric comparison with Eclipse `iceoryx2`, see [BENCHMARK_ICEORYX2_COMPARISON.md](BENCHMARK_ICEORYX2_COMPARISON.md).*
+*For an exhaustive metric-by-metric comparison with Eclipse `iceoryx2`, see [BENCHMARK_ICEORYX2_COMPARISON.md](BENCHMARK_ICEORYX2_COMPARISON.md).*  
+*For an exhaustive cross-system benchmark against equivalent competing-consumer systems (DPDK `rte_ring`, LMAX Disruptor, Linux POSIX `mqueue`, Linux `AF_UNIX` datagrams), see [BENCHMARK_COMPETITORS_REPORT.md](BENCHMARK_COMPETITORS_REPORT.md).*
 
 ---
 
