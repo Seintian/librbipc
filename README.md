@@ -96,6 +96,7 @@ librbipc/
 ├── BENCHMARK_REPORT.md         # In-depth perf profiling & benchmark analysis
 ├── BENCHMARK_ICEORYX2_COMPARISON.md # Metric-by-metric comparison against Eclipse iceoryx2
 ├── BENCHMARK_COMPETITORS_REPORT.md # Cross-system benchmark vs DPDK rte_ring, Disruptor, mqueue, AF_UNIX
+├── INVESTIGATION_DPDK_LMAX_IDLE_STRATEGIES.md # In-depth investigation of non-CPU-burning wait strategies
 └── README.md
 ```
 
@@ -201,7 +202,8 @@ TOTAL LINE COVERAGE            | 806              | 743            |    92.18%
 
 *For complete profiling methodology, hardware counter analysis, and `perf` breakdown, see [BENCHMARK_REPORT.md](BENCHMARK_REPORT.md).*  
 *For an exhaustive metric-by-metric comparison with Eclipse `iceoryx2`, see [BENCHMARK_ICEORYX2_COMPARISON.md](BENCHMARK_ICEORYX2_COMPARISON.md).*  
-*For an exhaustive cross-system benchmark against equivalent competing-consumer systems (DPDK `rte_ring`, LMAX Disruptor, Linux POSIX `mqueue`, Linux `AF_UNIX` datagrams), see [BENCHMARK_COMPETITORS_REPORT.md](BENCHMARK_COMPETITORS_REPORT.md).*
+*For an exhaustive cross-system benchmark against equivalent competing-consumer systems (DPDK `rte_ring`, LMAX Disruptor, Linux POSIX `mqueue`, Linux `AF_UNIX` datagrams), see [BENCHMARK_COMPETITORS_REPORT.md](BENCHMARK_COMPETITORS_REPORT.md).*  
+*For an in-depth investigation and empirical evaluation of non-CPU-burning wait strategies across DPDK, LMAX Disruptor, and librbipc, see [INVESTIGATION_DPDK_LMAX_IDLE_STRATEGIES.md](INVESTIGATION_DPDK_LMAX_IDLE_STRATEGIES.md).*
 
 ---
 

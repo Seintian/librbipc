@@ -528,6 +528,17 @@ In `BENCHMARK_ICEORYX2_COMPARISON.md`, `librbipc` is benchmarked directly agains
     5. **MPMC Scalability**: Benchmarked 1P-1C, 2P-2C, 4P-2C, 4P-4C intra-process multi-threading, proving wait-free ticket scalability under concurrent thread contention.
     6. **B-Queue Batch Scaling**: Demonstrated +38.0% speedup from batch size 1 (9.21 Mops/s) to batch size 16 (12.71 Mops/s).
   - Published comprehensive analysis report in [`BENCHMARK_COMPETITORS_REPORT.md`](BENCHMARK_COMPETITORS_REPORT.md) and exported structured machine-readable results to [`benchmarks/results/competitors_benchmark.json`](benchmarks/results/competitors_benchmark.json).
+  - **In-Depth Investigation of Non-CPU-Burning Wait Strategies**:
+    Conducted an exhaustive architectural investigation into how DPDK and LMAX Disruptor avoid 100% CPU burning when empty or quiescent, analyzing:
+    1. **DPDK Power Management**: `rte_power_monitor` (Intel `UMONITOR`/`UMWAIT` cacheline snooping in low-power C0.2 state, TSX transactional multi-wait), `rte_power_pause` (timed `TPAUSE` in WAITPKG or calibrated `rte_pause` loops), dynamic frequency scaling (`RTE_POWER_MGMT_TYPE_SCALE`), and hybrid Rx-interrupt mode (`rte_epoll_wait` on eventfds in `l3fwd-power`).
+    2. **LMAX Disruptor WaitStrategy Hierarchy**: Source-level analysis and empirical evaluation of `BusySpinWaitStrategy` (100% CPU), `YieldingWaitStrategy` (`sched_yield`), `SleepingWaitStrategy` (three-tier spin-yield-nanosleep), `BlockingWaitStrategy` (`pthread_mutex` + `pthread_cond`), `LiteBlockingWaitStrategy` (atomic boolean elision of mutex), and `PhasedBackoffWaitStrategy` (1 us spin -> 10 us yield -> cond fallback).
+    3. **Empirical Benchmarks Across 10 Strategies**: Built [`benchmarks/bench_idle_strategies.c`](benchmarks/bench_idle_strategies.c) (`bin/bench_idle_strategies`) measuring throughput, active latency, quiescent wake-up latency, and idle CPU load:
+       - `LMAX-Sleeping`: Reached **24.55 Mops/s** while dropping idle CPU to **1.01%** (wake latency 38.5 us).
+       - `LMAX-LiteBlocking`: Reached **16.76 Mops/s** (+95.6% over Blocking) at **0.27% idle CPU**.
+       - `LMAX-PhasedBackoff`: Achieved **17.26 Mops/s** and **100 ns active p50 latency** at **0.27% idle CPU**.
+       - `DPDK-Interrupt-Epoll`: Achieved **14.86 Mops/s** at **0.21% idle CPU**.
+       - `librbipc-Futex`: Delivered **13.82 Mops/s** with **0.17% idle CPU** (lowest idle consumption) with zero user-space mutex structures.
+    - Published full technical report in [`INVESTIGATION_DPDK_LMAX_IDLE_STRATEGIES.md`](INVESTIGATION_DPDK_LMAX_IDLE_STRATEGIES.md) and machine-readable data in [`benchmarks/results/idle_strategies_benchmark.json`](benchmarks/results/idle_strategies_benchmark.json).
 
 ---
 
