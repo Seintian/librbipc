@@ -157,7 +157,19 @@ RBIPC_INLINE void rbipc_io_complete_write_reservation(rbipc_ring_t * RBIPC_RESTR
 static void rbipc_io_audit_and_recover_dead_consumer(rbipc_shm_header_t *hdr,
                                                      rbipc_slot_t *slot,
                                                      uint64_t ticket) {
+    bool recovered = false;
     if (rbipc_slot_recover_dead_consumer(slot, ticket)) {
+        recovered = true;
+    } else {
+        uint64_t lease = atomic_load_explicit(&hdr->lease_timeout_ns, memory_order_relaxed);
+        if (lease > 0) {
+            uint64_t now = rbipc_clock_monotonic_ns();
+            if (rbipc_slot_recover_expired_lease(slot, ticket - hdr->capacity, hdr->capacity, lease, now)) {
+                recovered = true;
+            }
+        }
+    }
+    if (recovered) {
         atomic_thread_fence(memory_order_seq_cst);
         rbipc_sync_wake_all(&hdr->write_futex_seq, &hdr->write_waiters);
     }
@@ -185,11 +197,16 @@ static int rbipc_io_handle_write_backoff(rbipc_sync_state_t * RBIPC_RESTRICT syn
                                          uint64_t t_ticket,
                                          uint64_t timeout_ns,
                                          uint64_t * RBIPC_RESTRICT t) {
+    rbipc_io_audit_and_recover_dead_consumer(hdr, slot, t_ticket);
+    uint64_t initial_seq = atomic_load_explicit(&slot->sequence, memory_order_acquire);
+    if (RBIPC_LIKELY(rbipc_slot_is_vacant(initial_seq, t_ticket)) || RBIPC_UNLIKELY(rbipc_ring_is_shutdown(hdr))) {
+        *t = atomic_load_explicit(&hdr->write_ticket, memory_order_relaxed);
+        return RBIPC_OK;
+    }
+
     if (timeout_ns == 0) {
         return RBIPC_ERR_FULL;
     }
-
-    rbipc_io_audit_and_recover_dead_consumer(hdr, slot, t_ticket);
 
     /* Phase A: Register intent to wait with sequential consistency barrier */
     rbipc_sync_register_waiter(&hdr->write_waiters);
@@ -243,6 +260,7 @@ RBIPC_INLINE int rbipc_io_complete_read_acquisition(const rbipc_ring_t * RBIPC_R
         return RBIPC_OK;
     }
     if (rbipc_slot_state_is_poisoned(state)) {
+        rbipc_slot_mark_acquired((rbipc_slot_t *)slot, ring->cached_pid, rbipc_clock_monotonic_ns());
         *out_buf = NULL;
         *out_len = 0;
         *out_ticket = ticket;
@@ -509,7 +527,9 @@ int rbipc_read_release(rbipc_ring_t * RBIPC_RESTRICT ring, uint64_t ticket) {
     rbipc_slot_t *slots = (rbipc_slot_t *)RBIPC_ASSUME_ALIGNED(ring->slots, RBIPC_CACHE_LINE);
     rbipc_slot_t *slot = &slots[ticket & hdr->capacity_mask];
 
-    rbipc_slot_release(slot, ticket, hdr->capacity);
+    if (RBIPC_UNLIKELY(!rbipc_slot_release_ex(slot, ticket, hdr->capacity, ring->cached_pid))) {
+        return RBIPC_ERR_TIMEOUT;
+    }
     atomic_thread_fence(memory_order_seq_cst);
     if (RBIPC_UNLIKELY(rbipc_sync_has_waiters(&hdr->write_waiters))) {
         rbipc_sync_wake_one(&hdr->write_futex_seq, &hdr->write_waiters);
@@ -760,6 +780,7 @@ static void rbipc_io_populate_acquired_batch(const rbipc_ring_t * RBIPC_RESTRICT
             rovecs[i].buf = data_base + ((size_t)(ticket_i & mask) * slot_size);
             rovecs[i].len = atomic_load_explicit(&slot_i->len, memory_order_acquire);
         } else {
+            rbipc_slot_mark_acquired((rbipc_slot_t *)slot_i, ring->cached_pid, rbipc_clock_monotonic_ns());
             rovecs[i].buf = NULL;
             rovecs[i].len = 0;
         }
@@ -859,16 +880,20 @@ int rbipc_read_acquire_batch_nonblock(rbipc_ring_t * RBIPC_RESTRICT ring, uint32
  * @param[in]     count   Number of elements in batch.
  * @param[in]     tickets Array of slot tickets to release.
  */
-static void rbipc_io_release_slot_batch(rbipc_ring_t * RBIPC_RESTRICT ring, uint32_t count,
-                                        const uint64_t * RBIPC_RESTRICT tickets) {
+static int rbipc_io_release_slot_batch(rbipc_ring_t * RBIPC_RESTRICT ring, uint32_t count,
+                                       const uint64_t * RBIPC_RESTRICT tickets) {
     const uint32_t mask = ring->hdr->capacity_mask;
     const uint32_t cap = ring->hdr->capacity;
     rbipc_slot_t *slots = (rbipc_slot_t *)RBIPC_ASSUME_ALIGNED(ring->slots, RBIPC_CACHE_LINE);
+    int rc = RBIPC_OK;
 
     for (uint32_t i = 0; i < count; ++i) {
         rbipc_slot_t *slot = &slots[tickets[i] & mask];
-        rbipc_slot_release(slot, tickets[i], cap);
+        if (RBIPC_UNLIKELY(!rbipc_slot_release_ex(slot, tickets[i], cap, ring->cached_pid))) {
+            rc = RBIPC_ERR_TIMEOUT;
+        }
     }
+    return rc;
 }
 
 /**
@@ -881,12 +906,12 @@ int rbipc_read_release_batch(rbipc_ring_t * RBIPC_RESTRICT ring, uint32_t count,
     }
 
     rbipc_shm_header_t *hdr = ring->hdr;
-    rbipc_io_release_slot_batch(ring, count, tickets);
+    int rc = rbipc_io_release_slot_batch(ring, count, tickets);
 
     atomic_thread_fence(memory_order_seq_cst);
     if (RBIPC_UNLIKELY(rbipc_sync_has_waiters(&hdr->write_waiters))) {
         rbipc_sync_wake_n(&hdr->write_futex_seq, &hdr->write_waiters, count);
     }
     rbipc_ring_signal_eventfd(ring);
-    return RBIPC_OK;
+    return rc;
 }

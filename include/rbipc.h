@@ -248,6 +248,7 @@ typedef struct {
     _Alignas(RBIPC_CACHE_LINE) _Atomic uint32_t active_consumers; /**< Number of currently attached consumer handles. */
     _Alignas(RBIPC_CACHE_LINE) _Atomic uint32_t shutdown_flag;    /**< Atomic flag set to 1 when cooperative shutdown is requested. */
     _Alignas(RBIPC_CACHE_LINE) _Atomic uint32_t eventfd_waiters;  /**< Count of active eventfd/epoll reactor waiters registered. */
+    _Alignas(RBIPC_CACHE_LINE) _Atomic uint64_t lease_timeout_ns;   /**< Configurable consumer lease duration in nanoseconds (0 = disabled). */
 } rbipc_shm_header_t;
 
 /**
@@ -895,6 +896,46 @@ int rbipc_get_fd(const rbipc_ring_t *ring);
  */
 RBIPC_NODISCARD RBIPC_LEAF
 int rbipc_get_stats(const rbipc_ring_t * RBIPC_RESTRICT ring, rbipc_stats_t * RBIPC_RESTRICT out_stats);
+
+/**
+ * @defgroup rbipc_lease Consumer Lease Timeouts & Head-of-Line Defense
+ * @brief Dynamic consumer lease configuration and head-of-line blocking mitigation.
+ * @{
+ */
+
+/**
+ * @brief Configure consumer slot holding lease duration in nanoseconds.
+ *
+ * @param[in,out] ring             Ring buffer handle.
+ * @param[in]     lease_timeout_ns Maximum lease duration in nanoseconds (0 to disable).
+ *
+ * @return @ref RBIPC_OK on success.
+ * @retval RBIPC_ERR_INVAL if @p ring is NULL.
+ */
+RBIPC_NODISCARD RBIPC_LEAF
+int rbipc_set_lease_timeout(rbipc_ring_t *ring, uint64_t lease_timeout_ns);
+
+/**
+ * @brief Retrieve current consumer slot holding lease duration in nanoseconds.
+ *
+ * @param[in] ring Ring buffer handle.
+ *
+ * @return Lease timeout in nanoseconds (0 if disabled or invalid ring).
+ */
+RBIPC_NODISCARD RBIPC_LEAF
+uint64_t rbipc_get_lease_timeout(const rbipc_ring_t *ring);
+
+/**
+ * @brief Audit ring buffer and proactively revoke expired consumer leases.
+ *
+ * @param[in,out] ring Ring buffer handle.
+ *
+ * @return Number of expired leases revoked (>= 0), or negative error code.
+ */
+RBIPC_NODISCARD RBIPC_LEAF
+int rbipc_revoke_expired_leases(rbipc_ring_t *ring);
+/** @} */
+
 
 /**
  * @brief Convert an error code into a human-readable description string.

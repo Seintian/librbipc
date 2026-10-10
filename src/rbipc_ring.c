@@ -550,3 +550,57 @@ int rbipc_get_stats(const rbipc_ring_t * RBIPC_RESTRICT ring, rbipc_stats_t * RB
 
     return RBIPC_OK;
 }
+
+RBIPC_LEAF
+int rbipc_set_lease_timeout(rbipc_ring_t *ring, uint64_t lease_timeout_ns) {
+    if (RBIPC_UNLIKELY(!ring || !ring->hdr)) {
+        return RBIPC_ERR_INVAL;
+    }
+    atomic_store_explicit(&ring->hdr->lease_timeout_ns, lease_timeout_ns, memory_order_release);
+    return RBIPC_OK;
+}
+
+RBIPC_LEAF
+uint64_t rbipc_get_lease_timeout(const rbipc_ring_t *ring) {
+    if (RBIPC_UNLIKELY(!ring || !ring->hdr)) {
+        return 0;
+    }
+    return atomic_load_explicit(&ring->hdr->lease_timeout_ns, memory_order_acquire);
+}
+
+RBIPC_LEAF
+int rbipc_revoke_expired_leases(rbipc_ring_t *ring) {
+    if (RBIPC_UNLIKELY(!ring || !ring->hdr)) {
+        return RBIPC_ERR_INVAL;
+    }
+    rbipc_shm_header_t *hdr = ring->hdr;
+    uint64_t lease = atomic_load_explicit(&hdr->lease_timeout_ns, memory_order_relaxed);
+    if (lease == 0) {
+        return 0;
+    }
+
+    uint64_t now = rbipc_clock_monotonic_ns();
+    rbipc_slot_t *slots = (rbipc_slot_t *)RBIPC_ASSUME_ALIGNED(ring->slots, RBIPC_CACHE_LINE);
+    uint32_t cap = hdr->capacity;
+    int revoked_count = 0;
+
+    for (uint32_t i = 0; i < cap; ++i) {
+        rbipc_slot_t *slot = &slots[i];
+        uint32_t cpid = atomic_load_explicit(&slot->consumer_pid, memory_order_relaxed);
+        if (cpid > 0) {
+            uint64_t acquired_ts = atomic_load_explicit(&slot->acquire_timestamp_ns, memory_order_relaxed);
+            if (acquired_ts > 0 && now > acquired_ts && (now - acquired_ts) >= lease) {
+                uint64_t seq = atomic_load_explicit(&slot->sequence, memory_order_acquire);
+                if (rbipc_slot_recover_expired_lease(slot, seq, cap, lease, now)) {
+                    revoked_count++;
+                }
+            }
+        }
+    }
+
+    if (revoked_count > 0) {
+        atomic_thread_fence(memory_order_seq_cst);
+        rbipc_sync_wake_all(&hdr->write_futex_seq, &hdr->write_waiters);
+    }
+    return revoked_count;
+}

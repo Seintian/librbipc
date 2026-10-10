@@ -125,7 +125,27 @@ void rbipc_slot_mark_acquired(rbipc_slot_t *slot, pid_t pid, uint64_t timestamp_
 RBIPC_LEAF
 bool rbipc_slot_recover_dead_consumer(rbipc_slot_t *slot, uint64_t ticket);
 
+/**
+ * @brief Recovers an unreleased slot held past its lease timeout.
+ *
+ * @param[in,out] slot             Direct pointer to slot descriptor.
+ * @param[in]     ticket           Ticket position being recovered.
+ * @param[in]     lease_timeout_ns Configured lease duration in nanoseconds.
+ * @param[in]     now_ns           Current monotonic timestamp in nanoseconds.
+ *
+ * @return true if slot lease was revoked; false otherwise.
+ */
 RBIPC_LEAF
-void rbipc_slot_release(rbipc_slot_t *slot, uint64_t ticket, uint32_t capacity);
+bool rbipc_slot_recover_expired_lease(rbipc_slot_t *slot, uint64_t ticket, uint32_t capacity, uint64_t lease_timeout_ns, uint64_t now_ns);
+
+/**
+ * @brief Release a consumed slot with expected consumer PID validation.
+ */
+RBIPC_LEAF
+bool rbipc_slot_release_ex(rbipc_slot_t *slot, uint64_t ticket, uint32_t capacity, pid_t expected_pid);
+
+RBIPC_INLINE void rbipc_slot_release(rbipc_slot_t *slot, uint64_t ticket, uint32_t capacity) {
+    (void)rbipc_slot_release_ex(slot, ticket, capacity, 0);
+}
 
 #endif /* RBIPC_SLOT_H */

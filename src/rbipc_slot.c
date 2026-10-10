@@ -154,11 +154,41 @@ bool rbipc_slot_recover_dead_consumer(rbipc_slot_t *slot, uint64_t ticket) {
 }
 
 RBIPC_LEAF
-void rbipc_slot_release(rbipc_slot_t *slot, uint64_t ticket, uint32_t capacity) {
-    if (RBIPC_UNLIKELY(rbipc_is_null(slot))) return;
-    atomic_store_explicit(&slot->consumer_pid, 0, memory_order_relaxed);
+bool rbipc_slot_recover_expired_lease(rbipc_slot_t *slot, uint64_t ticket, uint32_t capacity, uint64_t lease_timeout_ns, uint64_t now_ns) {
+    if (RBIPC_UNLIKELY(rbipc_is_null(slot) || lease_timeout_ns == 0)) return false;
+    uint32_t cpid = atomic_load_explicit(&slot->consumer_pid, memory_order_relaxed);
+    if (cpid > 0) {
+        uint64_t acquired_ts = atomic_load_explicit(&slot->acquire_timestamp_ns, memory_order_relaxed);
+        if (acquired_ts > 0 && now_ns > acquired_ts && (now_ns - acquired_ts) >= lease_timeout_ns) {
+            atomic_store_explicit(&slot->consumer_pid, 0, memory_order_relaxed);
+            atomic_store_explicit(&slot->producer_pid, 0, memory_order_relaxed);
+            atomic_store_explicit(&slot->acquire_timestamp_ns, 0, memory_order_relaxed);
+            atomic_store_explicit(&slot->len, 0, memory_order_relaxed);
+            atomic_store_explicit(&slot->state, RBIPC_SLOT_EMPTY, memory_order_release);
+            atomic_store_explicit(&slot->sequence, ticket + capacity, memory_order_release);
+            return true;
+        }
+    }
+    return false;
+}
+
+RBIPC_LEAF
+bool rbipc_slot_release_ex(rbipc_slot_t *slot, uint64_t ticket, uint32_t capacity, pid_t expected_pid) {
+    if (RBIPC_UNLIKELY(rbipc_is_null(slot))) return false;
+    uint32_t cpid = (uint32_t)expected_pid;
+    if (cpid > 0) {
+        uint32_t current_cpid = cpid;
+        if (!atomic_compare_exchange_strong_explicit(&slot->consumer_pid, &current_cpid, 0,
+                                                     memory_order_acq_rel, memory_order_relaxed)) {
+            /* Lease was revoked, expired, or held by another peer */
+            return false;
+        }
+    } else {
+        atomic_store_explicit(&slot->consumer_pid, 0, memory_order_relaxed);
+    }
     atomic_store_explicit(&slot->acquire_timestamp_ns, 0, memory_order_relaxed);
     atomic_store_explicit(&slot->state, RBIPC_SLOT_EMPTY, memory_order_release);
     /* Advance slot sequence by capacity to allow the next cycle turn */
     atomic_store_explicit(&slot->sequence, ticket + capacity, memory_order_release);
+    return true;
 }

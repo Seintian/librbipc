@@ -14,13 +14,14 @@
 #define BATCH_SLOT_SIZE 128
 
 static void test_batch_validation(void) {
+    rbipc_destroy(BATCH_RING_NAME);
     rbipc_ring_t *ring = NULL;
     int rc = rbipc_create(BATCH_RING_NAME, BATCH_CAPACITY, BATCH_SLOT_SIZE, &ring);
     assert(rc == RBIPC_OK);
 
     rbipc_iovec_t iovecs[16];
     uint32_t reserved = 0;
-    rbipc_rovec_t rovecs[16];
+    rbipc_rovec_t rovecs[BATCH_CAPACITY];
     uint32_t acquired = 0;
     uint64_t tickets[16] = {0};
     uint32_t lens[16] = {0};
@@ -162,7 +163,7 @@ static void test_batch_nonblock_and_timeout(void) {
     int rc = rbipc_create(BATCH_RING_NAME, BATCH_CAPACITY, BATCH_SLOT_SIZE, &ring);
     assert(rc == RBIPC_OK);
 
-    rbipc_rovec_t rovecs[16];
+    rbipc_rovec_t rovecs[BATCH_CAPACITY];
     uint32_t acquired = 0;
     rbipc_iovec_t iovecs[BATCH_CAPACITY];
     uint32_t reserved = 0;
@@ -198,7 +199,7 @@ static void test_batch_nonblock_and_timeout(void) {
     assert(rc == RBIPC_OK);
     assert(acquired == 16);
 
-    uint64_t rel_tickets[16];
+    uint64_t rel_tickets[BATCH_CAPACITY];
     for (uint32_t i = 0; i < 16; ++i) {
         rel_tickets[i] = rovecs[i].ticket;
     }
