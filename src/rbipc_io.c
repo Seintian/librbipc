@@ -75,6 +75,35 @@ RBIPC_INLINE bool rbipc_io_try_claim_read_ticket(rbipc_shm_header_t * RBIPC_REST
  * @param[in,out] slot   Pointer to slot descriptor under inspection.
  * @param[in]     ticket Current consumer ticket value.
  */
+static void rbipc_io_audit_and_recover_dead_peer_range(rbipc_shm_header_t *hdr,
+                                                       rbipc_slot_t *slots,
+                                                       uint32_t t,
+                                                       uint32_t count) {
+    const uint32_t mask = hdr->capacity_mask;
+    for (uint32_t i = 0; i < count; ++i) {
+        uint32_t ticket_i = t + i;
+        rbipc_slot_t *slot_i = &slots[ticket_i & mask];
+        uint32_t seq = atomic_load_explicit(&slot_i->sequence, memory_order_acquire);
+        if (rbipc_slot_is_ready(seq, ticket_i)) {
+            continue;
+        }
+        uint32_t state = atomic_load_explicit(&slot_i->state, memory_order_acquire);
+        if (rbipc_slot_state_is_reserved(state)) {
+            uint32_t pid = atomic_load_explicit(&slot_i->producer_pid, memory_order_relaxed);
+            if (pid > 0 && !rbipc_slot_is_peer_alive((pid_t)pid)) {
+                if (rbipc_slot_poison(slot_i, ticket_i)) {
+                    atomic_thread_fence(memory_order_seq_cst);
+                    rbipc_sync_wake_all(&hdr->futex_seq, &hdr->futex_waiters);
+                }
+            } else {
+                break;
+            }
+        } else {
+            break;
+        }
+    }
+}
+
 static void rbipc_io_audit_and_recover_dead_peer(rbipc_shm_header_t *hdr, rbipc_slot_t *slot, uint32_t ticket) {
     uint32_t state = atomic_load_explicit(&slot->state, memory_order_acquire);
     if (rbipc_slot_state_is_reserved(state)) {
@@ -683,7 +712,10 @@ int rbipc_read_acquire_batch(rbipc_ring_t * RBIPC_RESTRICT ring, uint32_t count,
     rbipc_sync_state_t sync_state;
     rbipc_sync_state_init(&sync_state, UINT64_MAX);
 
+    rbipc_slot_t *slots = (rbipc_slot_t *)RBIPC_ASSUME_ALIGNED(ring->slots, RBIPC_CACHE_LINE);
+
     for (;;) {
+        rbipc_io_audit_and_recover_dead_peer_range(hdr, slots, t, count);
         uint32_t avail = rbipc_io_scan_ready_slots(ring, t, count);
         if (avail > 0) {
             if (rbipc_io_try_claim_read_ticket(hdr, &t, avail)) {
@@ -697,6 +729,7 @@ int rbipc_read_acquire_batch(rbipc_ring_t * RBIPC_RESTRICT ring, uint32_t count,
             }
 
             rbipc_sync_register_waiter(&hdr->futex_waiters);
+            rbipc_io_audit_and_recover_dead_peer_range(hdr, slots, t, count);
             avail = rbipc_io_scan_ready_slots(ring, t, count);
             if (avail > 0 || RBIPC_UNLIKELY(rbipc_ring_is_drained_on_shutdown(hdr, t))) {
                 rbipc_sync_deregister_waiter(&hdr->futex_waiters);
