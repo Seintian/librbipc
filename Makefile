@@ -22,7 +22,7 @@ TEST_BINS = $(patsubst $(TESTDIR)/%.c, $(BINDIR)/%, $(TEST_SRCS))
 BENCH_SRCS = $(wildcard $(BENCHDIR)/*.c)
 BENCH_BINS = $(patsubst $(BENCHDIR)/%.c, $(BINDIR)/%, $(BENCH_SRCS))
 
-.PHONY: all clean test bench coverage valgrind clang-tidy compile_commands docs
+.PHONY: all clean test bench coverage valgrind clang-tidy compile_commands docs tsan asan
 
 all: $(STATIC_LIB) $(SHARED_LIB) $(TEST_BINS) compile_commands.json
 
@@ -50,7 +50,7 @@ test: $(STATIC_LIB) $(TEST_BINS)
 	@echo "=================================================="
 	@for t in $(TEST_BINS); do \
 		echo "--> Running $$t ..."; \
-		$$t || exit 1; \
+		$(RUN_TEST) $$t || exit 1; \
 		echo ""; \
 	done
 	@echo "=================================================="
@@ -100,6 +100,16 @@ compile_commands: compile_commands.json
 
 docs:
 	@which doxygen > /dev/null 2>&1 && doxygen Doxyfile && python3 scripts/postprocess_docs.py || echo "doxygen is not installed in the environment; install doxygen to generate HTML documentation."
+
+
+tsan: CFLAGS = -std=c23 -Wall -Wextra -Wpedantic -Werror -Wno-error=tsan -O1 -g -fsanitize=thread -fPIC -Iinclude -pthread -D_GNU_SOURCE
+tsan: LDFLAGS += -fsanitize=thread
+tsan: clean
+	make test RUN_TEST="setarch $$(uname -m) -R" CFLAGS="$(CFLAGS)" LDFLAGS="$(LDFLAGS)"
+
+asan: CFLAGS = -std=c23 -Wall -Wextra -Wpedantic -Werror -O1 -g -fsanitize=address,undefined -fPIC -Iinclude -pthread -D_GNU_SOURCE
+asan: LDFLAGS += -fsanitize=address,undefined
+asan: clean test
 
 clean:
 	rm -rf $(BUILDDIR) $(BINDIR) $(LIBDIR) compile_commands.json *.gcda *.gcno *.gcov docs/html

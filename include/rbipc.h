@@ -26,6 +26,7 @@
 #include <stdbool.h>
 #include <stdatomic.h>
 #include <sys/stat.h>
+#include <sys/types.h>
 
 #ifdef __cplusplus
 extern "C" {
