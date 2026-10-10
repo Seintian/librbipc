@@ -832,6 +832,56 @@ int rbipc_read_release_batch(rbipc_ring_t * RBIPC_RESTRICT ring, uint32_t count,
                              const uint64_t * RBIPC_RESTRICT tickets);
 
 /**
+ * @defgroup rbipc_streaming Streaming & Cache-Bypassing I/O Operations
+ * @brief Non-temporal streaming stores for large payloads (> 16 KB).
+ * @{
+ */
+
+/**
+ * @brief Copy memory using cache-bypassing non-temporal streaming stores.
+ *
+ * @details Utilizes hardware streaming store instructions (AVX2 _mm256_stream_si256,
+ * SSE2 _mm_stream_si128, or ARM NEON/stnp) and memory fences to bypass L1/L2 cache
+ * hierarchies, preventing cache line eviction of ring buffer control structures.
+ *
+ * @param[out] dst  Destination buffer (must be valid memory).
+ * @param[in]  src  Source data buffer.
+ * @param[in]  size Number of bytes to copy.
+ *
+ * @return @ref RBIPC_OK on success.
+ * @retval RBIPC_ERR_INVAL if @p dst or @p src is NULL.
+ */
+RBIPC_LEAF
+int rbipc_stream_copy(void * RBIPC_RESTRICT dst, const void * RBIPC_RESTRICT src, size_t size);
+
+/**
+ * @brief Reserve a slot, copy payload via non-temporal streaming stores, and commit.
+ *
+ * @param[in,out] ring       Ring buffer handle.
+ * @param[in]     src        Source payload buffer.
+ * @param[in]     len        Length in bytes of payload to transmit.
+ * @param[out]    out_ticket Location to receive assigned ticket.
+ *
+ * @return @ref RBIPC_OK on success.
+ * @retval RBIPC_ERR_INVAL if arguments are invalid or @p len exceeds slot capacity.
+ */
+RBIPC_NODISCARD RBIPC_LEAF
+int rbipc_write_stream(rbipc_ring_t * RBIPC_RESTRICT ring, const void * RBIPC_RESTRICT src, uint32_t len, uint64_t * RBIPC_RESTRICT out_ticket);
+
+/**
+ * @brief Non-blocking variant of @ref rbipc_write_stream.
+ */
+RBIPC_NODISCARD RBIPC_LEAF
+int rbipc_write_stream_nonblock(rbipc_ring_t * RBIPC_RESTRICT ring, const void * RBIPC_RESTRICT src, uint32_t len, uint64_t * RBIPC_RESTRICT out_ticket);
+
+/**
+ * @brief Timeout-bounded variant of @ref rbipc_write_stream.
+ */
+RBIPC_NODISCARD RBIPC_LEAF
+int rbipc_write_stream_timeout(rbipc_ring_t * RBIPC_RESTRICT ring, const void * RBIPC_RESTRICT src, uint32_t len, uint64_t timeout_ns, uint64_t * RBIPC_RESTRICT out_ticket);
+/** @} */
+
+/**
  * @brief Signal cooperative shutdown to all waiting producers and consumers.
  *
  * @details Atomically sets the shutdown flag and executes futex wakeups across both

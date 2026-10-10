@@ -133,11 +133,72 @@ static void test_circular_wrap(void) {
     rbipc_detach(ring);
 }
 
+
+static void test_stream_operations(void) {
+    /* 1. NULL parameter checks */
+    char buf[128] = {0};
+    assert(rbipc_stream_copy(NULL, buf, 64) == RBIPC_ERR_INVAL);
+    assert(rbipc_stream_copy(buf, NULL, 64) == RBIPC_ERR_INVAL);
+
+    /* 2. Direct streaming copy accuracy across diverse sizes */
+    uint8_t src[4096];
+    uint8_t dst[4096];
+    for (int i = 0; i < 4096; ++i) {
+        src[i] = (uint8_t)(i ^ 0x5A);
+    }
+
+    size_t sizes[] = {0, 1, 15, 16, 31, 32, 63, 64, 127, 255, 256, 512, 1024, 2049, 4096};
+    for (size_t s = 0; s < sizeof(sizes)/sizeof(sizes[0]); ++s) {
+        size_t sz = sizes[s];
+        memset(dst, 0, sizeof(dst));
+        assert(rbipc_stream_copy(dst, src, sz) == RBIPC_OK);
+        assert(memcmp(dst, src, sz) == 0);
+    }
+
+    /* 3. High-level rbipc_write_stream through ring buffer */
+    rbipc_destroy(TEST_IO_NAME);
+    rbipc_ring_t *ring = NULL;
+    int rc = rbipc_create(TEST_IO_NAME, 64, 4096, &ring);
+    assert(rc == RBIPC_OK);
+
+    uint64_t ticket = 0;
+    assert(rbipc_write_stream(NULL, src, 1024, &ticket) == RBIPC_ERR_INVAL);
+    assert(rbipc_write_stream(ring, NULL, 1024, &ticket) == RBIPC_ERR_INVAL);
+    assert(rbipc_write_stream(ring, src, 1024, NULL) == RBIPC_ERR_INVAL);
+
+    /* Transmit 1024-byte payload */
+    rc = rbipc_write_stream(ring, src, 1024, &ticket);
+    assert(rc == RBIPC_OK);
+
+    const void *rbuf = NULL;
+    uint32_t rlen = 0;
+    uint64_t rticket = 0;
+    rc = rbipc_read_acquire(ring, &rbuf, &rlen, &rticket);
+    assert(rc == RBIPC_OK);
+    assert(rlen == 1024);
+    assert(rticket == ticket);
+    assert(memcmp(rbuf, src, 1024) == 0);
+    assert(rbipc_read_release(ring, rticket) == RBIPC_OK);
+
+    /* Test non-blocking stream write */
+    rc = rbipc_write_stream_nonblock(ring, src, 2048, &ticket);
+    assert(rc == RBIPC_OK);
+    rc = rbipc_read_acquire_nonblock(ring, &rbuf, &rlen, &rticket);
+    assert(rc == RBIPC_OK);
+    assert(rlen == 2048);
+    assert(memcmp(rbuf, src, 2048) == 0);
+    assert(rbipc_read_release(ring, rticket) == RBIPC_OK);
+
+    rbipc_detach(ring);
+    rbipc_destroy(TEST_IO_NAME);
+}
+
 int main(void) {
     printf("[test_io_basic] Running tests...\n");
     test_io_param_validation();
     test_nonblock_and_timeout();
     test_circular_wrap();
+    test_stream_operations();
     printf("[test_io_basic] All tests passed!\n");
     return 0;
 }
