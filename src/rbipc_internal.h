@@ -42,6 +42,7 @@ struct rbipc_ring {
     uint32_t roles;               /**< Bitmask of participant role flags (PRODUCER, CONSUMER, MONITOR). */
     bool is_creator;              /**< True if this process created the ring buffer; false if attached. */
     pid_t cached_pid;             /**< Cached process PID to avoid redundant getpid() system calls during reservations. */
+    uint32_t wait_policy;         /**< Wait and backoff synchronization policy (RBIPC_WAIT_ZERO_SPIN or RBIPC_WAIT_ADAPTIVE). */
     int event_fd;                 /**< Bound eventfd descriptor for epoll reactor integration (-1 if disabled). */
     bool owns_eventfd;            /**< True if this ring handle created the eventfd and should close it on detach. */
 };

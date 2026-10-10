@@ -118,6 +118,29 @@ int rbipc_sync_backoff(rbipc_sync_state_t * RBIPC_RESTRICT state, _Atomic uint32
     return rbipc_sync_wait_registered(state, futex_word, futex_waiters);
 }
 
+RBIPC_LEAF
+int rbipc_sync_backoff_adaptive(rbipc_sync_state_t * RBIPC_RESTRICT state,
+                                _Atomic uint32_t *futex_word,
+                                _Atomic uint32_t *futex_waiters,
+                                uint32_t policy,
+                                uint32_t spin_budget,
+                                rbipc_spin_pred_t predicate,
+                                void *arg) {
+    if (RBIPC_UNLIKELY(!state || !futex_word)) {
+        return RBIPC_ERR_INVAL;
+    }
+    if ((policy & RBIPC_WAIT_ADAPTIVE) && predicate) {
+        uint32_t budget = (spin_budget > 0) ? spin_budget : RBIPC_SPIN_COUNT_DEFAULT;
+        for (uint32_t i = 0; i < budget; ++i) {
+            rbipc_cpu_pause();
+            if (predicate(arg)) {
+                return 0;
+            }
+        }
+    }
+    return rbipc_sync_backoff(state, futex_word, futex_waiters);
+}
+
 /**
  * @brief Advance futex sequence and notify sleeping waiters if present.
  *

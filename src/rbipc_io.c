@@ -191,7 +191,8 @@ static void rbipc_io_audit_and_recover_dead_consumer_range(rbipc_shm_header_t *h
     }
 }
 
-static int rbipc_io_handle_write_backoff(rbipc_sync_state_t * RBIPC_RESTRICT sync_state,
+static int rbipc_io_handle_write_backoff(const rbipc_ring_t *ring,
+                                         rbipc_sync_state_t * RBIPC_RESTRICT sync_state,
                                          rbipc_shm_header_t *hdr,
                                          rbipc_slot_t *slot,
                                          uint64_t t_ticket,
@@ -208,10 +209,23 @@ static int rbipc_io_handle_write_backoff(rbipc_sync_state_t * RBIPC_RESTRICT syn
         return RBIPC_ERR_FULL;
     }
 
-    /* Phase A: Register intent to wait with sequential consistency barrier */
+    /* Phase 1: Micro-spin if adaptive wait policy is configured */
+    if (ring && (ring->wait_policy & RBIPC_WAIT_ADAPTIVE)) {
+        for (uint32_t spin = 0; spin < RBIPC_SPIN_COUNT_DEFAULT; ++spin) {
+            rbipc_cpu_pause();
+            uint64_t spin_seq = atomic_load_explicit(&slot->sequence, memory_order_acquire);
+            if (RBIPC_LIKELY(rbipc_slot_is_vacant(spin_seq, t_ticket)) || RBIPC_UNLIKELY(rbipc_ring_is_shutdown(hdr))) {
+                *t = atomic_load_explicit(&hdr->write_ticket, memory_order_relaxed);
+                return RBIPC_OK;
+            }
+        }
+    }
+
+    /* Phase 2: Passive Futex Sleep */
+    /* Step A: Register intent to wait with sequential consistency barrier */
     rbipc_sync_register_waiter(&hdr->write_waiters);
 
-    /* Phase B: Double-check slot vacancy after waiter registration */
+    /* Step B: Double-check slot vacancy after waiter registration */
     uint64_t seq = atomic_load_explicit(&slot->sequence, memory_order_acquire);
     if (RBIPC_LIKELY(rbipc_slot_is_vacant(seq, t_ticket)) || RBIPC_UNLIKELY(rbipc_ring_is_shutdown(hdr))) {
         rbipc_sync_deregister_waiter(&hdr->write_waiters);
@@ -219,7 +233,7 @@ static int rbipc_io_handle_write_backoff(rbipc_sync_state_t * RBIPC_RESTRICT syn
         return RBIPC_OK;
     }
 
-    /* Phase C & D: Suspend in kernel and deregister upon return */
+    /* Step C & D: Suspend in kernel and deregister upon return */
     int rc = rbipc_sync_wait_registered(sync_state, &hdr->write_futex_seq, &hdr->write_waiters);
     if (RBIPC_UNLIKELY(rc != 0)) {
         return rc;
@@ -287,7 +301,8 @@ RBIPC_INLINE int rbipc_io_complete_read_acquisition(const rbipc_ring_t * RBIPC_R
  * @retval RBIPC_ERR_SHUTDOWN Ring shut down and all committed data consumed.
  * @retval RBIPC_ERR_TIMEDOUT Timeout expired without available data.
  */
-static int rbipc_io_handle_read_backoff(rbipc_sync_state_t * RBIPC_RESTRICT sync_state,
+static int rbipc_io_handle_read_backoff(const rbipc_ring_t *ring,
+                                        rbipc_sync_state_t * RBIPC_RESTRICT sync_state,
                                         rbipc_shm_header_t *hdr,
                                         rbipc_slot_t *slot,
                                         uint64_t t,
@@ -303,10 +318,23 @@ static int rbipc_io_handle_read_backoff(rbipc_sync_state_t * RBIPC_RESTRICT sync
         return RBIPC_ERR_EMPTY;
     }
 
-    /* Phase A: Register intent to wait with sequential consistency barrier */
+    /* Phase 1: Micro-spin if adaptive wait policy is configured */
+    if (ring && (ring->wait_policy & RBIPC_WAIT_ADAPTIVE)) {
+        for (uint32_t spin = 0; spin < RBIPC_SPIN_COUNT_DEFAULT; ++spin) {
+            rbipc_cpu_pause();
+            uint64_t spin_seq = atomic_load_explicit(&slot->sequence, memory_order_acquire);
+            if (RBIPC_LIKELY(rbipc_slot_is_ready(spin_seq, t)) || RBIPC_UNLIKELY(rbipc_ring_is_shutdown(hdr))) {
+                *out_next_t = atomic_load_explicit(&hdr->read_ticket, memory_order_relaxed);
+                return RBIPC_OK;
+            }
+        }
+    }
+
+    /* Phase 2: Passive Futex Sleep */
+    /* Step A: Register intent to wait with sequential consistency barrier */
     rbipc_sync_register_waiter(&hdr->futex_waiters);
 
-    /* Phase B: Double-check condition to close lost-wakeup race window */
+    /* Step B: Double-check condition to close lost-wakeup race window */
     uint64_t seq = atomic_load_explicit(&slot->sequence, memory_order_acquire);
     if (RBIPC_LIKELY(rbipc_slot_is_ready(seq, t)) || RBIPC_UNLIKELY(rbipc_ring_is_shutdown(hdr))) {
         rbipc_sync_deregister_waiter(&hdr->futex_waiters);
@@ -314,7 +342,7 @@ static int rbipc_io_handle_read_backoff(rbipc_sync_state_t * RBIPC_RESTRICT sync
         return RBIPC_OK;
     }
 
-    /* Phase C & D: Suspend in kernel and deregister upon return */
+    /* Step C & D: Suspend in kernel and deregister upon return */
     int rc = rbipc_sync_wait_registered(sync_state, &hdr->futex_seq, &hdr->futex_waiters);
     if (RBIPC_UNLIKELY(rc != 0)) {
         return rc;
@@ -382,7 +410,7 @@ int rbipc_reserve_write_timeout(rbipc_ring_t * RBIPC_RESTRICT ring, uint32_t len
                 return RBIPC_OK;
             }
         } else if (rbipc_seq_is_behind(seq, t)) {
-            int rc = rbipc_io_handle_write_backoff(&sync_state, hdr, slot, t, timeout_ns, &t);
+            int rc = rbipc_io_handle_write_backoff(ring, &sync_state, hdr, slot, t, timeout_ns, &t);
             if (RBIPC_UNLIKELY(rc != RBIPC_OK)) {
                 return rc;
             }
@@ -487,7 +515,7 @@ int rbipc_read_acquire_timeout(rbipc_ring_t * RBIPC_RESTRICT ring, uint64_t time
                 return rbipc_io_complete_read_acquisition(ring, slot, t, out_buf, out_len, ticket);
             }
         } else if (rbipc_seq_is_behind(seq, t + 1)) {
-            int rc = rbipc_io_handle_read_backoff(&sync_state, hdr, slot, t, timeout_ns, &t);
+            int rc = rbipc_io_handle_read_backoff(ring, &sync_state, hdr, slot, t, timeout_ns, &t);
             if (RBIPC_UNLIKELY(rc != RBIPC_OK)) {
                 return rc;
             }
@@ -639,6 +667,18 @@ int rbipc_reserve_write_batch_timeout(rbipc_ring_t * RBIPC_RESTRICT ring, uint32
         } else {
             if (timeout_ns == 0) {
                 return RBIPC_ERR_FULL;
+            }
+            if (ring && (ring->wait_policy & RBIPC_WAIT_ADAPTIVE)) {
+                for (uint32_t spin = 0; spin < RBIPC_SPIN_COUNT_DEFAULT; ++spin) {
+                    rbipc_cpu_pause();
+                    avail = rbipc_io_scan_vacant_slots(ring, t, count);
+                    if (avail > 0 || RBIPC_UNLIKELY(rbipc_ring_is_shutdown(hdr))) {
+                        break;
+                    }
+                }
+                if (avail > 0) {
+                    continue;
+                }
             }
             rbipc_sync_register_waiter(&hdr->write_waiters);
             rbipc_io_audit_and_recover_dead_consumer_range(hdr, slots, t, count);
@@ -826,6 +866,18 @@ int rbipc_read_acquire_batch_timeout(rbipc_ring_t * RBIPC_RESTRICT ring, uint32_
             }
             if (timeout_ns == 0) {
                 return RBIPC_ERR_EMPTY;
+            }
+            if (ring && (ring->wait_policy & RBIPC_WAIT_ADAPTIVE)) {
+                for (uint32_t spin = 0; spin < RBIPC_SPIN_COUNT_DEFAULT; ++spin) {
+                    rbipc_cpu_pause();
+                    avail = rbipc_io_scan_ready_slots(ring, t, count);
+                    if (avail > 0 || RBIPC_UNLIKELY(rbipc_ring_is_drained_on_shutdown(hdr, t))) {
+                        break;
+                    }
+                }
+                if (avail > 0) {
+                    continue;
+                }
             }
 
             rbipc_sync_register_waiter(&hdr->futex_waiters);

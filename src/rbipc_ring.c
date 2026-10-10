@@ -552,6 +552,26 @@ int rbipc_get_stats(const rbipc_ring_t * RBIPC_RESTRICT ring, rbipc_stats_t * RB
 }
 
 RBIPC_LEAF
+int rbipc_set_wait_policy(rbipc_ring_t *ring, uint32_t policy) {
+    if (RBIPC_UNLIKELY(!ring)) {
+        return RBIPC_ERR_INVAL;
+    }
+    if (RBIPC_UNLIKELY(policy != RBIPC_WAIT_ZERO_SPIN && policy != RBIPC_WAIT_ADAPTIVE)) {
+        return RBIPC_ERR_INVAL;
+    }
+    ring->wait_policy = policy;
+    return RBIPC_OK;
+}
+
+RBIPC_LEAF
+uint32_t rbipc_get_wait_policy(const rbipc_ring_t *ring) {
+    if (RBIPC_UNLIKELY(!ring)) {
+        return RBIPC_WAIT_ZERO_SPIN;
+    }
+    return ring->wait_policy;
+}
+
+RBIPC_LEAF
 int rbipc_set_lease_timeout(rbipc_ring_t *ring, uint64_t lease_timeout_ns) {
     if (RBIPC_UNLIKELY(!ring || !ring->hdr)) {
         return RBIPC_ERR_INVAL;

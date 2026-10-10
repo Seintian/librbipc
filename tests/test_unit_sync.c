@@ -105,11 +105,126 @@ static void test_sync_backoff_and_timeout(void) {
     rbipc_sync_wake_n(NULL, NULL, 5);
 }
 
+static bool dummy_pred_true(void *arg) {
+    (void)arg;
+    return true;
+}
+
+static bool dummy_pred_countdown(void *arg) {
+    int *count = (int *)arg;
+    if (*count > 0) {
+        (*count)--;
+        return false;
+    }
+    return true;
+}
+
+static void test_adaptive_spin_backoff(void) {
+    _Atomic uint32_t futex_word;
+    atomic_init(&futex_word, 0);
+    _Atomic uint32_t futex_waiters;
+    atomic_init(&futex_waiters, 0);
+
+    rbipc_sync_state_t state;
+    rbipc_sync_state_init(&state, 1);
+
+    /* Spin pause check */
+    rbipc_sync_spin_pause(32);
+
+    /* Adaptive backoff with predicate returning true immediately */
+    int rc = rbipc_sync_backoff_adaptive(&state, &futex_word, &futex_waiters,
+                                         RBIPC_WAIT_ADAPTIVE, 64, dummy_pred_true, NULL);
+    assert(rc == 0);
+    /* No waiter registered or left behind */
+    assert(atomic_load(&futex_waiters) == 0);
+
+    /* Adaptive backoff with countdown predicate satisfying within spin budget */
+    int countdown = 10;
+    rc = rbipc_sync_backoff_adaptive(&state, &futex_word, &futex_waiters,
+                                     RBIPC_WAIT_ADAPTIVE, 64, dummy_pred_countdown, &countdown);
+    assert(rc == 0);
+    assert(countdown == 0);
+    assert(atomic_load(&futex_waiters) == 0);
+
+    /* Adaptive backoff with NULL predicate falls back to standard backoff (immediate timeout) */
+    rbipc_sync_state_init(&state, 1);
+    while (rc == 0) {
+        rc = rbipc_sync_backoff_adaptive(&state, &futex_word, &futex_waiters,
+                                         RBIPC_WAIT_ADAPTIVE, 64, NULL, NULL);
+    }
+    assert(rc == RBIPC_ERR_TIMEOUT);
+
+    /* Zero-spin policy ignores predicate and falls back to futex wait */
+    rbipc_sync_state_init(&state, 1);
+    rc = 0;
+    while (rc == 0) {
+        rc = rbipc_sync_backoff_adaptive(&state, &futex_word, &futex_waiters,
+                                         RBIPC_WAIT_ZERO_SPIN, 64, dummy_pred_true, NULL);
+    }
+    assert(rc == RBIPC_ERR_TIMEOUT);
+
+    /* NULL error checking */
+    assert(rbipc_sync_backoff_adaptive(NULL, &futex_word, &futex_waiters,
+                                       RBIPC_WAIT_ADAPTIVE, 64, dummy_pred_true, NULL) == RBIPC_ERR_INVAL);
+    assert(rbipc_sync_backoff_adaptive(&state, NULL, &futex_waiters,
+                                       RBIPC_WAIT_ADAPTIVE, 64, dummy_pred_true, NULL) == RBIPC_ERR_INVAL);
+}
+
+static void test_wait_policy_api(void) {
+    rbipc_ring_t *ring = NULL;
+    int rc = rbipc_create_ex(NULL, 1024, 64, RBIPC_CREATE_EXCL, 0660, &ring);
+    assert(rc == RBIPC_OK);
+    assert(ring != NULL);
+
+    /* Default must be ZERO_SPIN */
+    assert(rbipc_get_wait_policy(ring) == RBIPC_WAIT_ZERO_SPIN);
+
+    /* Change to ADAPTIVE */
+    assert(rbipc_set_wait_policy(ring, RBIPC_WAIT_ADAPTIVE) == RBIPC_OK);
+    assert(rbipc_get_wait_policy(ring) == RBIPC_WAIT_ADAPTIVE);
+
+    /* Invalid policy */
+    assert(rbipc_set_wait_policy(ring, 0x00FFU) == RBIPC_ERR_INVAL);
+    assert(rbipc_get_wait_policy(ring) == RBIPC_WAIT_ADAPTIVE);
+
+    /* Change back to ZERO_SPIN */
+    assert(rbipc_set_wait_policy(ring, RBIPC_WAIT_ZERO_SPIN) == RBIPC_OK);
+    assert(rbipc_get_wait_policy(ring) == RBIPC_WAIT_ZERO_SPIN);
+
+    /* NULL safety */
+    assert(rbipc_set_wait_policy(NULL, RBIPC_WAIT_ADAPTIVE) == RBIPC_ERR_INVAL);
+    assert(rbipc_get_wait_policy(NULL) == RBIPC_WAIT_ZERO_SPIN);
+
+    /* Test write and read with adaptive policy */
+    assert(rbipc_set_wait_policy(ring, RBIPC_WAIT_ADAPTIVE) == RBIPC_OK);
+    void *wbuf = NULL;
+    uint64_t wt = 0;
+    rc = rbipc_reserve_write(ring, 16, &wbuf, &wt);
+    assert(rc == RBIPC_OK);
+    assert(wbuf != NULL);
+    rc = rbipc_commit_write(ring, wt, 16);
+    assert(rc == RBIPC_OK);
+
+    const void *rbuf = NULL;
+    uint32_t rlen = 0;
+    uint64_t rt = 0;
+    rc = rbipc_read_acquire(ring, &rbuf, &rlen, &rt);
+    assert(rc == RBIPC_OK);
+    assert(rlen == 16);
+    assert(rt == wt);
+    rc = rbipc_read_release(ring, rt);
+    assert(rc == RBIPC_OK);
+
+    rbipc_detach(ring);
+}
+
 int main(void) {
     printf("[test_unit_sync] Running tests...\n");
     test_sync_state();
     test_sync_backoff_and_timeout();
     test_asymmetric_waiter_registration();
+    test_adaptive_spin_backoff();
+    test_wait_policy_api();
     printf("[test_unit_sync] All tests passed!\n");
     return 0;
 }

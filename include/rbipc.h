@@ -167,6 +167,15 @@ extern "C" {
 /** @} */
 
 /**
+ * @defgroup rbipc_wait_policies Wait & Backoff Synchronization Policies
+ * @brief Policies controlling thread backoff synchronization behavior.
+ * @{
+ */
+#define RBIPC_WAIT_ZERO_SPIN     0x0000U /**< Pure passive futex wait (zero CPU spin, lowest CPU usage). */
+#define RBIPC_WAIT_ADAPTIVE      0x0001U /**< Two-phase adaptive spin-then-wait (bounded CPU pause before futex). */
+/** @} */
+
+/**
  * @defgroup rbipc_constants Structural & Operational Constants
  * @brief Architecture-specific, operational, and structural constants.
  * @{
@@ -462,6 +471,28 @@ int rbipc_detach(rbipc_ring_t *ring);
  */
 RBIPC_LEAF
 int rbipc_destroy(const char *name);
+
+/**
+ * @brief Configure the wait and backoff synchronization policy for the ring handle.
+ *
+ * @param[in,out] ring   Ring buffer handle.
+ * @param[in]     policy Wait policy flags (@ref RBIPC_WAIT_ZERO_SPIN or @ref RBIPC_WAIT_ADAPTIVE).
+ *
+ * @return @ref RBIPC_OK on success.
+ * @retval RBIPC_ERR_INVAL if @p ring is NULL or @p policy is unsupported.
+ */
+RBIPC_LEAF
+int rbipc_set_wait_policy(rbipc_ring_t *ring, uint32_t policy);
+
+/**
+ * @brief Retrieve the currently active wait and backoff synchronization policy.
+ *
+ * @param[in] ring Ring buffer handle.
+ *
+ * @return Active policy flag mask, or @ref RBIPC_WAIT_ZERO_SPIN if @p ring is NULL.
+ */
+RBIPC_NODISCARD RBIPC_LEAF
+uint32_t rbipc_get_wait_policy(const rbipc_ring_t *ring);
 
 /**
  * @brief Reserve a slot in the ring buffer for writing (Zero-Copy, Blocking).

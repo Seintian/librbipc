@@ -16,8 +16,28 @@
 
 #include "rbipc.h"
 #include "rbipc_attr.h"
+#include "rbipc_arch.h"
 
 #include <stdint.h>
+
+/**
+ * @brief Default bounded CPU pause count for adaptive micro-spinning before passive futex wait.
+ */
+#define RBIPC_SPIN_COUNT_DEFAULT 48U
+
+/**
+ * @brief Predicate callback signature evaluated during adaptive spin pauses.
+ */
+typedef bool (*rbipc_spin_pred_t)(void *arg);
+
+/**
+ * @brief Bounded CPU micro-pause execution helper.
+ */
+RBIPC_INLINE void rbipc_sync_spin_pause(uint32_t count) {
+    for (uint32_t i = 0; i < count; ++i) {
+        rbipc_cpu_pause();
+    }
+}
 #include <stdatomic.h>
 #include <stdbool.h>
 
@@ -91,6 +111,28 @@ int rbipc_sync_wait_registered(rbipc_sync_state_t * RBIPC_RESTRICT state, _Atomi
 RBIPC_NODISCARD RBIPC_LEAF
 int rbipc_sync_backoff(rbipc_sync_state_t * RBIPC_RESTRICT state, _Atomic uint32_t *futex_word,
                        _Atomic uint32_t *futex_waiters);
+
+/**
+ * @brief Execute adaptive backoff with spin-then-wait policy.
+ *
+ * @param[in,out] state         Synchronization state tracking deadline.
+ * @param[in]     futex_word    Pointer to atomic futex sequence word in shared memory.
+ * @param[in,out] futex_waiters Pointer to atomic waiter count in shared memory.
+ * @param[in]     policy        Wait policy flags (@ref RBIPC_WAIT_ZERO_SPIN or @ref RBIPC_WAIT_ADAPTIVE).
+ * @param[in]     spin_budget   Number of spin pause iterations if adaptive (e.g. @ref RBIPC_SPIN_COUNT_DEFAULT).
+ * @param[in]     predicate     Optional predicate checking if wait condition cleared.
+ * @param[in]     arg           Context passed to @p predicate.
+ *
+ * @return 0 on success / condition met, @ref RBIPC_ERR_TIMEOUT on expiration, or error code.
+ */
+RBIPC_NODISCARD RBIPC_LEAF
+int rbipc_sync_backoff_adaptive(rbipc_sync_state_t * RBIPC_RESTRICT state,
+                                _Atomic uint32_t *futex_word,
+                                _Atomic uint32_t *futex_waiters,
+                                uint32_t policy,
+                                uint32_t spin_budget,
+                                rbipc_spin_pred_t predicate,
+                                void *arg);
 
 /**
  * @brief Wake up to @p count waiting threads on the specified futex word.
