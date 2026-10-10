@@ -35,6 +35,8 @@ const char *rbipc_strerror(int err) {
             return "Resource is busy or in contention";
         case RBIPC_ERR_OVERFLOW:
             return "Arithmetic or buffer calculation overflow";
+        case RBIPC_ERR_EXISTS:
+            return "Shared memory object already exists";
         default:
             return "Unknown error";
     }

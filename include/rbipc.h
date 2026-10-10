@@ -143,6 +143,16 @@ extern "C" {
 #define RBIPC_ERR_TIMEOUT    (-8) /**< Specified operation deadline expired prior to completion. */
 #define RBIPC_ERR_BUSY       (-9) /**< Resource contention or uncommitted slot state encountered. */
 #define RBIPC_ERR_OVERFLOW  (-10) /**< Geometric arithmetic or buffer size calculation exceeded addressable range. */
+#define RBIPC_ERR_EXISTS    (-11) /**< Shared memory object already exists. */
+/** @} */
+
+/**
+ * @defgroup rbipc_create_flags Creation Flags
+ * @brief Flags controlling shared memory creation behavior.
+ * @{
+ */
+#define RBIPC_CREATE_EXCL        0x0000U /**< Fail if shared memory object already exists (default safe mode). */
+#define RBIPC_CREATE_OVERWRITE   0x0001U /**< Unlink and overwrite pre-existing shared memory object. */
 /** @} */
 
 /**
@@ -307,6 +317,24 @@ typedef struct rbipc_ring rbipc_ring_t;
  * @see rbipc_detach
  * @see rbipc_destroy
  */
+/**
+ * @brief Creates a new shared memory IPC ring buffer with creation flags.
+ *
+ * @param[in]  name      POSIX shared memory object name (e.g. "/my_ring"), or NULL for anonymous memory.
+ * @param[in]  capacity  Requested slot count (must be power of two, >= @ref RBIPC_MIN_CAPACITY).
+ * @param[in]  slot_size Requested payload size per slot in bytes.
+ * @param[in]  flags     Creation flags (@ref RBIPC_CREATE_EXCL or @ref RBIPC_CREATE_OVERWRITE).
+ * @param[out] out_ring Location to store pointer to the allocated ring buffer handle.
+ *
+ * @return @ref RBIPC_OK on successful initialization.
+ * @retval RBIPC_ERR_EXISTS if object exists and @ref RBIPC_CREATE_OVERWRITE was not specified.
+ * @retval RBIPC_ERR_INVAL  if parameters or flags are invalid.
+ * @retval RBIPC_ERR_NOMEM  if virtual memory allocation or mmap fails.
+ * @retval RBIPC_ERR_SYS    if an underlying kernel syscall fails.
+ */
+RBIPC_NODISCARD RBIPC_LEAF
+int rbipc_create_ex(const char * RBIPC_RESTRICT name, size_t capacity, uint32_t slot_size, uint32_t flags, rbipc_ring_t ** RBIPC_RESTRICT out_ring);
+
 RBIPC_NODISCARD RBIPC_LEAF
 int rbipc_create(const char * RBIPC_RESTRICT name, size_t capacity, uint32_t slot_size, rbipc_ring_t ** RBIPC_RESTRICT out_ring);
 

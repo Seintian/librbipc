@@ -154,14 +154,18 @@ RBIPC_INLINE int rbipc_shm_create_anonymous(int * RBIPC_RESTRICT out_fd) {
 /**
  * @brief Atomic helper: Create and exclusively open a POSIX shared memory object.
  */
-RBIPC_INLINE int rbipc_shm_create_named(const char * RBIPC_RESTRICT name, int * RBIPC_RESTRICT out_fd) {
+RBIPC_INLINE int rbipc_shm_create_named(const char * RBIPC_RESTRICT name, uint32_t flags, int * RBIPC_RESTRICT out_fd) {
     if (RBIPC_UNLIKELY(!rbipc_is_valid_shm_name(name))) {
         return RBIPC_ERR_INVAL;
     }
-    /* Clean up pre-existing stale file if any */
-    shm_unlink(name);
+    if (flags & RBIPC_CREATE_OVERWRITE) {
+        shm_unlink(name);
+    }
     int fd = shm_open(name, O_CREAT | O_EXCL | O_RDWR, RBIPC_SHM_MODE);
     if (fd < 0) {
+        if (errno == EEXIST) {
+            return RBIPC_ERR_EXISTS;
+        }
         return RBIPC_ERR_SYS;
     }
     *out_fd = fd;
@@ -178,13 +182,16 @@ RBIPC_INLINE int rbipc_shm_truncate_file(int fd, size_t total_size) {
     return RBIPC_OK;
 }
 
-int rbipc_shm_create(const char * RBIPC_RESTRICT name, size_t total_size, int * RBIPC_RESTRICT out_fd) {
+int rbipc_shm_create_ex(const char * RBIPC_RESTRICT name, size_t total_size, uint32_t flags, int * RBIPC_RESTRICT out_fd) {
     if (RBIPC_UNLIKELY(!out_fd || total_size == 0)) {
+        return RBIPC_ERR_INVAL;
+    }
+    if (RBIPC_UNLIKELY((flags & ~RBIPC_CREATE_OVERWRITE) != 0)) {
         return RBIPC_ERR_INVAL;
     }
 
     int fd = -1;
-    int rc = name ? rbipc_shm_create_named(name, &fd) : rbipc_shm_create_anonymous(&fd);
+    int rc = name ? rbipc_shm_create_named(name, flags, &fd) : rbipc_shm_create_anonymous(&fd);
     if (RBIPC_UNLIKELY(rc != RBIPC_OK)) {
         return rc;
     }

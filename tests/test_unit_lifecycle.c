@@ -154,12 +154,48 @@ static void test_corrupted_shm_detection(void) {
     rbipc_destroy(TEST_LIFECYCLE_NAME);
 }
 
+static void test_shm_creation_flags_and_collision(void) {
+    rbipc_destroy(TEST_LIFECYCLE_NAME);
+
+    rbipc_ring_t *ring1 = NULL;
+    int rc = rbipc_create(TEST_LIFECYCLE_NAME, 32, 256, &ring1);
+    assert(rc == RBIPC_OK);
+    assert(ring1 != NULL);
+
+    /* Second creation on existing name without OVERWRITE must fail with RBIPC_ERR_EXISTS */
+    rbipc_ring_t *ring2 = NULL;
+    rc = rbipc_create(TEST_LIFECYCLE_NAME, 32, 256, &ring2);
+    assert(rc == RBIPC_ERR_EXISTS);
+    assert(ring2 == NULL);
+
+    /* Explicit EXCL flag must also fail with RBIPC_ERR_EXISTS */
+    rc = rbipc_create_ex(TEST_LIFECYCLE_NAME, 32, 256, RBIPC_CREATE_EXCL, &ring2);
+    assert(rc == RBIPC_ERR_EXISTS);
+    assert(ring2 == NULL);
+
+    /* Invalid flags must fail with RBIPC_ERR_INVAL */
+    rc = rbipc_create_ex(TEST_LIFECYCLE_NAME, 32, 256, 0xFFFFU, &ring2);
+    assert(rc == RBIPC_ERR_INVAL);
+    assert(ring2 == NULL);
+
+    /* OVERWRITE flag must succeed, unlinking and recreating the shared segment */
+    rc = rbipc_create_ex(TEST_LIFECYCLE_NAME, 32, 256, RBIPC_CREATE_OVERWRITE, &ring2);
+    assert(rc == RBIPC_OK);
+    assert(ring2 != NULL);
+
+    /* Clean up */
+    rbipc_detach(ring1);
+    rbipc_detach(ring2);
+    rbipc_destroy(TEST_LIFECYCLE_NAME);
+}
+
 int main(void) {
     printf("[test_unit_lifecycle] Running tests...\n");
     test_param_validation();
     test_anonymous_memfd_lifecycle();
     test_named_shm_lifecycle();
     test_corrupted_shm_detection();
+    test_shm_creation_flags_and_collision();
     printf("[test_unit_lifecycle] All tests passed!\n");
     return 0;
 }

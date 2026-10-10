@@ -65,6 +65,12 @@ static void test_shm_lifecycle(void) {
     assert(rc == RBIPC_OK);
     assert(fd >= 0);
 
+    /* Second create without overwrite flag must fail with RBIPC_ERR_EXISTS */
+    int fd_coll = -1;
+    assert(rbipc_shm_create(test_name, 16384, &fd_coll) == RBIPC_ERR_EXISTS);
+    assert(rbipc_shm_create_ex(test_name, 16384, RBIPC_CREATE_EXCL, &fd_coll) == RBIPC_ERR_EXISTS);
+    assert(rbipc_shm_create_ex(test_name, 16384, 0x8000, &fd_coll) == RBIPC_ERR_INVAL);
+
     /* Open existing */
     int fd_opened = -1;
     rc = rbipc_shm_open(test_name, &fd_opened);
