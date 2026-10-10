@@ -409,7 +409,7 @@ You allocate $2 \times \text{size}$ virtual address space and bind the same phys
 However, in `librbipc`, the ring buffer is organized into **fixed discrete slot chunks**:
 ```c
 // src/rbipc_io.h:27-31
-RBIPC_INLINE RBIPC_PURE void *rbipc_io_calc_slot_ptr(const rbipc_ring_t *ring, uint32_t ticket) {
+RBIPC_INLINE RBIPC_PURE void *rbipc_io_calc_slot_ptr(const rbipc_ring_t *ring, uint64_t ticket) {
     uint32_t idx = ticket & ring->hdr->capacity_mask;
     void *data_map = RBIPC_ASSUME_ALIGNED(ring->data_map, RBIPC_CACHE_LINE);
     return (char *)data_map + ((size_t)idx * ring->hdr->slot_size);

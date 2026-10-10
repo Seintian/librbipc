@@ -1,12 +1,14 @@
 /**
  * @file rbipc_vmem.h
- * @brief Virtual memory management and double-mapped circular ring mirror interfaces.
+ * @brief Virtual memory management, linear data mapping, and double-mapped ring mirror interfaces.
  * @details This header defines the primitives for mapping and unmapping control
- *          structures and constructing the continuous virtual memory ring mirror.
- *          By mapping the shared memory data region into two contiguous virtual address
- *          ranges using @c MAP_FIXED, read and write operations that cross the circular
- *          buffer boundary appear completely contiguous in virtual memory, thereby
- *          eliminating buffer wrap-around splits and payload copying.
+ *          structures, establishing lean 1x linear shared memory mappings for discrete slot
+ *          work queues, and constructing 2x continuous virtual memory ring mirrors for
+ *          arbitrary byte-streaming.
+ *          For streaming modes, mapping the shared memory data region into two contiguous
+ *          virtual address ranges using @c MAP_FIXED enables read and write operations that
+ *          cross the circular buffer boundary to appear completely contiguous in virtual
+ *          memory, thereby eliminating buffer wrap-around splits and payload copying.
  */
 
 #ifndef RBIPC_VMEM_H

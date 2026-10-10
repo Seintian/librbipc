@@ -116,7 +116,7 @@ Tested across standard real-time payload sizes (64 bytes to 64 kilobytes):
 #### Insight on Zero-Copy Behavior
 
 Both libraries achieve true zero-copy transmission. For payloads >= 16 KB, virtual memory bandwidth reaches **45 GB/s to 167 GB/s** because neither library moves payload bytes in memory.
-However, across small and large payloads alike, `librbipc` delivers consistently superior throughput (1.54x to 4.46x faster) due to zero chunk management overhead and contiguous double-mapped virtual address wrapping.
+However, across small and large payloads alike, `librbipc` delivers consistently superior throughput (1.54x to 4.46x faster) due to zero chunk management overhead, fixed cacheline slot geometry, and contiguous zero-copy pointer loans.
 
 ---
 
@@ -142,9 +142,9 @@ Comparison of hardware performance counters recorded under `perf stat` during a 
 
 | Architectural Trait | `iceoryx2` | `librbipc` |
 | :--- | :--- | :--- |
-| **Memory Allocation** | Pool of discrete chunk slices inside shared memory segment | Single contiguous circular buffer doubled-mapped via `mmap` |
-| **Boundary Wrapping** | Must fit within discrete chunk boundaries or chunk pools | **Double-Mapping Mirror Window**: contiguous access across ring wrap boundaries |
-| **Split I/O** | Handled at chunk allocator level | **Zero split reads/writes**: mirror window guarantees linear contiguous pointers |
+| **Memory Allocation** | Pool of discrete chunk slices inside shared memory segment | Lean 1x linear shared memory buffer (with opt-in 2x double-mapping for streaming) |
+| **Boundary Wrapping** | Must fit within discrete chunk boundaries or chunk pools | **Power-of-2 Bitwise Masking**: discrete slots are self-contained without boundary splits; continuous byte-streams use 2x virtual memory double-mapping |
+| **Split I/O** | Handled at chunk allocator level | **Zero split reads/writes**: linear slot geometry and streaming mirror guarantees linear contiguous pointers |
 | **Batching Mechanism** | Single-sample loaning only (`loan_slice` per item) | **B-Queue Vector API**: loans and commits $N$ items in 1 atomic CAS |
 | **Dead-Peer Handling** | Node monitoring, heartbeats, dead node reclamation | Slot state machine (`EMPTY`, `RESERVED`, `COMMITTED`, `POISONED`), `ESRCH` dead-peer detection |
 

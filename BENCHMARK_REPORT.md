@@ -44,7 +44,7 @@ This report documents the exhaustive quantitative benchmarking and architectural
 | **Max Latency Spike** | 1,817,073 ns | 20,212,616 ns | **10,199,529 ns** | **-49.5% (-10.0 ms)** | Double-checked futex wait & atomic sequence |
 | **Latency Std Deviation** | 8,981 ns | 516,898 ns | **227,703 ns** | **-55.9% (-289 µs jitter)** | Reduced variance across scheduler sleeps |
 | **Streaming Throughput** | 815,625 msgs/s | 10,230,419 msgs/s | **11,162,840 msgs/s** | **+9.1% higher** | 64-bit sequence counters + leaf inlining |
-| **Streaming Transfer Rate** | 49.78 MB/s | 624.42 MB/s | **681.33 MB/s** | **+9.1% higher** | Zero-copy circular mirror addressing |
+| **Streaming Transfer Rate** | 49.78 MB/s | 624.42 MB/s | **681.33 MB/s** | **+9.1% higher** | Zero-copy shared memory slot addressing |
 | **Streaming Avg Latency** | 1,226.05 ns | 97.75 ns | **89.58 ns** | **-8.4% faster** | Fast-path branch prediction elision |
 | **Batch Size 1 (B-Queue)** | 773,460 msgs/s | 5,870,272 msgs/s | **11,606,965 msgs/s** | **+97.7% (2.0x faster)** | Elimination of per-ticket false sharing |
 | **Batch Size 4 (B-Queue)** | 2,845,679 msgs/s | 5,980,802 msgs/s | **18,111,526 msgs/s** | **+202.8% (3.0x faster)** | Proportional futex wakeup dispatch (Point 1.6) |

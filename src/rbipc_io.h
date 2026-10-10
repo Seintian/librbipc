@@ -17,7 +17,7 @@
  * @brief Calculates the zero-copy virtual address for a given ticket's slot data buffer.
  * @details Computes the slot index using bitwise AND with the capacity mask
  *          (@c ticket & @c capacity_mask) and offsets into the
- *          cacheline-aligned double-mapped memory base pointer.
+ *          cacheline-aligned shared data memory base pointer.
  *
  * @param[in] ring   Pointer to the active ring runtime handle.
  * @param[in] ticket Monotonic ticket value identifying the target slot.

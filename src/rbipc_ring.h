@@ -27,7 +27,7 @@
  * @param[in] slots         Pointer to the array of mapped slot descriptors in virtual memory.
  * @param[in] ctrl_map      Base virtual address of the mapped control region.
  * @param[in] ctrl_map_size Size in bytes of the mapped control region.
- * @param[in] data_map      Base virtual address of the contiguous double-mapped data mirror.
+ * @param[in] data_map      Base virtual address of the shared data mapping (1x linear for slot queues).
  * @param[in] data_size     Size in bytes of a single circular data buffer.
  * @param[in] is_creator    @c true if this process initialized the shared memory region; @c false otherwise.
  *
@@ -62,7 +62,7 @@ int rbipc_ring_probe_and_validate_header(int fd, size_t page_size, rbipc_layout_
 
 /**
  * @brief Safely unmaps all virtual memory regions associated with a ring handle.
- * @details Unmaps the double-mapped data mirror and the control metadata mapping,
+ * @details Unmaps the shared data mapping and the control metadata mapping,
  *          nullifying their pointers in the ring structure.
  *
  * @param[in,out] ring Pointer to the ring handle whose mappings are to be released.

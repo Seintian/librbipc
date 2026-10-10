@@ -146,7 +146,7 @@ rbipc_ring_t *rbipc_ring_alloc_handle(int fd, const char * RBIPC_RESTRICT name,
  * @param[in] name      Shared memory object name (unlinked if non-null).
  * @param[in] ctrl_map  Mapped control region address (unmapped if non-null).
  * @param[in] ctrl_size Mapped control region byte size.
- * @param[in] data_map  Double-mapped data mirror address (unmapped if non-null).
+ * @param[in] data_map  Data mapping address (unmapped if non-null).
  * @param[in] data_size Single buffer data size.
  */
 static void rbipc_ring_abort_create(int fd, const char *name, void *ctrl_map,
@@ -280,8 +280,8 @@ int rbipc_ring_probe_and_validate_header(int fd, size_t page_size, rbipc_layout_
 
 /**
  * @brief Attaches to an existing ring buffer via an open file descriptor.
- * @details Validates shared memory geometry, maps control metadata, binds the double-mapped
- *          mirror, increments consumer participant counters, and returns a runtime handle.
+ * @details Validates shared memory geometry, maps control metadata, maps the shared data
+ *          buffer, increments consumer participant counters, and returns a runtime handle.
  */
 int rbipc_attach_fd_ex(int fd, uint32_t role_flags, rbipc_ring_t ** RBIPC_RESTRICT out_ring) {
     if (RBIPC_UNLIKELY(!rbipc_is_valid_fd(fd) || !out_ring)) {
@@ -369,7 +369,7 @@ int rbipc_attach(const char * RBIPC_RESTRICT name, rbipc_ring_t ** RBIPC_RESTRIC
 
 /**
  * @brief Releases virtual memory mappings associated with a ring handle.
- * @details Safely unmaps the double-mapped data mirror and the control metadata mapping.
+ * @details Safely unmaps the shared data mapping and the control metadata mapping.
  */
 RBIPC_LEAF
 void rbipc_ring_unmap_regions(rbipc_ring_t *ring) {

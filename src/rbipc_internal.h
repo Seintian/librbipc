@@ -37,7 +37,7 @@ struct rbipc_ring {
     rbipc_slot_t *slots;          /**< Direct virtual address pointer to slot descriptor control array. */
     void *ctrl_map;               /**< Base virtual memory address of the metadata mapping (header + slots). */
     size_t ctrl_map_size;         /**< Exact byte size of the mapped metadata region (page-aligned). */
-    void *data_map;               /**< Base virtual memory address of the contiguous 2x double-mapped payload buffer. */
+    void *data_map;               /**< Base virtual memory address of the contiguous shared memory payload buffer (1x linear for slot rings, 2x for stream mirrors). */
     size_t data_size;             /**< Byte size of a single circular data buffer (half of @ref data_map reservation). */
     uint32_t roles;               /**< Bitmask of participant role flags (PRODUCER, CONSUMER, MONITOR). */
     bool is_creator;              /**< True if this process created the ring buffer; false if attached. */

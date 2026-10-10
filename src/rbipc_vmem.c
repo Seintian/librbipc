@@ -1,9 +1,9 @@
 /**
  * @file rbipc_vmem.c
- * @brief Implementation of virtual memory management and double-mapped circular ring mirror.
+ * @brief Implementation of virtual memory management, linear data mapping, and circular ring mirror.
  * @details Implements kernel virtual memory mappings using POSIX @c mmap and @c munmap.
- *          Provides the mechanics for reserving anonymous memory space and binding
- *          the physical shared memory file twice consecutively with @c MAP_FIXED.
+ *          Provides single 1x linear mappings for discrete slot queues as well as anonymous
+ *          memory reservation and consecutive @c MAP_FIXED bindings for byte-stream mirrors.
  */
 
 #ifndef _GNU_SOURCE

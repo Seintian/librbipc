@@ -53,7 +53,7 @@ To ensure full reproducibility, all benchmarks were executed on an isolated bare
 
 | System | Memory Architecture | Slot Claiming / Synchronization | Delivery Contract | Idle Waiting Strategy | Zero-Copy Support |
 | :--- | :--- | :--- | :--- | :--- | :--- |
-| **`librbipc`** | Mirrored Virtual Memory Ring (`mmap` double-map) | Ticket-based wait-free reservation (`atomic_fetch_add`) | Competing-Consumer (1-to-1 slot handover) | Adaptive micro-spin + `sys_futex` passive sleep | **Yes** (in-place zero-copy slot pointer) |
+| **`librbipc`** | Single-Mapped Linear Shared Memory (Opt-in 2x Double-Map for Streaming) | Ticket-based wait-free reservation (`atomic_fetch_add`) | Competing-Consumer (1-to-1 slot handover) | Adaptive micro-spin + `sys_futex` passive sleep | **Yes** (in-place zero-copy slot pointer) |
 | **`DPDK rte_ring`** | POSIX Anonymous Shared Memory (`MAP_SHARED`) | Head/Tail CAS loop (`atomic_compare_exchange`) | Competing-Consumer (1-to-1 slot handover) | Busy-spin polling (`_mm_pause` poll-mode driver) | **Pointer only** (requires external payload buffer) |
 | **`LMAX Disruptor`** | POSIX Anonymous Shared Memory (`MAP_SHARED`) | WorkProcessor CAS on shared `workSequence` | Competing-Consumer (WorkerPool pattern) | Busy-spin sequence barrier gating | **Pointer only** (preallocated event slots) |
 | **`POSIX mqueue`** | Kernel Virtual Filesystem (`/dev/mqueue`) | Kernel mutex + Priority search tree + Wait queues | Competing-Consumer (kernel message queue) | Kernel context switch sleep or non-blocking poll | **No** (double-copy user $\to$ kernel $\to$ user) |
@@ -194,11 +194,13 @@ Batch Size 64  [█████████████████████�
 
 ## 5. Architectural Deep Dive: Why the Systems Perform as Observed
 
-### 5.1. Memory Layout & Virtual Memory Mirroring
+### 5.1. Memory Layout & Virtual Memory Architecture
 - **Traditional Ring Buffers (`rte_ring`, `Disruptor`)**: These engines maintain an array of pointers or fixed-size structs. When messages exceed a single pointer, producers must copy data into separate payload pools, or consumer code must handle circular wrap-around edge conditions manually.
-- **`librbipc` Double-Mapped Mirror Buffer**: `librbipc` maps the exact same physical shared memory page back-to-back in virtual memory using two adjacent `mmap` calls:
-  $$\text{Virtual Window} = [\text{Page}_0 \dots \text{Page}_{N-1}] \mathbin{\Vert} [\text{Page}_0 \dots \text{Page}_{N-1}]$$
-  This guarantees that every message, regardless of its ring wrap position, is accessible as a **contiguous memory pointer**. Zero wrap-around branch checks occur on the fast path, eliminating pointer arithmetic overhead.
+- **`librbipc` Linear Shared Memory (with Opt-In Double-Mapping for Streaming)**:
+  - **Discrete Slot Work Queues (Default Baseline)**: `librbipc` maps the circular data payload buffer using a **single linear 1x virtual memory mapping** (`rbipc_vmem_map_data`). Because slot sizes are fixed and aligned to 64 bytes, every discrete slot is self-contained within the linear address range $[0, \text{data\_size})$. Direct indexing via fast bitwise masking ($\text{ticket} \land \text{mask}$) guarantees that no discrete slot ever crosses the physical ring boundary, cutting virtual address space consumption by 50% compared to legacy double-mapping schemes.
+  - **Continuous Byte-Streaming (Opt-In Mode)**: Virtual memory double-mapping (`rbipc_vmem_map_double`) is selectively reserved for arbitrary, non-chunked byte-streaming (`rbipc_stream_*`), where consecutive `mmap(MAP_FIXED)` calls bind the physical memory back-to-back:
+    $$\text{Virtual Window} = [\text{Page}_0 \dots \text{Page}_{N-1}] \mathbin{\Vert} [\text{Page}_0 \dots \text{Page}_{N-1}]$$
+    This guarantees that variable-length stream payloads crossing the boundary remain accessible via a single contiguous pointer without memory fragmentation or split-copy overhead.
 
 ### 5.2. Synchronization: Wait-Free Tickets vs. CAS Contention Loops
 - In high-frequency trading rings (LMAX Disruptor) and networking rings (DPDK `rte_ring`), multi-producer concurrency is handled using atomic Compare-And-Swap (CAS) loops:

@@ -5,8 +5,9 @@
  * @details Implements a bounded, multi-producer multi-consumer (MPMC) lock-free ring buffer
  * architecture situated within POSIX shared memory, targeted at ISO C23 and modern Linux kernels.
  * The library combines three core architectural paradigms:
- * 1. Virtual memory double-mapping (mirror windowing) to present circular ring memory as a
- *    contiguous linear buffer without boundary wraparound splits.
+ * 1. High-efficiency shared memory architecture: single 1x linear virtual memory mapping for
+ *    discrete slot queues with power-of-2 boundary masking, with opt-in 2x virtual memory
+ *    double-mapping (mirror windowing) for continuous byte-stream boundary wrap-around.
  * 2. Cache-line isolated atomic sequence state machines (ticket-based reservation) operating
  *    with memory order semantics that guarantee single-turn, wait-free coordination on the fast path.
  * 3. Zero-spin passive synchronization utilizing Linux sys_futex primitives to achieve immediate
@@ -283,8 +284,8 @@ typedef struct {
  * @brief Vector descriptor for B-Queue batch write reservations.
  */
 typedef struct {
-    void *buf;           /**< Direct pointer to reserved payload buffer in double-mapped virtual memory. */
-    uint32_t ticket;     /**< Monotonic ticket identifier assigned to this slot reservation. */
+    void *buf;           /**< Direct pointer to reserved payload buffer in shared memory. */
+    uint64_t ticket;     /**< Monotonic 64-bit ticket identifier assigned to this slot reservation. */
     uint32_t max_len;    /**< Maximum allowable payload length in bytes for this slot. */
 } rbipc_iovec_t;
 
@@ -293,8 +294,8 @@ typedef struct {
  * @brief Vector descriptor for B-Queue batch read acquisitions.
  */
 typedef struct {
-    const void *buf;     /**< Direct read-only pointer to payload data in double-mapped virtual memory. */
-    uint32_t ticket;     /**< Monotonic ticket identifier assigned to this acquired slot. */
+    const void *buf;     /**< Direct read-only pointer to payload data in shared memory. */
+    uint64_t ticket;     /**< Monotonic 64-bit ticket identifier assigned to this acquired slot. */
     uint32_t len;        /**< Exact byte length of the committed message payload. */
 } rbipc_rovec_t;
 
@@ -318,7 +319,7 @@ typedef struct rbipc_ring rbipc_ring_t;
  * @details Allocates a POSIX shared memory object or an anonymous memfd, truncates it to
  * the precomputed geometric size (control header, cache-aligned slot table, and page-aligned
  * payload buffer), configures Linux file seals (F_SEAL_SHRINK | F_SEAL_GROW), initializes
- * slot sequence state machines, and establishes the double-mapped virtual address region.
+ * slot sequence state machines, and establishes the shared memory virtual address region.
  *
  * @param[in]  name      POSIX shared memory object name (e.g. "/my_ring").
  *                       Per POSIX.1-2008 (shm_open(3)), the identifier must begin with an initial
@@ -366,7 +367,7 @@ int rbipc_create(const char * RBIPC_RESTRICT name, size_t capacity, uint32_t slo
  *
  * @details Opens an existing POSIX shared memory object by name, probes and verifies the
  * structural integrity of the control header (@ref RBIPC_MAGIC, version, power-of-two capacity),
- * maps the metadata and double-mapped data regions into the caller's virtual address space,
+ * maps the metadata and shared data regions into the caller's virtual address space,
  * and increments the active attachee counter.
  *
  * @param[in]  name     POSIX shared memory object name (e.g. "/my_ring").
@@ -405,7 +406,7 @@ int rbipc_attach(const char * RBIPC_RESTRICT name, rbipc_ring_t ** RBIPC_RESTRIC
  *
  * @details Facilitates anonymous IPC across process boundaries where file descriptors
  * are inherited via fork() or received across UNIX domain sockets via SCM_RIGHTS ancillary data.
- * Validates header geometry and establishes double-mapped virtual addresses.
+ * Validates header geometry and establishes shared memory virtual addresses.
  *
  * @param[in]  fd       Open, readable and writable file descriptor referencing the shared memory object.
  * @param[out] out_ring Location to store the pointer to the allocated ring handle.
@@ -440,7 +441,7 @@ int rbipc_attach_fd(int fd, rbipc_ring_t ** RBIPC_RESTRICT out_ring);
  * @brief Detach from the ring buffer, unmapping virtual memory regions and closing handles.
  *
  * @details Decrements active attachee counters in the control header, unmaps metadata and
- * double-mapped circular memory windows via munmap, closes open file descriptors, and frees
+ * shared circular memory windows via munmap, closes open file descriptors, and frees
  * process-local handle memory. Does not unlink named shared memory objects from the system.
  *
  * @param[in,out] ring Pointer to ring buffer handle allocated by create or attach.
@@ -501,11 +502,11 @@ uint32_t rbipc_get_wait_policy(const rbipc_ring_t *ring);
  * @details Atomically reserves the next available sequential slot using ticket-based CAS.
  * If the ring buffer is completely full, suspends the thread immediately via Linux sys_futex
  * in a zero-spin passive wait until consumers release occupied slots. On success, provides
- * direct pointer access to the double-mapped slot buffer for in-place writing.
+ * direct pointer access to the shared slot buffer for in-place writing.
  *
  * @param[in]  ring       Ring buffer handle.
  * @param[in]  len        Requested payload length in bytes (must satisfy 0 < len <= slot_size).
- * @param[out] out_buf    Direct memory pointer into the double-mapped payload buffer.
+ * @param[out] out_buf    Direct memory pointer into the shared payload buffer.
  * @param[out] ticket     Assigned ticket number, required for subsequent commit or abort.
  *
  * @return @ref RBIPC_OK on successful slot reservation.
@@ -532,7 +533,7 @@ int rbipc_reserve_write(rbipc_ring_t * RBIPC_RESTRICT ring, uint32_t len,
  * @param[in]  ring       Ring buffer handle.
  * @param[in]  len        Requested payload length in bytes.
  * @param[in]  timeout_ns Timeout duration in nanoseconds (0 for non-blocking attempt).
- * @param[out] out_buf    Direct memory pointer into the double-mapped payload buffer.
+ * @param[out] out_buf    Direct memory pointer into the shared payload buffer.
  * @param[out] ticket     Assigned ticket number.
  *
  * @return @ref RBIPC_OK on success.
@@ -554,7 +555,7 @@ int rbipc_reserve_write_timeout(rbipc_ring_t * RBIPC_RESTRICT ring, uint32_t len
  *
  * @param[in]  ring       Ring buffer handle.
  * @param[in]  len        Requested payload length in bytes.
- * @param[out] out_buf    Direct memory pointer into the double-mapped payload buffer.
+ * @param[out] out_buf    Direct memory pointer into the shared payload buffer.
  * @param[out] ticket     Assigned ticket number.
  *
  * @return @ref RBIPC_OK on success.
@@ -615,7 +616,7 @@ int rbipc_abort_write(rbipc_ring_t * RBIPC_RESTRICT ring, uint64_t ticket);
  * and returns @ref RBIPC_ERR_POISONED to allow the pipeline to proceed seamlessly.
  *
  * @param[in,out] ring       Ring buffer handle.
- * @param[out]    out_buf    Direct read-only pointer to payload in double-mapped memory.
+ * @param[out]    out_buf    Direct read-only pointer to payload in shared memory.
  * @param[out]    out_len    Pointer receiving committed payload byte length.
  * @param[out]    ticket     Assigned ticket number, required for subsequent release.
  *
