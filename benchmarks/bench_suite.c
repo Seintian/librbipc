@@ -86,7 +86,8 @@ static void run_bench_idle(idle_metrics_t *out_metrics) {
         assert(rc == RBIPC_OK);
 
         const void *buf = NULL;
-        uint32_t len = 0, ticket = 0;
+        uint32_t len = 0;
+        uint64_t ticket = 0;
 
         /* Will block until shutdown */
         rc = rbipc_read_acquire(c_ring, &buf, &len, &ticket);
@@ -174,7 +175,8 @@ static void run_bench_ping_pong(int iterations, latency_dist_t *out_dist) {
 
         for (int i = 0; i < iterations; ++i) {
             const void *rbuf = NULL;
-            uint32_t rlen = 0, rticket = 0;
+            uint32_t rlen = 0;
+            uint64_t rticket = 0;
             rc = rbipc_read_acquire(c_a, &rbuf, &rlen, &rticket);
             if (rc != RBIPC_OK) break;
 
@@ -182,7 +184,7 @@ static void run_bench_ping_pong(int iterations, latency_dist_t *out_dist) {
             rbipc_read_release(c_a, rticket);
 
             void *wbuf = NULL;
-            uint32_t wticket = 0;
+            uint64_t wticket = 0;
             assert(rbipc_reserve_write(c_b, sizeof(uint64_t), &wbuf, &wticket) == RBIPC_OK);
             *(uint64_t *)wbuf = ts;
             assert(rbipc_commit_write(c_b, wticket, sizeof(uint64_t)) == RBIPC_OK);
@@ -201,14 +203,15 @@ static void run_bench_ping_pong(int iterations, latency_dist_t *out_dist) {
     for (int i = 0; i < iterations; ++i) {
         uint64_t t0 = get_time_ns();
         void *wbuf = NULL;
-        uint32_t wticket = 0;
+        uint64_t wticket = 0;
 
         assert(rbipc_reserve_write(ring_a, sizeof(uint64_t), &wbuf, &wticket) == RBIPC_OK);
         *(uint64_t *)wbuf = t0;
         assert(rbipc_commit_write(ring_a, wticket, sizeof(uint64_t)) == RBIPC_OK);
 
         const void *rbuf = NULL;
-        uint32_t rlen = 0, rticket = 0;
+        uint32_t rlen = 0;
+        uint64_t rticket = 0;
         assert(rbipc_read_acquire(ring_b, &rbuf, &rlen, &rticket) == RBIPC_OK);
         uint64_t t1 = get_time_ns();
         rbipc_read_release(ring_b, rticket);
@@ -255,6 +258,73 @@ static void run_bench_ping_pong(int iterations, latency_dist_t *out_dist) {
     printf("  p99.9 Latency   : %u ns\n", out_dist->p99_9_ns);
     printf("  p99.99 Latency  : %u ns\n", out_dist->p99_99_ns);
     printf("  Max Latency     : %u ns\n", out_dist->max_ns);
+}
+
+/* ============================================================================
+ * Latency Percentile Regression SLA Verification (Point 5.3)
+ * ============================================================================ */
+#define RBIPC_DEFAULT_MAX_P99_9_US  50U
+#define RBIPC_DEFAULT_MAX_LAT_US    100U
+
+typedef struct {
+    uint32_t threshold_p99_9_us;
+    uint32_t threshold_max_us;
+    uint32_t observed_p99_9_us;
+    uint32_t observed_max_us;
+    bool     passed;
+} latency_sla_result_t;
+
+static bool verify_latency_regression(const latency_dist_t *dist, bool strict,
+                                      uint32_t override_p99_9_us, uint32_t override_max_us,
+                                      latency_sla_result_t *out_sla) {
+    const char *p99_env = getenv("RBIPC_BENCH_MAX_P99_9_US");
+    const char *max_env = getenv("RBIPC_BENCH_MAX_US");
+
+    uint32_t max_p99_9_us = override_p99_9_us ? override_p99_9_us :
+                            (p99_env ? (uint32_t)strtoul(p99_env, NULL, 10) : RBIPC_DEFAULT_MAX_P99_9_US);
+    uint32_t max_lat_us   = override_max_us ? override_max_us :
+                            (max_env ? (uint32_t)strtoul(max_env, NULL, 10) : RBIPC_DEFAULT_MAX_LAT_US);
+
+    uint32_t p99_9_us = (dist->p99_9_ns + 999U) / 1000U;
+    uint32_t max_us   = (dist->max_ns + 999U) / 1000U;
+
+    bool p99_pass = (p99_9_us <= max_p99_9_us);
+    bool max_pass = (max_us <= max_lat_us);
+    bool overall_pass = p99_pass && max_pass;
+
+    if (out_sla) {
+        out_sla->threshold_p99_9_us = max_p99_9_us;
+        out_sla->threshold_max_us   = max_lat_us;
+        out_sla->observed_p99_9_us  = p99_9_us;
+        out_sla->observed_max_us    = max_us;
+        out_sla->passed             = overall_pass;
+    }
+
+    printf("\n--> [5.3 Latency Percentile Regression SLA Audit]\n");
+    printf("    Target p99.9 Ceiling: <= %u us | Observed: %u us (%u ns)\n",
+           max_p99_9_us, p99_9_us, dist->p99_9_ns);
+    printf("    Target Max Ceiling  : <= %u us | Observed: %u us (%u ns)\n",
+           max_lat_us, max_us, dist->max_ns);
+
+    if (overall_pass) {
+        printf("    [PASS] Latency distribution satisfies SLA performance ceilings!\n");
+        return true;
+    }
+
+    if (strict) {
+        fprintf(stderr, "\n    [FAIL] Latency percentile regression threshold exceeded!\n");
+        if (!p99_pass) {
+            fprintf(stderr, "           Observed p99.9 (%u us) > threshold (%u us)\n", p99_9_us, max_p99_9_us);
+        }
+        if (!max_pass) {
+            fprintf(stderr, "           Observed max (%u us) > threshold (%u us)\n", max_us, max_lat_us);
+        }
+        return false;
+    } else {
+        printf("    [NOTE] Latency tail exceeded reference SLA ceilings.\n");
+        printf("           (Expected under virtualization/WSL2; enforce via --strict or RBIPC_BENCH_STRICT_REGRESSION=1 in CI)\n");
+        return true;
+    }
 }
 
 /* ============================================================================
@@ -326,7 +396,8 @@ static void run_bench_streaming(int iterations, stream_metrics_t *out_metrics) {
 
     while (count < iterations) {
         const void *buf = NULL;
-        uint32_t len = 0, ticket = 0;
+        uint32_t len = 0;
+        uint64_t ticket = 0;
         int rc = rbipc_read_acquire(ring, &buf, &len, &ticket);
         if (rc == RBIPC_ERR_SHUTDOWN) break;
         assert(rc == RBIPC_OK);
@@ -502,7 +573,8 @@ static void run_bench_payload(uint32_t payload_size, int count, payload_result_t
 
     while (rec < count) {
         const void *buf = NULL;
-        uint32_t len = 0, ticket = 0;
+        uint32_t len = 0;
+        uint64_t ticket = 0;
         int rc = rbipc_read_acquire(ring, &buf, &len, &ticket);
         if (rc == RBIPC_ERR_SHUTDOWN) break;
         assert(rc == RBIPC_OK);
@@ -566,7 +638,8 @@ static void *mpmc_cons_thread(void *arg) {
 
     while (atomic_load_explicit(&g_mpmc_consumed, memory_order_relaxed) < total) {
         const void *buf = NULL;
-        uint32_t len = 0, ticket = 0;
+        uint32_t len = 0;
+        uint64_t ticket = 0;
         int rc = rbipc_read_acquire_timeout(ring, 50000000ULL, &buf, &len, &ticket);
         if (rc == RBIPC_ERR_TIMEOUT || rc == RBIPC_ERR_SHUTDOWN) {
             if (atomic_load_explicit(&g_mpmc_consumed, memory_order_relaxed) >= total) break;
@@ -624,9 +697,33 @@ static void run_bench_mpmc(uint32_t np, uint32_t nc, uint32_t total, mpmc_result
  * Main Driver: Runs all 6 benchmark categories and exports structured report
  * ============================================================================ */
 int main(int argc, char **argv) {
-    const char *tag = (argc > 1) ? argv[1] : "zero_spin_optimized";
+    bool strict_regression = false;
+    uint32_t custom_p99_9_us = 0;
+    uint32_t custom_max_us = 0;
+
+    const char *strict_env = getenv("RBIPC_BENCH_STRICT_REGRESSION");
+    if (strict_env && (strcmp(strict_env, "1") == 0 || strcmp(strict_env, "true") == 0)) {
+        strict_regression = true;
+    }
+
+    const char *tag = "zero_spin_optimized";
+    for (int i = 1; i < argc; ++i) {
+        if (strcmp(argv[i], "--strict") == 0 || strcmp(argv[i], "--strict-latency") == 0) {
+            strict_regression = true;
+        } else if (strncmp(argv[i], "--p99-threshold=", 16) == 0) {
+            custom_p99_9_us = (uint32_t)strtoul(argv[i] + 16, NULL, 10);
+        } else if (strncmp(argv[i], "--max-threshold=", 16) == 0) {
+            custom_max_us = (uint32_t)strtoul(argv[i] + 16, NULL, 10);
+        } else if (argv[i][0] != '-') {
+            tag = argv[i];
+        }
+    }
+
     printf("================================================================================\n");
     printf("            LIBRBIPC EXHAUSTIVE BENCHMARK SUITE: [%s]\n", tag);
+    if (strict_regression) {
+        printf("            [STRICT REGRESSION ENFORCEMENT ACTIVE]\n");
+    }
     printf("================================================================================\n");
 
     idle_metrics_t idle;
@@ -634,6 +731,13 @@ int main(int argc, char **argv) {
 
     latency_dist_t lat;
     run_bench_ping_pong(100000, &lat);
+
+    latency_sla_result_t sla_res = {0};
+    bool sla_ok = verify_latency_regression(&lat, strict_regression, custom_p99_9_us, custom_max_us, &sla_res);
+    if (!sla_ok && strict_regression) {
+        fprintf(stderr, "\nFATAL: Aborting benchmark suite due to latency regression failure in strict mode.\n");
+        return 1;
+    }
 
     stream_metrics_t stream;
     run_bench_streaming(1000000, &stream);
@@ -690,6 +794,13 @@ int main(int argc, char **argv) {
         fprintf(fp, "    \"p99_99_ns\": %u,\n", lat.p99_99_ns);
         fprintf(fp, "    \"max_ns\": %u,\n", lat.max_ns);
         fprintf(fp, "    \"stddev_ns\": %.2f\n", lat.stddev_ns);
+        fprintf(fp, "  },\n");
+        fprintf(fp, "  \"latency_sla\": {\n");
+        fprintf(fp, "    \"target_p99_9_us\": %u,\n", sla_res.threshold_p99_9_us);
+        fprintf(fp, "    \"target_max_us\": %u,\n", sla_res.threshold_max_us);
+        fprintf(fp, "    \"observed_p99_9_us\": %u,\n", sla_res.observed_p99_9_us);
+        fprintf(fp, "    \"observed_max_us\": %u,\n", sla_res.observed_max_us);
+        fprintf(fp, "    \"pass\": %s\n", sla_res.passed ? "true" : "false");
         fprintf(fp, "  },\n");
         fprintf(fp, "  \"streaming\": {\n");
         fprintf(fp, "    \"msgs_per_sec\": %.2f,\n", stream.msgs_per_sec);
