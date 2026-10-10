@@ -952,5 +952,6 @@ const char *rbipc_strerror(int err);
 #endif
 
 #include "rbipc_ipc.h"
+#include "rbipc_pubsub.h"
 
 #endif /* RBIPC_H */
