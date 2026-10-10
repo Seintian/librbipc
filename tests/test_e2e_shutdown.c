@@ -13,7 +13,7 @@ static void *consumer_thread(void *arg) {
     rbipc_ring_t *ring = (rbipc_ring_t *)arg;
     const void *buf = NULL;
     uint32_t len = 0;
-    uint32_t ticket = 0;
+    uint64_t ticket = 0;
 
     int rc = rbipc_read_acquire(ring, &buf, &len, &ticket);
     assert(rc == RBIPC_ERR_SHUTDOWN);
@@ -23,7 +23,7 @@ static void *consumer_thread(void *arg) {
 static void *producer_thread(void *arg) {
     rbipc_ring_t *ring = (rbipc_ring_t *)arg;
     void *buf = NULL;
-    uint32_t ticket = 0;
+    uint64_t ticket = 0;
 
     /* Fill buffer first */
     for (int i = 0; i < 4; ++i) {

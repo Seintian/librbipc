@@ -40,7 +40,7 @@ static void run_producer(int iterations) {
 
     for (int i = 0; i < iterations; ++i) {
         void *buf = NULL;
-        uint32_t ticket = 0;
+        uint64_t ticket = 0;
 
         rc = rbipc_reserve_write(ring, sizeof(bench_msg_t), &buf, &ticket);
         if (rc != RBIPC_OK) {
@@ -80,7 +80,7 @@ static void run_consumer(int expected_iterations) {
     while (received_count < expected_iterations) {
         const void *buf = NULL;
         uint32_t len = 0;
-        uint32_t ticket = 0;
+        uint64_t ticket = 0;
 
         rc = rbipc_read_acquire(ring, &buf, &len, &ticket);
         if (rc == RBIPC_ERR_SHUTDOWN) {
@@ -124,7 +124,7 @@ static void run_producer_batch(int iterations, uint32_t batch_size) {
     }
 
     rbipc_iovec_t iovecs[64];
-    uint32_t tickets[64];
+    uint64_t tickets[64];
     uint32_t lens[64];
 
     int sent = 0;
@@ -173,7 +173,7 @@ static void run_consumer_batch(int expected_iterations, uint32_t batch_size) {
     int received_count = 0;
     uint64_t expected_seq = 0;
     rbipc_rovec_t rovecs[64];
-    uint32_t tickets[64];
+    uint64_t tickets[64];
 
     while (received_count < expected_iterations) {
         uint32_t req = (uint32_t)(expected_iterations - received_count);

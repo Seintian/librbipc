@@ -80,7 +80,7 @@ static void test_reactor_epoll_integration(void) {
 
     /* 2. Write and commit a message */
     void *buf = NULL;
-    uint32_t ticket = 0;
+    uint64_t ticket = 0;
     rc = rbipc_reserve_write(ring, 14, &buf, &ticket);
     assert(rc == RBIPC_OK);
     memcpy(buf, "Hello Reactor!", 14);
@@ -100,7 +100,7 @@ static void test_reactor_epoll_integration(void) {
     /* 5. Acquire and release */
     const void *rbuf = NULL;
     uint32_t rlen = 0;
-    uint32_t rticket = 0;
+    uint64_t rticket = 0;
     rc = rbipc_read_acquire(ring, &rbuf, &rlen, &rticket);
     assert(rc == RBIPC_OK);
     assert(rlen == 14);
@@ -117,7 +117,7 @@ static void test_reactor_epoll_integration(void) {
     uint32_t reserved = 0;
     rc = rbipc_reserve_write_batch(ring, 4, iovecs, &reserved);
     assert(rc == RBIPC_OK && reserved == 4);
-    uint32_t tickets[4] = {iovecs[0].ticket, iovecs[1].ticket, iovecs[2].ticket, iovecs[3].ticket};
+    uint64_t tickets[4] = {iovecs[0].ticket, iovecs[1].ticket, iovecs[2].ticket, iovecs[3].ticket};
     uint32_t lens[4] = {8, 8, 8, 8};
     rc = rbipc_commit_write_batch(ring, 4, tickets, lens);
     assert(rc == RBIPC_OK);
@@ -131,7 +131,7 @@ static void test_reactor_epoll_integration(void) {
     uint32_t acquired = 0;
     rc = rbipc_read_acquire_batch(ring, 4, rovecs, &acquired);
     assert(rc == RBIPC_OK && acquired == 4);
-    uint32_t rel_tickets[4] = {rovecs[0].ticket, rovecs[1].ticket, rovecs[2].ticket, rovecs[3].ticket};
+    uint64_t rel_tickets[4] = {rovecs[0].ticket, rovecs[1].ticket, rovecs[2].ticket, rovecs[3].ticket};
     rc = rbipc_read_release_batch(ring, 4, rel_tickets);
     assert(rc == RBIPC_OK);
 

@@ -34,7 +34,7 @@ static void *producer_worker(void *arg) {
 
     for (uint32_t i = 0; i < MSGS_PER_PRODUCER; ++i) {
         void *buf = NULL;
-        uint32_t ticket = 0;
+        uint64_t ticket = 0;
 
         int rc = rbipc_reserve_write(ring, sizeof(mpmc_msg_t), &buf, &ticket);
         assert(rc == RBIPC_OK);
@@ -55,7 +55,7 @@ static void *consumer_worker(void *arg) {
     while (atomic_load_explicit(&g_consumed_count, memory_order_relaxed) < TOTAL_MSGS) {
         const void *buf = NULL;
         uint32_t len = 0;
-        uint32_t ticket = 0;
+        uint64_t ticket = 0;
 
         int rc = rbipc_read_acquire_timeout(ring, 100 * RBIPC_NSEC_PER_MSEC, &buf, &len, &ticket);
         if (rc == RBIPC_ERR_TIMEOUT || rc == RBIPC_ERR_SHUTDOWN) {

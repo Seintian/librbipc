@@ -205,7 +205,7 @@ enum rbipc_slot_state {
  * It is aligned to a 64-byte boundary to prevent false sharing between concurrent worker cores.
  */
 typedef struct {
-    _Alignas(RBIPC_CACHE_LINE) _Atomic uint32_t sequence;    /**< Monotonically increasing sequence number for turn scheduling. */
+    _Alignas(RBIPC_CACHE_LINE) _Atomic uint64_t sequence;    /**< Monotonically increasing sequence number for turn scheduling. */
     _Atomic uint32_t state;                                  /**< Slot lifecycle state, represented by @ref rbipc_slot_state. */
     _Atomic uint32_t producer_pid;                           /**< Process ID of the reserving producer (for ESRCH crash detection). */
     _Atomic uint32_t len;                                    /**< Valid committed byte length of the written payload. */
@@ -232,8 +232,8 @@ typedef struct {
     uint32_t header_crc;         /**< Hardware-accelerated CRC32C over immutable configuration layout fields. */
 
     /* Cache-line isolated atomic synchronization variables */
-    _Alignas(RBIPC_CACHE_LINE) _Atomic uint32_t write_ticket;     /**< Monotonic ticket counter claimed by reserving producers. */
-    _Alignas(RBIPC_CACHE_LINE) _Atomic uint32_t read_ticket;      /**< Monotonic ticket counter claimed by acquiring consumers. */
+    _Alignas(RBIPC_CACHE_LINE) _Atomic uint64_t write_ticket;     /**< Monotonic ticket counter claimed by reserving producers. */
+    _Alignas(RBIPC_CACHE_LINE) _Atomic uint64_t read_ticket;      /**< Monotonic ticket counter claimed by acquiring consumers. */
     _Alignas(RBIPC_CACHE_LINE) _Atomic uint32_t futex_seq;        /**< Futex word sequence counter for consumer wakeups (data ready). */
     _Alignas(RBIPC_CACHE_LINE) _Atomic uint32_t futex_waiters;    /**< Count of consumer threads actively sleeping on @c futex_seq. */
     _Alignas(RBIPC_CACHE_LINE) _Atomic uint32_t write_futex_seq;  /**< Futex word sequence counter for producer wakeups (space ready). */
@@ -253,8 +253,8 @@ typedef struct {
     uint64_t data_size;          /**< Byte size of the single circular payload buffer. */
     uint32_t capacity;           /**< Total slot capacity of the ring buffer. */
     uint32_t slot_size;          /**< Maximum payload capacity in bytes per slot. */
-    uint32_t write_ticket;       /**< Next ticket number to be claimed by writing producers. */
-    uint32_t read_ticket;        /**< Next ticket number to be claimed by acquiring consumers. */
+    uint64_t write_ticket;       /**< Next ticket number to be claimed by writing producers. */
+    uint64_t read_ticket;        /**< Next ticket number to be claimed by acquiring consumers. */
     uint32_t active_producers;   /**< Total count of attached active producer processes. */
     uint32_t active_consumers;   /**< Total count of attached active consumer processes. */
     uint32_t futex_waiters;      /**< Total count of consumer threads currently suspended in futex sleep. */
@@ -483,7 +483,7 @@ int rbipc_destroy(const char *name);
  */
 RBIPC_NODISCARD RBIPC_HOT RBIPC_LEAF
 int rbipc_reserve_write(rbipc_ring_t * RBIPC_RESTRICT ring, uint32_t len,
-                        void ** RBIPC_RESTRICT out_buf, uint32_t * RBIPC_RESTRICT ticket);
+                        void ** RBIPC_RESTRICT out_buf, uint64_t * RBIPC_RESTRICT ticket);
 
 /**
  * @brief Reserve a slot in the ring buffer for writing with timeout (Zero-Copy).
@@ -506,7 +506,7 @@ int rbipc_reserve_write(rbipc_ring_t * RBIPC_RESTRICT ring, uint32_t len,
  */
 RBIPC_NODISCARD RBIPC_LEAF
 int rbipc_reserve_write_timeout(rbipc_ring_t * RBIPC_RESTRICT ring, uint32_t len, uint64_t timeout_ns,
-                                void ** RBIPC_RESTRICT out_buf, uint32_t * RBIPC_RESTRICT ticket);
+                                void ** RBIPC_RESTRICT out_buf, uint64_t * RBIPC_RESTRICT ticket);
 
 /**
  * @brief Non-blocking write reservation attempt (Zero-Copy).
@@ -527,7 +527,7 @@ int rbipc_reserve_write_timeout(rbipc_ring_t * RBIPC_RESTRICT ring, uint32_t len
  */
 RBIPC_NODISCARD RBIPC_HOT RBIPC_LEAF
 int rbipc_reserve_write_nonblock(rbipc_ring_t * RBIPC_RESTRICT ring, uint32_t len,
-                                 void ** RBIPC_RESTRICT out_buf, uint32_t * RBIPC_RESTRICT ticket);
+                                 void ** RBIPC_RESTRICT out_buf, uint64_t * RBIPC_RESTRICT ticket);
 
 /**
  * @brief Commit a previously reserved slot, publishing its payload to consumers.
@@ -547,7 +547,7 @@ int rbipc_reserve_write_nonblock(rbipc_ring_t * RBIPC_RESTRICT ring, uint32_t le
  * @see rbipc_abort_write
  */
 RBIPC_HOT RBIPC_LEAF
-int rbipc_commit_write(rbipc_ring_t * RBIPC_RESTRICT ring, uint32_t ticket, uint32_t written_len);
+int rbipc_commit_write(rbipc_ring_t * RBIPC_RESTRICT ring, uint64_t ticket, uint32_t written_len);
 
 /**
  * @brief Abort a previously reserved slot without publishing payload data.
@@ -565,7 +565,7 @@ int rbipc_commit_write(rbipc_ring_t * RBIPC_RESTRICT ring, uint32_t ticket, uint
  * @see rbipc_commit_write
  */
 RBIPC_COLD RBIPC_LEAF
-int rbipc_abort_write(rbipc_ring_t * RBIPC_RESTRICT ring, uint32_t ticket);
+int rbipc_abort_write(rbipc_ring_t * RBIPC_RESTRICT ring, uint64_t ticket);
 
 /**
  * @brief Acquire the next committed message for reading (Zero-Copy, Blocking).
@@ -592,7 +592,7 @@ int rbipc_abort_write(rbipc_ring_t * RBIPC_RESTRICT ring, uint32_t ticket);
  */
 RBIPC_NODISCARD RBIPC_HOT RBIPC_LEAF
 int rbipc_read_acquire(rbipc_ring_t * RBIPC_RESTRICT ring, const void ** RBIPC_RESTRICT out_buf,
-                       uint32_t * RBIPC_RESTRICT out_len, uint32_t * RBIPC_RESTRICT ticket);
+                       uint32_t * RBIPC_RESTRICT out_len, uint64_t * RBIPC_RESTRICT ticket);
 
 /**
  * @brief Acquire the next committed message with timeout (Zero-Copy).
@@ -617,7 +617,7 @@ int rbipc_read_acquire(rbipc_ring_t * RBIPC_RESTRICT ring, const void ** RBIPC_R
 RBIPC_NODISCARD RBIPC_LEAF
 int rbipc_read_acquire_timeout(rbipc_ring_t * RBIPC_RESTRICT ring, uint64_t timeout_ns,
                                const void ** RBIPC_RESTRICT out_buf, uint32_t * RBIPC_RESTRICT out_len,
-                               uint32_t * RBIPC_RESTRICT ticket);
+                               uint64_t * RBIPC_RESTRICT ticket);
 
 /**
  * @brief Non-blocking read acquire attempt (Zero-Copy).
@@ -639,7 +639,7 @@ int rbipc_read_acquire_timeout(rbipc_ring_t * RBIPC_RESTRICT ring, uint64_t time
  */
 RBIPC_NODISCARD RBIPC_HOT RBIPC_LEAF
 int rbipc_read_acquire_nonblock(rbipc_ring_t * RBIPC_RESTRICT ring, const void ** RBIPC_RESTRICT out_buf,
-                                uint32_t * RBIPC_RESTRICT out_len, uint32_t * RBIPC_RESTRICT ticket);
+                                uint32_t * RBIPC_RESTRICT out_len, uint64_t * RBIPC_RESTRICT ticket);
 
 /**
  * @brief Release a consumed slot back to the ring buffer for reuse.
@@ -656,7 +656,7 @@ int rbipc_read_acquire_nonblock(rbipc_ring_t * RBIPC_RESTRICT ring, const void *
  * @see rbipc_read_acquire
  */
 RBIPC_HOT RBIPC_LEAF
-int rbipc_read_release(rbipc_ring_t * RBIPC_RESTRICT ring, uint32_t ticket);
+int rbipc_read_release(rbipc_ring_t * RBIPC_RESTRICT ring, uint64_t ticket);
 
 /**
  * @brief Reserve a batch of contiguous slots for writing (Zero-Copy, B-Queue Batching).
@@ -725,7 +725,7 @@ int rbipc_reserve_write_batch_timeout(rbipc_ring_t * RBIPC_RESTRICT ring, uint32
  */
 RBIPC_HOT RBIPC_LEAF
 int rbipc_commit_write_batch(rbipc_ring_t * RBIPC_RESTRICT ring, uint32_t count,
-                             const uint32_t * RBIPC_RESTRICT tickets, const uint32_t * RBIPC_RESTRICT lens);
+                             const uint64_t * RBIPC_RESTRICT tickets, const uint32_t * RBIPC_RESTRICT lens);
 
 /**
  * @brief Acquire a batch of committed messages for reading (Zero-Copy, B-Queue Batching).
@@ -791,7 +791,7 @@ int rbipc_read_acquire_batch_timeout(rbipc_ring_t * RBIPC_RESTRICT ring, uint32_
  */
 RBIPC_HOT RBIPC_LEAF
 int rbipc_read_release_batch(rbipc_ring_t * RBIPC_RESTRICT ring, uint32_t count,
-                             const uint32_t * RBIPC_RESTRICT tickets);
+                             const uint64_t * RBIPC_RESTRICT tickets);
 
 /**
  * @brief Signal cooperative shutdown to all waiting producers and consumers.

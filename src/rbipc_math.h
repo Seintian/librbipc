@@ -85,8 +85,8 @@ RBIPC_INLINE RBIPC_CONST RBIPC_NODISCARD size_t rbipc_align_up(size_t val, size_
  * @return Signed 32-bit integer representing the distance from @p b to @p a.
  *         A positive value indicates @p a is ahead of @p b; negative indicates @p a is behind @p b.
  */
-RBIPC_INLINE RBIPC_CONST RBIPC_NODISCARD int32_t rbipc_seq_diff(uint32_t a, uint32_t b) {
-    return (int32_t)(a - b);
+RBIPC_INLINE RBIPC_CONST RBIPC_NODISCARD int64_t rbipc_seq_diff(uint64_t a, uint64_t b) {
+    return (int64_t)(a - b);
 }
 
 #endif /* RBIPC_MATH_H */

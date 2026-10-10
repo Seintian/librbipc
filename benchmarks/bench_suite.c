@@ -299,7 +299,7 @@ static void run_bench_streaming(int iterations, stream_metrics_t *out_metrics) {
 
         for (int i = 0; i < iterations; ++i) {
             void *buf = NULL;
-            uint32_t ticket = 0;
+            uint64_t ticket = 0;
             int rc = rbipc_reserve_write(p_ring, sizeof(payload), &buf, &ticket);
             assert(rc == RBIPC_OK);
             *(uint32_t *)buf = (uint32_t)i;
@@ -393,7 +393,7 @@ static void run_bench_batching(uint32_t batch_size, int total_msgs, batch_result
         assert(rbipc_attach(BENCH_SHM_A, &p_ring) == RBIPC_OK);
 
         rbipc_iovec_t iovecs[128];
-        uint32_t tickets[128];
+        uint64_t tickets[128];
         uint32_t lens[128];
 
         int sent = 0;
@@ -421,7 +421,7 @@ static void run_bench_batching(uint32_t batch_size, int total_msgs, batch_result
 
     /* Consumer Parent */
     rbipc_rovec_t rovecs[128];
-    uint32_t tickets[128];
+    uint64_t tickets[128];
 
     uint64_t t0 = get_time_ns();
     int count = 0;
@@ -486,7 +486,7 @@ static void run_bench_payload(uint32_t payload_size, int count, payload_result_t
 
         for (int i = 0; i < count; ++i) {
             void *buf = NULL;
-            uint32_t ticket = 0;
+            uint64_t ticket = 0;
             assert(rbipc_reserve_write(p_ring, payload_size, &buf, &ticket) == RBIPC_OK);
             *(uint32_t *)buf = (uint32_t)i;
             assert(rbipc_commit_write(p_ring, ticket, payload_size) == RBIPC_OK);
@@ -549,7 +549,7 @@ static void *mpmc_prod_thread(void *arg) {
 
     for (uint32_t i = 0; i < count; ++i) {
         void *buf = NULL;
-        uint32_t ticket = 0;
+        uint64_t ticket = 0;
         int rc = rbipc_reserve_write(ring, 64, &buf, &ticket);
         assert(rc == RBIPC_OK);
         *(uint32_t *)buf = i;

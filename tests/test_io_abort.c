@@ -17,7 +17,7 @@ int main(void) {
 
     /* 1. Normal write */
     void *w_buf = NULL;
-    uint32_t ticket0 = 0;
+    uint64_t ticket0 = 0;
     rc = rbipc_reserve_write(ring, 32, &w_buf, &ticket0);
     assert(rc == RBIPC_OK);
     strcpy((char *)w_buf, "MSG_0");
@@ -25,7 +25,7 @@ int main(void) {
     assert(rc == RBIPC_OK);
 
     /* 2. Aborted write */
-    uint32_t ticket1 = 0;
+    uint64_t ticket1 = 0;
     rc = rbipc_reserve_write(ring, 32, &w_buf, &ticket1);
     assert(rc == RBIPC_OK);
     /* Decide to abort */
@@ -33,7 +33,7 @@ int main(void) {
     assert(rc == RBIPC_OK);
 
     /* 3. Normal write again */
-    uint32_t ticket2 = 0;
+    uint64_t ticket2 = 0;
     rc = rbipc_reserve_write(ring, 32, &w_buf, &ticket2);
     assert(rc == RBIPC_OK);
     strcpy((char *)w_buf, "MSG_2");
@@ -43,7 +43,7 @@ int main(void) {
     /* Consumer side */
     const void *r_buf = NULL;
     uint32_t r_len = 0;
-    uint32_t r_ticket = 0;
+    uint64_t r_ticket = 0;
 
     /* Read MSG_0 */
     rc = rbipc_read_acquire(ring, &r_buf, &r_len, &r_ticket);

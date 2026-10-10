@@ -141,7 +141,7 @@ RBIPC_INLINE RBIPC_CONST bool rbipc_is_valid_page_size(size_t page_size) {
  * @param[in] b Sequence number B.
  * @return true if sequence numbers are identical, false otherwise.
  */
-RBIPC_INLINE RBIPC_CONST bool rbipc_seq_is_equal(uint32_t a, uint32_t b) {
+RBIPC_INLINE RBIPC_CONST bool rbipc_seq_is_equal(uint64_t a, uint64_t b) {
     return rbipc_seq_diff(a, b) == 0;
 }
 
@@ -152,7 +152,7 @@ RBIPC_INLINE RBIPC_CONST bool rbipc_seq_is_equal(uint32_t a, uint32_t b) {
  * @param[in] b Sequence number B.
  * @return true if @p a is ahead of @p b, false otherwise.
  */
-RBIPC_INLINE RBIPC_CONST bool rbipc_seq_is_ahead(uint32_t a, uint32_t b) {
+RBIPC_INLINE RBIPC_CONST bool rbipc_seq_is_ahead(uint64_t a, uint64_t b) {
     return rbipc_seq_diff(a, b) > 0;
 }
 
@@ -163,7 +163,7 @@ RBIPC_INLINE RBIPC_CONST bool rbipc_seq_is_ahead(uint32_t a, uint32_t b) {
  * @param[in] b Sequence number B.
  * @return true if @p a is behind @p b, false otherwise.
  */
-RBIPC_INLINE RBIPC_CONST bool rbipc_seq_is_behind(uint32_t a, uint32_t b) {
+RBIPC_INLINE RBIPC_CONST bool rbipc_seq_is_behind(uint64_t a, uint64_t b) {
     return rbipc_seq_diff(a, b) < 0;
 }
 
@@ -178,7 +178,7 @@ RBIPC_INLINE RBIPC_CONST bool rbipc_seq_is_behind(uint32_t a, uint32_t b) {
  * @param[in] ticket Reserving producer ticket number.
  * @return true if slot is ready for producer reservation, false otherwise.
  */
-RBIPC_INLINE RBIPC_CONST bool rbipc_slot_is_vacant(uint32_t seq, uint32_t ticket) {
+RBIPC_INLINE RBIPC_CONST bool rbipc_slot_is_vacant(uint64_t seq, uint64_t ticket) {
     return rbipc_seq_diff(seq, ticket) == 0;
 }
 
@@ -189,7 +189,7 @@ RBIPC_INLINE RBIPC_CONST bool rbipc_slot_is_vacant(uint32_t seq, uint32_t ticket
  * @param[in] ticket Acquiring consumer ticket number.
  * @return true if slot payload has been committed by producer, false otherwise.
  */
-RBIPC_INLINE RBIPC_CONST bool rbipc_slot_is_ready(uint32_t seq, uint32_t ticket) {
+RBIPC_INLINE RBIPC_CONST bool rbipc_slot_is_ready(uint64_t seq, uint64_t ticket) {
     return rbipc_seq_diff(seq, ticket + 1) == 0;
 }
 
@@ -295,9 +295,9 @@ RBIPC_INLINE bool rbipc_ring_is_shutdown(const rbipc_shm_header_t *hdr) {
  * @param[in] read_ticket Current reader ticket being processed.
  * @return true if shutdown is signaled and all published messages are consumed, false otherwise.
  */
-RBIPC_INLINE bool rbipc_ring_is_drained_on_shutdown(const rbipc_shm_header_t *hdr, uint32_t read_ticket) {
+RBIPC_INLINE bool rbipc_ring_is_drained_on_shutdown(const rbipc_shm_header_t *hdr, uint64_t read_ticket) {
     if (RBIPC_UNLIKELY(rbipc_ring_is_shutdown(hdr))) {
-        uint32_t cur_write = atomic_load_explicit(&hdr->write_ticket, memory_order_relaxed);
+        uint64_t cur_write = atomic_load_explicit(&hdr->write_ticket, memory_order_relaxed);
         return read_ticket >= cur_write;
     }
     return false;

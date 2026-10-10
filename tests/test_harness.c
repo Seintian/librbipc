@@ -47,7 +47,7 @@ static void run_producer(int iterations) {
     printf("[Producer] Starting transmission of %d messages...\n", iterations);
     for (int i = 0; i < iterations; ++i) {
         void *buf = NULL;
-        uint32_t ticket = 0;
+        uint64_t ticket = 0;
 
         rc = rbipc_reserve_write(ring, sizeof(test_msg_t), &buf, &ticket);
         if (rc != RBIPC_OK) {
@@ -89,14 +89,14 @@ static void run_consumer(int expected_iterations) {
     while (received_count < expected_iterations) {
         const void *buf = NULL;
         uint32_t len = 0;
-        uint32_t ticket = 0;
+        uint64_t ticket = 0;
 
         rc = rbipc_read_acquire(ring, &buf, &len, &ticket);
         if (rc == RBIPC_ERR_SHUTDOWN) {
             printf("[Consumer] Received shutdown signal.\n");
             break;
         } else if (rc == RBIPC_ERR_POISONED) {
-            printf("[Consumer] Skipped poisoned slot (ticket %u)\n", ticket);
+            printf("[Consumer] Skipped poisoned slot (ticket %lu)\n", (unsigned long)ticket);
             rbipc_read_release(ring, ticket);
             continue;
         } else if (rc != RBIPC_OK) {

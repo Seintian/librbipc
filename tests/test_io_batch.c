@@ -22,7 +22,7 @@ static void test_batch_validation(void) {
     uint32_t reserved = 0;
     rbipc_rovec_t rovecs[16];
     uint32_t acquired = 0;
-    uint32_t tickets[16] = {0};
+    uint64_t tickets[16] = {0};
     uint32_t lens[16] = {0};
 
     /* NULL / invalid argument tests */
@@ -67,7 +67,7 @@ static void test_batch_roundtrip(void) {
     assert(rc == RBIPC_OK);
     assert(reserved == batch_size);
 
-    uint32_t tickets[16];
+    uint64_t tickets[16];
     uint32_t lens[16];
 
     for (uint32_t i = 0; i < batch_size; ++i) {
@@ -135,7 +135,7 @@ static void test_batch_roundtrip(void) {
 
     /* Commit first slot, abort second slot */
     memcpy(iovecs[0].buf, "COMMITTED_SLOT", 15);
-    uint32_t t_commit = iovecs[0].ticket;
+    uint64_t t_commit = iovecs[0].ticket;
     uint32_t l_commit = 15;
     assert(rbipc_commit_write_batch(ring, 1, &t_commit, &l_commit) == RBIPC_OK);
     assert(rbipc_abort_write(ring, iovecs[1].ticket) == RBIPC_OK);
@@ -148,7 +148,7 @@ static void test_batch_roundtrip(void) {
     assert(rovecs[1].buf == NULL); /* Poisoned slot */
     assert(rovecs[1].len == 0);
 
-    uint32_t rel_tickets[2] = {rovecs[0].ticket, rovecs[1].ticket};
+    uint64_t rel_tickets[2] = {rovecs[0].ticket, rovecs[1].ticket};
     assert(rbipc_read_release_batch(ring, 2, rel_tickets) == RBIPC_OK);
 
     rbipc_detach(ring);
@@ -185,7 +185,7 @@ static void test_batch_nonblock_and_timeout(void) {
     assert(rbipc_reserve_write_batch_timeout(ring, 1, 1000000ULL, iovecs, &reserved) == RBIPC_ERR_TIMEOUT);
 
     /* 6. Commit all reserved slots */
-    uint32_t tickets[BATCH_CAPACITY];
+    uint64_t tickets[BATCH_CAPACITY];
     uint32_t lens[BATCH_CAPACITY];
     for (uint32_t i = 0; i < BATCH_CAPACITY; ++i) {
         tickets[i] = iovecs[i].ticket;
@@ -198,7 +198,7 @@ static void test_batch_nonblock_and_timeout(void) {
     assert(rc == RBIPC_OK);
     assert(acquired == 16);
 
-    uint32_t rel_tickets[16];
+    uint64_t rel_tickets[16];
     for (uint32_t i = 0; i < 16; ++i) {
         rel_tickets[i] = rovecs[i].ticket;
     }

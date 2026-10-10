@@ -75,7 +75,7 @@ void rbipc_slot_mark_reserved(rbipc_slot_t *slot, pid_t pid);
  * @param[in]     len    Actual payload byte length written.
  */
 RBIPC_LEAF
-void rbipc_slot_commit(rbipc_slot_t *slot, uint32_t ticket, uint32_t len);
+void rbipc_slot_commit(rbipc_slot_t *slot, uint64_t ticket, uint32_t len);
 
 /**
  * @brief Transition an uncommitted or orphaned slot to POISONED state.
@@ -89,7 +89,7 @@ void rbipc_slot_commit(rbipc_slot_t *slot, uint32_t ticket, uint32_t len);
  * @return true if slot was successfully transitioned to POISONED; false if already committed/released.
  */
 RBIPC_LEAF
-bool rbipc_slot_poison(rbipc_slot_t *slot, uint32_t ticket);
+bool rbipc_slot_poison(rbipc_slot_t *slot, uint64_t ticket);
 
 /**
  * @brief Release a consumed slot back to the ring buffer for producer recycling.
@@ -123,9 +123,9 @@ void rbipc_slot_mark_acquired(rbipc_slot_t *slot, pid_t pid, uint64_t timestamp_
  * @return true if slot was recovered from dead consumer; false otherwise.
  */
 RBIPC_LEAF
-bool rbipc_slot_recover_dead_consumer(rbipc_slot_t *slot, uint32_t ticket);
+bool rbipc_slot_recover_dead_consumer(rbipc_slot_t *slot, uint64_t ticket);
 
 RBIPC_LEAF
-void rbipc_slot_release(rbipc_slot_t *slot, uint32_t ticket, uint32_t capacity);
+void rbipc_slot_release(rbipc_slot_t *slot, uint64_t ticket, uint32_t capacity);
 
 #endif /* RBIPC_SLOT_H */

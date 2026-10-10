@@ -19,7 +19,7 @@ static void test_io_param_validation(void) {
 
     void *out_buf = NULL;
     const void *in_buf = NULL;
-    uint32_t ticket = 0;
+    uint64_t ticket = 0;
     uint32_t len = 0;
 
     /* Reserve validation */
@@ -54,7 +54,7 @@ static void test_nonblock_and_timeout(void) {
 
     const void *in_buf = NULL;
     uint32_t read_len = 0;
-    uint32_t read_ticket = 0;
+    uint64_t read_ticket = 0;
 
     /* Read on empty ring (non-blocking) */
     assert(rbipc_read_acquire_nonblock(ring, &in_buf, &read_len, &read_ticket) == RBIPC_ERR_EMPTY);
@@ -64,7 +64,7 @@ static void test_nonblock_and_timeout(void) {
 
     /* Fill all slots */
     void *write_buf = NULL;
-    uint32_t write_ticket = 0;
+    uint64_t write_ticket = 0;
 
     for (uint32_t i = 0; i < TEST_CAPACITY; ++i) {
         rc = rbipc_reserve_write_nonblock(ring, 64, &write_buf, &write_ticket);
@@ -106,7 +106,7 @@ static void test_circular_wrap(void) {
     /* Loop through 5 full capacity cycles (20 messages across 4 slots) */
     for (uint32_t i = 0; i < 20; ++i) {
         void *w_buf = NULL;
-        uint32_t w_ticket = 0;
+        uint64_t w_ticket = 0;
         rc = rbipc_reserve_write(ring, 32, &w_buf, &w_ticket);
         assert(rc == RBIPC_OK);
         assert(w_ticket == i);
@@ -117,7 +117,7 @@ static void test_circular_wrap(void) {
 
         const void *r_buf = NULL;
         uint32_t r_len = 0;
-        uint32_t r_ticket = 0;
+        uint64_t r_ticket = 0;
         rc = rbipc_read_acquire(ring, &r_buf, &r_len, &r_ticket);
         assert(rc == RBIPC_OK);
         assert(r_ticket == i);

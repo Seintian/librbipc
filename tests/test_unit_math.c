@@ -47,14 +47,20 @@ static void test_seq_diff(void) {
     assert(rbipc_seq_diff(10, 5) == 5);
     assert(rbipc_seq_diff(5, 10) == -5);
 
-    /* Wrap-around testing: a is just after wrap, b is just before wrap */
-    uint32_t b = UINT32_MAX - 2;
-    uint32_t a = 2; /* 5 steps ahead after wrap */
+    /* 64-bit Monotonicity beyond 32-bit (112s) wrap-around boundary */
+    uint64_t large_a = 5000000000ULL;
+    uint64_t large_b = 10ULL;
+    assert(rbipc_seq_diff(large_a, large_b) == 4999999990LL);
+    assert(rbipc_seq_diff(large_b, large_a) == -4999999990LL);
+
+    /* 64-bit modular wrap-around testing at 2^64 boundary */
+    uint64_t b = UINT64_MAX - 2;
+    uint64_t a = 2; /* 5 steps ahead after wrap */
     assert(rbipc_seq_diff(a, b) == 5);
     assert(rbipc_seq_diff(b, a) == -5);
 
-    assert(rbipc_seq_diff(0, UINT32_MAX) == 1);
-    assert(rbipc_seq_diff(UINT32_MAX, 0) == -1);
+    assert(rbipc_seq_diff(0, UINT64_MAX) == 1);
+    assert(rbipc_seq_diff(UINT64_MAX, 0) == -1);
 }
 
 int main(void) {

@@ -70,7 +70,7 @@ void rbipc_slot_mark_reserved(rbipc_slot_t *slot, pid_t pid) {
 }
 
 RBIPC_LEAF
-void rbipc_slot_commit(rbipc_slot_t *slot, uint32_t ticket, uint32_t len) {
+void rbipc_slot_commit(rbipc_slot_t *slot, uint64_t ticket, uint32_t len) {
     if (RBIPC_UNLIKELY(rbipc_is_null(slot))) return;
     atomic_store_explicit(&slot->len, len, memory_order_relaxed);
     atomic_store_explicit(&slot->state, RBIPC_SLOT_COMMITTED, memory_order_release);
@@ -79,7 +79,7 @@ void rbipc_slot_commit(rbipc_slot_t *slot, uint32_t ticket, uint32_t len) {
 }
 
 RBIPC_LEAF
-bool rbipc_slot_poison(rbipc_slot_t *slot, uint32_t ticket) {
+bool rbipc_slot_poison(rbipc_slot_t *slot, uint64_t ticket) {
     if (RBIPC_UNLIKELY(rbipc_is_null(slot))) return false;
     uint32_t state = atomic_load_explicit(&slot->state, memory_order_acquire);
     while (state == RBIPC_SLOT_RESERVED || state == RBIPC_SLOT_RESERVING || state == RBIPC_SLOT_EMPTY) {
@@ -102,7 +102,7 @@ void rbipc_slot_mark_acquired(rbipc_slot_t *slot, pid_t pid, uint64_t timestamp_
 }
 
 RBIPC_LEAF
-bool rbipc_slot_recover_dead_consumer(rbipc_slot_t *slot, uint32_t ticket) {
+bool rbipc_slot_recover_dead_consumer(rbipc_slot_t *slot, uint64_t ticket) {
     if (RBIPC_UNLIKELY(rbipc_is_null(slot))) return false;
     uint32_t cpid = atomic_load_explicit(&slot->consumer_pid, memory_order_relaxed);
     if (cpid > 0 && !rbipc_slot_is_peer_alive((pid_t)cpid)) {
@@ -118,7 +118,7 @@ bool rbipc_slot_recover_dead_consumer(rbipc_slot_t *slot, uint32_t ticket) {
 }
 
 RBIPC_LEAF
-void rbipc_slot_release(rbipc_slot_t *slot, uint32_t ticket, uint32_t capacity) {
+void rbipc_slot_release(rbipc_slot_t *slot, uint64_t ticket, uint32_t capacity) {
     if (RBIPC_UNLIKELY(rbipc_is_null(slot))) return;
     atomic_store_explicit(&slot->consumer_pid, 0, memory_order_relaxed);
     atomic_store_explicit(&slot->acquire_timestamp_ns, 0, memory_order_relaxed);
