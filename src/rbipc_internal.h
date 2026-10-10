@@ -42,7 +42,25 @@ struct rbipc_ring {
     uint32_t roles;               /**< Bitmask of participant role flags (PRODUCER, CONSUMER, MONITOR). */
     bool is_creator;              /**< True if this process created the ring buffer; false if attached. */
     pid_t cached_pid;             /**< Cached process PID to avoid redundant getpid() system calls during reservations. */
+    int event_fd;                 /**< Bound eventfd descriptor for epoll reactor integration (-1 if disabled). */
+    bool owns_eventfd;            /**< True if this ring handle created the eventfd and should close it on detach. */
 };
+
+#include <sys/eventfd.h>
+#include <unistd.h>
+
+/**
+ * @brief Dispatch notification to bound eventfd if reactor waiters are present.
+ */
+RBIPC_INLINE void rbipc_ring_signal_eventfd(const rbipc_ring_t *ring) {
+    if (RBIPC_UNLIKELY(ring && ring->event_fd >= 0)) {
+        if (ring->hdr && atomic_load_explicit(&ring->hdr->eventfd_waiters, memory_order_relaxed) > 0) {
+            uint64_t val = 1;
+            ssize_t ret = write(ring->event_fd, &val, sizeof(val));
+            (void)ret;
+        }
+    }
+}
 
 /**
  * @brief Bounded, null-terminating string copy without insecure C runtime warnings.

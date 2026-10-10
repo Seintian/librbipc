@@ -241,6 +241,7 @@ typedef struct {
     _Alignas(RBIPC_CACHE_LINE) _Atomic uint32_t active_producers; /**< Number of currently attached producer handles. */
     _Alignas(RBIPC_CACHE_LINE) _Atomic uint32_t active_consumers; /**< Number of currently attached consumer handles. */
     _Alignas(RBIPC_CACHE_LINE) _Atomic uint32_t shutdown_flag;    /**< Atomic flag set to 1 when cooperative shutdown is requested. */
+    _Alignas(RBIPC_CACHE_LINE) _Atomic uint32_t eventfd_waiters;  /**< Count of active eventfd/epoll reactor waiters registered. */
 } rbipc_shm_header_t;
 
 /**
@@ -807,6 +808,60 @@ int rbipc_read_release_batch(rbipc_ring_t * RBIPC_RESTRICT ring, uint32_t count,
  */
 RBIPC_LEAF
 int rbipc_signal_shutdown(rbipc_ring_t *ring);
+
+/**
+ * @brief Enable asynchronous eventfd signaling on the ring buffer handle.
+ *
+ * @details Creates a non-blocking, close-on-exec eventfd (EFD_NONBLOCK | EFD_CLOEXEC)
+ * associated with this ring buffer handle for integration with Linux epoll reactors
+ * (Tokio, libuv, epoll_wait) and io_uring. When messages are committed or released,
+ * a notification is dispatched to wake epoll listeners.
+ *
+ * @param[in,out] ring   Ring buffer handle.
+ * @param[out]    out_fd Pointer receiving the newly created eventfd file descriptor.
+ *
+ * @return @ref RBIPC_OK on success.
+ * @retval RBIPC_ERR_INVAL if arguments are null or descriptor creation fails.
+ */
+RBIPC_NODISCARD RBIPC_LEAF
+int rbipc_enable_eventfd(rbipc_ring_t * RBIPC_RESTRICT ring, int * RBIPC_RESTRICT out_fd);
+
+/**
+ * @brief Bind an existing external eventfd descriptor to the ring buffer handle.
+ *
+ * @param[in,out] ring     Ring buffer handle.
+ * @param[in]     event_fd Open eventfd descriptor (must be >= 0).
+ *
+ * @return @ref RBIPC_OK on success.
+ * @retval RBIPC_ERR_INVAL if ring is null or event_fd is negative.
+ */
+RBIPC_NODISCARD RBIPC_LEAF
+int rbipc_set_eventfd(rbipc_ring_t * RBIPC_RESTRICT ring, int event_fd);
+
+/**
+ * @brief Retrieve the currently bound eventfd file descriptor from the ring buffer handle.
+ *
+ * @param[in]  ring   Ring buffer handle.
+ * @param[out] out_fd Pointer receiving the bound eventfd descriptor.
+ *
+ * @return @ref RBIPC_OK if an eventfd is bound and descriptor returned.
+ * @retval RBIPC_ERR_INVAL if arguments are null.
+ * @retval RBIPC_ERR_NOTSUP if no eventfd is currently bound to the ring handle.
+ */
+RBIPC_NODISCARD RBIPC_LEAF
+int rbipc_get_eventfd(const rbipc_ring_t * RBIPC_RESTRICT ring, int * RBIPC_RESTRICT out_fd);
+
+/**
+ * @brief Drain accumulated counter notifications from the bound eventfd.
+ *
+ * @param[in] ring Ring buffer handle with bound eventfd.
+ *
+ * @return @ref RBIPC_OK on success.
+ * @retval RBIPC_ERR_INVAL if ring is null.
+ * @retval RBIPC_ERR_NOTSUP if no eventfd is bound.
+ */
+RBIPC_NODISCARD RBIPC_LEAF
+int rbipc_eventfd_drain(const rbipc_ring_t * RBIPC_RESTRICT ring);
 
 /**
  * @brief Retrieve underlying shared memory file descriptor.

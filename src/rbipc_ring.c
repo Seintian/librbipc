@@ -132,6 +132,8 @@ rbipc_ring_t *rbipc_ring_alloc_handle(int fd, const char * RBIPC_RESTRICT name,
     ring->roles = roles;
     ring->is_creator = is_creator;
     ring->cached_pid = getpid();
+    ring->event_fd = -1;
+    ring->owns_eventfd = false;
 
     return ring;
 }
@@ -443,7 +445,76 @@ int rbipc_signal_shutdown(rbipc_ring_t *ring) {
     atomic_store_explicit(&ring->hdr->shutdown_flag, 1, memory_order_release);
     rbipc_sync_wake_all(&ring->hdr->futex_seq, &ring->hdr->futex_waiters);
     rbipc_sync_wake_all(&ring->hdr->write_futex_seq, &ring->hdr->write_waiters);
+    rbipc_ring_signal_eventfd(ring);
     return RBIPC_OK;
+}
+
+int rbipc_enable_eventfd(rbipc_ring_t * RBIPC_RESTRICT ring, int * RBIPC_RESTRICT out_fd) {
+    if (RBIPC_UNLIKELY(!ring || !out_fd)) {
+        return RBIPC_ERR_INVAL;
+    }
+    if (ring->event_fd >= 0) {
+        *out_fd = ring->event_fd;
+        return RBIPC_OK;
+    }
+    int fd = eventfd(0, EFD_NONBLOCK | EFD_CLOEXEC);
+    if (RBIPC_UNLIKELY(fd < 0)) {
+        return RBIPC_ERR_SYS;
+    }
+    ring->event_fd = fd;
+    ring->owns_eventfd = true;
+    if (ring->hdr) {
+        atomic_fetch_add_explicit(&ring->hdr->eventfd_waiters, 1, memory_order_release);
+    }
+    *out_fd = fd;
+    return RBIPC_OK;
+}
+
+int rbipc_set_eventfd(rbipc_ring_t * RBIPC_RESTRICT ring, int event_fd) {
+    if (RBIPC_UNLIKELY(!ring || event_fd < 0)) {
+        return RBIPC_ERR_INVAL;
+    }
+    if (ring->event_fd >= 0 && ring->owns_eventfd) {
+        if (ring->hdr) {
+            atomic_fetch_sub_explicit(&ring->hdr->eventfd_waiters, 1, memory_order_release);
+        }
+        close(ring->event_fd);
+    }
+    ring->event_fd = event_fd;
+    ring->owns_eventfd = false;
+    if (ring->hdr) {
+        atomic_fetch_add_explicit(&ring->hdr->eventfd_waiters, 1, memory_order_release);
+    }
+    return RBIPC_OK;
+}
+
+int rbipc_get_eventfd(const rbipc_ring_t * RBIPC_RESTRICT ring, int * RBIPC_RESTRICT out_fd) {
+    if (RBIPC_UNLIKELY(!ring || !out_fd)) {
+        return RBIPC_ERR_INVAL;
+    }
+    if (ring->event_fd < 0) {
+        return RBIPC_ERR_NOTSUP;
+    }
+    *out_fd = ring->event_fd;
+    return RBIPC_OK;
+}
+
+int rbipc_eventfd_drain(const rbipc_ring_t * RBIPC_RESTRICT ring) {
+    if (RBIPC_UNLIKELY(!ring)) {
+        return RBIPC_ERR_INVAL;
+    }
+    if (ring->event_fd < 0) {
+        return RBIPC_ERR_NOTSUP;
+    }
+    uint64_t val = 0;
+    ssize_t n = read(ring->event_fd, &val, sizeof(val));
+    if (n < 0) {
+        if (errno == EAGAIN || errno == EWOULDBLOCK) {
+            return RBIPC_OK;
+        }
+        return RBIPC_ERR_SYS;
+    }
+    return (n == sizeof(val)) ? RBIPC_OK : RBIPC_ERR_SYS;
 }
 
 /**

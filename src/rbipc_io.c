@@ -409,6 +409,7 @@ int rbipc_commit_write(rbipc_ring_t * RBIPC_RESTRICT ring, uint32_t ticket, uint
     if (RBIPC_UNLIKELY(rbipc_sync_has_waiters(&hdr->futex_waiters))) {
         rbipc_sync_wake_one(&hdr->futex_seq, &hdr->futex_waiters);
     }
+    rbipc_ring_signal_eventfd(ring);
 
     return RBIPC_OK;
 }
@@ -513,6 +514,7 @@ int rbipc_read_release(rbipc_ring_t * RBIPC_RESTRICT ring, uint32_t ticket) {
     if (RBIPC_UNLIKELY(rbipc_sync_has_waiters(&hdr->write_waiters))) {
         rbipc_sync_wake_one(&hdr->write_futex_seq, &hdr->write_waiters);
     }
+    rbipc_ring_signal_eventfd(ring);
 
     return RBIPC_OK;
 }
@@ -703,6 +705,7 @@ int rbipc_commit_write_batch(rbipc_ring_t * RBIPC_RESTRICT ring, uint32_t count,
     if (RBIPC_UNLIKELY(rbipc_sync_has_waiters(&hdr->futex_waiters))) {
         rbipc_sync_wake_n(&hdr->futex_seq, &hdr->futex_waiters, count);
     }
+    rbipc_ring_signal_eventfd(ring);
     return RBIPC_OK;
 }
 
@@ -884,5 +887,6 @@ int rbipc_read_release_batch(rbipc_ring_t * RBIPC_RESTRICT ring, uint32_t count,
     if (RBIPC_UNLIKELY(rbipc_sync_has_waiters(&hdr->write_waiters))) {
         rbipc_sync_wake_n(&hdr->write_futex_seq, &hdr->write_waiters, count);
     }
+    rbipc_ring_signal_eventfd(ring);
     return RBIPC_OK;
 }
