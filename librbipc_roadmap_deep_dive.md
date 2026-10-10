@@ -1,6 +1,6 @@
 # librbipc Engineering Roadmap: Comprehensive Technical Deep-Dive
 
-This document provides an exhaustive, low-level technical deep-dive into every item documented in [`ROADMAP.md`](file:///home/chrst/repos/librbipc/ROADMAP.md). For each point, it dissects the **underlying systems problem** (down to kernel syscalls, CPU memory orderings, cache coherence, and race windows) and expands the **concrete remediation** with algorithmic rationale and implementation architectures.
+This document provides an exhaustive, low-level technical deep-dive into every item documented in [`ROADMAP.md`](ROADMAP.md). For each point, it dissects the **underlying systems problem** (down to kernel syscalls, CPU memory orderings, cache coherence, and race windows) and expands the **concrete remediation** with algorithmic rationale and implementation architectures.
 
 ---
 
@@ -43,7 +43,7 @@ This document provides an exhaustive, low-level technical deep-dive into every i
 
 ### 1.1 Eliminate the Lost-Wakeup Race in Passive Waiter Elision
 
-* **Target Files**: [`src/rbipc_io.c`](file:///home/chrst/repos/librbipc/src/rbipc_io.c), [`src/rbipc_sync.c`](file:///home/chrst/repos/librbipc/src/rbipc_sync.c), [`src/rbipc_sync.h`](file:///home/chrst/repos/librbipc/src/rbipc_sync.h)
+* **Target Files**: [`src/rbipc_io.c`](src/rbipc_io.c), [`src/rbipc_sync.c`](src/rbipc_sync.c), [`src/rbipc_sync.h`](src/rbipc_sync.h)
 * **Severity**: Critical (P0)
 
 #### The Problem: Root Cause & Concurrency Mechanics
@@ -113,7 +113,7 @@ This is the classic **Store-Load Reordering / Dekker-style lost wakeup race**. T
 
 ### 1.2 Implement Dead-Peer Crash Recovery in the B-Queue Batch API
 
-* **Target Files**: [`src/rbipc_io.c#L634-L670`](file:///home/chrst/repos/librbipc/src/rbipc_io.c#L634-L670), [`src/rbipc_slot.c`](file:///home/chrst/repos/librbipc/src/rbipc_slot.c)
+* **Target Files**: [`src/rbipc_io.c#L634-L670`](src/rbipc_io.c#L634-L670), [`src/rbipc_slot.c`](src/rbipc_slot.c)
 * **Severity**: Critical (P0)
 
 #### The Problem: Root Cause & Concurrency Mechanics
@@ -169,7 +169,7 @@ When a consumer calls `rbipc_read_acquire_batch`:
 
 ### 1.3 Implement Consumer Crash Recovery & Bidirectional Liveness Tracking
 
-* **Target Files**: [`include/rbipc.h`](file:///home/chrst/repos/librbipc/include/rbipc.h), [`src/rbipc_slot.h`](file:///home/chrst/repos/librbipc/src/rbipc_slot.h), [`src/rbipc_slot.c`](file:///home/chrst/repos/librbipc/src/rbipc_slot.c), [`src/rbipc_io.c`](file:///home/chrst/repos/librbipc/src/rbipc_io.c)
+* **Target Files**: [`include/rbipc.h`](include/rbipc.h), [`src/rbipc_slot.h`](src/rbipc_slot.h), [`src/rbipc_slot.c`](src/rbipc_slot.c), [`src/rbipc_io.c`](src/rbipc_io.c)
 * **Severity**: Critical (P0)
 
 #### The Problem: Root Cause & Concurrency Mechanics
@@ -231,7 +231,7 @@ Notice that `producer_pid` is tracked, but **`consumer_pid` is entirely absent**
 
 ### 1.4 Close the Dead-Producer Ticket-Hole Allocation Race
 
-* **Target Files**: [`src/rbipc_io.c#L255-L259`](file:///home/chrst/repos/librbipc/src/rbipc_io.c#L255-L259), [`src/rbipc_slot.c`](file:///home/chrst/repos/librbipc/src/rbipc_slot.c)
+* **Target Files**: [`src/rbipc_io.c#L255-L259`](src/rbipc_io.c#L255-L259), [`src/rbipc_slot.c`](src/rbipc_slot.c)
 * **Severity**: High (P0)
 
 #### The Problem: Root Cause & Concurrency Mechanics
@@ -299,7 +299,7 @@ If the producer process is killed **immediately after the CAS succeeds in `try_c
 
 ### 1.5 Prevent Destructive `shm_unlink` in `rbipc_create`
 
-* **Target Files**: [`src/rbipc_shm.c#L157-L170`](file:///home/chrst/repos/librbipc/src/rbipc_shm.c#L157-L170), [`include/rbipc.h`](file:///home/chrst/repos/librbipc/include/rbipc.h)
+* **Target Files**: [`src/rbipc_shm.c#L157-L170`](src/rbipc_shm.c#L157-L170), [`include/rbipc.h`](include/rbipc.h)
 * **Severity**: High (P0)
 
 #### The Problem: Root Cause & Concurrency Mechanics
@@ -345,7 +345,7 @@ int fd = shm_open(name, O_CREAT | O_EXCL | O_RDWR, RBIPC_SHM_MODE);
 
 ### 1.6 Proportional Wakeup Dispatch for Vector Batch Operations
 
-* **Target Files**: [`src/rbipc_io.c#L568-L571`](file:///home/chrst/repos/librbipc/src/rbipc_io.c#L568-L571), [`src/rbipc_io.c#L703-L705`](file:///home/chrst/repos/librbipc/src/rbipc_io.c#L703-L705), [`src/rbipc_sync.c`](file:///home/chrst/repos/librbipc/src/rbipc_sync.c)
+* **Target Files**: [`src/rbipc_io.c#L568-L571`](src/rbipc_io.c#L568-L571), [`src/rbipc_io.c#L703-L705`](src/rbipc_io.c#L703-L705), [`src/rbipc_sync.c`](src/rbipc_sync.c)
 * **Severity**: Medium (P0)
 
 #### The Problem: Root Cause & Concurrency Mechanics
@@ -399,7 +399,7 @@ A producer commits a batch of 64 messages via `rbipc_commit_write_batch`:
 
 ### 2.1 Resolve the Double-Mapping Mirror Paradox
 
-* **Target Files**: [`src/rbipc_vmem.c`](file:///home/chrst/repos/librbipc/src/rbipc_vmem.c), [`src/rbipc_vmem.h`](file:///home/chrst/repos/librbipc/src/rbipc_vmem.h), [`src/rbipc_io.h`](file:///home/chrst/repos/librbipc/src/rbipc_io.h), [`src/rbipc_shm.c`](file:///home/chrst/repos/librbipc/src/rbipc_shm.c)
+* **Target Files**: [`src/rbipc_vmem.c`](src/rbipc_vmem.c), [`src/rbipc_vmem.h`](src/rbipc_vmem.h), [`src/rbipc_io.h`](src/rbipc_io.h), [`src/rbipc_shm.c`](src/rbipc_shm.c)
 * **Severity**: Structural / Performance (P1)
 
 #### The Problem: Architectural Incoherence
@@ -440,7 +440,7 @@ RBIPC_INLINE RBIPC_PURE void *rbipc_io_calc_slot_ptr(const rbipc_ring_t *ring, u
 
 ### 2.2 Decouple Participant Roles from Creator Status
 
-* **Target Files**: [`include/rbipc.h`](file:///home/chrst/repos/librbipc/include/rbipc.h), [`src/rbipc_ring.c`](file:///home/chrst/repos/librbipc/src/rbipc_ring.c)
+* **Target Files**: [`include/rbipc.h`](include/rbipc.h), [`src/rbipc_ring.c`](src/rbipc_ring.c)
 * **Severity**: Architecture & Telemetry (P1)
 
 #### The Problem: Structural Incoherence
@@ -495,7 +495,7 @@ In production microservices and aerospace systems, the process initializing shar
 
 ### 2.3 Align Benchmark Comparisons & Formalize Delivery Semantics
 
-* **Target Files**: [`BENCHMARK_ICEORYX2_COMPARISON.md`](file:///home/chrst/repos/librbipc/BENCHMARK_ICEORYX2_COMPARISON.md), [`README.md`](file:///home/chrst/repos/librbipc/README.md)
+* **Target Files**: [`BENCHMARK_ICEORYX2_COMPARISON.md`](BENCHMARK_ICEORYX2_COMPARISON.md), [`README.md`](README.md)
 * **Severity**: Architectural Classification (P1)
 
 #### The Problem: Incoherent Benchmark Baselines
@@ -524,7 +524,7 @@ In `BENCHMARK_ICEORYX2_COMPARISON.md`, `librbipc` is benchmarked directly agains
 
 ### 2.4 Clarify File Sealing Limitations on POSIX Shared Memory
 
-* **Target Files**: [`src/rbipc_shm.c#L221-L232`](file:///home/chrst/repos/librbipc/src/rbipc_shm.c#L221-L232), [`README.md`](file:///home/chrst/repos/librbipc/README.md), [`include/rbipc.h`](file:///home/chrst/repos/librbipc/include/rbipc.h)
+* **Target Files**: [`src/rbipc_shm.c#L221-L232`](src/rbipc_shm.c#L221-L232), [`README.md`](README.md), [`include/rbipc.h`](include/rbipc.h)
 * **Severity**: Security / Integrity (P1)
 
 #### The Problem: Silent Syscall Failure
@@ -560,7 +560,7 @@ On standard POSIX shared memory descriptors opened with `shm_open()` (which resi
 
 ### 2.5 Eliminate Empty Header: `rbipc_error.h`
 
-* **Target Files**: [`src/rbipc_error.h`](file:///home/chrst/repos/librbipc/src/rbipc_error.h)
+* **Target Files**: [`src/rbipc_error.h`](src/rbipc_error.h)
 * **Severity**: Hygiene (P1)
 
 #### The Problem & Suggestion
@@ -580,7 +580,7 @@ On standard POSIX shared memory descriptors opened with `shm_open()` (which resi
 
 ### 3.1 Complete the B-Queue Vector Batch API Matrix
 
-* **Target Files**: [`include/rbipc.h`](file:///home/chrst/repos/librbipc/include/rbipc.h), [`src/rbipc_io.c`](file:///home/chrst/repos/librbipc/src/rbipc_io.c)
+* **Target Files**: [`include/rbipc.h`](include/rbipc.h), [`src/rbipc_io.c`](src/rbipc_io.c)
 * **Severity**: API Ergonomics (P1)
 
 #### The Problem
@@ -616,7 +616,7 @@ int rbipc_read_acquire_batch_timeout(rbipc_ring_t *ring, uint32_t count, uint64_
 
 ### 3.2 Asynchronous Event Loop & Reactor Integration (`eventfd`, `epoll`, `io_uring`)
 
-* **Target Files**: [`include/rbipc.h`](file:///home/chrst/repos/librbipc/include/rbipc.h), [`src/rbipc_ring.c`](file:///home/chrst/repos/librbipc/src/rbipc_ring.c), [`src/rbipc_io.c`](file:///home/chrst/repos/librbipc/src/rbipc_io.c)
+* **Target Files**: [`include/rbipc.h`](include/rbipc.h), [`src/rbipc_ring.c`](src/rbipc_ring.c), [`src/rbipc_io.c`](src/rbipc_io.c)
 * **Severity**: Systems Integration (P1)
 
 #### The Problem
@@ -644,7 +644,7 @@ Because a futex operates on raw userspace memory words and does not provide a fi
 
 ### 3.3 64-Bit Monotonic Sequence Numbers (Eliminate 112s Wrap-Around)
 
-* **Target Files**: [`include/rbipc.h`](file:///home/chrst/repos/librbipc/include/rbipc.h), [`src/rbipc_math.h`](file:///home/chrst/repos/librbipc/src/rbipc_math.h), [`src/rbipc_io.c`](file:///home/chrst/repos/librbipc/src/rbipc_io.c), [`src/rbipc_slot.h`](file:///home/chrst/repos/librbipc/src/rbipc_slot.h)
+* **Target Files**: [`include/rbipc.h`](include/rbipc.h), [`src/rbipc_math.h`](src/rbipc_math.h), [`src/rbipc_io.c`](src/rbipc_io.c), [`src/rbipc_slot.h`](src/rbipc_slot.h)
 * **Severity**: High / Architecture (P1)
 
 #### The Problem: Wrap-Around at High Throughput
@@ -674,7 +674,7 @@ While modular sequence comparison ($A - B < 2^{31}$) handles continuous processi
 
 ### 3.4 Robust Process Auditing via Linux `pidfd_open`
 
-* **Target Files**: [`src/rbipc_slot.c#L48-L55`](file:///home/chrst/repos/librbipc/src/rbipc_slot.c#L48-L55), [`src/rbipc_slot.h`](file:///home/chrst/repos/librbipc/src/rbipc_slot.h)
+* **Target Files**: [`src/rbipc_slot.c#L48-L55`](src/rbipc_slot.c#L48-L55), [`src/rbipc_slot.h`](src/rbipc_slot.h)
 * **Severity**: Crash Recovery Reliability (P1)
 
 #### The Problem: Pitfalls of `kill(pid, 0)`
@@ -707,7 +707,7 @@ bool rbipc_slot_is_peer_alive(pid_t pid) {
 
 ### 3.5 Configurable Shared Memory Permissions & umask Enforcement
 
-* **Target Files**: [`src/rbipc_shm.c#L163`](file:///home/chrst/repos/librbipc/src/rbipc_shm.c#L163), [`include/rbipc.h`](file:///home/chrst/repos/librbipc/include/rbipc.h)
+* **Target Files**: [`src/rbipc_shm.c#L163`](src/rbipc_shm.c#L163), [`include/rbipc.h`](include/rbipc.h)
 * **Severity**: Security & Access Control (P1)
 
 #### The Problem
@@ -761,7 +761,7 @@ Enables seamless one-line descriptor passing for secure anonymous rings.
 
 ### 3.7 Consumer Lease Timeouts (Head-of-Line Blocking Mitigation)
 
-* **Target Files**: [`src/rbipc_io.c`](file:///home/chrst/repos/librbipc/src/rbipc_io.c), [`include/rbipc.h`](file:///home/chrst/repos/librbipc/include/rbipc.h)
+* **Target Files**: [`src/rbipc_io.c`](src/rbipc_io.c), [`include/rbipc.h`](include/rbipc.h)
 * **Severity**: Latency SLA & Resilience (P2)
 
 #### The Problem: Head-of-Line Blocking
@@ -811,7 +811,7 @@ Providing an optional pub/sub mode allows `librbipc` to serve both work-distribu
 
 ### 4.1 Adaptive Two-Phase Spin-Then-Wait Backoff Engine
 
-* **Target Files**: [`src/rbipc_sync.c`](file:///home/chrst/repos/librbipc/src/rbipc_sync.c), [`src/rbipc_sync.h`](file:///home/chrst/repos/librbipc/src/rbipc_sync.h)
+* **Target Files**: [`src/rbipc_sync.c`](src/rbipc_sync.c), [`src/rbipc_sync.h`](src/rbipc_sync.h)
 * **Severity**: Micro-latency Optimization (P2)
 
 #### The Problem: The Cost of Immediate Futex Sleep
@@ -838,7 +838,7 @@ Implement a hybrid backoff:
 
 ### 4.2 SIMD/Vectorized Batch Slot Vacancy & Readiness Scanning
 
-* **Target Files**: [`src/rbipc_io.c#L425-L439`](file:///home/chrst/repos/librbipc/src/rbipc_io.c#L425-L439), [`src/rbipc_io.c#L583-L597`](file:///home/chrst/repos/librbipc/src/rbipc_io.c#L583-L597)
+* **Target Files**: [`src/rbipc_io.c#L425-L439`](src/rbipc_io.c#L425-L439), [`src/rbipc_io.c#L583-L597`](src/rbipc_io.c#L583-L597)
 * **Severity**: Cacheline & Vectorization Efficiency (P2)
 
 #### The Problem: Cacheline Hopping in Array-of-Structures
@@ -873,7 +873,7 @@ In `rbipc_io_scan_vacant_slots` and `rbipc_io_scan_ready_slots`:
 
 ### 4.3 Cache-Bypassing Non-Temporal Streaming Stores for Large Payloads
 
-* **Target Files**: [`src/rbipc_io.c`](file:///home/chrst/repos/librbipc/src/rbipc_io.c)
+* **Target Files**: [`src/rbipc_io.c`](src/rbipc_io.c)
 * **Severity**: Memory Hierarchy Efficiency (P2)
 
 #### The Problem: Cache Pollution on Large Payloads
@@ -900,7 +900,7 @@ Non-temporal stores bypass CPU cache hierarchies entirely and stream writes dire
 
 ### 5.1 ThreadSanitizer & AddressSanitizer Targets in Makefile
 
-* **Target Files**: [`Makefile`](file:///home/chrst/repos/librbipc/Makefile)
+* **Target Files**: [`Makefile`](Makefile)
 * **Severity**: Verification & Testing (P0)
 
 #### The Problem
