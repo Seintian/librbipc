@@ -680,6 +680,33 @@ int rbipc_reserve_write_batch(rbipc_ring_t * RBIPC_RESTRICT ring, uint32_t count
                               rbipc_iovec_t * RBIPC_RESTRICT iovecs, uint32_t * RBIPC_RESTRICT out_reserved);
 
 /**
+ * @brief Reserve a batch of contiguous slots non-blocking (Zero-Copy, B-Queue Batching).
+ *
+ * @param[in,out] ring         Ring buffer handle.
+ * @param[in]     count        Requested slot count.
+ * @param[out]    iovecs       Caller-allocated vector buffer.
+ * @param[out]    out_reserved Pointer receiving reserved count.
+ * @return RBIPC_OK on success, RBIPC_ERR_FULL if no slots available immediately.
+ */
+RBIPC_NODISCARD RBIPC_HOT RBIPC_LEAF
+int rbipc_reserve_write_batch_nonblock(rbipc_ring_t * RBIPC_RESTRICT ring, uint32_t count,
+                                       rbipc_iovec_t * RBIPC_RESTRICT iovecs, uint32_t * RBIPC_RESTRICT out_reserved);
+
+/**
+ * @brief Reserve a batch of contiguous slots with timeout (Zero-Copy, B-Queue Batching).
+ *
+ * @param[in,out] ring         Ring buffer handle.
+ * @param[in]     count        Requested slot count.
+ * @param[in]     timeout_ns   Timeout in nanoseconds (0 = non-blocking, UINT64_MAX = blocking).
+ * @param[out]    iovecs       Caller-allocated vector buffer.
+ * @param[out]    out_reserved Pointer receiving reserved count.
+ * @return RBIPC_OK on success, RBIPC_ERR_TIMEOUT on expiry, RBIPC_ERR_FULL if nonblock full.
+ */
+RBIPC_NODISCARD RBIPC_HOT RBIPC_LEAF
+int rbipc_reserve_write_batch_timeout(rbipc_ring_t * RBIPC_RESTRICT ring, uint32_t count, uint64_t timeout_ns,
+                                      rbipc_iovec_t * RBIPC_RESTRICT iovecs, uint32_t * RBIPC_RESTRICT out_reserved);
+
+/**
  * @brief Commit a batch of previously reserved slots.
  *
  * @details Publishes multiple reserved slots to consumers in ticket order, triggering a
@@ -718,6 +745,33 @@ int rbipc_commit_write_batch(rbipc_ring_t * RBIPC_RESTRICT ring, uint32_t count,
 RBIPC_NODISCARD RBIPC_HOT RBIPC_LEAF
 int rbipc_read_acquire_batch(rbipc_ring_t * RBIPC_RESTRICT ring, uint32_t count,
                              rbipc_rovec_t * RBIPC_RESTRICT rovecs, uint32_t * RBIPC_RESTRICT out_acquired);
+
+/**
+ * @brief Acquire a batch of committed messages non-blocking (Zero-Copy, B-Queue Batching).
+ *
+ * @param[in,out] ring         Ring buffer handle.
+ * @param[in]     count        Maximum number of messages to acquire.
+ * @param[out]    rovecs       Caller-provided array of at least @p count vector descriptors.
+ * @param[out]    out_acquired Pointer receiving number of messages successfully acquired.
+ * @return RBIPC_OK on success, RBIPC_ERR_EMPTY if no messages available immediately.
+ */
+RBIPC_NODISCARD RBIPC_HOT RBIPC_LEAF
+int rbipc_read_acquire_batch_nonblock(rbipc_ring_t * RBIPC_RESTRICT ring, uint32_t count,
+                                      rbipc_rovec_t * RBIPC_RESTRICT rovecs, uint32_t * RBIPC_RESTRICT out_acquired);
+
+/**
+ * @brief Acquire a batch of committed messages with timeout (Zero-Copy, B-Queue Batching).
+ *
+ * @param[in,out] ring         Ring buffer handle.
+ * @param[in]     count        Maximum number of messages to acquire.
+ * @param[in]     timeout_ns   Timeout in nanoseconds (0 = non-blocking, UINT64_MAX = blocking).
+ * @param[out]    rovecs       Caller-provided array of at least @p count vector descriptors.
+ * @param[out]    out_acquired Pointer receiving number of messages successfully acquired.
+ * @return RBIPC_OK on success, RBIPC_ERR_TIMEOUT on expiry, RBIPC_ERR_EMPTY if nonblock empty.
+ */
+RBIPC_NODISCARD RBIPC_HOT RBIPC_LEAF
+int rbipc_read_acquire_batch_timeout(rbipc_ring_t * RBIPC_RESTRICT ring, uint32_t count, uint64_t timeout_ns,
+                                     rbipc_rovec_t * RBIPC_RESTRICT rovecs, uint32_t * RBIPC_RESTRICT out_acquired);
 
 /**
  * @brief Release a batch of consumed slots back to the ring buffer.

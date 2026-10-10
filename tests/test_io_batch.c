@@ -155,10 +155,72 @@ static void test_batch_roundtrip(void) {
     rbipc_destroy(BATCH_RING_NAME);
 }
 
+static void test_batch_nonblock_and_timeout(void) {
+    rbipc_destroy(BATCH_RING_NAME);
+
+    rbipc_ring_t *ring = NULL;
+    int rc = rbipc_create(BATCH_RING_NAME, BATCH_CAPACITY, BATCH_SLOT_SIZE, &ring);
+    assert(rc == RBIPC_OK);
+
+    rbipc_rovec_t rovecs[16];
+    uint32_t acquired = 0;
+    rbipc_iovec_t iovecs[BATCH_CAPACITY];
+    uint32_t reserved = 0;
+
+    /* 1. On empty ring, nonblock acquire must return RBIPC_ERR_EMPTY */
+    assert(rbipc_read_acquire_batch_nonblock(ring, 4, rovecs, &acquired) == RBIPC_ERR_EMPTY);
+
+    /* 2. On empty ring, timeout acquire with 1ms timeout must return RBIPC_ERR_TIMEOUT */
+    assert(rbipc_read_acquire_batch_timeout(ring, 4, 1000000ULL, rovecs, &acquired) == RBIPC_ERR_TIMEOUT);
+
+    /* 3. Reserve entire buffer using batch nonblock */
+    rc = rbipc_reserve_write_batch_nonblock(ring, BATCH_CAPACITY, iovecs, &reserved);
+    assert(rc == RBIPC_OK);
+    assert(reserved == BATCH_CAPACITY);
+
+    /* 4. When full, nonblock write must return RBIPC_ERR_FULL */
+    assert(rbipc_reserve_write_batch_nonblock(ring, 1, iovecs, &reserved) == RBIPC_ERR_FULL);
+
+    /* 5. When full, timeout write with 1ms timeout must return RBIPC_ERR_TIMEOUT */
+    assert(rbipc_reserve_write_batch_timeout(ring, 1, 1000000ULL, iovecs, &reserved) == RBIPC_ERR_TIMEOUT);
+
+    /* 6. Commit all reserved slots */
+    uint32_t tickets[BATCH_CAPACITY];
+    uint32_t lens[BATCH_CAPACITY];
+    for (uint32_t i = 0; i < BATCH_CAPACITY; ++i) {
+        tickets[i] = iovecs[i].ticket;
+        lens[i] = 16;
+    }
+    assert(rbipc_commit_write_batch(ring, BATCH_CAPACITY, tickets, lens) == RBIPC_OK);
+
+    /* 7. Acquire using batch timeout */
+    rc = rbipc_read_acquire_batch_timeout(ring, 16, 1000000ULL, rovecs, &acquired);
+    assert(rc == RBIPC_OK);
+    assert(acquired == 16);
+
+    uint32_t rel_tickets[16];
+    for (uint32_t i = 0; i < 16; ++i) {
+        rel_tickets[i] = rovecs[i].ticket;
+    }
+    assert(rbipc_read_release_batch(ring, 16, rel_tickets) == RBIPC_OK);
+
+    /* Clean up remaining unread */
+    rc = rbipc_read_acquire_batch_nonblock(ring, BATCH_CAPACITY, rovecs, &acquired);
+    assert(rc == RBIPC_OK);
+    for (uint32_t i = 0; i < acquired; ++i) {
+        rel_tickets[i] = rovecs[i].ticket;
+    }
+    assert(rbipc_read_release_batch(ring, acquired, rel_tickets) == RBIPC_OK);
+
+    rbipc_detach(ring);
+    rbipc_destroy(BATCH_RING_NAME);
+}
+
 int main(void) {
     printf("[test_io_batch] Running B-Queue batching tests...\n");
     test_batch_validation();
     test_batch_roundtrip();
+    test_batch_nonblock_and_timeout();
     printf("[test_io_batch] All tests passed!\n");
     return 0;
 }

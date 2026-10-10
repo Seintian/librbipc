@@ -581,8 +581,10 @@ static void rbipc_io_populate_reserved_batch(rbipc_ring_t * RBIPC_RESTRICT ring,
  * @brief Reserves a contiguous batch of slots for writing using vector descriptors.
  * @details Claims up to @p count contiguous vacant slots in a single atomic CAS operation.
  */
-int rbipc_reserve_write_batch(rbipc_ring_t * RBIPC_RESTRICT ring, uint32_t count,
-                              rbipc_iovec_t * RBIPC_RESTRICT iovecs, uint32_t * RBIPC_RESTRICT out_reserved) {
+int rbipc_reserve_write_batch_timeout(rbipc_ring_t * RBIPC_RESTRICT ring, uint32_t count,
+                                      uint64_t timeout_ns,
+                                      rbipc_iovec_t * RBIPC_RESTRICT iovecs,
+                                      uint32_t * RBIPC_RESTRICT out_reserved) {
     if (RBIPC_UNLIKELY(!ring || !ring->hdr || !iovecs || !out_reserved || count == 0)) {
         return RBIPC_ERR_INVAL;
     }
@@ -595,7 +597,7 @@ int rbipc_reserve_write_batch(rbipc_ring_t * RBIPC_RESTRICT ring, uint32_t count
     uint32_t t = atomic_load_explicit(&hdr->write_ticket, memory_order_relaxed);
 
     rbipc_sync_state_t sync_state;
-    rbipc_sync_state_init(&sync_state, UINT64_MAX);
+    rbipc_sync_state_init(&sync_state, timeout_ns);
 
     rbipc_slot_t *slots = (rbipc_slot_t *)RBIPC_ASSUME_ALIGNED(ring->slots, RBIPC_CACHE_LINE);
 
@@ -613,6 +615,9 @@ int rbipc_reserve_write_batch(rbipc_ring_t * RBIPC_RESTRICT ring, uint32_t count
                 return RBIPC_OK;
             }
         } else {
+            if (timeout_ns == 0) {
+                return RBIPC_ERR_FULL;
+            }
             rbipc_sync_register_waiter(&hdr->write_waiters);
             rbipc_io_audit_and_recover_dead_consumer_range(hdr, slots, t, count);
             avail = rbipc_io_scan_vacant_slots(ring, t, count);
@@ -627,6 +632,16 @@ int rbipc_reserve_write_batch(rbipc_ring_t * RBIPC_RESTRICT ring, uint32_t count
             t = atomic_load_explicit(&hdr->write_ticket, memory_order_relaxed);
         }
     }
+}
+
+int rbipc_reserve_write_batch(rbipc_ring_t * RBIPC_RESTRICT ring, uint32_t count,
+                              rbipc_iovec_t * RBIPC_RESTRICT iovecs, uint32_t * RBIPC_RESTRICT out_reserved) {
+    return rbipc_reserve_write_batch_timeout(ring, count, UINT64_MAX, iovecs, out_reserved);
+}
+
+int rbipc_reserve_write_batch_nonblock(rbipc_ring_t * RBIPC_RESTRICT ring, uint32_t count,
+                                       rbipc_iovec_t * RBIPC_RESTRICT iovecs, uint32_t * RBIPC_RESTRICT out_reserved) {
+    return rbipc_reserve_write_batch_timeout(ring, count, 0, iovecs, out_reserved);
 }
 
 /**
@@ -752,8 +767,10 @@ static void rbipc_io_populate_acquired_batch(const rbipc_ring_t * RBIPC_RESTRICT
 /**
  * @brief Acquires a contiguous batch of committed slots for reading using vector descriptors.
  */
-int rbipc_read_acquire_batch(rbipc_ring_t * RBIPC_RESTRICT ring, uint32_t count,
-                             rbipc_rovec_t * RBIPC_RESTRICT rovecs, uint32_t * RBIPC_RESTRICT out_acquired) {
+int rbipc_read_acquire_batch_timeout(rbipc_ring_t * RBIPC_RESTRICT ring, uint32_t count,
+                                     uint64_t timeout_ns,
+                                     rbipc_rovec_t * RBIPC_RESTRICT rovecs,
+                                     uint32_t * RBIPC_RESTRICT out_acquired) {
     if (RBIPC_UNLIKELY(!ring || !ring->hdr || !rovecs || !out_acquired || count == 0)) {
         return RBIPC_ERR_INVAL;
     }
@@ -766,7 +783,7 @@ int rbipc_read_acquire_batch(rbipc_ring_t * RBIPC_RESTRICT ring, uint32_t count,
     uint32_t t = atomic_load_explicit(&hdr->read_ticket, memory_order_relaxed);
 
     rbipc_sync_state_t sync_state;
-    rbipc_sync_state_init(&sync_state, UINT64_MAX);
+    rbipc_sync_state_init(&sync_state, timeout_ns);
 
     rbipc_slot_t *slots = (rbipc_slot_t *)RBIPC_ASSUME_ALIGNED(ring->slots, RBIPC_CACHE_LINE);
 
@@ -782,6 +799,9 @@ int rbipc_read_acquire_batch(rbipc_ring_t * RBIPC_RESTRICT ring, uint32_t count,
         } else {
             if (RBIPC_UNLIKELY(rbipc_ring_is_drained_on_shutdown(hdr, t))) {
                 return RBIPC_ERR_SHUTDOWN;
+            }
+            if (timeout_ns == 0) {
+                return RBIPC_ERR_EMPTY;
             }
 
             rbipc_sync_register_waiter(&hdr->futex_waiters);
@@ -817,6 +837,16 @@ int rbipc_read_acquire_batch(rbipc_ring_t * RBIPC_RESTRICT ring, uint32_t count,
             t = atomic_load_explicit(&hdr->read_ticket, memory_order_relaxed);
         }
     }
+}
+
+int rbipc_read_acquire_batch(rbipc_ring_t * RBIPC_RESTRICT ring, uint32_t count,
+                             rbipc_rovec_t * RBIPC_RESTRICT rovecs, uint32_t * RBIPC_RESTRICT out_acquired) {
+    return rbipc_read_acquire_batch_timeout(ring, count, UINT64_MAX, rovecs, out_acquired);
+}
+
+int rbipc_read_acquire_batch_nonblock(rbipc_ring_t * RBIPC_RESTRICT ring, uint32_t count,
+                                      rbipc_rovec_t * RBIPC_RESTRICT rovecs, uint32_t * RBIPC_RESTRICT out_acquired) {
+    return rbipc_read_acquire_batch_timeout(ring, count, 0, rovecs, out_acquired);
 }
 
 /**
