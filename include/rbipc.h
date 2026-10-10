@@ -193,6 +193,8 @@ typedef struct {
     _Atomic uint32_t state;                                  /**< Slot lifecycle state, represented by @ref rbipc_slot_state. */
     _Atomic uint32_t producer_pid;                           /**< Process ID of the reserving producer (for ESRCH crash detection). */
     _Atomic uint32_t len;                                    /**< Valid committed byte length of the written payload. */
+    _Atomic uint32_t consumer_pid;                           /**< Process ID of acquiring consumer (for crash recovery). */
+    _Atomic uint64_t acquire_timestamp_ns;                   /**< Monotonic timestamp in nanoseconds when slot was acquired. */
 } rbipc_slot_t;
 
 /**

@@ -92,6 +92,30 @@ bool rbipc_slot_poison(rbipc_slot_t *slot, uint32_t ticket);
  * @param[in]     ticket   Acquired ticket number being released.
  * @param[in]     capacity Total ring buffer capacity (turn step distance).
  */
+/**
+ * @brief Stamp slot with consumer ownership on acquisition.
+ *
+ * @param[in,out] slot         Direct pointer to slot descriptor.
+ * @param[in]     pid          Process identifier of acquiring consumer.
+ * @param[in]     timestamp_ns Monotonic timestamp in nanoseconds.
+ */
+RBIPC_LEAF
+void rbipc_slot_mark_acquired(rbipc_slot_t *slot, pid_t pid, uint64_t timestamp_ns);
+
+/**
+ * @brief Recovers an unreleased slot held by a dead consumer peer.
+ *
+ * @details If holding consumer PID is dead, resets slot state to EMPTY,
+ * clears consumer/producer fields, and advances slot sequence to make it vacant.
+ *
+ * @param[in,out] slot   Direct pointer to slot descriptor.
+ * @param[in]     ticket Producer ticket attempting to claim this slot.
+ *
+ * @return true if slot was recovered from dead consumer; false otherwise.
+ */
+RBIPC_LEAF
+bool rbipc_slot_recover_dead_consumer(rbipc_slot_t *slot, uint32_t ticket);
+
 RBIPC_LEAF
 void rbipc_slot_release(rbipc_slot_t *slot, uint32_t ticket, uint32_t capacity);
 

@@ -33,6 +33,8 @@ RBIPC_INLINE void rbipc_slot_init_single(rbipc_slot_t *slot, uint32_t index) {
     atomic_init(&slot->state, RBIPC_SLOT_EMPTY);
     atomic_init(&slot->producer_pid, 0);
     atomic_init(&slot->len, 0);
+    atomic_init(&slot->consumer_pid, 0);
+    atomic_init(&slot->acquire_timestamp_ns, 0);
 }
 
 RBIPC_LEAF
@@ -84,8 +86,33 @@ bool rbipc_slot_poison(rbipc_slot_t *slot, uint32_t ticket) {
 }
 
 RBIPC_LEAF
+void rbipc_slot_mark_acquired(rbipc_slot_t *slot, pid_t pid, uint64_t timestamp_ns) {
+    if (RBIPC_UNLIKELY(rbipc_is_null(slot))) return;
+    atomic_store_explicit(&slot->consumer_pid, (uint32_t)pid, memory_order_relaxed);
+    atomic_store_explicit(&slot->acquire_timestamp_ns, timestamp_ns, memory_order_relaxed);
+}
+
+RBIPC_LEAF
+bool rbipc_slot_recover_dead_consumer(rbipc_slot_t *slot, uint32_t ticket) {
+    if (RBIPC_UNLIKELY(rbipc_is_null(slot))) return false;
+    uint32_t cpid = atomic_load_explicit(&slot->consumer_pid, memory_order_relaxed);
+    if (cpid > 0 && !rbipc_slot_is_peer_alive((pid_t)cpid)) {
+        atomic_store_explicit(&slot->consumer_pid, 0, memory_order_relaxed);
+        atomic_store_explicit(&slot->producer_pid, 0, memory_order_relaxed);
+        atomic_store_explicit(&slot->acquire_timestamp_ns, 0, memory_order_relaxed);
+        atomic_store_explicit(&slot->len, 0, memory_order_relaxed);
+        atomic_store_explicit(&slot->state, RBIPC_SLOT_EMPTY, memory_order_release);
+        atomic_store_explicit(&slot->sequence, ticket, memory_order_release);
+        return true;
+    }
+    return false;
+}
+
+RBIPC_LEAF
 void rbipc_slot_release(rbipc_slot_t *slot, uint32_t ticket, uint32_t capacity) {
     if (RBIPC_UNLIKELY(rbipc_is_null(slot))) return;
+    atomic_store_explicit(&slot->consumer_pid, 0, memory_order_relaxed);
+    atomic_store_explicit(&slot->acquire_timestamp_ns, 0, memory_order_relaxed);
     atomic_store_explicit(&slot->state, RBIPC_SLOT_EMPTY, memory_order_release);
     /* Advance slot sequence by capacity to allow the next cycle turn */
     atomic_store_explicit(&slot->sequence, ticket + capacity, memory_order_release);

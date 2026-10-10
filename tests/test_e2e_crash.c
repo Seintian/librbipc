@@ -89,6 +89,62 @@ static void test_batch_crash_recovery(void) {
     rbipc_destroy(shm_name);
 }
 
+static void test_consumer_crash_recovery(void) {
+    const char *shm_name = "/rbipc_consumer_crash_test";
+    rbipc_destroy(shm_name);
+
+    rbipc_ring_t *ring = NULL;
+    int rc = rbipc_create(shm_name, 4, 64, &ring);
+    assert(rc == RBIPC_OK);
+
+    /* Producer writes 4 messages filling the ring */
+    for (uint32_t i = 0; i < 4; ++i) {
+        void *buf = NULL;
+        uint32_t ticket = 0;
+        rc = rbipc_reserve_write(ring, 16, &buf, &ticket);
+        assert(rc == RBIPC_OK);
+        assert(ticket == i);
+        snprintf((char *)buf, 16, "MSG_%u", i);
+        rc = rbipc_commit_write(ring, ticket, 16);
+        assert(rc == RBIPC_OK);
+    }
+
+    pid_t pid = fork();
+    if (pid == 0) {
+        rbipc_ring_t *child_ring = NULL;
+        int c_rc = rbipc_attach(shm_name, &child_ring);
+        assert(c_rc == RBIPC_OK);
+
+        const void *buf = NULL;
+        uint32_t len = 0;
+        uint32_t ticket = 0;
+        /* Child consumer acquires slot 0 (ticket 0) */
+        c_rc = rbipc_read_acquire(child_ring, &buf, &len, &ticket);
+        assert(c_rc == RBIPC_OK);
+        assert(ticket == 0);
+
+        /* Abruptly terminate holding acquired slot 0 without releasing */
+        kill(getpid(), SIGKILL);
+        _exit(1);
+    }
+
+    int status;
+    waitpid(pid, &status, 0);
+
+    /* Producer attempts to produce message 5 (ticket 4), which wraps to slot 0 */
+    void *w_buf = NULL;
+    uint32_t w_ticket = 0;
+    rc = rbipc_reserve_write(ring, 16, &w_buf, &w_ticket);
+    assert(rc == RBIPC_OK);
+    assert(w_ticket == 4);
+    strcpy((char *)w_buf, "RECOVERED_MSG");
+    rc = rbipc_commit_write(ring, w_ticket, 16);
+    assert(rc == RBIPC_OK);
+
+    rbipc_detach(ring);
+    rbipc_destroy(shm_name);
+}
+
 int main(void) {
     printf("[test_e2e_crash] Running dead-peer crash recovery test...\n");
     rbipc_destroy(TEST_CRASH_NAME);
@@ -153,6 +209,7 @@ int main(void) {
     rbipc_destroy(TEST_CRASH_NAME);
 
     test_batch_crash_recovery();
+    test_consumer_crash_recovery();
 
     printf("[test_e2e_crash] Dead-peer crash recovery test passed!\n");
     return 0;

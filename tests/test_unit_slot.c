@@ -19,6 +19,8 @@ static void test_slot_state_lifecycle(void) {
         assert(atomic_load(&slots[i].state) == RBIPC_SLOT_EMPTY);
         assert(atomic_load(&slots[i].producer_pid) == 0);
         assert(atomic_load(&slots[i].len) == 0);
+        assert(atomic_load(&slots[i].consumer_pid) == 0);
+        assert(atomic_load(&slots[i].acquire_timestamp_ns) == 0);
     }
 
     /* Reserve slot 0 */
@@ -36,6 +38,17 @@ static void test_slot_state_lifecycle(void) {
     rbipc_slot_release(&slots[0], 0, 4);
     assert(atomic_load(&slots[0].state) == RBIPC_SLOT_EMPTY);
     assert(atomic_load(&slots[0].sequence) == 4);
+
+    
+    /* Test mark acquired and consumer crash recovery */
+    rbipc_slot_mark_acquired(&slots[0], getpid(), 123456);
+    assert(atomic_load(&slots[0].consumer_pid) == (uint32_t)getpid());
+    assert(atomic_load(&slots[0].acquire_timestamp_ns) == 123456);
+
+    /* Release should clear consumer_pid and timestamp */
+    rbipc_slot_release(&slots[0], 0, 4);
+    assert(atomic_load(&slots[0].consumer_pid) == 0);
+    assert(atomic_load(&slots[0].acquire_timestamp_ns) == 0);
 
     /* Test Poison transition */
     rbipc_slot_mark_reserved(&slots[1], getpid());

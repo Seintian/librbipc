@@ -153,6 +153,31 @@ RBIPC_INLINE void rbipc_io_complete_write_reservation(rbipc_ring_t * RBIPC_RESTR
  * @retval RBIPC_ERR_FULL     Non-blocking mode and buffer is full.
  * @retval RBIPC_ERR_TIMEDOUT Timeout expired without available space.
  */
+static void rbipc_io_audit_and_recover_dead_consumer(rbipc_shm_header_t *hdr,
+                                                     rbipc_slot_t *slot,
+                                                     uint32_t ticket) {
+    if (rbipc_slot_recover_dead_consumer(slot, ticket)) {
+        atomic_thread_fence(memory_order_seq_cst);
+        rbipc_sync_wake_all(&hdr->write_futex_seq, &hdr->write_waiters);
+    }
+}
+
+static void rbipc_io_audit_and_recover_dead_consumer_range(rbipc_shm_header_t *hdr,
+                                                           rbipc_slot_t *slots,
+                                                           uint32_t t,
+                                                           uint32_t count) {
+    const uint32_t mask = hdr->capacity_mask;
+    for (uint32_t i = 0; i < count; ++i) {
+        uint32_t ticket_i = t + i;
+        rbipc_slot_t *slot_i = &slots[ticket_i & mask];
+        uint32_t seq = atomic_load_explicit(&slot_i->sequence, memory_order_acquire);
+        if (rbipc_slot_is_vacant(seq, ticket_i)) {
+            continue;
+        }
+        rbipc_io_audit_and_recover_dead_consumer(hdr, slot_i, ticket_i);
+    }
+}
+
 static int rbipc_io_handle_write_backoff(rbipc_sync_state_t * RBIPC_RESTRICT sync_state,
                                          rbipc_shm_header_t *hdr,
                                          rbipc_slot_t *slot,
@@ -162,6 +187,8 @@ static int rbipc_io_handle_write_backoff(rbipc_sync_state_t * RBIPC_RESTRICT syn
     if (timeout_ns == 0) {
         return RBIPC_ERR_FULL;
     }
+
+    rbipc_io_audit_and_recover_dead_consumer(hdr, slot, t_ticket);
 
     /* Phase A: Register intent to wait with sequential consistency barrier */
     rbipc_sync_register_waiter(&hdr->write_waiters);
@@ -207,6 +234,7 @@ RBIPC_INLINE int rbipc_io_complete_read_acquisition(const rbipc_ring_t * RBIPC_R
                                                     uint32_t * RBIPC_RESTRICT out_ticket) {
     uint32_t state = atomic_load_explicit(&slot->state, memory_order_acquire);
     if (RBIPC_LIKELY(rbipc_slot_state_is_committed(state))) {
+        rbipc_slot_mark_acquired((rbipc_slot_t *)slot, ring->cached_pid, rbipc_clock_monotonic_ns());
         *out_buf = rbipc_io_calc_slot_ptr(ring, ticket);
         *out_len = atomic_load_explicit(&slot->len, memory_order_acquire);
         *out_ticket = ticket;
@@ -547,11 +575,14 @@ int rbipc_reserve_write_batch(rbipc_ring_t * RBIPC_RESTRICT ring, uint32_t count
     rbipc_sync_state_t sync_state;
     rbipc_sync_state_init(&sync_state, UINT64_MAX);
 
+    rbipc_slot_t *slots = (rbipc_slot_t *)RBIPC_ASSUME_ALIGNED(ring->slots, RBIPC_CACHE_LINE);
+
     for (;;) {
         if (RBIPC_UNLIKELY(rbipc_ring_is_shutdown(hdr))) {
             return RBIPC_ERR_SHUTDOWN;
         }
 
+        rbipc_io_audit_and_recover_dead_consumer_range(hdr, slots, t, count);
         uint32_t avail = rbipc_io_scan_vacant_slots(ring, t, count);
         if (avail > 0) {
             if (rbipc_io_try_claim_write_ticket(hdr, &t, avail)) {
@@ -561,6 +592,7 @@ int rbipc_reserve_write_batch(rbipc_ring_t * RBIPC_RESTRICT ring, uint32_t count
             }
         } else {
             rbipc_sync_register_waiter(&hdr->write_waiters);
+            rbipc_io_audit_and_recover_dead_consumer_range(hdr, slots, t, count);
             avail = rbipc_io_scan_vacant_slots(ring, t, count);
             if (avail > 0 || RBIPC_UNLIKELY(rbipc_ring_is_shutdown(hdr))) {
                 rbipc_sync_deregister_waiter(&hdr->write_waiters);
@@ -683,6 +715,7 @@ static void rbipc_io_populate_acquired_batch(const rbipc_ring_t * RBIPC_RESTRICT
         uint32_t state = atomic_load_explicit(&slot_i->state, memory_order_acquire);
         rovecs[i].ticket = ticket_i;
         if (rbipc_slot_state_is_committed(state)) {
+            rbipc_slot_mark_acquired((rbipc_slot_t *)slot_i, ring->cached_pid, rbipc_clock_monotonic_ns());
             rovecs[i].buf = data_base + ((size_t)(ticket_i & mask) * slot_size);
             rovecs[i].len = atomic_load_explicit(&slot_i->len, memory_order_acquire);
         } else {
