@@ -231,11 +231,15 @@ int rbipc_shm_seal(int fd) {
     }
 #ifdef F_ADD_SEALS
     if (fcntl(fd, F_ADD_SEALS, F_SEAL_SHRINK | F_SEAL_GROW) < 0) {
-        /* Not fatal on all filesystems / kernels */
-        return RBIPC_OK;
+        if (errno == EINVAL || errno == EPERM || errno == ENOSYS || errno == EOPNOTSUPP) {
+            return RBIPC_ERR_NOTSUP;
+        }
+        return RBIPC_ERR_SYS;
     }
-#endif
     return RBIPC_OK;
+#else
+    return RBIPC_ERR_NOTSUP;
+#endif
 }
 
 RBIPC_LEAF

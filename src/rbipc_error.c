@@ -37,6 +37,8 @@ const char *rbipc_strerror(int err) {
             return "Arithmetic or buffer calculation overflow";
         case RBIPC_ERR_EXISTS:
             return "Shared memory object already exists";
+        case RBIPC_ERR_NOTSUP:
+            return "Operation not supported";
         default:
             return "Unknown error";
     }

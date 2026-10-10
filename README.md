@@ -42,9 +42,9 @@ Designed following strict Software Engineering principles (Single Responsibility
    - Heavily annotated with modern compiler attributes (`RBIPC_NODISCARD`, `RBIPC_INLINE`, `RBIPC_PURE`, `RBIPC_CONST`, `RBIPC_LEAF`, `RBIPC_ASSUME_ALIGNED`, and `restrict`), guiding aggressive compiler loop unrolling, instruction scheduling, and vectorization.
 9. **B-Queue Batching API (PPoPP '08 / IJPP '13)**:
    - Vector-based burst operations (`rbipc_reserve_write_batch`, `rbipc_commit_write_batch`, `rbipc_read_acquire_batch`, `rbipc_read_release_batch`) amortize atomic CAS overhead over $N$ items in a single CAS, scaling throughput past 38,000,000 msgs/sec.
-10. **Linux File Sealing & Memfd Inheritance**:
-    - Descriptors are sealed via `F_ADD_SEALS` (`F_SEAL_SHRINK | F_SEAL_GROW`) against accidental truncation `SIGBUS` panics.
-    - Direct file descriptor attachment (`rbipc_attach_fd`) enables anonymous `memfd_create` buffers to be passed over UNIX domain sockets (`SCM_RIGHTS`).
+10. **Linux File Sealing & Zero-Trust Memfd**:
+    - Anonymous memory descriptors created via `memfd_create(..., MFD_ALLOW_SEALING)` are permanently sealed via `F_ADD_SEALS` (`F_SEAL_SHRINK | F_SEAL_GROW`) against malicious truncation `SIGBUS` panics.
+    - Files residing in standard `/dev/shm` tmpfs are inherently unsealed under Linux kernel semantics; for zero-trust process isolation, anonymous memfd inheritance over UNIX domain sockets (`SCM_RIGHTS`) with `rbipc_attach_fd` is the recommended deployment pattern.
 
 ---
 

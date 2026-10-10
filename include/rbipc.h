@@ -144,6 +144,7 @@ extern "C" {
 #define RBIPC_ERR_BUSY       (-9) /**< Resource contention or uncommitted slot state encountered. */
 #define RBIPC_ERR_OVERFLOW  (-10) /**< Geometric arithmetic or buffer size calculation exceeded addressable range. */
 #define RBIPC_ERR_EXISTS    (-11) /**< Shared memory object already exists. */
+#define RBIPC_ERR_NOTSUP    (-12) /**< Operation not supported by underlying kernel or filesystem. */
 /** @} */
 
 /**

@@ -23,6 +23,7 @@ int main(void) {
     assert(strcmp(rbipc_strerror(RBIPC_ERR_BUSY), "Resource is busy or in contention") == 0);
     assert(strcmp(rbipc_strerror(RBIPC_ERR_OVERFLOW), "Arithmetic or buffer calculation overflow") == 0);
     assert(strcmp(rbipc_strerror(RBIPC_ERR_EXISTS), "Shared memory object already exists") == 0);
+    assert(strcmp(rbipc_strerror(RBIPC_ERR_NOTSUP), "Operation not supported") == 0);
     assert(strcmp(rbipc_strerror(-999), "Unknown error") == 0);
     assert(strcmp(rbipc_strerror(999), "Unknown error") == 0);
 

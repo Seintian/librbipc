@@ -65,6 +65,9 @@ static void test_shm_lifecycle(void) {
     assert(rc == RBIPC_OK);
     assert(fd >= 0);
 
+    /* Sealing named POSIX shm must return RBIPC_ERR_NOTSUP (Linux tmpfs restriction) */
+    assert(rbipc_shm_seal(fd) == RBIPC_ERR_NOTSUP);
+
     /* Second create without overwrite flag must fail with RBIPC_ERR_EXISTS */
     int fd_coll = -1;
     assert(rbipc_shm_create(test_name, 16384, &fd_coll) == RBIPC_ERR_EXISTS);
