@@ -21,6 +21,18 @@
 #include <signal.h>
 #include <errno.h>
 #include <unistd.h>
+#include <sys/syscall.h>
+#include <poll.h>
+
+#ifndef SYS_pidfd_open
+#if defined(__x86_64__)
+#define SYS_pidfd_open 434
+#elif defined(__aarch64__)
+#define SYS_pidfd_open 434
+#elif defined(__i386__)
+#define SYS_pidfd_open 434
+#endif
+#endif
 
 /**
  * @brief Initialize an individual slot control descriptor in shared memory.
@@ -49,6 +61,30 @@ void rbipc_slot_init_table(rbipc_slot_t * RBIPC_RESTRICT slots, uint32_t capacit
 RBIPC_LEAF
 bool rbipc_slot_is_peer_alive(pid_t pid) {
     if (RBIPC_UNLIKELY(pid <= 0)) return false;
+
+#ifdef SYS_pidfd_open
+    /* Modern Linux 5.3+ process descriptor auditing to eliminate PID recycling races */
+    int pfd = (int)syscall(SYS_pidfd_open, pid, 0);
+    if (pfd >= 0) {
+        struct pollfd fds = {
+            .fd = pfd,
+            .events = POLLIN,
+            .revents = 0
+        };
+        int ret = poll(&fds, 1, 0);
+        close(pfd);
+        if (ret > 0 && (fds.revents & (POLLIN | POLLHUP | POLLERR))) {
+            return false; /* Process has terminated / exited */
+        }
+        if (ret == 0) {
+            return true; /* Process is alive and running */
+        }
+    } else if (errno == ESRCH) {
+        return false; /* Process does not exist */
+    }
+#endif
+
+    /* Graceful fallback for older kernels (<= 5.2) or restricted environments */
     if (kill(pid, 0) == 0) {
         return true;
     }

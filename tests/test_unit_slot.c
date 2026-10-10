@@ -83,6 +83,9 @@ static void test_peer_liveness(void) {
     waitpid(pid, NULL, 0);
     /* Now pid is dead */
     assert(rbipc_slot_is_peer_alive(pid) == false);
+
+    /* Non-existent large PID test */
+    assert(rbipc_slot_is_peer_alive(9999999) == false);
 }
 
 int main(void) {
