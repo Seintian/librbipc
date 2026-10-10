@@ -23,6 +23,12 @@
 #include <unistd.h>
 #include <errno.h>
 
+#if defined(__x86_64__) || defined(_M_X64)
+#include <immintrin.h>
+#elif defined(__aarch64__) || defined(__arm__)
+#include <arm_neon.h>
+#endif
+
 /* ============================================================================
  * Atomic Synchronization and State Transition Subroutines
  * ============================================================================ */
@@ -581,9 +587,7 @@ int rbipc_read_release(rbipc_ring_t * RBIPC_RESTRICT ring, uint64_t ticket) {
  *
  * @return Number of contiguous vacant slots available.
  */
-static uint32_t rbipc_io_scan_vacant_slots(const rbipc_ring_t *ring, uint64_t t, uint32_t count) {
-    const uint32_t mask = ring->hdr->capacity_mask;
-    const rbipc_slot_t *slots = (const rbipc_slot_t *)RBIPC_ASSUME_ALIGNED(ring->slots, RBIPC_CACHE_LINE);
+static uint32_t rbipc_io_scan_vacant_scalar(const rbipc_slot_t *slots, uint32_t mask, uint64_t t, uint32_t count) {
     uint32_t avail = 0;
     for (uint32_t i = 0; i < count; ++i) {
         const rbipc_slot_t *slot = &slots[(t + i) & mask];
@@ -595,6 +599,105 @@ static uint32_t rbipc_io_scan_vacant_slots(const rbipc_ring_t *ring, uint64_t t,
         }
     }
     return avail;
+}
+
+#if defined(__x86_64__) || defined(_M_X64)
+#if defined(__GNUC__) || defined(__clang__)
+__attribute__((target("avx2")))
+#endif
+static uint32_t rbipc_io_scan_vacant_avx2(const rbipc_slot_t *slots, uint32_t mask, uint64_t t, uint32_t count) {
+    uint32_t avail = 0;
+    while (avail + 4 <= count) {
+        uint64_t base_t = t + avail;
+        uint32_t idx = (uint32_t)(base_t & mask);
+        uint64_t s0, s1, s2, s3;
+        if (idx + 4 <= mask + 1) {
+            s0 = atomic_load_explicit(&slots[idx + 0].sequence, memory_order_acquire);
+            s1 = atomic_load_explicit(&slots[idx + 1].sequence, memory_order_acquire);
+            s2 = atomic_load_explicit(&slots[idx + 2].sequence, memory_order_acquire);
+            s3 = atomic_load_explicit(&slots[idx + 3].sequence, memory_order_acquire);
+        } else {
+            s0 = atomic_load_explicit(&slots[(base_t + 0) & mask].sequence, memory_order_acquire);
+            s1 = atomic_load_explicit(&slots[(base_t + 1) & mask].sequence, memory_order_acquire);
+            s2 = atomic_load_explicit(&slots[(base_t + 2) & mask].sequence, memory_order_acquire);
+            s3 = atomic_load_explicit(&slots[(base_t + 3) & mask].sequence, memory_order_acquire);
+        }
+        __m256i vseq = _mm256_set_epi64x((long long)s3, (long long)s2, (long long)s1, (long long)s0);
+        __m256i vtgt = _mm256_set_epi64x((long long)(base_t + 3), (long long)(base_t + 2),
+                                         (long long)(base_t + 1), (long long)(base_t + 0));
+        __m256i cmp = _mm256_cmpeq_epi64(vseq, vtgt);
+        int match_mask = _mm256_movemask_pd((__m256d)cmp);
+        if (match_mask == 0x0F) {
+            avail += 4;
+        } else {
+            if ((match_mask & 0x01) == 0) return avail;
+            if ((match_mask & 0x02) == 0) return avail + 1;
+            if ((match_mask & 0x04) == 0) return avail + 2;
+            return avail + 3;
+        }
+    }
+    while (avail < count) {
+        const rbipc_slot_t *slot = &slots[(t + avail) & mask];
+        uint64_t seq = atomic_load_explicit(&slot->sequence, memory_order_acquire);
+        if (rbipc_slot_is_vacant(seq, t + avail)) {
+            avail++;
+        } else {
+            break;
+        }
+    }
+    return avail;
+}
+#elif defined(__aarch64__)
+static uint32_t rbipc_io_scan_vacant_neon(const rbipc_slot_t *slots, uint32_t mask, uint64_t t, uint32_t count) {
+    uint32_t avail = 0;
+    while (avail + 2 <= count) {
+        uint64_t base_t = t + avail;
+        uint64_t s0 = atomic_load_explicit(&slots[(base_t + 0) & mask].sequence, memory_order_acquire);
+        uint64_t s1 = atomic_load_explicit(&slots[(base_t + 1) & mask].sequence, memory_order_acquire);
+        uint64x2_t vseq = vcombine_u64(vcreate_u64(s0), vcreate_u64(s1));
+        uint64x2_t vtgt = vcombine_u64(vcreate_u64(base_t), vcreate_u64(base_t + 1));
+        uint64x2_t cmp = vceqq_u64(vseq, vtgt);
+        if (vgetq_lane_u64(cmp, 0) == 0xFFFFFFFFFFFFFFFFULL) {
+            avail++;
+            if (vgetq_lane_u64(cmp, 1) == 0xFFFFFFFFFFFFFFFFULL) {
+                avail++;
+            } else {
+                return avail;
+            }
+        } else {
+            return avail;
+        }
+    }
+    while (avail < count) {
+        const rbipc_slot_t *slot = &slots[(t + avail) & mask];
+        uint64_t seq = atomic_load_explicit(&slot->sequence, memory_order_acquire);
+        if (rbipc_slot_is_vacant(seq, t + avail)) {
+            avail++;
+        } else {
+            break;
+        }
+    }
+    return avail;
+}
+#endif
+
+static uint32_t rbipc_io_scan_vacant_slots(const rbipc_ring_t *ring, uint64_t t, uint32_t count) {
+    const uint32_t mask = ring->hdr->capacity_mask;
+    const rbipc_slot_t *slots = (const rbipc_slot_t *)RBIPC_ASSUME_ALIGNED(ring->slots, RBIPC_CACHE_LINE);
+
+#if defined(__x86_64__) || defined(_M_X64)
+#if defined(__GNUC__) || defined(__clang__)
+    if (__builtin_cpu_supports("avx2") && count >= 4) {
+        return rbipc_io_scan_vacant_avx2(slots, mask, t, count);
+    }
+#endif
+#elif defined(__aarch64__)
+    if (count >= 2) {
+        return rbipc_io_scan_vacant_neon(slots, mask, t, count);
+    }
+#endif
+
+    return rbipc_io_scan_vacant_scalar(slots, mask, t, count);
 }
 
 /**
@@ -778,9 +881,7 @@ int rbipc_commit_write_batch(rbipc_ring_t * RBIPC_RESTRICT ring, uint32_t count,
  *
  * @return Number of contiguous ready slots available.
  */
-static uint32_t rbipc_io_scan_ready_slots(const rbipc_ring_t *ring, uint64_t t, uint32_t count) {
-    const uint32_t mask = ring->hdr->capacity_mask;
-    const rbipc_slot_t *slots = (const rbipc_slot_t *)RBIPC_ASSUME_ALIGNED(ring->slots, RBIPC_CACHE_LINE);
+static uint32_t rbipc_io_scan_ready_scalar(const rbipc_slot_t *slots, uint32_t mask, uint64_t t, uint32_t count) {
     uint32_t avail = 0;
     for (uint32_t i = 0; i < count; ++i) {
         const rbipc_slot_t *slot = &slots[(t + i) & mask];
@@ -792,6 +893,105 @@ static uint32_t rbipc_io_scan_ready_slots(const rbipc_ring_t *ring, uint64_t t, 
         }
     }
     return avail;
+}
+
+#if defined(__x86_64__) || defined(_M_X64)
+#if defined(__GNUC__) || defined(__clang__)
+__attribute__((target("avx2")))
+#endif
+static uint32_t rbipc_io_scan_ready_avx2(const rbipc_slot_t *slots, uint32_t mask, uint64_t t, uint32_t count) {
+    uint32_t avail = 0;
+    while (avail + 4 <= count) {
+        uint64_t base_t = t + avail;
+        uint32_t idx = (uint32_t)(base_t & mask);
+        uint64_t s0, s1, s2, s3;
+        if (idx + 4 <= mask + 1) {
+            s0 = atomic_load_explicit(&slots[idx + 0].sequence, memory_order_acquire);
+            s1 = atomic_load_explicit(&slots[idx + 1].sequence, memory_order_acquire);
+            s2 = atomic_load_explicit(&slots[idx + 2].sequence, memory_order_acquire);
+            s3 = atomic_load_explicit(&slots[idx + 3].sequence, memory_order_acquire);
+        } else {
+            s0 = atomic_load_explicit(&slots[(base_t + 0) & mask].sequence, memory_order_acquire);
+            s1 = atomic_load_explicit(&slots[(base_t + 1) & mask].sequence, memory_order_acquire);
+            s2 = atomic_load_explicit(&slots[(base_t + 2) & mask].sequence, memory_order_acquire);
+            s3 = atomic_load_explicit(&slots[(base_t + 3) & mask].sequence, memory_order_acquire);
+        }
+        __m256i vseq = _mm256_set_epi64x((long long)s3, (long long)s2, (long long)s1, (long long)s0);
+        __m256i vtgt = _mm256_set_epi64x((long long)(base_t + 4), (long long)(base_t + 3),
+                                         (long long)(base_t + 2), (long long)(base_t + 1));
+        __m256i cmp = _mm256_cmpeq_epi64(vseq, vtgt);
+        int match_mask = _mm256_movemask_pd((__m256d)cmp);
+        if (match_mask == 0x0F) {
+            avail += 4;
+        } else {
+            if ((match_mask & 0x01) == 0) return avail;
+            if ((match_mask & 0x02) == 0) return avail + 1;
+            if ((match_mask & 0x04) == 0) return avail + 2;
+            return avail + 3;
+        }
+    }
+    while (avail < count) {
+        const rbipc_slot_t *slot = &slots[(t + avail) & mask];
+        uint64_t seq = atomic_load_explicit(&slot->sequence, memory_order_acquire);
+        if (rbipc_slot_is_ready(seq, t + avail)) {
+            avail++;
+        } else {
+            break;
+        }
+    }
+    return avail;
+}
+#elif defined(__aarch64__)
+static uint32_t rbipc_io_scan_ready_neon(const rbipc_slot_t *slots, uint32_t mask, uint64_t t, uint32_t count) {
+    uint32_t avail = 0;
+    while (avail + 2 <= count) {
+        uint64_t base_t = t + avail;
+        uint64_t s0 = atomic_load_explicit(&slots[(base_t + 0) & mask].sequence, memory_order_acquire);
+        uint64_t s1 = atomic_load_explicit(&slots[(base_t + 1) & mask].sequence, memory_order_acquire);
+        uint64x2_t vseq = vcombine_u64(vcreate_u64(s0), vcreate_u64(s1));
+        uint64x2_t vtgt = vcombine_u64(vcreate_u64(base_t + 1), vcreate_u64(base_t + 2));
+        uint64x2_t cmp = vceqq_u64(vseq, vtgt);
+        if (vgetq_lane_u64(cmp, 0) == 0xFFFFFFFFFFFFFFFFULL) {
+            avail++;
+            if (vgetq_lane_u64(cmp, 1) == 0xFFFFFFFFFFFFFFFFULL) {
+                avail++;
+            } else {
+                return avail;
+            }
+        } else {
+            return avail;
+        }
+    }
+    while (avail < count) {
+        const rbipc_slot_t *slot = &slots[(t + avail) & mask];
+        uint64_t seq = atomic_load_explicit(&slot->sequence, memory_order_acquire);
+        if (rbipc_slot_is_ready(seq, t + avail)) {
+            avail++;
+        } else {
+            break;
+        }
+    }
+    return avail;
+}
+#endif
+
+static uint32_t rbipc_io_scan_ready_slots(const rbipc_ring_t *ring, uint64_t t, uint32_t count) {
+    const uint32_t mask = ring->hdr->capacity_mask;
+    const rbipc_slot_t *slots = (const rbipc_slot_t *)RBIPC_ASSUME_ALIGNED(ring->slots, RBIPC_CACHE_LINE);
+
+#if defined(__x86_64__) || defined(_M_X64)
+#if defined(__GNUC__) || defined(__clang__)
+    if (__builtin_cpu_supports("avx2") && count >= 4) {
+        return rbipc_io_scan_ready_avx2(slots, mask, t, count);
+    }
+#endif
+#elif defined(__aarch64__)
+    if (count >= 2) {
+        return rbipc_io_scan_ready_neon(slots, mask, t, count);
+    }
+#endif
+
+    return rbipc_io_scan_ready_scalar(slots, mask, t, count);
 }
 
 /**

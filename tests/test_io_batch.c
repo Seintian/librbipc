@@ -217,11 +217,82 @@ static void test_batch_nonblock_and_timeout(void) {
     rbipc_destroy(BATCH_RING_NAME);
 }
 
+static void test_batch_vector_scanning(void) {
+    rbipc_destroy(BATCH_RING_NAME);
+    rbipc_ring_t *ring = NULL;
+    int rc = rbipc_create(BATCH_RING_NAME, BATCH_CAPACITY, BATCH_SLOT_SIZE, &ring);
+    assert(rc == RBIPC_OK);
+
+    rbipc_iovec_t iovecs[BATCH_CAPACITY];
+    rbipc_rovec_t rovecs[BATCH_CAPACITY];
+    uint32_t reserved = 0;
+    uint32_t acquired = 0;
+
+    /* Test various batch counts: 1, 3, 4, 7, 12, 16, 20 */
+    uint32_t test_sizes[] = {1, 3, 4, 7, 12, 16, 20};
+    for (size_t s = 0; s < sizeof(test_sizes)/sizeof(test_sizes[0]); ++s) {
+        uint32_t sz = test_sizes[s];
+        rc = rbipc_reserve_write_batch(ring, sz, iovecs, &reserved);
+        assert(rc == RBIPC_OK);
+        assert(reserved == sz);
+
+        uint64_t tickets[BATCH_CAPACITY];
+        uint32_t lens[BATCH_CAPACITY];
+        for (uint32_t i = 0; i < sz; ++i) {
+            tickets[i] = iovecs[i].ticket;
+            lens[i] = 32;
+        }
+        rc = rbipc_commit_write_batch(ring, sz, tickets, lens);
+        assert(rc == RBIPC_OK);
+
+        rc = rbipc_read_acquire_batch(ring, sz, rovecs, &acquired);
+        assert(rc == RBIPC_OK);
+        assert(acquired == sz);
+
+        for (uint32_t i = 0; i < sz; ++i) {
+            tickets[i] = rovecs[i].ticket;
+        }
+        rc = rbipc_read_release_batch(ring, sz, tickets);
+        assert(rc == RBIPC_OK);
+    }
+
+    /* Test across wrap-around boundary */
+    /* Advance write_ticket near end of ring: capacity is 64 */
+    /* Currently ticket position is sum(test_sizes) = 1+3+4+7+12+16+20 = 63 */
+    /* Next reservation of 8 crosses boundary 64 (0) */
+    rc = rbipc_reserve_write_batch(ring, 8, iovecs, &reserved);
+    assert(rc == RBIPC_OK);
+    assert(reserved == 8);
+
+    uint64_t tickets[8];
+    uint32_t lens[8];
+    for (uint32_t i = 0; i < 8; ++i) {
+        tickets[i] = iovecs[i].ticket;
+        lens[i] = 16;
+    }
+    rc = rbipc_commit_write_batch(ring, 8, tickets, lens);
+    assert(rc == RBIPC_OK);
+
+    rc = rbipc_read_acquire_batch(ring, 8, rovecs, &acquired);
+    assert(rc == RBIPC_OK);
+    assert(acquired == 8);
+
+    for (uint32_t i = 0; i < 8; ++i) {
+        tickets[i] = rovecs[i].ticket;
+    }
+    rc = rbipc_read_release_batch(ring, 8, tickets);
+    assert(rc == RBIPC_OK);
+
+    rbipc_detach(ring);
+    rbipc_destroy(BATCH_RING_NAME);
+}
+
 int main(void) {
     printf("[test_io_batch] Running B-Queue batching tests...\n");
     test_batch_validation();
     test_batch_roundtrip();
     test_batch_nonblock_and_timeout();
+    test_batch_vector_scanning();
     printf("[test_io_batch] All tests passed!\n");
     return 0;
 }
