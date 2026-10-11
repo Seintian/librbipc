@@ -154,7 +154,7 @@ bool rbipc_slot_recover_dead_consumer(rbipc_slot_t *slot, uint64_t ticket) {
 }
 
 RBIPC_LEAF
-bool rbipc_slot_recover_expired_lease(rbipc_slot_t *slot, uint64_t ticket, uint32_t capacity, uint64_t lease_timeout_ns, uint64_t now_ns) {
+bool rbipc_slot_recover_expired_lease(rbipc_slot_t *slot, uint64_t target_vacant_ticket, uint64_t lease_timeout_ns, uint64_t now_ns) {
     if (RBIPC_UNLIKELY(rbipc_is_null(slot) || lease_timeout_ns == 0)) return false;
     uint32_t cpid = atomic_load_explicit(&slot->consumer_pid, memory_order_relaxed);
     if (cpid > 0) {
@@ -165,7 +165,7 @@ bool rbipc_slot_recover_expired_lease(rbipc_slot_t *slot, uint64_t ticket, uint3
             atomic_store_explicit(&slot->acquire_timestamp_ns, 0, memory_order_relaxed);
             atomic_store_explicit(&slot->len, 0, memory_order_relaxed);
             atomic_store_explicit(&slot->state, RBIPC_SLOT_EMPTY, memory_order_release);
-            atomic_store_explicit(&slot->sequence, ticket + capacity, memory_order_release);
+            atomic_store_explicit(&slot->sequence, target_vacant_ticket, memory_order_release);
             return true;
         }
     }

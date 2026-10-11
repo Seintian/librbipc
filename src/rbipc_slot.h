@@ -128,15 +128,15 @@ bool rbipc_slot_recover_dead_consumer(rbipc_slot_t *slot, uint64_t ticket);
 /**
  * @brief Recovers an unreleased slot held past its lease timeout.
  *
- * @param[in,out] slot             Direct pointer to slot descriptor.
- * @param[in]     ticket           Ticket position being recovered.
- * @param[in]     lease_timeout_ns Configured lease duration in nanoseconds.
- * @param[in]     now_ns           Current monotonic timestamp in nanoseconds.
+ * @param[in,out] slot                  Direct pointer to slot descriptor.
+ * @param[in]     target_vacant_ticket Target sequence counter making slot vacant for next producer.
+ * @param[in]     lease_timeout_ns      Configured lease duration in nanoseconds.
+ * @param[in]     now_ns                Current monotonic timestamp in nanoseconds.
  *
  * @return true if slot lease was revoked; false otherwise.
  */
 RBIPC_LEAF
-bool rbipc_slot_recover_expired_lease(rbipc_slot_t *slot, uint64_t ticket, uint32_t capacity, uint64_t lease_timeout_ns, uint64_t now_ns);
+bool rbipc_slot_recover_expired_lease(rbipc_slot_t *slot, uint64_t target_vacant_ticket, uint64_t lease_timeout_ns, uint64_t now_ns);
 
 /**
  * @brief Release a consumed slot with expected consumer PID validation.

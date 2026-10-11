@@ -81,6 +81,27 @@ static void test_lease_revocation_proactive(void) {
     rc = rbipc_read_release(ring, rticket);
     assert(rc == RBIPC_ERR_TIMEOUT);
 
+    /* Verify revoked slot was recycled to target sequence:
+     * Write remaining 15 slots (tickets 1..15), then write ticket 16 which reuses slot 0. */
+    for (int i = 1; i < 16; ++i) {
+        void *fill_buf = NULL;
+        uint64_t fill_ticket = 0;
+        rc = rbipc_reserve_write(ring, 32, &fill_buf, &fill_ticket);
+        assert(rc == RBIPC_OK);
+        assert(fill_ticket == (uint64_t)i);
+        rc = rbipc_commit_write(ring, fill_ticket, 32);
+        assert(rc == RBIPC_OK);
+    }
+
+    /* Ticket 16 maps to index (16 & 15) == 0 (slot 0). Must be vacant and claimable! */
+    void *next_buf = NULL;
+    uint64_t next_ticket = 0;
+    rc = rbipc_reserve_write(ring, 32, &next_buf, &next_ticket);
+    assert(rc == RBIPC_OK);
+    assert(next_ticket == 16);
+    rc = rbipc_commit_write(ring, next_ticket, 32);
+    assert(rc == RBIPC_OK);
+
     rbipc_detach(ring);
 }
 

@@ -170,7 +170,7 @@ static void rbipc_io_audit_and_recover_dead_consumer(rbipc_shm_header_t *hdr,
         uint64_t lease = atomic_load_explicit(&hdr->lease_timeout_ns, memory_order_relaxed);
         if (lease > 0) {
             uint64_t now = rbipc_clock_monotonic_ns();
-            if (rbipc_slot_recover_expired_lease(slot, ticket - hdr->capacity, hdr->capacity, lease, now)) {
+            if (rbipc_slot_recover_expired_lease(slot, ticket, lease, now)) {
                 recovered = true;
             }
         }
@@ -270,12 +270,12 @@ RBIPC_INLINE int rbipc_io_complete_read_acquisition(const rbipc_ring_t * RBIPC_R
                                                     const void ** RBIPC_RESTRICT out_buf,
                                                     uint32_t * RBIPC_RESTRICT out_len,
                                                     uint64_t * RBIPC_RESTRICT out_ticket) {
+    *out_ticket = ticket;
     uint32_t state = atomic_load_explicit(&slot->state, memory_order_acquire);
     if (RBIPC_LIKELY(rbipc_slot_state_is_committed(state))) {
         rbipc_slot_mark_acquired((rbipc_slot_t *)slot, ring->cached_pid, rbipc_clock_monotonic_ns());
         *out_buf = rbipc_io_calc_slot_ptr(ring, ticket);
         *out_len = atomic_load_explicit(&slot->len, memory_order_acquire);
-        *out_ticket = ticket;
         rbipc_io_prefetch_read_next(ring, ticket + 1);
         return RBIPC_OK;
     }
@@ -283,9 +283,30 @@ RBIPC_INLINE int rbipc_io_complete_read_acquisition(const rbipc_ring_t * RBIPC_R
         rbipc_slot_mark_acquired((rbipc_slot_t *)slot, ring->cached_pid, rbipc_clock_monotonic_ns());
         *out_buf = NULL;
         *out_len = 0;
-        *out_ticket = ticket;
         return RBIPC_ERR_POISONED;
     }
+
+    /* Defensive bounded micro-pause if state observation lagged behind slot sequence */
+    for (uint32_t p = 0; p < RBIPC_SPIN_COUNT_DEFAULT; ++p) {
+        rbipc_cpu_pause();
+        state = atomic_load_explicit(&slot->state, memory_order_acquire);
+        if (rbipc_slot_state_is_committed(state)) {
+            rbipc_slot_mark_acquired((rbipc_slot_t *)slot, ring->cached_pid, rbipc_clock_monotonic_ns());
+            *out_buf = rbipc_io_calc_slot_ptr(ring, ticket);
+            *out_len = atomic_load_explicit(&slot->len, memory_order_acquire);
+            rbipc_io_prefetch_read_next(ring, ticket + 1);
+            return RBIPC_OK;
+        }
+        if (rbipc_slot_state_is_poisoned(state)) {
+            rbipc_slot_mark_acquired((rbipc_slot_t *)slot, ring->cached_pid, rbipc_clock_monotonic_ns());
+            *out_buf = NULL;
+            *out_len = 0;
+            return RBIPC_ERR_POISONED;
+        }
+    }
+
+    *out_buf = NULL;
+    *out_len = 0;
     return RBIPC_ERR_BUSY;
 }
 

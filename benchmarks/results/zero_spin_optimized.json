@@ -1,65 +1,65 @@
 {
   "tag": "zero_spin_optimized",
   "idle": {
-    "user_sec": 0.003289,
+    "user_sec": 0.002597,
     "sys_sec": 0.000000,
-    "total_sec": 0.003289,
-    "cpu_pct": 0.16,
+    "total_sec": 0.002597,
+    "cpu_pct": 0.13,
     "vol_cs": 100,
     "invol_cs": 0
   },
   "latency": {
     "min_ns": 200,
-    "mean_ns": 33439.09,
-    "p50_ns": 27101,
-    "p90_ns": 34801,
-    "p99_ns": 55252,
-    "p99_9_ns": 155558,
-    "p99_99_ns": 10080789,
-    "max_ns": 10114940,
-    "stddev_ns": 208355.05
+    "mean_ns": 31189.40,
+    "p50_ns": 25651,
+    "p90_ns": 31251,
+    "p99_ns": 46352,
+    "p99_9_ns": 84754,
+    "p99_99_ns": 10072894,
+    "max_ns": 10140948,
+    "stddev_ns": 208171.80
   },
   "latency_sla": {
     "target_p99_9_us": 50,
     "target_max_us": 100,
-    "observed_p99_9_us": 156,
-    "observed_max_us": 10115,
+    "observed_p99_9_us": 85,
+    "observed_max_us": 10141,
     "pass": false
   },
   "streaming": {
-    "msgs_per_sec": 8508885.90,
-    "mb_per_sec": 519.34,
-    "avg_latency_ns": 117.52,
-    "producer_vol_cs": 440,
+    "msgs_per_sec": 6782781.79,
+    "mb_per_sec": 413.99,
+    "avg_latency_ns": 147.43,
+    "producer_vol_cs": 761,
     "producer_invol_cs": 2,
-    "consumer_vol_cs": 98440,
+    "consumer_vol_cs": 98506,
     "consumer_invol_cs": 0
   },
   "batching": [
-    {"size": 1, "msgs_per_sec": 10842826.81, "mb_per_sec": 661.79, "avg_latency_ns": 92.23},
-    {"size": 4, "msgs_per_sec": 22276290.74, "mb_per_sec": 1359.64, "avg_latency_ns": 44.89},
-    {"size": 8, "msgs_per_sec": 23787187.64, "mb_per_sec": 1451.85, "avg_latency_ns": 42.04},
-    {"size": 16, "msgs_per_sec": 25018114.37, "mb_per_sec": 1526.98, "avg_latency_ns": 39.97},
-    {"size": 32, "msgs_per_sec": 25475108.22, "mb_per_sec": 1554.88, "avg_latency_ns": 39.25},
-    {"size": 64, "msgs_per_sec": 27043989.46, "mb_per_sec": 1650.63, "avg_latency_ns": 36.98},
-    {"size": 128, "msgs_per_sec": 25593058.34, "mb_per_sec": 1562.08, "avg_latency_ns": 39.07}
+    {"size": 1, "msgs_per_sec": 10514753.21, "mb_per_sec": 641.77, "avg_latency_ns": 95.10},
+    {"size": 4, "msgs_per_sec": 23564462.93, "mb_per_sec": 1438.26, "avg_latency_ns": 42.44},
+    {"size": 8, "msgs_per_sec": 25618156.51, "mb_per_sec": 1563.61, "avg_latency_ns": 39.03},
+    {"size": 16, "msgs_per_sec": 26585954.54, "mb_per_sec": 1622.68, "avg_latency_ns": 37.61},
+    {"size": 32, "msgs_per_sec": 30173079.42, "mb_per_sec": 1841.62, "avg_latency_ns": 33.14},
+    {"size": 64, "msgs_per_sec": 28393258.44, "mb_per_sec": 1732.99, "avg_latency_ns": 35.22},
+    {"size": 128, "msgs_per_sec": 26356251.87, "mb_per_sec": 1608.66, "avg_latency_ns": 37.94}
   ],
   "payloads": [
-    {"size": 64, "msgs_per_sec": 7442413.49, "mb_per_sec": 454.25},
-    {"size": 256, "msgs_per_sec": 8628937.73, "mb_per_sec": 2106.67},
-    {"size": 1024, "msgs_per_sec": 7615023.12, "mb_per_sec": 7436.55},
-    {"size": 4096, "msgs_per_sec": 8838920.70, "mb_per_sec": 34527.03},
-    {"size": 16384, "msgs_per_sec": 7814349.50, "mb_per_sec": 122099.21},
-    {"size": 65536, "msgs_per_sec": 8025486.05, "mb_per_sec": 501592.88},
-    {"size": 262144, "msgs_per_sec": 8391952.52, "mb_per_sec": 2097988.13},
-    {"size": 1048576, "msgs_per_sec": 8185086.08, "mb_per_sec": 8185086.08},
-    {"size": 4194304, "msgs_per_sec": 10783473.25, "mb_per_sec": 43133893.00},
-    {"size": 16777216, "msgs_per_sec": 9700356.00, "mb_per_sec": 155205696.05}
+    {"size": 64, "msgs_per_sec": 5325147.80, "mb_per_sec": 325.02},
+    {"size": 256, "msgs_per_sec": 6253621.24, "mb_per_sec": 1526.76},
+    {"size": 1024, "msgs_per_sec": 5893261.54, "mb_per_sec": 5755.14},
+    {"size": 4096, "msgs_per_sec": 6173127.20, "mb_per_sec": 24113.78},
+    {"size": 16384, "msgs_per_sec": 5910137.54, "mb_per_sec": 92345.90},
+    {"size": 65536, "msgs_per_sec": 6230495.43, "mb_per_sec": 389405.96},
+    {"size": 262144, "msgs_per_sec": 6054236.09, "mb_per_sec": 1513559.02},
+    {"size": 1048576, "msgs_per_sec": 6073098.79, "mb_per_sec": 6073098.79},
+    {"size": 4194304, "msgs_per_sec": 13538738.56, "mb_per_sec": 54154954.25},
+    {"size": 16777216, "msgs_per_sec": 12470081.94, "mb_per_sec": 199521310.96}
   ],
   "mpmc": [
-    {"p": 1, "c": 1, "msgs_per_sec": 6027275.37, "avg_latency_ns": 165.91},
-    {"p": 2, "c": 2, "msgs_per_sec": 3501154.79, "avg_latency_ns": 285.62},
-    {"p": 4, "c": 2, "msgs_per_sec": 1252037.18, "avg_latency_ns": 798.70},
-    {"p": 4, "c": 4, "msgs_per_sec": 3092575.52, "avg_latency_ns": 323.36}
+    {"p": 1, "c": 1, "msgs_per_sec": 5578900.28, "avg_latency_ns": 179.25},
+    {"p": 2, "c": 2, "msgs_per_sec": 3290546.21, "avg_latency_ns": 303.90},
+    {"p": 4, "c": 2, "msgs_per_sec": 1215216.58, "avg_latency_ns": 822.90},
+    {"p": 4, "c": 4, "msgs_per_sec": 3636499.92, "avg_latency_ns": 274.99}
   ]
 }

@@ -626,7 +626,8 @@ int rbipc_revoke_expired_leases(rbipc_ring_t *ring) {
             uint64_t acquired_ts = atomic_load_explicit(&slot->acquire_timestamp_ns, memory_order_relaxed);
             if (acquired_ts > 0 && now > acquired_ts && (now - acquired_ts) >= lease) {
                 uint64_t seq = atomic_load_explicit(&slot->sequence, memory_order_acquire);
-                if (rbipc_slot_recover_expired_lease(slot, seq, cap, lease, now)) {
+                uint64_t target_ticket = (seq > 0 ? (seq - 1) : 0) + (uint64_t)cap;
+                if (rbipc_slot_recover_expired_lease(slot, target_ticket, lease, now)) {
                     revoked_count++;
                 }
             }
