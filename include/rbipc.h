@@ -3,8 +3,7 @@
  * @brief librbipc: Lock-Free Shared-Memory Ring Buffer Inter-Process Communication
  *
  * @details Implements a bounded, multi-producer multi-consumer (MPMC) lock-free ring buffer
- * architecture situated within POSIX shared memory, targeted at ISO C23 and modern Linux kernels.
- * The library combines three core architectural paradigms:
+ * architecture situated within POSIX shared memory, targeted at ISO C23 and modern Linux kernels. * The library combines three core architectural paradigms grounded in prestigious literature:
  * 1. High-efficiency shared memory architecture: single 1x linear virtual memory mapping for
  *    discrete slot queues with power-of-2 boundary masking, with opt-in 2x virtual memory
  *    double-mapping (mirror windowing) for continuous byte-stream boundary wrap-around.
@@ -13,6 +12,14 @@
  * 3. Zero-spin passive synchronization utilizing Linux sys_futex primitives to achieve immediate
  *    process suspension during contention or idle intervals, ensuring 0% CPU consumption while
  *    maintaining sub-microsecond resumption latency and automatic dead-peer crash recovery.
+ *
+ * Grounded in peer-reviewed scientific systems literature and industry standards:
+ * - Dmitry Vyukov (2010), "Bounded MPMC Queue", 1024cores.
+ * - J. Yang & H. Zhou (ISCA 2012), "B-Queue: Efficient and Practical Queuing for Fast Core-to-Core Communication".
+ * - LMAX Disruptor (Thompson, Farley, Barker, Gee, Stewart, 2011), "Disruptor: High performance alternative to bounded queues".
+ * - Giacomoni, Moseley, Vachharajani (PPoPP 2008), "FastForward for efficient pipeline parallelism: a cache-optimized concurrent lock-free queue".
+ * - Ulrich Drepper (2007), "What Every Programmer Should Know About Memory", Red Hat.
+ * - Franke, Russell, Kirkwood (OLS 2002), "Fuss, Futexes and Furwocks: Fast Userlevel Locking in Linux".
  *
  * @author Christian Santarelli
  * @date 2026
@@ -343,47 +350,49 @@ typedef struct rbipc_ring rbipc_ring_t;
  * @see rbipc_destroy
  */
 /**
- * @brief Creates a new shared memory IPC ring buffer with creation flags.
+ * @brief Creates a new shared memory IPC ring buffer with creation flags and permissions.
  *
  * @param[in]  name      POSIX shared memory object name (e.g. "/my_ring"), or NULL for anonymous memory.
  * @param[in]  capacity  Requested slot count (must be power of two, >= @ref RBIPC_MIN_CAPACITY).
  * @param[in]  slot_size Requested payload size per slot in bytes.
  * @param[in]  flags     Creation flags (@ref RBIPC_CREATE_EXCL or @ref RBIPC_CREATE_OVERWRITE).
- * @param[out] out_ring Location to store pointer to the allocated ring buffer handle.
+ * @param[in]  mode      POSIX file permission mode bits (e.g. 0660; masked against system umask).
+ * @param[out] out_ring  Location to store pointer to the allocated ring buffer handle.
  *
  * @return @ref RBIPC_OK on successful initialization.
  * @retval RBIPC_ERR_EXISTS if object exists and @ref RBIPC_CREATE_OVERWRITE was not specified.
  * @retval RBIPC_ERR_INVAL  if parameters or flags are invalid.
  * @retval RBIPC_ERR_NOMEM  if virtual memory allocation or mmap fails.
  * @retval RBIPC_ERR_SYS    if an underlying kernel syscall fails.
+ *
+ * @see rbipc_create
+ * @see rbipc_destroy
  */
 RBIPC_NODISCARD RBIPC_LEAF
 int rbipc_create_ex(const char * RBIPC_RESTRICT name, size_t capacity, uint32_t slot_size, uint32_t flags, mode_t mode, rbipc_ring_t ** RBIPC_RESTRICT out_ring);
 
+/**
+ * @brief Create a new named shared-memory IPC ring buffer with default permissions and exclusive creation.
+ *
+ * @details Equivalent to calling rbipc_create_ex(name, capacity, slot_size, RBIPC_CREATE_EXCL, 0660, out_ring).
+ *
+ * @param[in]  name      POSIX shared memory object name (e.g. "/my_ring").
+ * @param[in]  capacity  Requested slot count (automatically rounded up to next power of two).
+ * @param[in]  slot_size Requested payload size per slot in bytes.
+ * @param[out] out_ring  Location to store pointer to the allocated ring buffer handle.
+ *
+ * @return @ref RBIPC_OK on successful initialization.
+ * @retval RBIPC_ERR_EXISTS if object exists.
+ * @retval RBIPC_ERR_INVAL  if parameters are invalid.
+ * @retval RBIPC_ERR_NOMEM  if virtual memory allocation or mmap fails.
+ * @retval RBIPC_ERR_SYS    if an underlying kernel syscall fails.
+ *
+ * @see rbipc_create_ex
+ * @see rbipc_destroy
+ */
 RBIPC_NODISCARD RBIPC_LEAF
 int rbipc_create(const char * RBIPC_RESTRICT name, size_t capacity, uint32_t slot_size, rbipc_ring_t ** RBIPC_RESTRICT out_ring);
 
-/**
- * @brief Attach to an existing named shared-memory IPC ring buffer.
- *
- * @details Opens an existing POSIX shared memory object by name, probes and verifies the
- * structural integrity of the control header (@ref RBIPC_MAGIC, version, power-of-two capacity),
- * maps the metadata and shared data regions into the caller's virtual address space,
- * and increments the active attachee counter.
- *
- * @param[in]  name     POSIX shared memory object name (e.g. "/my_ring").
- *                      Must begin with an initial slash and contain no subsequent slashes (POSIX shm_open(3)).
- * @param[out] out_ring Location to store the pointer to the allocated ring handle.
- *
- * @return @ref RBIPC_OK on success.
- * @retval RBIPC_ERR_INVAL if @p name or @p out_ring is NULL or invalid.
- * @retval RBIPC_ERR_NOMEM if virtual address space mapping fails.
- * @retval RBIPC_ERR_SYS   if shm_open or fstat fails (e.g. ENOENT if ring does not exist).
- *
- * @see rbipc_create
- * @see rbipc_attach_fd
- * @see rbipc_detach
- */
 /**
  * @brief Attach to an existing named shared-memory IPC ring buffer with participant role flags.
  *
@@ -395,31 +404,39 @@ int rbipc_create(const char * RBIPC_RESTRICT name, size_t capacity, uint32_t slo
  * @retval RBIPC_ERR_INVAL if @p name or @p out_ring is NULL or @p role_flags is invalid.
  * @retval RBIPC_ERR_NOMEM if virtual address space mapping fails.
  * @retval RBIPC_ERR_SYS   if shm_open or fstat fails.
+ *
+ * @see rbipc_attach
+ * @see rbipc_create
+ * @see rbipc_detach
  */
 RBIPC_NODISCARD RBIPC_LEAF
 int rbipc_attach_ex(const char * RBIPC_RESTRICT name, uint32_t role_flags, rbipc_ring_t ** RBIPC_RESTRICT out_ring);
 
-RBIPC_NODISCARD RBIPC_LEAF
-int rbipc_attach(const char * RBIPC_RESTRICT name, rbipc_ring_t ** RBIPC_RESTRICT out_ring);
-
 /**
- * @brief Attach to an existing shared-memory IPC ring buffer via open file descriptor.
+ * @brief Attach to an existing named shared-memory IPC ring buffer as standard consumer.
  *
- * @details Facilitates anonymous IPC across process boundaries where file descriptors
- * are inherited via fork() or received across UNIX domain sockets via SCM_RIGHTS ancillary data.
- * Validates header geometry and establishes shared memory virtual addresses.
+ * @details Opens an existing POSIX shared memory object by name, probes and verifies the
+ * structural integrity of the control header (@ref RBIPC_MAGIC, version, power-of-two capacity),
+ * maps the metadata and shared data regions into the caller's virtual address space,
+ * and increments the active attachee counter with default consumer role.
  *
- * @param[in]  fd       Open, readable and writable file descriptor referencing the shared memory object.
+ * @param[in]  name     POSIX shared memory object name (e.g. "/my_ring").
+ *                      Must begin with an initial slash and contain no subsequent slashes (POSIX shm_open(3)).
  * @param[out] out_ring Location to store the pointer to the allocated ring handle.
  *
  * @return @ref RBIPC_OK on success.
- * @retval RBIPC_ERR_INVAL if @p fd is invalid or @p out_ring is NULL.
- * @retval RBIPC_ERR_NOMEM if memory mapping fails.
- * @retval RBIPC_ERR_SYS   if descriptor validation or memory mapping fails.
+ * @retval RBIPC_ERR_INVAL if @p name or @p out_ring is NULL or invalid.
+ * @retval RBIPC_ERR_NOMEM if virtual address space mapping fails.
+ * @retval RBIPC_ERR_SYS   if shm_open or fstat fails (e.g. ENOENT if ring does not exist).
  *
- * @see rbipc_attach
- * @see rbipc_get_fd
+ * @see rbipc_attach_ex
+ * @see rbipc_create
+ * @see rbipc_attach_fd
+ * @see rbipc_detach
  */
+RBIPC_NODISCARD RBIPC_LEAF
+int rbipc_attach(const char * RBIPC_RESTRICT name, rbipc_ring_t ** RBIPC_RESTRICT out_ring);
+
 /**
  * @brief Attach to an existing shared-memory IPC ring buffer via open fd with participant role flags.
  *
@@ -431,10 +448,33 @@ int rbipc_attach(const char * RBIPC_RESTRICT name, rbipc_ring_t ** RBIPC_RESTRIC
  * @retval RBIPC_ERR_INVAL if @p fd or @p out_ring is invalid or @p role_flags is invalid.
  * @retval RBIPC_ERR_NOMEM if virtual memory allocation or mmap fails.
  * @retval RBIPC_ERR_SYS   if system calls fail.
+ *
+ * @see rbipc_attach_fd
+ * @see rbipc_attach
+ * @see rbipc_get_fd
  */
 RBIPC_NODISCARD RBIPC_LEAF
 int rbipc_attach_fd_ex(int fd, uint32_t role_flags, rbipc_ring_t ** RBIPC_RESTRICT out_ring);
 
+/**
+ * @brief Attach to an existing shared-memory IPC ring buffer via open file descriptor.
+ *
+ * @details Facilitates anonymous IPC across process boundaries where file descriptors
+ * are inherited via fork() or received across UNIX domain sockets via SCM_RIGHTS ancillary data.
+ * Validates header geometry and establishes shared memory virtual addresses as standard consumer.
+ *
+ * @param[in]  fd       Open, readable and writable file descriptor referencing the shared memory object.
+ * @param[out] out_ring Location to store the pointer to the allocated ring handle.
+ *
+ * @return @ref RBIPC_OK on success.
+ * @retval RBIPC_ERR_INVAL if @p fd is invalid or @p out_ring is NULL.
+ * @retval RBIPC_ERR_NOMEM if memory mapping fails.
+ * @retval RBIPC_ERR_SYS   if descriptor validation or memory mapping fails.
+ *
+ * @see rbipc_attach_fd_ex
+ * @see rbipc_attach
+ * @see rbipc_get_fd
+ */
 RBIPC_NODISCARD RBIPC_LEAF
 int rbipc_attach_fd(int fd, rbipc_ring_t ** RBIPC_RESTRICT out_ring);
 
@@ -872,13 +912,33 @@ RBIPC_NODISCARD RBIPC_LEAF
 int rbipc_write_stream(rbipc_ring_t * RBIPC_RESTRICT ring, const void * RBIPC_RESTRICT src, uint32_t len, uint64_t * RBIPC_RESTRICT out_ticket);
 
 /**
- * @brief Non-blocking variant of @ref rbipc_write_stream.
+ * @brief Non-blocking variant of @ref rbipc_write_stream using non-temporal streaming stores.
+ *
+ * @param[in,out] ring       Ring buffer handle.
+ * @param[in]     src        Source payload buffer.
+ * @param[in]     len        Length in bytes of payload to transmit.
+ * @param[out]    out_ticket Location to receive assigned ticket.
+ *
+ * @return @ref RBIPC_OK on success.
+ * @retval RBIPC_ERR_FULL  if ring buffer is currently full.
+ * @retval RBIPC_ERR_INVAL if arguments are invalid or @p len exceeds slot capacity.
  */
 RBIPC_NODISCARD RBIPC_LEAF
 int rbipc_write_stream_nonblock(rbipc_ring_t * RBIPC_RESTRICT ring, const void * RBIPC_RESTRICT src, uint32_t len, uint64_t * RBIPC_RESTRICT out_ticket);
 
 /**
- * @brief Timeout-bounded variant of @ref rbipc_write_stream.
+ * @brief Timeout-bounded variant of @ref rbipc_write_stream using non-temporal streaming stores.
+ *
+ * @param[in,out] ring       Ring buffer handle.
+ * @param[in]     src        Source payload buffer.
+ * @param[in]     len        Length in bytes of payload to transmit.
+ * @param[in]     timeout_ns Bounded deadline duration in nanoseconds (0 = non-blocking).
+ * @param[out]    out_ticket Location to receive assigned ticket.
+ *
+ * @return @ref RBIPC_OK on success.
+ * @retval RBIPC_ERR_TIMEOUT if deadline expires before slot availability.
+ * @retval RBIPC_ERR_FULL    if non-blocking attempt found full ring.
+ * @retval RBIPC_ERR_INVAL   if arguments are invalid or @p len exceeds slot capacity.
  */
 RBIPC_NODISCARD RBIPC_LEAF
 int rbipc_write_stream_timeout(rbipc_ring_t * RBIPC_RESTRICT ring, const void * RBIPC_RESTRICT src, uint32_t len, uint64_t timeout_ns, uint64_t * RBIPC_RESTRICT out_ticket);

@@ -20,6 +20,9 @@ struct rbipc_sub {
     uint64_t cursor;
 };
 
+/**
+ * @brief Publish a single message to all subscribers on the ring buffer topic.
+ */
 RBIPC_LEAF
 int rbipc_publish(rbipc_ring_t *ring, const void *buf, uint32_t len) {
     if (RBIPC_UNLIKELY(!ring || !ring->hdr || !buf)) {
@@ -62,6 +65,9 @@ int rbipc_publish(rbipc_ring_t *ring, const void *buf, uint32_t len) {
     return RBIPC_OK;
 }
 
+/**
+ * @brief Publish a batch of messages to all subscribers on the ring buffer topic.
+ */
 RBIPC_LEAF
 int rbipc_publish_batch(rbipc_ring_t *ring, uint32_t count, const void * const *bufs, const uint32_t *lens) {
     if (RBIPC_UNLIKELY(!ring || !ring->hdr || !bufs || !lens || count == 0)) {
@@ -113,6 +119,9 @@ int rbipc_publish_batch(rbipc_ring_t *ring, uint32_t count, const void * const *
     return RBIPC_OK;
 }
 
+/**
+ * @brief Create a local subscriber handle with cursor positioning choice.
+ */
 RBIPC_LEAF
 int rbipc_sub_create_ex(rbipc_ring_t *ring, bool from_oldest, rbipc_sub_t **out_sub) {
     if (RBIPC_UNLIKELY(!ring || !ring->hdr || !out_sub)) {
@@ -139,11 +148,17 @@ int rbipc_sub_create_ex(rbipc_ring_t *ring, bool from_oldest, rbipc_sub_t **out_
     return RBIPC_OK;
 }
 
+/**
+ * @brief Create a local subscriber handle reading only newly published messages.
+ */
 RBIPC_LEAF
 int rbipc_sub_create(rbipc_ring_t *ring, rbipc_sub_t **out_sub) {
     return rbipc_sub_create_ex(ring, true, out_sub);
 }
 
+/**
+ * @brief Destroy a subscriber handle and release allocated resources.
+ */
 RBIPC_LEAF
 void rbipc_sub_destroy(rbipc_sub_t *sub) {
     if (sub) {
@@ -151,6 +166,9 @@ void rbipc_sub_destroy(rbipc_sub_t *sub) {
     }
 }
 
+/**
+ * @brief Poll the next published message non-blockingly.
+ */
 RBIPC_LEAF
 int rbipc_sub_poll(rbipc_sub_t *sub, const void **out_buf, uint32_t *out_len, uint64_t *out_seq) {
     if (RBIPC_UNLIKELY(!sub || !sub->ring || !out_buf || !out_len || !out_seq)) {
@@ -187,6 +205,9 @@ int rbipc_sub_poll(rbipc_sub_t *sub, const void **out_buf, uint32_t *out_len, ui
     return RBIPC_ERR_EMPTY;
 }
 
+/**
+ * @brief Poll a batch of published messages non-blockingly.
+ */
 RBIPC_LEAF
 int rbipc_sub_poll_batch(rbipc_sub_t *sub, uint32_t max_count,
                          const void **out_bufs, uint32_t *out_lens,
@@ -234,6 +255,9 @@ int rbipc_sub_poll_batch(rbipc_sub_t *sub, uint32_t max_count,
     return RBIPC_OK;
 }
 
+/**
+ * @brief Wait for and read the next published message with timeout.
+ */
 RBIPC_LEAF
 int rbipc_sub_read(rbipc_sub_t *sub, uint64_t timeout_ns, const void **out_buf, uint32_t *out_len, uint64_t *out_seq) {
     if (RBIPC_UNLIKELY(!sub || !sub->ring)) {
@@ -273,6 +297,9 @@ int rbipc_sub_read(rbipc_sub_t *sub, uint64_t timeout_ns, const void **out_buf, 
     }
 }
 
+/**
+ * @brief Query current subscriber lag behind topic write cursor.
+ */
 RBIPC_LEAF
 uint64_t rbipc_sub_get_lag(const rbipc_sub_t *sub) {
     if (RBIPC_UNLIKELY(!sub || !sub->ring || !sub->ring->hdr)) {

@@ -48,6 +48,13 @@ const char *rbipc_strerror(int err) {
 #include <stdio.h>
 #include <string.h>
 
+/**
+ * @brief Translate a Linux system errno code to corresponding librbipc error code.
+ *
+ * @param[in] err System errno value.
+ *
+ * @return Mapped librbipc status code.
+ */
 RBIPC_PURE RBIPC_LEAF
 int rbipc_errno_to_status(int err) {
     switch (err) {
@@ -72,6 +79,16 @@ int rbipc_errno_to_status(int err) {
     }
 }
 
+/**
+ * @brief Format a composite diagnostic message combining status and system errno.
+ *
+ * @param[in]  status    librbipc status code.
+ * @param[in]  sys_errno Linux system errno (or 0).
+ * @param[out] buf       Destination character buffer.
+ * @param[in]  buf_size  Capacity of destination buffer.
+ *
+ * @return Pointer to @p buf.
+ */
 RBIPC_LEAF
 char *rbipc_error_format(int status, int sys_errno, char *buf, size_t buf_size) {
     if (RBIPC_UNLIKELY(!buf || buf_size == 0)) {

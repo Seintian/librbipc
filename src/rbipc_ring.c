@@ -243,6 +243,9 @@ int rbipc_create_ex(const char * RBIPC_RESTRICT name, size_t capacity, uint32_t 
     return RBIPC_OK;
 }
 
+/**
+ * @brief Create a named shared-memory IPC ring buffer with default options.
+ */
 int rbipc_create(const char * RBIPC_RESTRICT name, size_t capacity, uint32_t slot_size, rbipc_ring_t ** RBIPC_RESTRICT out_ring) {
     return rbipc_create_ex(name, capacity, slot_size, RBIPC_CREATE_EXCL, 0, out_ring);
 }
@@ -340,10 +343,16 @@ int rbipc_attach_fd_ex(int fd, uint32_t role_flags, rbipc_ring_t ** RBIPC_RESTRI
     return RBIPC_OK;
 }
 
+/**
+ * @brief Attach to an existing shared-memory ring buffer via open file descriptor as consumer.
+ */
 int rbipc_attach_fd(int fd, rbipc_ring_t ** RBIPC_RESTRICT out_ring) {
     return rbipc_attach_fd_ex(fd, RBIPC_ROLE_CONSUMER, out_ring);
 }
 
+/**
+ * @brief Attach to an existing named shared-memory ring buffer with role flags.
+ */
 int rbipc_attach_ex(const char * RBIPC_RESTRICT name, uint32_t role_flags, rbipc_ring_t ** RBIPC_RESTRICT out_ring) {
     if (RBIPC_UNLIKELY(!name || !out_ring)) {
         return RBIPC_ERR_INVAL;
@@ -365,6 +374,9 @@ int rbipc_attach_ex(const char * RBIPC_RESTRICT name, uint32_t role_flags, rbipc
     return RBIPC_OK;
 }
 
+/**
+ * @brief Attach to an existing named shared-memory ring buffer as consumer.
+ */
 int rbipc_attach(const char * RBIPC_RESTRICT name, rbipc_ring_t ** RBIPC_RESTRICT out_ring) {
     return rbipc_attach_ex(name, RBIPC_ROLE_CONSUMER, out_ring);
 }
@@ -463,6 +475,9 @@ int rbipc_signal_shutdown(rbipc_ring_t *ring) {
     return RBIPC_OK;
 }
 
+/**
+ * @brief Enable asynchronous eventfd signaling on the ring buffer.
+ */
 int rbipc_enable_eventfd(rbipc_ring_t * RBIPC_RESTRICT ring, int * RBIPC_RESTRICT out_fd) {
     if (RBIPC_UNLIKELY(!ring || !out_fd)) {
         return RBIPC_ERR_INVAL;
@@ -484,6 +499,9 @@ int rbipc_enable_eventfd(rbipc_ring_t * RBIPC_RESTRICT ring, int * RBIPC_RESTRIC
     return RBIPC_OK;
 }
 
+/**
+ * @brief Bind an external eventfd file descriptor to the ring buffer.
+ */
 int rbipc_set_eventfd(rbipc_ring_t * RBIPC_RESTRICT ring, int event_fd) {
     if (RBIPC_UNLIKELY(!ring || event_fd < 0)) {
         return RBIPC_ERR_INVAL;
@@ -502,6 +520,9 @@ int rbipc_set_eventfd(rbipc_ring_t * RBIPC_RESTRICT ring, int event_fd) {
     return RBIPC_OK;
 }
 
+/**
+ * @brief Retrieve currently bound eventfd file descriptor from ring buffer.
+ */
 int rbipc_get_eventfd(const rbipc_ring_t * RBIPC_RESTRICT ring, int * RBIPC_RESTRICT out_fd) {
     if (RBIPC_UNLIKELY(!ring || !out_fd)) {
         return RBIPC_ERR_INVAL;
@@ -513,6 +534,9 @@ int rbipc_get_eventfd(const rbipc_ring_t * RBIPC_RESTRICT ring, int * RBIPC_REST
     return RBIPC_OK;
 }
 
+/**
+ * @brief Drain accumulated eventfd counter.
+ */
 int rbipc_eventfd_drain(const rbipc_ring_t * RBIPC_RESTRICT ring) {
     if (RBIPC_UNLIKELY(!ring)) {
         return RBIPC_ERR_INVAL;
@@ -567,6 +591,9 @@ int rbipc_get_stats(const rbipc_ring_t * RBIPC_RESTRICT ring, rbipc_stats_t * RB
 }
 
 RBIPC_LEAF
+/**
+ * @brief Set wait synchronization policy (zero-spin vs adaptive).
+ */
 int rbipc_set_wait_policy(rbipc_ring_t *ring, uint32_t policy) {
     if (RBIPC_UNLIKELY(!ring)) {
         return RBIPC_ERR_INVAL;
@@ -579,6 +606,9 @@ int rbipc_set_wait_policy(rbipc_ring_t *ring, uint32_t policy) {
 }
 
 RBIPC_LEAF
+/**
+ * @brief Query current wait synchronization policy.
+ */
 uint32_t rbipc_get_wait_policy(const rbipc_ring_t *ring) {
     if (RBIPC_UNLIKELY(!ring)) {
         return RBIPC_WAIT_ZERO_SPIN;
@@ -587,6 +617,9 @@ uint32_t rbipc_get_wait_policy(const rbipc_ring_t *ring) {
 }
 
 RBIPC_LEAF
+/**
+ * @brief Configure consumer slot holding lease duration in nanoseconds.
+ */
 int rbipc_set_lease_timeout(rbipc_ring_t *ring, uint64_t lease_timeout_ns) {
     if (RBIPC_UNLIKELY(!ring || !ring->hdr)) {
         return RBIPC_ERR_INVAL;
@@ -596,6 +629,9 @@ int rbipc_set_lease_timeout(rbipc_ring_t *ring, uint64_t lease_timeout_ns) {
 }
 
 RBIPC_LEAF
+/**
+ * @brief Query configured consumer slot holding lease duration in nanoseconds.
+ */
 uint64_t rbipc_get_lease_timeout(const rbipc_ring_t *ring) {
     if (RBIPC_UNLIKELY(!ring || !ring->hdr)) {
         return 0;
@@ -604,6 +640,9 @@ uint64_t rbipc_get_lease_timeout(const rbipc_ring_t *ring) {
 }
 
 RBIPC_LEAF
+/**
+ * @brief Proactively audit ring buffer and revoke expired consumer leases.
+ */
 int rbipc_revoke_expired_leases(rbipc_ring_t *ring) {
     if (RBIPC_UNLIKELY(!ring || !ring->hdr)) {
         return RBIPC_ERR_INVAL;

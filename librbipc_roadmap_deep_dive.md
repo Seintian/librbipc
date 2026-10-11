@@ -658,7 +658,9 @@ Because a futex operates on raw userspace memory words and does not provide a fi
   - Added atomic `eventfd_waiters` counter to `rbipc_shm_header_t` in `include/rbipc.h` and bound `event_fd` / `owns_eventfd` descriptor tracking in `src/rbipc_internal.h`.
   - Implemented `rbipc_enable_eventfd`, `rbipc_set_eventfd`, `rbipc_get_eventfd`, and `rbipc_eventfd_drain` in `src/rbipc_ring.c`, creating non-blocking cloexec eventfds and tracking waiter registrations.
   - Implemented `rbipc_ring_signal_eventfd` dual-trigger notifications on `rbipc_commit_write`, `rbipc_commit_write_batch`, `rbipc_read_release`, `rbipc_read_release_batch`, and `rbipc_signal_shutdown`.
-  - Added comprehensive epoll reactor test in `tests/test_unit_reactor.c` validating edge-triggered event multiplexing, drain behavior, slot commit/release wakeups, and shutdown broadcasting.
+  - Enforced RAII descriptor cleanup and `eventfd_waiters` decrement prior to shared memory unmapping in `rbipc_detach()`.
+  - Added explicit atomic initialization for `eventfd_waiters` and telemetry exposure via `rbipc_get_stats()`.
+  - Added comprehensive epoll reactor test in `tests/test_unit_reactor.c` validating edge-triggered event multiplexing, drain behavior, slot commit/release wakeups, shutdown broadcasting, and clean waiter state de-registration.
 
 ---
 

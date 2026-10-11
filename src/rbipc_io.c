@@ -820,11 +820,17 @@ int rbipc_reserve_write_batch_timeout(rbipc_ring_t * RBIPC_RESTRICT ring, uint32
     }
 }
 
+/**
+ * @brief Reserve a batch of contiguous slots for writing (Blocking).
+ */
 int rbipc_reserve_write_batch(rbipc_ring_t * RBIPC_RESTRICT ring, uint32_t count,
                               rbipc_iovec_t * RBIPC_RESTRICT iovecs, uint32_t * RBIPC_RESTRICT out_reserved) {
     return rbipc_reserve_write_batch_timeout(ring, count, UINT64_MAX, iovecs, out_reserved);
 }
 
+/**
+ * @brief Reserve a batch of contiguous slots for writing (Non-blocking).
+ */
 int rbipc_reserve_write_batch_nonblock(rbipc_ring_t * RBIPC_RESTRICT ring, uint32_t count,
                                        rbipc_iovec_t * RBIPC_RESTRICT iovecs, uint32_t * RBIPC_RESTRICT out_reserved) {
     return rbipc_reserve_write_batch_timeout(ring, count, 0, iovecs, out_reserved);
@@ -1136,11 +1142,17 @@ int rbipc_read_acquire_batch_timeout(rbipc_ring_t * RBIPC_RESTRICT ring, uint32_
     }
 }
 
+/**
+ * @brief Acquire a batch of committed slots for reading (Blocking).
+ */
 int rbipc_read_acquire_batch(rbipc_ring_t * RBIPC_RESTRICT ring, uint32_t count,
                              rbipc_rovec_t * RBIPC_RESTRICT rovecs, uint32_t * RBIPC_RESTRICT out_acquired) {
     return rbipc_read_acquire_batch_timeout(ring, count, UINT64_MAX, rovecs, out_acquired);
 }
 
+/**
+ * @brief Acquire a batch of committed slots for reading (Non-blocking).
+ */
 int rbipc_read_acquire_batch_nonblock(rbipc_ring_t * RBIPC_RESTRICT ring, uint32_t count,
                                       rbipc_rovec_t * RBIPC_RESTRICT rovecs, uint32_t * RBIPC_RESTRICT out_acquired) {
     return rbipc_read_acquire_batch_timeout(ring, count, 0, rovecs, out_acquired);
@@ -1216,6 +1228,9 @@ static void rbipc_stream_copy_sse2_blocks(uint8_t * RBIPC_RESTRICT d,
 }
 #endif
 
+/**
+ * @brief Non-temporal streaming memory copy bypassing CPU cache hierarchies.
+ */
 RBIPC_LEAF
 int rbipc_stream_copy(void * RBIPC_RESTRICT dst, const void * RBIPC_RESTRICT src, size_t size) {
     if (RBIPC_UNLIKELY(!dst || !src)) {
@@ -1262,6 +1277,9 @@ int rbipc_stream_copy(void * RBIPC_RESTRICT dst, const void * RBIPC_RESTRICT src
     return RBIPC_OK;
 }
 
+/**
+ * @brief Transmit payload via non-temporal streaming stores with bounded timeout.
+ */
 RBIPC_LEAF
 int rbipc_write_stream_timeout(rbipc_ring_t * RBIPC_RESTRICT ring,
                                const void * RBIPC_RESTRICT src,
@@ -1280,6 +1298,9 @@ int rbipc_write_stream_timeout(rbipc_ring_t * RBIPC_RESTRICT ring,
     return rbipc_commit_write(ring, *out_ticket, len);
 }
 
+/**
+ * @brief Transmit payload via non-temporal streaming stores (Blocking).
+ */
 RBIPC_LEAF
 int rbipc_write_stream(rbipc_ring_t * RBIPC_RESTRICT ring,
                        const void * RBIPC_RESTRICT src,
@@ -1288,6 +1309,9 @@ int rbipc_write_stream(rbipc_ring_t * RBIPC_RESTRICT ring,
     return rbipc_write_stream_timeout(ring, src, len, UINT64_MAX, out_ticket);
 }
 
+/**
+ * @brief Transmit payload via non-temporal streaming stores (Non-blocking).
+ */
 RBIPC_LEAF
 int rbipc_write_stream_nonblock(rbipc_ring_t * RBIPC_RESTRICT ring,
                                 const void * RBIPC_RESTRICT src,

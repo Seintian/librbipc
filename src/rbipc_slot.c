@@ -49,6 +49,9 @@ RBIPC_INLINE void rbipc_slot_init_single(rbipc_slot_t *slot, uint32_t index) {
     atomic_init(&slot->acquire_timestamp_ns, 0);
 }
 
+/**
+ * @brief Initialize all slot descriptors across the shared memory slot table.
+ */
 RBIPC_LEAF
 void rbipc_slot_init_table(rbipc_slot_t * RBIPC_RESTRICT slots, uint32_t capacity) {
     if (RBIPC_UNLIKELY(rbipc_is_null(slots))) return;
@@ -58,6 +61,9 @@ void rbipc_slot_init_table(rbipc_slot_t * RBIPC_RESTRICT slots, uint32_t capacit
     }
 }
 
+/**
+ * @brief Probe process liveness via pidfd or kill(pid, 0).
+ */
 RBIPC_LEAF
 bool rbipc_slot_is_peer_alive(pid_t pid) {
     if (RBIPC_UNLIKELY(pid <= 0)) return false;
@@ -91,6 +97,9 @@ bool rbipc_slot_is_peer_alive(pid_t pid) {
     return errno != ESRCH;
 }
 
+/**
+ * @brief Transition slot to RESERVING state.
+ */
 RBIPC_LEAF
 void rbipc_slot_mark_reserving(rbipc_slot_t *slot, pid_t pid) {
     if (RBIPC_UNLIKELY(rbipc_is_null(slot))) return;
@@ -98,6 +107,9 @@ void rbipc_slot_mark_reserving(rbipc_slot_t *slot, pid_t pid) {
     atomic_store_explicit(&slot->state, RBIPC_SLOT_RESERVING, memory_order_release);
 }
 
+/**
+ * @brief Transition slot to RESERVED state.
+ */
 RBIPC_LEAF
 void rbipc_slot_mark_reserved(rbipc_slot_t *slot, pid_t pid) {
     if (RBIPC_UNLIKELY(rbipc_is_null(slot))) return;
@@ -105,6 +117,9 @@ void rbipc_slot_mark_reserved(rbipc_slot_t *slot, pid_t pid) {
     atomic_store_explicit(&slot->state, RBIPC_SLOT_RESERVED, memory_order_release);
 }
 
+/**
+ * @brief Commit payload and advance sequence to publish slot to consumers.
+ */
 RBIPC_LEAF
 void rbipc_slot_commit(rbipc_slot_t *slot, uint64_t ticket, uint32_t len) {
     if (RBIPC_UNLIKELY(rbipc_is_null(slot))) return;
@@ -114,6 +129,9 @@ void rbipc_slot_commit(rbipc_slot_t *slot, uint64_t ticket, uint32_t len) {
     atomic_store_explicit(&slot->sequence, ticket + 1, memory_order_release);
 }
 
+/**
+ * @brief Poison an abandoned reservation to allow consumers to bypass.
+ */
 RBIPC_LEAF
 bool rbipc_slot_poison(rbipc_slot_t *slot, uint64_t ticket) {
     if (RBIPC_UNLIKELY(rbipc_is_null(slot))) return false;
@@ -130,6 +148,9 @@ bool rbipc_slot_poison(rbipc_slot_t *slot, uint64_t ticket) {
     return false;
 }
 
+/**
+ * @brief Record consumer PID and acquisition timestamp on slot.
+ */
 RBIPC_LEAF
 void rbipc_slot_mark_acquired(rbipc_slot_t *slot, pid_t pid, uint64_t timestamp_ns) {
     if (RBIPC_UNLIKELY(rbipc_is_null(slot))) return;
@@ -137,6 +158,9 @@ void rbipc_slot_mark_acquired(rbipc_slot_t *slot, pid_t pid, uint64_t timestamp_
     atomic_store_explicit(&slot->acquire_timestamp_ns, timestamp_ns, memory_order_relaxed);
 }
 
+/**
+ * @brief Recover slot abandoned by dead consumer.
+ */
 RBIPC_LEAF
 bool rbipc_slot_recover_dead_consumer(rbipc_slot_t *slot, uint64_t ticket) {
     if (RBIPC_UNLIKELY(rbipc_is_null(slot))) return false;
@@ -153,6 +177,9 @@ bool rbipc_slot_recover_dead_consumer(rbipc_slot_t *slot, uint64_t ticket) {
     return false;
 }
 
+/**
+ * @brief Revoke expired consumer lease and recycle slot sequence.
+ */
 RBIPC_LEAF
 bool rbipc_slot_recover_expired_lease(rbipc_slot_t *slot, uint64_t target_vacant_ticket, uint64_t lease_timeout_ns, uint64_t now_ns) {
     if (RBIPC_UNLIKELY(rbipc_is_null(slot) || lease_timeout_ns == 0)) return false;
@@ -172,6 +199,9 @@ bool rbipc_slot_recover_expired_lease(rbipc_slot_t *slot, uint64_t target_vacant
     return false;
 }
 
+/**
+ * @brief Release consumed slot with consumer PID validation.
+ */
 RBIPC_LEAF
 bool rbipc_slot_release_ex(rbipc_slot_t *slot, uint64_t ticket, uint32_t capacity, pid_t expected_pid) {
     if (RBIPC_UNLIKELY(rbipc_is_null(slot))) return false;

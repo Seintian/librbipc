@@ -107,6 +107,9 @@ RBIPC_INLINE int rbipc_shm_calc_metadata_geometry(uint32_t capacity, size_t page
     return RBIPC_OK;
 }
 
+/**
+ * @brief Calculate shared memory partition offsets and layout geometry.
+ */
 RBIPC_LEAF
 int rbipc_shm_calc_layout(uint32_t capacity, uint32_t slot_size, size_t page_size, rbipc_layout_t * RBIPC_RESTRICT layout) {
     if (RBIPC_UNLIKELY(!layout || !rbipc_is_power_of_two(capacity) || capacity < 2 || slot_size == 0 || page_size == 0)) {
@@ -198,6 +201,9 @@ RBIPC_INLINE int rbipc_shm_truncate_file(int fd, size_t total_size) {
     return RBIPC_OK;
 }
 
+/**
+ * @brief Create and truncate a shared memory file descriptor with mode and flags.
+ */
 int rbipc_shm_create_ex(const char * RBIPC_RESTRICT name, size_t total_size, uint32_t flags, mode_t mode, int * RBIPC_RESTRICT out_fd) {
     if (RBIPC_UNLIKELY(!out_fd || total_size == 0)) {
         return RBIPC_ERR_INVAL;
@@ -225,6 +231,9 @@ int rbipc_shm_create_ex(const char * RBIPC_RESTRICT name, size_t total_size, uin
     return RBIPC_OK;
 }
 
+/**
+ * @brief Open an existing POSIX shared memory object.
+ */
 int rbipc_shm_open(const char * RBIPC_RESTRICT name, int * RBIPC_RESTRICT out_fd) {
     if (RBIPC_UNLIKELY(!out_fd || !rbipc_is_valid_shm_name(name))) {
         return RBIPC_ERR_INVAL;
@@ -240,6 +249,9 @@ int rbipc_shm_open(const char * RBIPC_RESTRICT name, int * RBIPC_RESTRICT out_fd
     return RBIPC_OK;
 }
 
+/**
+ * @brief Apply file sealing to shared memory file descriptor.
+ */
 RBIPC_LEAF
 int rbipc_shm_seal(int fd) {
     if (RBIPC_UNLIKELY(!rbipc_is_valid_fd(fd))) {
@@ -258,6 +270,9 @@ int rbipc_shm_seal(int fd) {
 #endif
 }
 
+/**
+ * @brief Unlink a POSIX shared memory object by name.
+ */
 RBIPC_LEAF
 int rbipc_shm_unlink(const char *name) {
     if (RBIPC_UNLIKELY(!rbipc_is_valid_shm_name(name))) {
@@ -269,6 +284,9 @@ int rbipc_shm_unlink(const char *name) {
     return RBIPC_OK;
 }
 
+/**
+ * @brief Close an open shared memory file descriptor.
+ */
 RBIPC_LEAF
 void rbipc_shm_close(int fd) {
     if (rbipc_is_valid_fd(fd)) {

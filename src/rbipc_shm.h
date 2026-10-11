@@ -68,6 +68,19 @@ int rbipc_shm_calc_layout(uint32_t capacity, uint32_t slot_size, size_t page_siz
 RBIPC_NODISCARD
 int rbipc_shm_create_ex(const char * RBIPC_RESTRICT name, size_t total_size, uint32_t flags, mode_t mode, int * RBIPC_RESTRICT out_fd);
 
+/**
+ * @brief Create a new shared memory file descriptor with default exclusive flags and zero mode.
+ *
+ * @param[in]  name       POSIX shared memory name, or NULL for anonymous memfd.
+ * @param[in]  total_size Allocation byte size to truncate file to.
+ * @param[out] out_fd     Location to store the opened file descriptor.
+ *
+ * @return @ref RBIPC_OK on success.
+ * @retval RBIPC_ERR_INVAL if @p out_fd is NULL or @p total_size is zero.
+ * @retval RBIPC_ERR_SYS   if shm_open, memfd_create, or ftruncate fails.
+ *
+ * @see rbipc_shm_create_ex
+ */
 RBIPC_INLINE int rbipc_shm_create(const char * RBIPC_RESTRICT name, size_t total_size, int * RBIPC_RESTRICT out_fd) {
     return rbipc_shm_create_ex(name, total_size, RBIPC_CREATE_EXCL, 0, out_fd);
 }

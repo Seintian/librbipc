@@ -24,6 +24,9 @@
 #include <sched.h>
 #include <errno.h>
 
+/**
+ * @brief Initialize synchronization state and deadline timestamp.
+ */
 RBIPC_LEAF
 void rbipc_sync_state_init(rbipc_sync_state_t * RBIPC_RESTRICT state, uint64_t timeout_ns) {
     if (RBIPC_UNLIKELY(!state)) return;
@@ -66,6 +69,9 @@ RBIPC_INLINE int rbipc_sync_calc_timeout_spec(const rbipc_sync_state_t * RBIPC_R
     return 0;
 }
 
+/**
+ * @brief Register intent to wait by incrementing waiter counter.
+ */
 RBIPC_LEAF
 void rbipc_sync_register_waiter(_Atomic uint32_t *futex_waiters) {
     if (futex_waiters) {
@@ -73,6 +79,9 @@ void rbipc_sync_register_waiter(_Atomic uint32_t *futex_waiters) {
     }
 }
 
+/**
+ * @brief Deregister wait intent by decrementing waiter counter.
+ */
 RBIPC_LEAF
 void rbipc_sync_deregister_waiter(_Atomic uint32_t *futex_waiters) {
     if (futex_waiters) {
@@ -80,6 +89,9 @@ void rbipc_sync_deregister_waiter(_Atomic uint32_t *futex_waiters) {
     }
 }
 
+/**
+ * @brief Execute futex wait when waiter is already registered.
+ */
 RBIPC_LEAF
 int rbipc_sync_wait_registered(rbipc_sync_state_t * RBIPC_RESTRICT state, _Atomic uint32_t *futex_word,
                                _Atomic uint32_t *futex_waiters) {
@@ -108,6 +120,9 @@ int rbipc_sync_wait_registered(rbipc_sync_state_t * RBIPC_RESTRICT state, _Atomi
     return 0;
 }
 
+/**
+ * @brief Passive futex backoff step with automatic waiter registration.
+ */
 RBIPC_LEAF
 int rbipc_sync_backoff(rbipc_sync_state_t * RBIPC_RESTRICT state, _Atomic uint32_t *futex_word,
                        _Atomic uint32_t *futex_waiters) {
@@ -118,6 +133,9 @@ int rbipc_sync_backoff(rbipc_sync_state_t * RBIPC_RESTRICT state, _Atomic uint32
     return rbipc_sync_wait_registered(state, futex_word, futex_waiters);
 }
 
+/**
+ * @brief Adaptive two-phase spin-then-wait backoff engine.
+ */
 RBIPC_LEAF
 int rbipc_sync_backoff_adaptive(rbipc_sync_state_t * RBIPC_RESTRICT state,
                                 _Atomic uint32_t *futex_word,
@@ -158,6 +176,9 @@ RBIPC_INLINE void rbipc_sync_dispatch_wake(_Atomic uint32_t *futex_word,
     }
 }
 
+/**
+ * @brief Wake up to count waiting threads via sys_futex.
+ */
 RBIPC_LEAF
 void rbipc_sync_wake_n(_Atomic uint32_t *futex_word, _Atomic uint32_t *futex_waiters, uint32_t count) {
     int c = (count > (uint32_t)INT32_MAX) ? INT32_MAX : (int)count;
@@ -165,11 +186,17 @@ void rbipc_sync_wake_n(_Atomic uint32_t *futex_word, _Atomic uint32_t *futex_wai
     rbipc_sync_dispatch_wake(futex_word, futex_waiters, c);
 }
 
+/**
+ * @brief Wake one waiting thread via sys_futex.
+ */
 RBIPC_LEAF
 void rbipc_sync_wake_one(_Atomic uint32_t *futex_word, _Atomic uint32_t *futex_waiters) {
     rbipc_sync_dispatch_wake(futex_word, futex_waiters, 1);
 }
 
+/**
+ * @brief Wake all waiting threads via sys_futex broadcast.
+ */
 RBIPC_LEAF
 void rbipc_sync_wake_all(_Atomic uint32_t *futex_word, _Atomic uint32_t *futex_waiters) {
     rbipc_sync_dispatch_wake(futex_word, futex_waiters, INT32_MAX);

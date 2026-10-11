@@ -45,15 +45,9 @@ RBIPC_NODISCARD RBIPC_LEAF
 bool rbipc_slot_is_peer_alive(pid_t pid);
 
 /**
- * @brief Atomically transition a slot descriptor to RESERVED state.
- *
- * @details Sets the producer PID and stores @ref RBIPC_SLOT_RESERVED with relaxed ordering.
- *
- * @param[in,out] slot Direct pointer to slot descriptor.
- * @param[in]     pid  Process identifier of reserving producer.
- */
-/**
  * @brief Atomically transition a slot descriptor to RESERVING state.
+ *
+ * @details Pre-reserves slot before acquiring the write ticket to close PID registration races.
  *
  * @param[in,out] slot Direct pointer to slot descriptor.
  * @param[in]     pid  Process identifier of reserving producer.
@@ -61,6 +55,14 @@ bool rbipc_slot_is_peer_alive(pid_t pid);
 RBIPC_LEAF
 void rbipc_slot_mark_reserving(rbipc_slot_t *slot, pid_t pid);
 
+/**
+ * @brief Atomically transition a slot descriptor to RESERVED state.
+ *
+ * @details Sets the producer PID and stores @ref RBIPC_SLOT_RESERVED with relaxed ordering.
+ *
+ * @param[in,out] slot Direct pointer to slot descriptor.
+ * @param[in]     pid  Process identifier of reserving producer.
+ */
 RBIPC_LEAF
 void rbipc_slot_mark_reserved(rbipc_slot_t *slot, pid_t pid);
 
@@ -91,16 +93,6 @@ void rbipc_slot_commit(rbipc_slot_t *slot, uint64_t ticket, uint32_t len);
 RBIPC_LEAF
 bool rbipc_slot_poison(rbipc_slot_t *slot, uint64_t ticket);
 
-/**
- * @brief Release a consumed slot back to the ring buffer for producer recycling.
- *
- * @details Resets state to @ref RBIPC_SLOT_EMPTY, clears PID and length, and advances
- * the sequence to `ticket + capacity` with release memory ordering.
- *
- * @param[in,out] slot     Direct pointer to slot descriptor.
- * @param[in]     ticket   Acquired ticket number being released.
- * @param[in]     capacity Total ring buffer capacity (turn step distance).
- */
 /**
  * @brief Stamp slot with consumer ownership on acquisition.
  *
@@ -139,11 +131,31 @@ RBIPC_LEAF
 bool rbipc_slot_recover_expired_lease(rbipc_slot_t *slot, uint64_t target_vacant_ticket, uint64_t lease_timeout_ns, uint64_t now_ns);
 
 /**
- * @brief Release a consumed slot with expected consumer PID validation.
+ * @brief Release a consumed slot back to the ring buffer with expected consumer PID validation.
+ *
+ * @details Resets state to @ref RBIPC_SLOT_EMPTY, clears PID and length, and advances
+ * the sequence to `ticket + capacity` with release memory ordering.
+ *
+ * @param[in,out] slot         Direct pointer to slot descriptor.
+ * @param[in]     ticket       Acquired ticket number being released.
+ * @param[in]     capacity     Total ring buffer capacity (turn step distance).
+ * @param[in]     expected_pid Expected consumer PID (or 0 to bypass PID validation).
+ *
+ * @return true on successful release; false if consumer PID mismatch.
  */
 RBIPC_LEAF
 bool rbipc_slot_release_ex(rbipc_slot_t *slot, uint64_t ticket, uint32_t capacity, pid_t expected_pid);
 
+/**
+ * @brief Release a consumed slot back to the ring buffer for producer recycling.
+ *
+ * @details Resets state to @ref RBIPC_SLOT_EMPTY, clears PID and length, and advances
+ * the sequence to `ticket + capacity` with release memory ordering.
+ *
+ * @param[in,out] slot     Direct pointer to slot descriptor.
+ * @param[in]     ticket   Acquired ticket number being released.
+ * @param[in]     capacity Total ring buffer capacity (turn step distance).
+ */
 RBIPC_INLINE void rbipc_slot_release(rbipc_slot_t *slot, uint64_t ticket, uint32_t capacity) {
     (void)rbipc_slot_release_ex(slot, ticket, capacity, 0);
 }

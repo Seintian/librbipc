@@ -20,6 +20,10 @@
 #include <stdint.h>
 #include <time.h>
 
+#if defined(__x86_64__) || defined(_M_X64) || defined(__i386__) || defined(_M_IX86)
+#include <immintrin.h>
+#endif
+
 /**
  * @brief Emit a hardware processor hint indicating an execution pause or spin-wait loop.
  *
@@ -31,24 +35,17 @@
  *
  * @note In librbipc passive zero-spin mode, execution suspends via sys_futex rather than spinning.
  */
+RBIPC_INLINE void rbipc_cpu_pause(void) {
 #if defined(__x86_64__) || defined(_M_X64) || defined(__i386__) || defined(_M_IX86)
-#include <immintrin.h>
-RBIPC_INLINE void rbipc_cpu_pause(void) {
     _mm_pause();
-}
 #elif defined(__aarch64__) || defined(__arm__)
-RBIPC_INLINE void rbipc_cpu_pause(void) {
     __asm__ __volatile__("isb\n" ::: "memory");
-}
 #elif defined(__riscv)
-RBIPC_INLINE void rbipc_cpu_pause(void) {
     __asm__ __volatile__("pause\n" ::: "memory");
-}
 #else
-RBIPC_INLINE void rbipc_cpu_pause(void) {
     __asm__ __volatile__("" ::: "memory");
-}
 #endif
+}
 
 /**
  * @brief Query current high-resolution monotonic clock timestamp in nanoseconds.
