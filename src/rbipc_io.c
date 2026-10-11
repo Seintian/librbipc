@@ -1,202 +1,121 @@
 /**
  * @file rbipc_io.c
- * @brief Zero-copy input/output queueing operations, ticket coordination, and batching.
- * @details Implements the lock-free single-item and vectorized multi-item reservation,
- *          commit, acquisition, and release pipelines. Provides crash detection for
- *          uncommitted peer slots, zero-spin passive futex synchronization,
- *          and memory prefetching.
+ * @brief Lock-free, wait-free single-slot ring buffer I/O pipeline implementation.
+ *
+ * @details Implements single-slot zero-copy write reservation, atomic publication,
+ * read acquisition, and slot reclamation. Coordinates synchronization via cache-line
+ * isolated sequence state machines and adaptive futex backoff.
+ *
+ * Grounded in systems literature:
+ * - Dmitry Vyukov (2010), "Bounded MPMC Queue", 1024cores.
+ * - Ulrich Drepper (2007), "What Every Programmer Should Know About Memory".
+ *
+ * @author Christian Santarelli
+ * @date 2026
+ * @copyright Apache License 2.0
  */
 
 #ifndef _GNU_SOURCE
 #define _GNU_SOURCE
 #endif
 
-#include "rbipc.h"
-#include "rbipc_internal.h"
 #include "rbipc_io.h"
-#include "rbipc_math.h"
+#include "rbipc_internal.h"
 #include "rbipc_slot.h"
 #include "rbipc_sync.h"
-#include "rbipc_attr.h"
+#include "rbipc_audit.h"
 #include "rbipc_predicate.h"
+#include "rbipc_reactor.h"
 
-#include <unistd.h>
-#include <errno.h>
-
-#if defined(__x86_64__) || defined(_M_X64)
-#include <immintrin.h>
-#elif defined(__aarch64__) || defined(__arm__)
-#include <arm_neon.h>
-#endif
+#include <string.h>
 
 /* ============================================================================
- * Atomic Synchronization and State Transition Subroutines
+ * Internal Fast-Path Ticket and Reservation Helpers
  * ============================================================================ */
 
 /**
- * @brief Attempts an atomic CAS reservation of a producer write ticket range.
- * @details Uses @c atomic_compare_exchange_weak_explicit with relaxed memory order
- *          to advance @c write_ticket by @p count. If the CAS fails, @p t is updated
- *          with the most recent observed ticket value.
- *
- * @param[in,out] hdr   Pointer to shared memory control header.
- * @param[in,out] t     Pointer to expected current write ticket.
- * @param[in]     count Number of consecutive slots to reserve.
- *
- * @return @c true if the ticket range was claimed successfully; @c false otherwise.
+ * @brief Attempt to atomically advance write ticket.
  */
 RBIPC_INLINE bool rbipc_io_try_claim_write_ticket(rbipc_shm_header_t * RBIPC_RESTRICT hdr,
                                                   uint64_t * RBIPC_RESTRICT t,
                                                   uint32_t count) {
-    return atomic_compare_exchange_weak_explicit(&hdr->write_ticket, t, *t + count,
-                                                 memory_order_relaxed, memory_order_relaxed);
+    return atomic_compare_exchange_weak_explicit(&hdr->write_ticket, t, *t + (uint64_t)count,
+                                                 memory_order_acq_rel, memory_order_relaxed);
 }
 
 /**
- * @brief Attempts an atomic CAS reservation of a consumer read ticket range.
- * @details Uses @c atomic_compare_exchange_weak_explicit with relaxed memory order
- *          to advance @c read_ticket by @p count. If the CAS fails, @p t is updated
- *          with the most recent observed ticket value.
- *
- * @param[in,out] hdr   Pointer to shared memory control header.
- * @param[in,out] t     Pointer to expected current read ticket.
- * @param[in]     count Number of consecutive slots to acquire.
- *
- * @return @c true if the ticket range was claimed successfully; @c false otherwise.
+ * @brief Attempt to atomically advance read ticket.
  */
 RBIPC_INLINE bool rbipc_io_try_claim_read_ticket(rbipc_shm_header_t * RBIPC_RESTRICT hdr,
                                                  uint64_t * RBIPC_RESTRICT t,
                                                  uint32_t count) {
-    return atomic_compare_exchange_weak_explicit(&hdr->read_ticket, t, *t + count,
-                                                 memory_order_relaxed, memory_order_relaxed);
+    return atomic_compare_exchange_weak_explicit(&hdr->read_ticket, t, *t + (uint64_t)count,
+                                                 memory_order_acq_rel, memory_order_relaxed);
 }
 
 /**
- * @brief Audits a slot descriptor and recovers the ring if the holding producer died prematurely.
- * @details If a slot remains in @c RBIPC_SLOT_RESERVED state and its holding PID is no longer
- *          alive in the operating system process table, poisons the slot and wakes waiting
- *          consumers so progress is not permanently stalled.
- *
- * @param[in,out] hdr    Pointer to shared memory control header.
- * @param[in,out] slot   Pointer to slot descriptor under inspection.
- * @param[in]     ticket Current consumer ticket value.
- */
-static void rbipc_io_audit_and_recover_dead_peer_range(rbipc_shm_header_t *hdr,
-                                                       rbipc_slot_t *slots,
-                                                       uint64_t t,
-                                                       uint32_t count) {
-    const uint32_t mask = hdr->capacity_mask;
-    for (uint32_t i = 0; i < count; ++i) {
-        uint64_t ticket_i = t + (uint64_t)i;
-        rbipc_slot_t *slot_i = &slots[ticket_i & mask];
-        uint64_t seq = atomic_load_explicit(&slot_i->sequence, memory_order_acquire);
-        if (rbipc_slot_is_ready(seq, ticket_i)) {
-            continue;
-        }
-        uint32_t state = atomic_load_explicit(&slot_i->state, memory_order_acquire);
-        if (rbipc_slot_state_is_reserved(state) || rbipc_slot_state_is_reserving(state)) {
-            uint32_t pid = atomic_load_explicit(&slot_i->producer_pid, memory_order_relaxed);
-            if (pid > 0 && !rbipc_slot_is_peer_alive((pid_t)pid)) {
-                if (rbipc_slot_poison(slot_i, ticket_i)) {
-                    atomic_thread_fence(memory_order_seq_cst);
-                    rbipc_sync_wake_all(&hdr->futex_seq, &hdr->futex_waiters);
-                }
-            } else {
-                break;
-            }
-        } else {
-            break;
-        }
-    }
-}
-
-static void rbipc_io_audit_and_recover_dead_peer(rbipc_shm_header_t *hdr, rbipc_slot_t *slot, uint64_t ticket) {
-    uint32_t state = atomic_load_explicit(&slot->state, memory_order_acquire);
-    if (rbipc_slot_state_is_reserved(state) || rbipc_slot_state_is_reserving(state)) {
-        uint32_t pid = atomic_load_explicit(&slot->producer_pid, memory_order_relaxed);
-        if (pid > 0 && !rbipc_slot_is_peer_alive((pid_t)pid)) {
-            if (rbipc_slot_poison(slot, ticket)) {
-                atomic_thread_fence(memory_order_seq_cst);
-                rbipc_sync_wake_all(&hdr->futex_seq, &hdr->futex_waiters);
-            }
-        }
-    }
-}
-
-/**
- * @brief Finalizes a slot write reservation and primes CPU caches.
- * @details Marks the slot reserved with the current PID, populates the output buffer
- *          and ticket pointers, and issues prefetch instructions for the next slot.
- *
- * @param[in]  ring       Pointer to active ring handle.
- * @param[out] slot       Pointer to slot descriptor being reserved.
- * @param[in]  ticket     Claimed write ticket.
- * @param[out] out_buf    Pointer to receive the payload address.
- * @param[out] out_ticket Pointer to receive the claimed ticket.
+ * @brief Finalize single-slot write reservation and populate return pointers.
  */
 RBIPC_INLINE void rbipc_io_complete_write_reservation(rbipc_ring_t * RBIPC_RESTRICT ring,
-                                                      rbipc_slot_t *slot, uint64_t ticket,
+                                                      rbipc_slot_t * RBIPC_RESTRICT slot,
+                                                      uint64_t t,
                                                       void ** RBIPC_RESTRICT out_buf,
-                                                      uint64_t * RBIPC_RESTRICT out_ticket) {
+                                                      uint64_t * RBIPC_RESTRICT ticket) {
     rbipc_slot_mark_reserved(slot, ring->cached_pid);
-    *out_buf = rbipc_io_calc_slot_ptr(ring, ticket);
-    *out_ticket = ticket;
-    rbipc_io_prefetch_write_next(ring, ticket + 1);
+    *out_buf = rbipc_io_calc_slot_ptr(ring, t);
+    *ticket = t;
+    rbipc_io_prefetch_write_next(ring, t + 1);
 }
 
 /**
- * @brief Evaluates ring full conditions and executes adaptive futex backoff.
- * @details If timeout is zero, returns @c RBIPC_ERR_FULL immediately. Otherwise,
- *          delegates to rbipc_sync_backoff() waiting on @c write_futex_seq, and refreshes
- *          the producer ticket upon wakeup.
- *
- * @param[in,out] sync_state State tracking deadline and timeout.
- * @param[in,out] hdr        Shared memory control header.
- * @param[in]     timeout_ns Nanosecond timeout budget.
- * @param[out]    t          Pointer to receive refreshed write ticket.
- *
- * @return Status code indicating the outcome of the backoff.
- * @retval RBIPC_OK           Woken up before timeout.
- * @retval RBIPC_ERR_FULL     Non-blocking mode and buffer is full.
- * @retval RBIPC_ERR_TIMEDOUT Timeout expired without available space.
+ * @brief Finalize single-slot read acquisition and extract message payload pointers.
  */
-static void rbipc_io_audit_and_recover_dead_consumer(rbipc_shm_header_t *hdr,
-                                                     rbipc_slot_t *slot,
-                                                     uint64_t ticket) {
-    bool recovered = false;
-    if (rbipc_slot_recover_dead_consumer(slot, ticket)) {
-        recovered = true;
-    } else {
-        uint64_t lease = atomic_load_explicit(&hdr->lease_timeout_ns, memory_order_relaxed);
-        if (lease > 0) {
-            uint64_t now = rbipc_clock_monotonic_ns();
-            if (rbipc_slot_recover_expired_lease(slot, ticket, lease, now)) {
-                recovered = true;
-            }
+RBIPC_INLINE int rbipc_io_complete_read_acquisition(const rbipc_ring_t * RBIPC_RESTRICT ring,
+                                                    rbipc_slot_t * RBIPC_RESTRICT slot,
+                                                    uint64_t ticket,
+                                                    const void ** RBIPC_RESTRICT out_buf,
+                                                    uint32_t * RBIPC_RESTRICT out_len,
+                                                    uint64_t * RBIPC_RESTRICT out_ticket) {
+    *out_ticket = ticket;
+    uint32_t state = atomic_load_explicit(&slot->state, memory_order_acquire);
+    if (RBIPC_LIKELY(rbipc_slot_state_is_committed(state))) {
+        rbipc_slot_mark_acquired(slot, ring->cached_pid, rbipc_clock_monotonic_ns());
+        *out_buf = rbipc_io_calc_slot_ptr(ring, ticket);
+        *out_len = atomic_load_explicit(&slot->len, memory_order_acquire);
+        rbipc_io_prefetch_read_next(ring, ticket + 1);
+        return RBIPC_OK;
+    }
+    if (rbipc_slot_state_is_poisoned(state)) {
+        rbipc_slot_mark_acquired(slot, ring->cached_pid, rbipc_clock_monotonic_ns());
+        *out_buf = NULL;
+        *out_len = 0;
+        return RBIPC_ERR_POISONED;
+    }
+
+    /* Defensive bounded micro-pause if state observation lagged behind slot sequence */
+    for (uint32_t p = 0; p < RBIPC_SPIN_COUNT_DEFAULT; ++p) {
+        rbipc_cpu_pause();
+        state = atomic_load_explicit(&slot->state, memory_order_acquire);
+        if (rbipc_slot_state_is_committed(state)) {
+            rbipc_slot_mark_acquired(slot, ring->cached_pid, rbipc_clock_monotonic_ns());
+            *out_buf = rbipc_io_calc_slot_ptr(ring, ticket);
+            *out_len = atomic_load_explicit(&slot->len, memory_order_acquire);
+            rbipc_io_prefetch_read_next(ring, ticket + 1);
+            return RBIPC_OK;
+        }
+        if (rbipc_slot_state_is_poisoned(state)) {
+            rbipc_slot_mark_acquired(slot, ring->cached_pid, rbipc_clock_monotonic_ns());
+            *out_buf = NULL;
+            *out_len = 0;
+            return RBIPC_ERR_POISONED;
         }
     }
-    if (recovered) {
-        atomic_thread_fence(memory_order_seq_cst);
-        rbipc_sync_wake_all(&hdr->write_futex_seq, &hdr->write_waiters);
-    }
+    return RBIPC_ERR_BUSY;
 }
 
-static void rbipc_io_audit_and_recover_dead_consumer_range(rbipc_shm_header_t *hdr,
-                                                           rbipc_slot_t *slots,
-                                                           uint64_t t,
-                                                           uint32_t count) {
-    const uint32_t mask = hdr->capacity_mask;
-    for (uint32_t i = 0; i < count; ++i) {
-        uint64_t ticket_i = t + (uint64_t)i;
-        rbipc_slot_t *slot_i = &slots[ticket_i & mask];
-        uint64_t seq = atomic_load_explicit(&slot_i->sequence, memory_order_acquire);
-        if (rbipc_slot_is_vacant(seq, ticket_i)) {
-            continue;
-        }
-        rbipc_io_audit_and_recover_dead_consumer(hdr, slot_i, ticket_i);
-    }
-}
-
+/**
+ * @brief Handle backoff progression and futex suspension when writer encounters full ring.
+ */
 static int rbipc_io_handle_write_backoff(const rbipc_ring_t *ring,
                                          rbipc_sync_state_t * RBIPC_RESTRICT sync_state,
                                          rbipc_shm_header_t *hdr,
@@ -204,7 +123,7 @@ static int rbipc_io_handle_write_backoff(const rbipc_ring_t *ring,
                                          uint64_t t_ticket,
                                          uint64_t timeout_ns,
                                          uint64_t * RBIPC_RESTRICT t) {
-    rbipc_io_audit_and_recover_dead_consumer(hdr, slot, t_ticket);
+    rbipc_audit_recover_dead_consumer(hdr, slot, t_ticket);
     uint64_t initial_seq = atomic_load_explicit(&slot->sequence, memory_order_acquire);
     if (RBIPC_LIKELY(rbipc_slot_is_vacant(initial_seq, t_ticket)) || RBIPC_UNLIKELY(rbipc_ring_is_shutdown(hdr))) {
         *t = atomic_load_explicit(&hdr->write_ticket, memory_order_relaxed);
@@ -227,11 +146,9 @@ static int rbipc_io_handle_write_backoff(const rbipc_ring_t *ring,
         }
     }
 
-    /* Phase 2: Passive Futex Sleep */
-    /* Step A: Register intent to wait with sequential consistency barrier */
+    /* Phase 2: Passive Futex Sleep with Dekker-style double-check */
     rbipc_sync_register_waiter(&hdr->write_waiters);
 
-    /* Step B: Double-check slot vacancy after waiter registration */
     uint64_t seq = atomic_load_explicit(&slot->sequence, memory_order_acquire);
     if (RBIPC_LIKELY(rbipc_slot_is_vacant(seq, t_ticket)) || RBIPC_UNLIKELY(rbipc_ring_is_shutdown(hdr))) {
         rbipc_sync_deregister_waiter(&hdr->write_waiters);
@@ -239,7 +156,6 @@ static int rbipc_io_handle_write_backoff(const rbipc_ring_t *ring,
         return RBIPC_OK;
     }
 
-    /* Step C & D: Suspend in kernel and deregister upon return */
     int rc = rbipc_sync_wait_registered(sync_state, &hdr->write_futex_seq, &hdr->write_waiters);
     if (RBIPC_UNLIKELY(rc != 0)) {
         return rc;
@@ -249,84 +165,7 @@ static int rbipc_io_handle_write_backoff(const rbipc_ring_t *ring,
 }
 
 /**
- * @brief Finalizes committed read acquisition and extracts message payload pointers.
- * @details Inspects slot state. If committed, returns payload buffer and length.
- *          If poisoned, returns @c RBIPC_ERR_POISONED. Otherwise, returns @c RBIPC_ERR_BUSY.
- *
- * @param[in]  ring       Pointer to ring handle.
- * @param[in]  slot       Pointer to acquired slot descriptor.
- * @param[in]  ticket     Acquired read ticket.
- * @param[out] out_buf    Pointer to receive payload address.
- * @param[out] out_len    Pointer to receive payload length.
- * @param[out] out_ticket Pointer to receive ticket.
- *
- * @return Status code indicating the outcome of acquisition.
- * @retval RBIPC_OK           Slot payload successfully acquired.
- * @retval RBIPC_ERR_POISONED Slot was poisoned due to producer crash.
- * @retval RBIPC_ERR_BUSY     Slot write in progress.
- */
-RBIPC_INLINE int rbipc_io_complete_read_acquisition(const rbipc_ring_t * RBIPC_RESTRICT ring,
-                                                    const rbipc_slot_t *slot, uint64_t ticket,
-                                                    const void ** RBIPC_RESTRICT out_buf,
-                                                    uint32_t * RBIPC_RESTRICT out_len,
-                                                    uint64_t * RBIPC_RESTRICT out_ticket) {
-    *out_ticket = ticket;
-    uint32_t state = atomic_load_explicit(&slot->state, memory_order_acquire);
-    if (RBIPC_LIKELY(rbipc_slot_state_is_committed(state))) {
-        rbipc_slot_mark_acquired((rbipc_slot_t *)slot, ring->cached_pid, rbipc_clock_monotonic_ns());
-        *out_buf = rbipc_io_calc_slot_ptr(ring, ticket);
-        *out_len = atomic_load_explicit(&slot->len, memory_order_acquire);
-        rbipc_io_prefetch_read_next(ring, ticket + 1);
-        return RBIPC_OK;
-    }
-    if (rbipc_slot_state_is_poisoned(state)) {
-        rbipc_slot_mark_acquired((rbipc_slot_t *)slot, ring->cached_pid, rbipc_clock_monotonic_ns());
-        *out_buf = NULL;
-        *out_len = 0;
-        return RBIPC_ERR_POISONED;
-    }
-
-    /* Defensive bounded micro-pause if state observation lagged behind slot sequence */
-    for (uint32_t p = 0; p < RBIPC_SPIN_COUNT_DEFAULT; ++p) {
-        rbipc_cpu_pause();
-        state = atomic_load_explicit(&slot->state, memory_order_acquire);
-        if (rbipc_slot_state_is_committed(state)) {
-            rbipc_slot_mark_acquired((rbipc_slot_t *)slot, ring->cached_pid, rbipc_clock_monotonic_ns());
-            *out_buf = rbipc_io_calc_slot_ptr(ring, ticket);
-            *out_len = atomic_load_explicit(&slot->len, memory_order_acquire);
-            rbipc_io_prefetch_read_next(ring, ticket + 1);
-            return RBIPC_OK;
-        }
-        if (rbipc_slot_state_is_poisoned(state)) {
-            rbipc_slot_mark_acquired((rbipc_slot_t *)slot, ring->cached_pid, rbipc_clock_monotonic_ns());
-            *out_buf = NULL;
-            *out_len = 0;
-            return RBIPC_ERR_POISONED;
-        }
-    }
-
-    *out_buf = NULL;
-    *out_len = 0;
-    return RBIPC_ERR_BUSY;
-}
-
-/**
- * @brief Evaluates ring empty conditions and executes adaptive futex backoff.
- * @details Checks for crashed producer peers, checks shutdown drain condition,
- *          and either returns @c RBIPC_ERR_EMPTY (non-blocking) or executes futex wait.
- *
- * @param[in,out] sync_state  State tracking deadline and timeout.
- * @param[in,out] hdr         Shared memory control header.
- * @param[in,out] slot        Current slot descriptor.
- * @param[in]     t           Current consumer ticket.
- * @param[in]     timeout_ns  Nanosecond timeout budget.
- * @param[out]    out_next_t  Pointer to receive refreshed read ticket.
- *
- * @return Status code indicating the outcome of the backoff.
- * @retval RBIPC_OK           Woken up with data available.
- * @retval RBIPC_ERR_EMPTY    Non-blocking mode and ring is empty.
- * @retval RBIPC_ERR_SHUTDOWN Ring shut down and all committed data consumed.
- * @retval RBIPC_ERR_TIMEDOUT Timeout expired without available data.
+ * @brief Handle backoff progression and futex suspension when reader encounters empty ring.
  */
 static int rbipc_io_handle_read_backoff(const rbipc_ring_t *ring,
                                         rbipc_sync_state_t * RBIPC_RESTRICT sync_state,
@@ -335,7 +174,7 @@ static int rbipc_io_handle_read_backoff(const rbipc_ring_t *ring,
                                         uint64_t t,
                                         uint64_t timeout_ns,
                                         uint64_t * RBIPC_RESTRICT out_next_t) {
-    rbipc_io_audit_and_recover_dead_peer(hdr, slot, t);
+    rbipc_audit_recover_dead_producer(hdr, slot, t);
 
     if (RBIPC_UNLIKELY(rbipc_ring_is_drained_on_shutdown(hdr, t))) {
         return RBIPC_ERR_SHUTDOWN;
@@ -357,11 +196,9 @@ static int rbipc_io_handle_read_backoff(const rbipc_ring_t *ring,
         }
     }
 
-    /* Phase 2: Passive Futex Sleep */
-    /* Step A: Register intent to wait with sequential consistency barrier */
+    /* Phase 2: Passive Futex Sleep with Dekker-style double-check */
     rbipc_sync_register_waiter(&hdr->futex_waiters);
 
-    /* Step B: Double-check condition to close lost-wakeup race window */
     uint64_t seq = atomic_load_explicit(&slot->sequence, memory_order_acquire);
     if (RBIPC_LIKELY(rbipc_slot_is_ready(seq, t)) || RBIPC_UNLIKELY(rbipc_ring_is_shutdown(hdr))) {
         rbipc_sync_deregister_waiter(&hdr->futex_waiters);
@@ -369,32 +206,13 @@ static int rbipc_io_handle_read_backoff(const rbipc_ring_t *ring,
         return RBIPC_OK;
     }
 
-    /* Step C & D: Suspend in kernel and deregister upon return */
     int rc = rbipc_sync_wait_registered(sync_state, &hdr->futex_seq, &hdr->futex_waiters);
     if (RBIPC_UNLIKELY(rc != 0)) {
         return rc;
     }
 
-    /* Timestamped ticket-hole detection: if slot remains in EMPTY state past 50ms grace period
-     * or active_producers is 0, producer crashed between CAS and slot reservation. */
-    uint32_t state = atomic_load_explicit(&slot->state, memory_order_acquire);
-    if (state == RBIPC_SLOT_EMPTY) {
-        uint64_t wt = atomic_load_explicit(&hdr->write_ticket, memory_order_acquire);
-        if (rbipc_seq_diff(wt, t) > 0) {
-            uint64_t now_ts = rbipc_clock_monotonic_ns();
-            if (sync_state->hole_first_seen_ns == 0) {
-                sync_state->hole_first_seen_ns = now_ts;
-            } else if (now_ts - sync_state->hole_first_seen_ns >= 50000000ULL ||
-                       atomic_load_explicit(&hdr->active_producers, memory_order_acquire) == 0) {
-                if (rbipc_slot_poison(slot, t)) {
-                    atomic_thread_fence(memory_order_seq_cst);
-                    rbipc_sync_wake_all(&hdr->futex_seq, &hdr->futex_waiters);
-                }
-            }
-        }
-    } else {
-        sync_state->hole_first_seen_ns = 0;
-    }
+    /* Unified ticket-hole audit & healing */
+    rbipc_audit_check_and_heal_ticket_hole(hdr, slot, t, sync_state);
 
     *out_next_t = atomic_load_explicit(&hdr->read_ticket, memory_order_relaxed);
     return RBIPC_OK;
@@ -404,11 +222,7 @@ static int rbipc_io_handle_read_backoff(const rbipc_ring_t *ring,
  * Public Single-Item Write Interface
  * ============================================================================ */
 
-/**
- * @brief Reserves a slot for writing with a specified nanosecond timeout.
- * @details Scans for a vacant slot at the current producer ticket. Uses zero-spin
- *          passive futex suspension if the ring is full.
- */
+RBIPC_LEAF
 int rbipc_reserve_write_timeout(rbipc_ring_t * RBIPC_RESTRICT ring, uint32_t len, uint64_t timeout_ns,
                                 void ** RBIPC_RESTRICT out_buf, uint64_t * RBIPC_RESTRICT ticket) {
     if (RBIPC_UNLIKELY(!ring || !ring->hdr || !out_buf || !ticket || len > ring->hdr->slot_size)) {
@@ -447,77 +261,66 @@ int rbipc_reserve_write_timeout(rbipc_ring_t * RBIPC_RESTRICT ring, uint32_t len
     }
 }
 
-/**
- * @brief Reserves a slot for writing with indefinite blocking.
- */
+RBIPC_LEAF
 int rbipc_reserve_write(rbipc_ring_t * RBIPC_RESTRICT ring, uint32_t len,
                         void ** RBIPC_RESTRICT out_buf, uint64_t * RBIPC_RESTRICT ticket) {
     return rbipc_reserve_write_timeout(ring, len, UINT64_MAX, out_buf, ticket);
 }
 
-/**
- * @brief Reserves a slot for writing non-blockingly.
- */
+RBIPC_LEAF
 int rbipc_reserve_write_nonblock(rbipc_ring_t * RBIPC_RESTRICT ring, uint32_t len,
                                  void ** RBIPC_RESTRICT out_buf, uint64_t * RBIPC_RESTRICT ticket) {
     return rbipc_reserve_write_timeout(ring, len, 0, out_buf, ticket);
 }
 
-/**
- * @brief Commits a previously reserved slot, publishing its contents to consumers.
- * @details Stores the written length, publishes the slot sequence with release memory semantics,
- *          and wakes a suspended consumer via futex if waiters exist.
- */
+RBIPC_LEAF
 int rbipc_commit_write(rbipc_ring_t * RBIPC_RESTRICT ring, uint64_t ticket, uint32_t written_len) {
     if (RBIPC_UNLIKELY(!ring || !ring->hdr || written_len > ring->hdr->slot_size)) {
         return RBIPC_ERR_INVAL;
     }
 
     rbipc_shm_header_t *hdr = ring->hdr;
-    rbipc_slot_t *slots = (rbipc_slot_t *)RBIPC_ASSUME_ALIGNED(ring->slots, RBIPC_CACHE_LINE);
-    rbipc_slot_t *slot = &slots[ticket & hdr->capacity_mask];
+    uint32_t idx = (uint32_t)(ticket & (uint64_t)hdr->capacity_mask);
+    rbipc_slot_t *slot = (rbipc_slot_t *)RBIPC_ASSUME_ALIGNED(&ring->slots[idx], RBIPC_CACHE_LINE);
 
     rbipc_slot_commit(slot, ticket, written_len);
+
     atomic_thread_fence(memory_order_seq_cst);
     if (RBIPC_UNLIKELY(rbipc_sync_has_waiters(&hdr->futex_waiters))) {
         rbipc_sync_wake_one(&hdr->futex_seq, &hdr->futex_waiters);
     }
-    rbipc_ring_signal_eventfd(ring);
+    rbipc_reactor_signal(ring);
 
     return RBIPC_OK;
 }
 
-/**
- * @brief Aborts a reserved slot without committing meaningful payload.
- * @details Transitions the slot to poisoned state and advances sequence, allowing
- *          consumers to skip the slot without stalling progress.
- */
+RBIPC_LEAF
 int rbipc_abort_write(rbipc_ring_t * RBIPC_RESTRICT ring, uint64_t ticket) {
     if (RBIPC_UNLIKELY(!ring || !ring->hdr)) {
         return RBIPC_ERR_INVAL;
     }
 
     rbipc_shm_header_t *hdr = ring->hdr;
-    rbipc_slot_t *slots = (rbipc_slot_t *)RBIPC_ASSUME_ALIGNED(ring->slots, RBIPC_CACHE_LINE);
-    rbipc_slot_t *slot = &slots[ticket & hdr->capacity_mask];
+    uint32_t idx = (uint32_t)(ticket & (uint64_t)hdr->capacity_mask);
+    rbipc_slot_t *slot = (rbipc_slot_t *)RBIPC_ASSUME_ALIGNED(&ring->slots[idx], RBIPC_CACHE_LINE);
 
     if (rbipc_slot_poison(slot, ticket)) {
         atomic_thread_fence(memory_order_seq_cst);
-        rbipc_sync_wake_one(&hdr->futex_seq, &hdr->futex_waiters);
+        if (RBIPC_UNLIKELY(rbipc_sync_has_waiters(&hdr->futex_waiters))) {
+            rbipc_sync_wake_all(&hdr->futex_seq, &hdr->futex_waiters);
+        }
+        rbipc_reactor_signal(ring);
+        return RBIPC_OK;
     }
 
-    return RBIPC_OK;
+    return RBIPC_ERR_BUSY;
 }
 
 /* ============================================================================
  * Public Single-Item Read Interface
  * ============================================================================ */
 
-/**
- * @brief Acquires the next committed slot for reading with a nanosecond timeout.
- * @details Reads the next slot at the consumer ticket. Supports zero-spin passive
- *          futex suspension if no data is currently available.
- */
+RBIPC_LEAF
 int rbipc_read_acquire_timeout(rbipc_ring_t * RBIPC_RESTRICT ring, uint64_t timeout_ns,
                                const void ** RBIPC_RESTRICT out_buf, uint32_t * RBIPC_RESTRICT out_len,
                                uint64_t * RBIPC_RESTRICT ticket) {
@@ -552,770 +355,36 @@ int rbipc_read_acquire_timeout(rbipc_ring_t * RBIPC_RESTRICT ring, uint64_t time
     }
 }
 
-/**
- * @brief Acquires the next committed slot for reading with indefinite blocking.
- */
+RBIPC_LEAF
 int rbipc_read_acquire(rbipc_ring_t * RBIPC_RESTRICT ring, const void ** RBIPC_RESTRICT out_buf,
                        uint32_t * RBIPC_RESTRICT out_len, uint64_t * RBIPC_RESTRICT ticket) {
     return rbipc_read_acquire_timeout(ring, UINT64_MAX, out_buf, out_len, ticket);
 }
 
-/**
- * @brief Acquires the next committed slot for reading non-blockingly.
- */
+RBIPC_LEAF
 int rbipc_read_acquire_nonblock(rbipc_ring_t * RBIPC_RESTRICT ring, const void ** RBIPC_RESTRICT out_buf,
                                 uint32_t * RBIPC_RESTRICT out_len, uint64_t * RBIPC_RESTRICT ticket) {
     return rbipc_read_acquire_timeout(ring, 0, out_buf, out_len, ticket);
 }
 
-/**
- * @brief Releases a previously acquired slot, recycling it for future producer writes.
- * @details Increments the slot sequence by capacity to mark it vacant for the next cycle,
- *          and wakes a suspended producer via futex if write waiters exist.
- */
+RBIPC_LEAF
 int rbipc_read_release(rbipc_ring_t * RBIPC_RESTRICT ring, uint64_t ticket) {
     if (RBIPC_UNLIKELY(!ring || !ring->hdr)) {
         return RBIPC_ERR_INVAL;
     }
 
     rbipc_shm_header_t *hdr = ring->hdr;
-    rbipc_slot_t *slots = (rbipc_slot_t *)RBIPC_ASSUME_ALIGNED(ring->slots, RBIPC_CACHE_LINE);
-    rbipc_slot_t *slot = &slots[ticket & hdr->capacity_mask];
+    const uint32_t mask = hdr->capacity_mask;
+    const uint32_t cap = hdr->capacity;
+    rbipc_slot_t *slot = (rbipc_slot_t *)RBIPC_ASSUME_ALIGNED(&ring->slots[ticket & mask], RBIPC_CACHE_LINE);
 
-    if (RBIPC_UNLIKELY(!rbipc_slot_release_ex(slot, ticket, hdr->capacity, ring->cached_pid))) {
-        return RBIPC_ERR_TIMEOUT;
-    }
+    bool released = rbipc_slot_release_ex(slot, ticket, cap, ring->cached_pid);
+
     atomic_thread_fence(memory_order_seq_cst);
     if (RBIPC_UNLIKELY(rbipc_sync_has_waiters(&hdr->write_waiters))) {
         rbipc_sync_wake_one(&hdr->write_futex_seq, &hdr->write_waiters);
     }
-    rbipc_ring_signal_eventfd(ring);
+    rbipc_reactor_signal(ring);
 
-    return RBIPC_OK;
-}
-
-/* ============================================================================
- * Batch Queue (B-Queue) Vector Operations
- * ============================================================================ */
-
-/**
- * @brief Scans a contiguous range of vacant slots starting from ticket position.
- * @details Iterates up to @p count slots, returning the number of consecutive vacant slots found.
- *
- * @param[in] ring  Pointer to ring handle.
- * @param[in] t     Starting producer ticket.
- * @param[in] count Maximum number of slots to examine.
- *
- * @return Number of contiguous vacant slots available.
- */
-static uint32_t rbipc_io_scan_vacant_scalar(const rbipc_slot_t *slots, uint32_t mask, uint64_t t, uint32_t count) {
-    uint32_t avail = 0;
-    for (uint32_t i = 0; i < count; ++i) {
-        const rbipc_slot_t *slot = &slots[(t + i) & mask];
-        uint64_t seq = atomic_load_explicit(&slot->sequence, memory_order_acquire);
-        if (rbipc_slot_is_vacant(seq, t + i)) {
-            avail++;
-        } else {
-            break;
-        }
-    }
-    return avail;
-}
-
-#if defined(__x86_64__) || defined(_M_X64)
-#if defined(__GNUC__) || defined(__clang__)
-__attribute__((target("avx2")))
-#endif
-static uint32_t rbipc_io_scan_vacant_avx2(const rbipc_slot_t *slots, uint32_t mask, uint64_t t, uint32_t count) {
-    uint32_t avail = 0;
-    while (avail + 4 <= count) {
-        uint64_t base_t = t + avail;
-        uint32_t idx = (uint32_t)(base_t & mask);
-        uint64_t s0, s1, s2, s3;
-        if (idx + 4 <= mask + 1) {
-            s0 = atomic_load_explicit(&slots[idx + 0].sequence, memory_order_acquire);
-            s1 = atomic_load_explicit(&slots[idx + 1].sequence, memory_order_acquire);
-            s2 = atomic_load_explicit(&slots[idx + 2].sequence, memory_order_acquire);
-            s3 = atomic_load_explicit(&slots[idx + 3].sequence, memory_order_acquire);
-        } else {
-            s0 = atomic_load_explicit(&slots[(base_t + 0) & mask].sequence, memory_order_acquire);
-            s1 = atomic_load_explicit(&slots[(base_t + 1) & mask].sequence, memory_order_acquire);
-            s2 = atomic_load_explicit(&slots[(base_t + 2) & mask].sequence, memory_order_acquire);
-            s3 = atomic_load_explicit(&slots[(base_t + 3) & mask].sequence, memory_order_acquire);
-        }
-        __m256i vseq = _mm256_set_epi64x((long long)s3, (long long)s2, (long long)s1, (long long)s0);
-        __m256i vtgt = _mm256_set_epi64x((long long)(base_t + 3), (long long)(base_t + 2),
-                                         (long long)(base_t + 1), (long long)(base_t + 0));
-        __m256i cmp = _mm256_cmpeq_epi64(vseq, vtgt);
-        int match_mask = _mm256_movemask_pd((__m256d)cmp);
-        if (match_mask == 0x0F) {
-            avail += 4;
-        } else {
-            if ((match_mask & 0x01) == 0) return avail;
-            if ((match_mask & 0x02) == 0) return avail + 1;
-            if ((match_mask & 0x04) == 0) return avail + 2;
-            return avail + 3;
-        }
-    }
-    while (avail < count) {
-        const rbipc_slot_t *slot = &slots[(t + avail) & mask];
-        uint64_t seq = atomic_load_explicit(&slot->sequence, memory_order_acquire);
-        if (rbipc_slot_is_vacant(seq, t + avail)) {
-            avail++;
-        } else {
-            break;
-        }
-    }
-    return avail;
-}
-#elif defined(__aarch64__)
-static uint32_t rbipc_io_scan_vacant_neon(const rbipc_slot_t *slots, uint32_t mask, uint64_t t, uint32_t count) {
-    uint32_t avail = 0;
-    while (avail + 2 <= count) {
-        uint64_t base_t = t + avail;
-        uint64_t s0 = atomic_load_explicit(&slots[(base_t + 0) & mask].sequence, memory_order_acquire);
-        uint64_t s1 = atomic_load_explicit(&slots[(base_t + 1) & mask].sequence, memory_order_acquire);
-        uint64x2_t vseq = vcombine_u64(vcreate_u64(s0), vcreate_u64(s1));
-        uint64x2_t vtgt = vcombine_u64(vcreate_u64(base_t), vcreate_u64(base_t + 1));
-        uint64x2_t cmp = vceqq_u64(vseq, vtgt);
-        if (vgetq_lane_u64(cmp, 0) == 0xFFFFFFFFFFFFFFFFULL) {
-            avail++;
-            if (vgetq_lane_u64(cmp, 1) == 0xFFFFFFFFFFFFFFFFULL) {
-                avail++;
-            } else {
-                return avail;
-            }
-        } else {
-            return avail;
-        }
-    }
-    while (avail < count) {
-        const rbipc_slot_t *slot = &slots[(t + avail) & mask];
-        uint64_t seq = atomic_load_explicit(&slot->sequence, memory_order_acquire);
-        if (rbipc_slot_is_vacant(seq, t + avail)) {
-            avail++;
-        } else {
-            break;
-        }
-    }
-    return avail;
-}
-#endif
-
-static uint32_t rbipc_io_scan_vacant_slots(const rbipc_ring_t *ring, uint64_t t, uint32_t count) {
-    const uint32_t mask = ring->hdr->capacity_mask;
-    const rbipc_slot_t *slots = (const rbipc_slot_t *)RBIPC_ASSUME_ALIGNED(ring->slots, RBIPC_CACHE_LINE);
-
-#if defined(__x86_64__) || defined(_M_X64)
-#if defined(__GNUC__) || defined(__clang__)
-    if (__builtin_cpu_supports("avx2") && count >= 4) {
-        return rbipc_io_scan_vacant_avx2(slots, mask, t, count);
-    }
-#endif
-#elif defined(__aarch64__)
-    if (count >= 2) {
-        return rbipc_io_scan_vacant_neon(slots, mask, t, count);
-    }
-#endif
-
-    return rbipc_io_scan_vacant_scalar(slots, mask, t, count);
-}
-
-/**
- * @brief Populates write reservation vector descriptors for an allocated batch.
- * @details Marks each reserved slot with caller PID, assigns buffer pointers and tickets,
- *          and prefetches upcoming slots.
- *
- * @param[in,out] ring   Pointer to ring handle.
- * @param[in]     t      Base ticket claimed for the batch.
- * @param[in]     count  Number of reserved slots in batch.
- * @param[out]    iovecs Array of write I/O vectors to populate.
- */
-static void rbipc_io_populate_reserved_batch(rbipc_ring_t * RBIPC_RESTRICT ring,
-                                             uint64_t t, uint32_t count,
-                                             rbipc_iovec_t * RBIPC_RESTRICT iovecs) {
-    const uint32_t mask = ring->hdr->capacity_mask;
-    const uint32_t slot_size = ring->hdr->slot_size;
-    pid_t my_pid = ring->cached_pid;
-    rbipc_slot_t *slots = (rbipc_slot_t *)RBIPC_ASSUME_ALIGNED(ring->slots, RBIPC_CACHE_LINE);
-    char *data_base = (char *)RBIPC_ASSUME_ALIGNED(ring->data_map, RBIPC_CACHE_LINE);
-
-    for (uint32_t i = 0; i < count; ++i) {
-        uint64_t ticket_i = t + (uint64_t)i;
-        rbipc_slot_t *slot_i = &slots[ticket_i & mask];
-        rbipc_slot_mark_reserved(slot_i, my_pid);
-        iovecs[i].buf = data_base + ((size_t)(ticket_i & mask) * slot_size);
-        iovecs[i].ticket = ticket_i;
-        iovecs[i].max_len = slot_size;
-    }
-    RBIPC_PREFETCH(&slots[(t + count) & mask], RBIPC_PREFETCH_WRITE, RBIPC_PREFETCH_LOCALITY_HIGH);
-}
-
-/**
- * @brief Reserves a contiguous batch of slots for writing using vector descriptors.
- * @details Claims up to @p count contiguous vacant slots in a single atomic CAS operation.
- */
-int rbipc_reserve_write_batch_timeout(rbipc_ring_t * RBIPC_RESTRICT ring, uint32_t count,
-                                      uint64_t timeout_ns,
-                                      rbipc_iovec_t * RBIPC_RESTRICT iovecs,
-                                      uint32_t * RBIPC_RESTRICT out_reserved) {
-    if (RBIPC_UNLIKELY(!ring || !ring->hdr || !iovecs || !out_reserved || count == 0)) {
-        return RBIPC_ERR_INVAL;
-    }
-
-    rbipc_shm_header_t *hdr = ring->hdr;
-    if (count > hdr->capacity) {
-        count = hdr->capacity;
-    }
-
-    uint64_t t = atomic_load_explicit(&hdr->write_ticket, memory_order_relaxed);
-
-    rbipc_sync_state_t sync_state;
-    rbipc_sync_state_init(&sync_state, timeout_ns);
-
-    rbipc_slot_t *slots = (rbipc_slot_t *)RBIPC_ASSUME_ALIGNED(ring->slots, RBIPC_CACHE_LINE);
-
-    for (;;) {
-        if (RBIPC_UNLIKELY(rbipc_ring_is_shutdown(hdr))) {
-            return RBIPC_ERR_SHUTDOWN;
-        }
-
-        rbipc_io_audit_and_recover_dead_consumer_range(hdr, slots, t, count);
-        uint32_t avail = rbipc_io_scan_vacant_slots(ring, t, count);
-        if (avail > 0) {
-            if (rbipc_io_try_claim_write_ticket(hdr, &t, avail)) {
-                rbipc_io_populate_reserved_batch(ring, t, avail, iovecs);
-                *out_reserved = avail;
-                return RBIPC_OK;
-            }
-        } else {
-            if (timeout_ns == 0) {
-                return RBIPC_ERR_FULL;
-            }
-            if (ring && (ring->wait_policy & RBIPC_WAIT_ADAPTIVE)) {
-                for (uint32_t spin = 0; spin < RBIPC_SPIN_COUNT_DEFAULT; ++spin) {
-                    rbipc_cpu_pause();
-                    avail = rbipc_io_scan_vacant_slots(ring, t, count);
-                    if (avail > 0 || RBIPC_UNLIKELY(rbipc_ring_is_shutdown(hdr))) {
-                        break;
-                    }
-                }
-                if (avail > 0) {
-                    continue;
-                }
-            }
-            rbipc_sync_register_waiter(&hdr->write_waiters);
-            rbipc_io_audit_and_recover_dead_consumer_range(hdr, slots, t, count);
-            avail = rbipc_io_scan_vacant_slots(ring, t, count);
-            if (avail > 0 || RBIPC_UNLIKELY(rbipc_ring_is_shutdown(hdr))) {
-                rbipc_sync_deregister_waiter(&hdr->write_waiters);
-                continue;
-            }
-            int rc = rbipc_sync_wait_registered(&sync_state, &hdr->write_futex_seq, &hdr->write_waiters);
-            if (RBIPC_UNLIKELY(rc != 0)) {
-                return rc;
-            }
-            t = atomic_load_explicit(&hdr->write_ticket, memory_order_relaxed);
-        }
-    }
-}
-
-/**
- * @brief Reserve a batch of contiguous slots for writing (Blocking).
- */
-int rbipc_reserve_write_batch(rbipc_ring_t * RBIPC_RESTRICT ring, uint32_t count,
-                              rbipc_iovec_t * RBIPC_RESTRICT iovecs, uint32_t * RBIPC_RESTRICT out_reserved) {
-    return rbipc_reserve_write_batch_timeout(ring, count, UINT64_MAX, iovecs, out_reserved);
-}
-
-/**
- * @brief Reserve a batch of contiguous slots for writing (Non-blocking).
- */
-int rbipc_reserve_write_batch_nonblock(rbipc_ring_t * RBIPC_RESTRICT ring, uint32_t count,
-                                       rbipc_iovec_t * RBIPC_RESTRICT iovecs, uint32_t * RBIPC_RESTRICT out_reserved) {
-    return rbipc_reserve_write_batch_timeout(ring, count, 0, iovecs, out_reserved);
-}
-
-/**
- * @brief Validates that all batch message lengths do not exceed slot capacity.
- *
- * @param[in] max_len Maximum slot payload limit.
- * @param[in] count   Number of elements in array.
- * @param[in] lens    Array of payload lengths to validate.
- *
- * @return @c true if all lengths are valid; @c false if any exceeds @p max_len.
- */
-static bool rbipc_io_validate_batch_lengths(uint32_t max_len, uint32_t count,
-                                            const uint32_t * RBIPC_RESTRICT lens) {
-    for (uint32_t i = 0; i < count; ++i) {
-        if (RBIPC_UNLIKELY(lens[i] > max_len)) {
-            return false;
-        }
-    }
-    return true;
-}
-
-/**
- * @brief Commits an array of reserved slot descriptors in shared memory.
- *
- * @param[in,out] ring    Pointer to ring handle.
- * @param[in]     count   Number of elements in batch.
- * @param[in]     tickets Array of reservation tickets to commit.
- * @param[in]     lens    Array of written payload lengths.
- */
-static void rbipc_io_commit_slot_batch(rbipc_ring_t * RBIPC_RESTRICT ring, uint32_t count,
-                                       const uint64_t * RBIPC_RESTRICT tickets,
-                                       const uint32_t * RBIPC_RESTRICT lens) {
-    const uint32_t mask = ring->hdr->capacity_mask;
-    rbipc_slot_t *slots = (rbipc_slot_t *)RBIPC_ASSUME_ALIGNED(ring->slots, RBIPC_CACHE_LINE);
-
-    for (uint32_t i = 0; i < count; ++i) {
-        rbipc_slot_t *slot = &slots[tickets[i] & mask];
-        rbipc_slot_commit(slot, tickets[i], lens[i]);
-    }
-}
-
-/**
- * @brief Commits a batch of previously reserved slots, publishing all payloads to consumers.
- */
-int rbipc_commit_write_batch(rbipc_ring_t * RBIPC_RESTRICT ring, uint32_t count,
-                             const uint64_t * RBIPC_RESTRICT tickets, const uint32_t * RBIPC_RESTRICT lens) {
-    if (RBIPC_UNLIKELY(!ring || !ring->hdr || !tickets || !lens || count == 0)) {
-        return RBIPC_ERR_INVAL;
-    }
-
-    rbipc_shm_header_t *hdr = ring->hdr;
-    if (RBIPC_UNLIKELY(!rbipc_io_validate_batch_lengths(hdr->slot_size, count, lens))) {
-        return RBIPC_ERR_INVAL;
-    }
-
-    rbipc_io_commit_slot_batch(ring, count, tickets, lens);
-
-    atomic_thread_fence(memory_order_seq_cst);
-    if (RBIPC_UNLIKELY(rbipc_sync_has_waiters(&hdr->futex_waiters))) {
-        rbipc_sync_wake_n(&hdr->futex_seq, &hdr->futex_waiters, count);
-    }
-    rbipc_ring_signal_eventfd(ring);
-    return RBIPC_OK;
-}
-
-/**
- * @brief Scans a contiguous range of ready committed slots starting from ticket position.
- *
- * @param[in] ring  Pointer to ring handle.
- * @param[in] t     Starting consumer ticket.
- * @param[in] count Maximum number of slots to examine.
- *
- * @return Number of contiguous ready slots available.
- */
-static uint32_t rbipc_io_scan_ready_scalar(const rbipc_slot_t *slots, uint32_t mask, uint64_t t, uint32_t count) {
-    uint32_t avail = 0;
-    for (uint32_t i = 0; i < count; ++i) {
-        const rbipc_slot_t *slot = &slots[(t + i) & mask];
-        uint64_t seq = atomic_load_explicit(&slot->sequence, memory_order_acquire);
-        if (rbipc_slot_is_ready(seq, t + i)) {
-            avail++;
-        } else {
-            break;
-        }
-    }
-    return avail;
-}
-
-#if defined(__x86_64__) || defined(_M_X64)
-#if defined(__GNUC__) || defined(__clang__)
-__attribute__((target("avx2")))
-#endif
-static uint32_t rbipc_io_scan_ready_avx2(const rbipc_slot_t *slots, uint32_t mask, uint64_t t, uint32_t count) {
-    uint32_t avail = 0;
-    while (avail + 4 <= count) {
-        uint64_t base_t = t + avail;
-        uint32_t idx = (uint32_t)(base_t & mask);
-        uint64_t s0, s1, s2, s3;
-        if (idx + 4 <= mask + 1) {
-            s0 = atomic_load_explicit(&slots[idx + 0].sequence, memory_order_acquire);
-            s1 = atomic_load_explicit(&slots[idx + 1].sequence, memory_order_acquire);
-            s2 = atomic_load_explicit(&slots[idx + 2].sequence, memory_order_acquire);
-            s3 = atomic_load_explicit(&slots[idx + 3].sequence, memory_order_acquire);
-        } else {
-            s0 = atomic_load_explicit(&slots[(base_t + 0) & mask].sequence, memory_order_acquire);
-            s1 = atomic_load_explicit(&slots[(base_t + 1) & mask].sequence, memory_order_acquire);
-            s2 = atomic_load_explicit(&slots[(base_t + 2) & mask].sequence, memory_order_acquire);
-            s3 = atomic_load_explicit(&slots[(base_t + 3) & mask].sequence, memory_order_acquire);
-        }
-        __m256i vseq = _mm256_set_epi64x((long long)s3, (long long)s2, (long long)s1, (long long)s0);
-        __m256i vtgt = _mm256_set_epi64x((long long)(base_t + 4), (long long)(base_t + 3),
-                                         (long long)(base_t + 2), (long long)(base_t + 1));
-        __m256i cmp = _mm256_cmpeq_epi64(vseq, vtgt);
-        int match_mask = _mm256_movemask_pd((__m256d)cmp);
-        if (match_mask == 0x0F) {
-            avail += 4;
-        } else {
-            if ((match_mask & 0x01) == 0) return avail;
-            if ((match_mask & 0x02) == 0) return avail + 1;
-            if ((match_mask & 0x04) == 0) return avail + 2;
-            return avail + 3;
-        }
-    }
-    while (avail < count) {
-        const rbipc_slot_t *slot = &slots[(t + avail) & mask];
-        uint64_t seq = atomic_load_explicit(&slot->sequence, memory_order_acquire);
-        if (rbipc_slot_is_ready(seq, t + avail)) {
-            avail++;
-        } else {
-            break;
-        }
-    }
-    return avail;
-}
-#elif defined(__aarch64__)
-static uint32_t rbipc_io_scan_ready_neon(const rbipc_slot_t *slots, uint32_t mask, uint64_t t, uint32_t count) {
-    uint32_t avail = 0;
-    while (avail + 2 <= count) {
-        uint64_t base_t = t + avail;
-        uint64_t s0 = atomic_load_explicit(&slots[(base_t + 0) & mask].sequence, memory_order_acquire);
-        uint64_t s1 = atomic_load_explicit(&slots[(base_t + 1) & mask].sequence, memory_order_acquire);
-        uint64x2_t vseq = vcombine_u64(vcreate_u64(s0), vcreate_u64(s1));
-        uint64x2_t vtgt = vcombine_u64(vcreate_u64(base_t + 1), vcreate_u64(base_t + 2));
-        uint64x2_t cmp = vceqq_u64(vseq, vtgt);
-        if (vgetq_lane_u64(cmp, 0) == 0xFFFFFFFFFFFFFFFFULL) {
-            avail++;
-            if (vgetq_lane_u64(cmp, 1) == 0xFFFFFFFFFFFFFFFFULL) {
-                avail++;
-            } else {
-                return avail;
-            }
-        } else {
-            return avail;
-        }
-    }
-    while (avail < count) {
-        const rbipc_slot_t *slot = &slots[(t + avail) & mask];
-        uint64_t seq = atomic_load_explicit(&slot->sequence, memory_order_acquire);
-        if (rbipc_slot_is_ready(seq, t + avail)) {
-            avail++;
-        } else {
-            break;
-        }
-    }
-    return avail;
-}
-#endif
-
-static uint32_t rbipc_io_scan_ready_slots(const rbipc_ring_t *ring, uint64_t t, uint32_t count) {
-    const uint32_t mask = ring->hdr->capacity_mask;
-    const rbipc_slot_t *slots = (const rbipc_slot_t *)RBIPC_ASSUME_ALIGNED(ring->slots, RBIPC_CACHE_LINE);
-
-#if defined(__x86_64__) || defined(_M_X64)
-#if defined(__GNUC__) || defined(__clang__)
-    if (__builtin_cpu_supports("avx2") && count >= 4) {
-        return rbipc_io_scan_ready_avx2(slots, mask, t, count);
-    }
-#endif
-#elif defined(__aarch64__)
-    if (count >= 2) {
-        return rbipc_io_scan_ready_neon(slots, mask, t, count);
-    }
-#endif
-
-    return rbipc_io_scan_ready_scalar(slots, mask, t, count);
-}
-
-/**
- * @brief Populates read acquisition vector descriptors for an acquired batch.
- *
- * @param[in]  ring   Pointer to ring handle.
- * @param[in]  t      Base ticket claimed for the batch.
- * @param[in]  count  Number of acquired slots in batch.
- * @param[out] rovecs Array of read-only I/O vectors to populate.
- */
-static void rbipc_io_populate_acquired_batch(const rbipc_ring_t * RBIPC_RESTRICT ring,
-                                             uint64_t t, uint32_t count,
-                                             rbipc_rovec_t * RBIPC_RESTRICT rovecs) {
-    const uint32_t mask = ring->hdr->capacity_mask;
-    const uint32_t slot_size = ring->hdr->slot_size;
-    const rbipc_slot_t *slots = (const rbipc_slot_t *)RBIPC_ASSUME_ALIGNED(ring->slots, RBIPC_CACHE_LINE);
-    const char *data_base = (const char *)RBIPC_ASSUME_ALIGNED(ring->data_map, RBIPC_CACHE_LINE);
-
-    for (uint32_t i = 0; i < count; ++i) {
-        uint64_t ticket_i = t + (uint64_t)i;
-        const rbipc_slot_t *slot_i = &slots[ticket_i & mask];
-        uint32_t state = atomic_load_explicit(&slot_i->state, memory_order_acquire);
-        rovecs[i].ticket = ticket_i;
-        if (rbipc_slot_state_is_committed(state)) {
-            rbipc_slot_mark_acquired((rbipc_slot_t *)slot_i, ring->cached_pid, rbipc_clock_monotonic_ns());
-            rovecs[i].buf = data_base + ((size_t)(ticket_i & mask) * slot_size);
-            rovecs[i].len = atomic_load_explicit(&slot_i->len, memory_order_acquire);
-        } else {
-            rbipc_slot_mark_acquired((rbipc_slot_t *)slot_i, ring->cached_pid, rbipc_clock_monotonic_ns());
-            rovecs[i].buf = NULL;
-            rovecs[i].len = 0;
-        }
-    }
-    RBIPC_PREFETCH(&slots[(t + count) & mask], RBIPC_PREFETCH_READ, RBIPC_PREFETCH_LOCALITY_HIGH);
-}
-
-/**
- * @brief Acquires a contiguous batch of committed slots for reading using vector descriptors.
- */
-int rbipc_read_acquire_batch_timeout(rbipc_ring_t * RBIPC_RESTRICT ring, uint32_t count,
-                                     uint64_t timeout_ns,
-                                     rbipc_rovec_t * RBIPC_RESTRICT rovecs,
-                                     uint32_t * RBIPC_RESTRICT out_acquired) {
-    if (RBIPC_UNLIKELY(!ring || !ring->hdr || !rovecs || !out_acquired || count == 0)) {
-        return RBIPC_ERR_INVAL;
-    }
-
-    rbipc_shm_header_t *hdr = ring->hdr;
-    if (count > hdr->capacity) {
-        count = hdr->capacity;
-    }
-
-    uint64_t t = atomic_load_explicit(&hdr->read_ticket, memory_order_relaxed);
-
-    rbipc_sync_state_t sync_state;
-    rbipc_sync_state_init(&sync_state, timeout_ns);
-
-    rbipc_slot_t *slots = (rbipc_slot_t *)RBIPC_ASSUME_ALIGNED(ring->slots, RBIPC_CACHE_LINE);
-
-    for (;;) {
-        rbipc_io_audit_and_recover_dead_peer_range(hdr, slots, t, count);
-        uint32_t avail = rbipc_io_scan_ready_slots(ring, t, count);
-        if (avail > 0) {
-            if (rbipc_io_try_claim_read_ticket(hdr, &t, avail)) {
-                rbipc_io_populate_acquired_batch(ring, t, avail, rovecs);
-                *out_acquired = avail;
-                return RBIPC_OK;
-            }
-        } else {
-            if (RBIPC_UNLIKELY(rbipc_ring_is_drained_on_shutdown(hdr, t))) {
-                return RBIPC_ERR_SHUTDOWN;
-            }
-            if (timeout_ns == 0) {
-                return RBIPC_ERR_EMPTY;
-            }
-            if (ring && (ring->wait_policy & RBIPC_WAIT_ADAPTIVE)) {
-                for (uint32_t spin = 0; spin < RBIPC_SPIN_COUNT_DEFAULT; ++spin) {
-                    rbipc_cpu_pause();
-                    avail = rbipc_io_scan_ready_slots(ring, t, count);
-                    if (avail > 0 || RBIPC_UNLIKELY(rbipc_ring_is_drained_on_shutdown(hdr, t))) {
-                        break;
-                    }
-                }
-                if (avail > 0) {
-                    continue;
-                }
-            }
-
-            rbipc_sync_register_waiter(&hdr->futex_waiters);
-            rbipc_io_audit_and_recover_dead_peer_range(hdr, slots, t, count);
-            avail = rbipc_io_scan_ready_slots(ring, t, count);
-            if (avail > 0 || RBIPC_UNLIKELY(rbipc_ring_is_drained_on_shutdown(hdr, t))) {
-                rbipc_sync_deregister_waiter(&hdr->futex_waiters);
-                continue;
-            }
-            int rc = rbipc_sync_wait_registered(&sync_state, &hdr->futex_seq, &hdr->futex_waiters);
-            if (RBIPC_UNLIKELY(rc != 0)) {
-                return rc;
-            }
-            /* Post-wait ticket hole check */
-            rbipc_slot_t *slot_t = &slots[t & hdr->capacity_mask];
-            if (atomic_load_explicit(&slot_t->state, memory_order_acquire) == RBIPC_SLOT_EMPTY) {
-                uint64_t wt = atomic_load_explicit(&hdr->write_ticket, memory_order_acquire);
-                if (rbipc_seq_diff(wt, t) > 0) {
-                    uint64_t now_ts = rbipc_clock_monotonic_ns();
-                    if (sync_state.hole_first_seen_ns == 0) {
-                        sync_state.hole_first_seen_ns = now_ts;
-                    } else if (now_ts - sync_state.hole_first_seen_ns >= 50000000ULL ||
-                               atomic_load_explicit(&hdr->active_producers, memory_order_acquire) == 0) {
-                        if (rbipc_slot_poison(slot_t, t)) {
-                            atomic_thread_fence(memory_order_seq_cst);
-                            rbipc_sync_wake_all(&hdr->futex_seq, &hdr->futex_waiters);
-                        }
-                    }
-                }
-            } else {
-                sync_state.hole_first_seen_ns = 0;
-            }
-            t = atomic_load_explicit(&hdr->read_ticket, memory_order_relaxed);
-        }
-    }
-}
-
-/**
- * @brief Acquire a batch of committed slots for reading (Blocking).
- */
-int rbipc_read_acquire_batch(rbipc_ring_t * RBIPC_RESTRICT ring, uint32_t count,
-                             rbipc_rovec_t * RBIPC_RESTRICT rovecs, uint32_t * RBIPC_RESTRICT out_acquired) {
-    return rbipc_read_acquire_batch_timeout(ring, count, UINT64_MAX, rovecs, out_acquired);
-}
-
-/**
- * @brief Acquire a batch of committed slots for reading (Non-blocking).
- */
-int rbipc_read_acquire_batch_nonblock(rbipc_ring_t * RBIPC_RESTRICT ring, uint32_t count,
-                                      rbipc_rovec_t * RBIPC_RESTRICT rovecs, uint32_t * RBIPC_RESTRICT out_acquired) {
-    return rbipc_read_acquire_batch_timeout(ring, count, 0, rovecs, out_acquired);
-}
-
-/**
- * @brief Releases a batch of consumed slots and recycles them for producer reuse.
- *
- * @param[in,out] ring    Pointer to ring handle.
- * @param[in]     count   Number of elements in batch.
- * @param[in]     tickets Array of slot tickets to release.
- */
-static int rbipc_io_release_slot_batch(rbipc_ring_t * RBIPC_RESTRICT ring, uint32_t count,
-                                       const uint64_t * RBIPC_RESTRICT tickets) {
-    const uint32_t mask = ring->hdr->capacity_mask;
-    const uint32_t cap = ring->hdr->capacity;
-    rbipc_slot_t *slots = (rbipc_slot_t *)RBIPC_ASSUME_ALIGNED(ring->slots, RBIPC_CACHE_LINE);
-    int rc = RBIPC_OK;
-
-    for (uint32_t i = 0; i < count; ++i) {
-        rbipc_slot_t *slot = &slots[tickets[i] & mask];
-        if (RBIPC_UNLIKELY(!rbipc_slot_release_ex(slot, tickets[i], cap, ring->cached_pid))) {
-            rc = RBIPC_ERR_TIMEOUT;
-        }
-    }
-    return rc;
-}
-
-/**
- * @brief Releases a batch of previously acquired slots, recycling them for future producer writes.
- */
-int rbipc_read_release_batch(rbipc_ring_t * RBIPC_RESTRICT ring, uint32_t count,
-                             const uint64_t * RBIPC_RESTRICT tickets) {
-    if (RBIPC_UNLIKELY(!ring || !ring->hdr || !tickets || count == 0)) {
-        return RBIPC_ERR_INVAL;
-    }
-
-    rbipc_shm_header_t *hdr = ring->hdr;
-    int rc = rbipc_io_release_slot_batch(ring, count, tickets);
-
-    atomic_thread_fence(memory_order_seq_cst);
-    if (RBIPC_UNLIKELY(rbipc_sync_has_waiters(&hdr->write_waiters))) {
-        rbipc_sync_wake_n(&hdr->write_futex_seq, &hdr->write_waiters, count);
-    }
-    rbipc_ring_signal_eventfd(ring);
-    return rc;
-}
-
-/* ============================================================================
- * Non-Temporal Streaming Stores & Large Payload Transfer Acceleration
- * ============================================================================ */
-
-#if defined(__x86_64__) || defined(_M_X64)
-#if defined(__GNUC__) || defined(__clang__)
-__attribute__((target("avx2")))
-#endif
-static void rbipc_stream_copy_avx2_blocks(uint8_t * RBIPC_RESTRICT d,
-                                          const uint8_t * RBIPC_RESTRICT s,
-                                          size_t blocks) {
-    for (size_t i = 0; i < blocks; ++i) {
-        __m256i val = _mm256_loadu_si256((const __m256i *)(const void *)(s + i * 32));
-        _mm256_stream_si256((__m256i *)(void *)(d + i * 32), val);
-    }
-}
-
-static void rbipc_stream_copy_sse2_blocks(uint8_t * RBIPC_RESTRICT d,
-                                          const uint8_t * RBIPC_RESTRICT s,
-                                          size_t blocks) {
-    for (size_t i = 0; i < blocks; ++i) {
-        __m128i val = _mm_loadu_si128((const __m128i *)(const void *)(s + i * 16));
-        _mm_stream_si128((__m128i *)(void *)(d + i * 16), val);
-    }
-}
-#endif
-
-/**
- * @brief Non-temporal streaming memory copy bypassing CPU cache hierarchies.
- */
-RBIPC_LEAF
-int rbipc_stream_copy(void * RBIPC_RESTRICT dst, const void * RBIPC_RESTRICT src, size_t size) {
-    if (RBIPC_UNLIKELY(!dst || !src)) {
-        return RBIPC_ERR_INVAL;
-    }
-    uint8_t *d = (uint8_t *)dst;
-    const uint8_t *s = (const uint8_t *)src;
-
-#if defined(__x86_64__) || defined(_M_X64)
-    if (size >= 256) {
-        uintptr_t d_addr = (uintptr_t)d;
-        size_t align_offset = (32 - (d_addr & 31)) & 31;
-        if (align_offset > 0 && align_offset <= size) {
-            memcpy(d, s, align_offset);
-            d += align_offset;
-            s += align_offset;
-            size -= align_offset;
-        }
-
-#if defined(__GNUC__) || defined(__clang__)
-        if (__builtin_cpu_supports("avx2") && size >= 32) {
-            size_t blocks = size / 32;
-            rbipc_stream_copy_avx2_blocks(d, s, blocks);
-            d += blocks * 32;
-            s += blocks * 32;
-            size %= 32;
-            _mm_sfence();
-        } else
-#endif
-        if (size >= 16) {
-            size_t blocks = size / 16;
-            rbipc_stream_copy_sse2_blocks(d, s, blocks);
-            d += blocks * 16;
-            s += blocks * 16;
-            size %= 16;
-            _mm_sfence();
-        }
-    }
-#endif
-
-    if (size > 0) {
-        memcpy(d, s, size);
-    }
-    return RBIPC_OK;
-}
-
-/**
- * @brief Transmit payload via non-temporal streaming stores with bounded timeout.
- */
-RBIPC_LEAF
-int rbipc_write_stream_timeout(rbipc_ring_t * RBIPC_RESTRICT ring,
-                               const void * RBIPC_RESTRICT src,
-                               uint32_t len,
-                               uint64_t timeout_ns,
-                               uint64_t * RBIPC_RESTRICT out_ticket) {
-    if (RBIPC_UNLIKELY(!ring || !src || !out_ticket)) {
-        return RBIPC_ERR_INVAL;
-    }
-    void *buf = NULL;
-    int rc = rbipc_reserve_write_timeout(ring, len, timeout_ns, &buf, out_ticket);
-    if (RBIPC_UNLIKELY(rc != RBIPC_OK)) {
-        return rc;
-    }
-    rbipc_stream_copy(buf, src, len);
-    return rbipc_commit_write(ring, *out_ticket, len);
-}
-
-/**
- * @brief Transmit payload via non-temporal streaming stores (Blocking).
- */
-RBIPC_LEAF
-int rbipc_write_stream(rbipc_ring_t * RBIPC_RESTRICT ring,
-                       const void * RBIPC_RESTRICT src,
-                       uint32_t len,
-                       uint64_t * RBIPC_RESTRICT out_ticket) {
-    return rbipc_write_stream_timeout(ring, src, len, UINT64_MAX, out_ticket);
-}
-
-/**
- * @brief Transmit payload via non-temporal streaming stores (Non-blocking).
- */
-RBIPC_LEAF
-int rbipc_write_stream_nonblock(rbipc_ring_t * RBIPC_RESTRICT ring,
-                                const void * RBIPC_RESTRICT src,
-                                uint32_t len,
-                                uint64_t * RBIPC_RESTRICT out_ticket) {
-    return rbipc_write_stream_timeout(ring, src, len, 0, out_ticket);
+    return released ? RBIPC_OK : RBIPC_ERR_TIMEOUT;
 }

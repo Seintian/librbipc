@@ -16,6 +16,7 @@
 #include "rbipc.h"
 #include "rbipc_attr.h"
 #include "rbipc_predicate.h"
+#include "rbipc_reactor.h"
 
 #include <stdbool.h>
 #include <stddef.h>
@@ -47,26 +48,17 @@ struct rbipc_ring {
     bool owns_eventfd;            /**< True if this ring handle created the eventfd and should close it on detach. */
 };
 
-#include <sys/eventfd.h>
-#include <unistd.h>
-
 /**
  * @brief Dispatch notification to bound eventfd if reactor waiters are present.
  */
 RBIPC_INLINE void rbipc_ring_signal_eventfd(const rbipc_ring_t *ring) {
-    if (RBIPC_UNLIKELY(ring && ring->event_fd >= 0)) {
-        if (ring->hdr && atomic_load_explicit(&ring->hdr->eventfd_waiters, memory_order_relaxed) > 0) {
-            uint64_t val = 1;
-            ssize_t ret = write(ring->event_fd, &val, sizeof(val));
-            (void)ret;
-        }
-    }
+    rbipc_reactor_signal(ring);
 }
 
 /**
  * @brief Bounded, null-terminating string copy without insecure C runtime warnings.
  *
- * @details Copies characters from @p src to @p dest up to `dest_size - 1` bytes and guarantees
+ * @details Copies characters from @p src to @p dest up to dest_size - 1 bytes and guarantees
  * NUL-termination. Defensively handles NULL pointers and zero-length destination buffers.
  *
  * @param[out] dest      Destination character buffer.
