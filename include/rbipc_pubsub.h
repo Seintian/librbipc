@@ -41,6 +41,23 @@ RBIPC_NODISCARD RBIPC_LEAF
 int rbipc_publish(rbipc_ring_t *ring, const void *buf, uint32_t len);
 
 /**
+ * @brief Publish a contiguous batch of messages to all subscribers on the ring buffer topic.
+ *
+ * @details Amortizes the atomic write ticket increment and sequential consistency fences across
+ * @p count messages, applying cache-bypassing non-temporal streaming stores for payloads >= 256 bytes.
+ *
+ * @param[in] ring  Ring buffer instance acting as the multicast topic.
+ * @param[in] count Number of messages in batch arrays.
+ * @param[in] bufs  Array of pointers to payload data buffers.
+ * @param[in] lens  Array of payload byte lengths (each must be <= ring slot_size).
+ *
+ * @return @ref RBIPC_OK on success.
+ * @retval RBIPC_ERR_INVAL if parameters are NULL, count is 0, or any length exceeds slot capacity.
+ */
+RBIPC_NODISCARD RBIPC_LEAF
+int rbipc_publish_batch(rbipc_ring_t *ring, uint32_t count, const void * const *bufs, const uint32_t *lens);
+
+/**
  * @brief Create a local subscriber handle attached to a topic ring buffer.
  *
  * @param[in]  ring         Ring buffer instance.
@@ -90,6 +107,27 @@ void rbipc_sub_destroy(rbipc_sub_t *sub);
  */
 RBIPC_NODISCARD RBIPC_LEAF
 int rbipc_sub_poll(rbipc_sub_t *sub, const void **out_buf, uint32_t *out_len, uint64_t *out_seq);
+
+/**
+ * @brief Read a batch of next published messages non-blockingly.
+ *
+ * @details Vectorized subscriber reading that extracts up to @p max_count published messages
+ * without per-slot synchronization overhead, advancing the local subscriber cursor.
+ *
+ * @param[in]  sub        Subscriber handle.
+ * @param[in]  max_count  Maximum number of messages to poll into output arrays.
+ * @param[out] out_bufs   Array of pointers to receive payload addresses in shared memory.
+ * @param[out] out_lens   Array to receive payload byte lengths.
+ * @param[out] out_seqs   Array to receive message sequence numbers.
+ * @param[out] out_polled Pointer to receive actual count of polled messages (0 to max_count).
+ *
+ * @return @ref RBIPC_OK on success.
+ * @retval RBIPC_ERR_INVAL if parameters are NULL or max_count is 0.
+ */
+RBIPC_NODISCARD RBIPC_LEAF
+int rbipc_sub_poll_batch(rbipc_sub_t *sub, uint32_t max_count,
+                         const void **out_bufs, uint32_t *out_lens,
+                         uint64_t *out_seqs, uint32_t *out_polled);
 
 /**
  * @brief Wait for and read the next published message with timeout.

@@ -105,10 +105,67 @@ static void test_pubsub_lapped_subscriber(void) {
     rbipc_detach(ring);
 }
 
+static void test_pubsub_batch_and_streaming(void) {
+    /* Create 32-slot topic with 512-byte slot size */
+    rbipc_ring_t *ring = NULL;
+    assert(rbipc_create(NULL, 32, 512, &ring) == RBIPC_OK);
+
+    rbipc_sub_t *sub = NULL;
+    assert(rbipc_sub_create(ring, &sub) == RBIPC_OK);
+
+    /* 1. Test publish_batch with 8 messages */
+    char payloads[8][64];
+    const void *bufs[8];
+    uint32_t lens[8];
+    for (int i = 0; i < 8; ++i) {
+        snprintf(payloads[i], sizeof(payloads[i]), "Batch PubSub Item #%d", i);
+        bufs[i] = payloads[i];
+        lens[i] = (uint32_t)strlen(payloads[i]) + 1;
+    }
+
+    assert(rbipc_publish_batch(ring, 8, bufs, lens) == RBIPC_OK);
+    assert(rbipc_sub_get_lag(sub) == 8);
+
+    /* 2. Test sub_poll_batch: poll all 8 messages in a single call */
+    const void *polled_bufs[8];
+    uint32_t polled_lens[8];
+    uint64_t polled_seqs[8];
+    uint32_t polled_count = 0;
+
+    assert(rbipc_sub_poll_batch(sub, 8, polled_bufs, polled_lens, polled_seqs, &polled_count) == RBIPC_OK);
+    assert(polled_count == 8);
+    for (uint32_t i = 0; i < 8; ++i) {
+        assert(polled_seqs[i] == (uint64_t)i);
+        assert(polled_lens[i] == lens[i]);
+        assert(strcmp((const char *)polled_bufs[i], payloads[i]) == 0);
+    }
+    assert(rbipc_sub_get_lag(sub) == 0);
+
+    /* 3. Test large payload (>= 256 bytes) non-temporal streaming copy */
+    char large_payload[384];
+    memset(large_payload, 0x5A, sizeof(large_payload));
+    large_payload[sizeof(large_payload) - 1] = '\0';
+
+    assert(rbipc_publish(ring, large_payload, sizeof(large_payload)) == RBIPC_OK);
+    assert(rbipc_sub_get_lag(sub) == 1);
+
+    const void *recv_large = NULL;
+    uint32_t recv_len = 0;
+    uint64_t recv_seq = 0;
+    assert(rbipc_sub_poll(sub, &recv_large, &recv_len, &recv_seq) == RBIPC_OK);
+    assert(recv_len == sizeof(large_payload));
+    assert(recv_seq == 8);
+    assert(memcmp(recv_large, large_payload, sizeof(large_payload)) == 0);
+
+    rbipc_sub_destroy(sub);
+    rbipc_detach(ring);
+}
+
 int main(void) {
     printf("[test_unit_pubsub] Running 1-to-N multicast publish-subscribe tests...\n");
     test_pubsub_basic_multicast();
     test_pubsub_lapped_subscriber();
+    test_pubsub_batch_and_streaming();
     printf("[test_unit_pubsub] All tests passed!\n");
     return 0;
 }
