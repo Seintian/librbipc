@@ -1,27 +1,39 @@
 /**
  * @file rbipc.h
- * @brief librbipc: Lock-Free Shared-Memory Ring Buffer Inter-Process Communication
+ * @brief librbipc: Lock-Free Shared-Memory Ring Buffer Inter-Process
+ * Communication
  *
- * @details Implements a bounded, multi-producer multi-consumer (MPMC) lock-free ring buffer
- * architecture situated within POSIX shared memory, targeted at ISO C23 and modern Linux kernels. * The library combines three core architectural paradigms grounded in prestigious literature:
- * 1. High-efficiency shared memory architecture: single 1x linear virtual memory mapping for
- *    discrete slot queues with power-of-2 boundary masking, with opt-in 2x virtual memory
- *    double-mapping (mirror windowing) for continuous byte-stream boundary wrap-around.
- * 2. Cache-line isolated atomic sequence state machines (ticket-based reservation) operating
- *    with memory order semantics that guarantee single-turn, wait-free coordination on the fast path.
- * 3. Zero-spin passive synchronization utilizing Linux sys_futex primitives to achieve immediate
- *    process suspension during contention or idle intervals, ensuring 0% CPU consumption while
- *    maintaining sub-microsecond resumption latency and automatic dead-peer crash recovery.
+ * @details Implements a bounded, multi-producer multi-consumer (MPMC) lock-free
+ * ring buffer architecture situated within POSIX shared memory, targeted at ISO
+ * C23 and modern Linux kernels. * The library combines three core architectural
+ * paradigms grounded in prestigious literature:
+ * 1. High-efficiency shared memory architecture: single 1x linear virtual
+ * memory mapping for discrete slot queues with power-of-2 boundary masking,
+ * with opt-in 2x virtual memory double-mapping (mirror windowing) for
+ * continuous byte-stream boundary wrap-around.
+ * 2. Cache-line isolated atomic sequence state machines (ticket-based
+ * reservation) operating with memory order semantics that guarantee
+ * single-turn, wait-free coordination on the fast path.
+ * 3. Zero-spin passive synchronization utilizing Linux sys_futex primitives to
+ * achieve immediate process suspension during contention or idle intervals,
+ * ensuring 0% CPU consumption while maintaining sub-microsecond resumption
+ * latency and automatic dead-peer crash recovery.
  *
- * Grounded in peer-reviewed scientific systems literature and industry standards:
+ * Grounded in peer-reviewed scientific systems literature and industry
+ * standards:
  * - Dmitry Vyukov (2010), "Bounded MPMC Queue", 1024cores.
- * - J. Yang & H. Zhou (ISCA 2012), "B-Queue: Efficient and Practical Queuing for Fast Core-to-Core Communication".
- * - LMAX Disruptor (Thompson, Farley, Barker, Gee, Stewart, 2011), "Disruptor: High performance alternative to bounded queues".
- * - Giacomoni, Moseley, Vachharajani (PPoPP 2008), "FastForward for efficient pipeline parallelism: a cache-optimized concurrent lock-free queue".
- * - Ulrich Drepper (2007), "What Every Programmer Should Know About Memory", Red Hat.
- * - Franke, Russell, Kirkwood (OLS 2002), "Fuss, Futexes and Furwocks: Fast Userlevel Locking in Linux".
+ * - J. Yang & H. Zhou (ISCA 2012), "B-Queue: Efficient and Practical Queuing
+ * for Fast Core-to-Core Communication".
+ * - LMAX Disruptor (Thompson, Farley, Barker, Gee, Stewart, 2011), "Disruptor:
+ * High performance alternative to bounded queues".
+ * - Giacomoni, Moseley, Vachharajani (PPoPP 2008), "FastForward for efficient
+ * pipeline parallelism: a cache-optimized concurrent lock-free queue".
+ * - Ulrich Drepper (2007), "What Every Programmer Should Know About Memory",
+ * Red Hat.
+ * - Franke, Russell, Kirkwood (OLS 2002), "Fuss, Futexes and Furwocks: Fast
+ * Userlevel Locking in Linux".
  *
- * @author Christian Santarelli
+ * @author Seintian
  * @date 2026
  * @copyright Apache License 2.0
  */
@@ -29,10 +41,10 @@
 #ifndef RBIPC_H
 #define RBIPC_H
 
+#include <stdatomic.h>
+#include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
-#include <stdbool.h>
-#include <stdatomic.h>
 #include <sys/stat.h>
 #include <sys/types.h>
 
@@ -42,67 +54,78 @@ extern "C" {
 
 /* ============================================================================
  * Compiler Directives, Attributes, and Optimization Annotations
- * ============================================================================ */
+ * ============================================================================
+ */
 
 #if defined(__GNUC__) || defined(__clang__)
 /**
  * @def RBIPC_NODISCARD
- * @brief Directs the compiler to emit a warning or error if the function return value is discarded.
+ * @brief Directs the compiler to emit a warning or error if the function return
+ * value is discarded.
  */
-#define RBIPC_NODISCARD         __attribute__((warn_unused_result))
+#define RBIPC_NODISCARD __attribute__((warn_unused_result))
 
 /**
  * @def RBIPC_RETURNS_NONNULL
- * @brief Asserts to the compiler that the function will never return a null pointer.
+ * @brief Asserts to the compiler that the function will never return a null
+ * pointer.
  */
-#define RBIPC_RETURNS_NONNULL   __attribute__((returns_nonnull))
+#define RBIPC_RETURNS_NONNULL __attribute__((returns_nonnull))
 
 /**
  * @def RBIPC_PURE
- * @brief Designates a function whose return value depends solely on its parameters and global memory.
+ * @brief Designates a function whose return value depends solely on its
+ * parameters and global memory.
  */
-#define RBIPC_PURE              __attribute__((pure))
+#define RBIPC_PURE __attribute__((pure))
 
 /**
  * @def RBIPC_CONST
- * @brief Designates a pure mathematical function that examines only its arguments and has no side effects.
+ * @brief Designates a pure mathematical function that examines only its
+ * arguments and has no side effects.
  */
-#define RBIPC_CONST             __attribute__((const))
+#define RBIPC_CONST __attribute__((const))
 
 /**
  * @def RBIPC_HOT
- * @brief Instructs the compiler that the decorated function is on the execution critical path.
+ * @brief Instructs the compiler that the decorated function is on the execution
+ * critical path.
  */
-#define RBIPC_HOT               __attribute__((hot))
+#define RBIPC_HOT __attribute__((hot))
 
 /**
  * @def RBIPC_COLD
- * @brief Informs the compiler that the function is rarely executed (e.g. error handling, shutdown).
+ * @brief Informs the compiler that the function is rarely executed (e.g. error
+ * handling, shutdown).
  */
-#define RBIPC_COLD              __attribute__((cold))
+#define RBIPC_COLD __attribute__((cold))
 
 /**
  * @def RBIPC_LEAF
- * @brief Asserts that the function does not call back into the caller's translation unit.
+ * @brief Asserts that the function does not call back into the caller's
+ * translation unit.
  * @note Enables global register allocation across translation unit boundaries.
  */
-#define RBIPC_LEAF              __attribute__((leaf))
+#define RBIPC_LEAF __attribute__((leaf))
 
 /**
  * @def RBIPC_LIKELY(x)
- * @brief Branch prediction hint indicating that the expression evaluates to true with high probability.
+ * @brief Branch prediction hint indicating that the expression evaluates to
+ * true with high probability.
  */
-#define RBIPC_LIKELY(x)         (__builtin_expect(!!(x), 1))
+#define RBIPC_LIKELY(x) (__builtin_expect(!!(x), 1))
 
 /**
  * @def RBIPC_UNLIKELY(x)
- * @brief Branch prediction hint indicating that the expression evaluates to false with high probability.
+ * @brief Branch prediction hint indicating that the expression evaluates to
+ * false with high probability.
  */
-#define RBIPC_UNLIKELY(x)       (__builtin_expect(!!(x), 0))
+#define RBIPC_UNLIKELY(x) (__builtin_expect(!!(x), 0))
 
 /**
  * @def RBIPC_ASSUME_ALIGNED(p, a)
- * @brief Asserts to the optimizer that pointer @p p is aligned to at least @p a bytes.
+ * @brief Asserts to the optimizer that pointer @p p is aligned to at least @p a
+ * bytes.
  */
 #define RBIPC_ASSUME_ALIGNED(p, a) __builtin_assume_aligned((p), (a))
 
@@ -110,13 +133,14 @@ extern "C" {
  * @def RBIPC_UNREACHABLE()
  * @brief Informs the compiler optimizer that execution cannot reach this point.
  */
-#define RBIPC_UNREACHABLE()     __builtin_unreachable()
+#define RBIPC_UNREACHABLE() __builtin_unreachable()
 
 /**
  * @def RBIPC_RESTRICT
- * @brief C99/C11/C23 restrict keyword indicating disjoint, non-aliasing pointer access.
+ * @brief C99/C11/C23 restrict keyword indicating disjoint, non-aliasing pointer
+ * access.
  */
-#define RBIPC_RESTRICT          restrict
+#define RBIPC_RESTRICT restrict
 #else
 #define RBIPC_NODISCARD
 #define RBIPC_RETURNS_NONNULL
@@ -125,35 +149,53 @@ extern "C" {
 #define RBIPC_HOT
 #define RBIPC_COLD
 #define RBIPC_LEAF
-#define RBIPC_LIKELY(x)         (x)
-#define RBIPC_UNLIKELY(x)       (x)
+#define RBIPC_LIKELY(x) (x)
+#define RBIPC_UNLIKELY(x) (x)
 #define RBIPC_ASSUME_ALIGNED(p, a) (p)
-#define RBIPC_UNREACHABLE()     ((void)0)
+#define RBIPC_UNREACHABLE() ((void)0)
 #define RBIPC_RESTRICT
 #endif
 
 /* ============================================================================
  * Constants & Error Codes
- * ============================================================================ */
+ * ============================================================================
+ */
 
 /**
  * @defgroup rbipc_errors Status & Error Codes
  * @brief Return codes emitted across the librbipc API surface.
  * @{
  */
-#define RBIPC_OK               0  /**< Operation completed successfully without error. */
-#define RBIPC_ERR_INVAL      (-1) /**< Invalid argument, null pointer, or illegal configuration parameter. */
-#define RBIPC_ERR_NOMEM      (-2) /**< Memory allocation or virtual memory mapping subsystem failure. */
-#define RBIPC_ERR_SYS        (-3) /**< Underlying Linux kernel system call failure; inspect errno for detail. */
-#define RBIPC_ERR_FULL       (-4) /**< Ring buffer is currently full; no write slots available. */
-#define RBIPC_ERR_EMPTY      (-5) /**< Ring buffer is currently empty; no committed read messages available. */
-#define RBIPC_ERR_POISONED   (-6) /**< Reserving producer terminated prematurely; slot safely poisoned and bypassed. */
-#define RBIPC_ERR_SHUTDOWN   (-7) /**< Ring buffer has signaled cooperative termination and was cleanly drained. */
-#define RBIPC_ERR_TIMEOUT    (-8) /**< Specified operation deadline expired prior to completion. */
-#define RBIPC_ERR_BUSY       (-9) /**< Resource contention or uncommitted slot state encountered. */
-#define RBIPC_ERR_OVERFLOW  (-10) /**< Geometric arithmetic or buffer size calculation exceeded addressable range. */
-#define RBIPC_ERR_EXISTS    (-11) /**< Shared memory object already exists. */
-#define RBIPC_ERR_NOTSUP    (-12) /**< Operation not supported by underlying kernel or filesystem. */
+#define RBIPC_OK 0 /**< Operation completed successfully without error. */
+#define RBIPC_ERR_INVAL                                                        \
+  (-1) /**< Invalid argument, null pointer, or illegal configuration           \
+          parameter. */
+#define RBIPC_ERR_NOMEM                                                        \
+  (-2) /**< Memory allocation or virtual memory mapping subsystem failure. */
+#define RBIPC_ERR_SYS                                                          \
+  (-3) /**< Underlying Linux kernel system call failure; inspect errno for     \
+          detail. */
+#define RBIPC_ERR_FULL                                                         \
+  (-4) /**< Ring buffer is currently full; no write slots available. */
+#define RBIPC_ERR_EMPTY                                                        \
+  (-5) /**< Ring buffer is currently empty; no committed read messages         \
+          available. */
+#define RBIPC_ERR_POISONED                                                     \
+  (-6) /**< Reserving producer terminated prematurely; slot safely poisoned    \
+          and bypassed. */
+#define RBIPC_ERR_SHUTDOWN                                                     \
+  (-7) /**< Ring buffer has signaled cooperative termination and was cleanly   \
+          drained. */
+#define RBIPC_ERR_TIMEOUT                                                      \
+  (-8) /**< Specified operation deadline expired prior to completion. */
+#define RBIPC_ERR_BUSY                                                         \
+  (-9) /**< Resource contention or uncommitted slot state encountered. */
+#define RBIPC_ERR_OVERFLOW                                                     \
+  (-10) /**< Geometric arithmetic or buffer size calculation exceeded          \
+           addressable range. */
+#define RBIPC_ERR_EXISTS (-11) /**< Shared memory object already exists. */
+#define RBIPC_ERR_NOTSUP                                                       \
+  (-12) /**< Operation not supported by underlying kernel or filesystem. */
 /** @} */
 
 /**
@@ -161,18 +203,25 @@ extern "C" {
  * @brief Flags controlling shared memory creation behavior.
  * @{
  */
-#define RBIPC_CREATE_EXCL        0x0000U /**< Fail if shared memory object already exists (default safe mode). */
-#define RBIPC_CREATE_OVERWRITE   0x0001U /**< Unlink and overwrite pre-existing shared memory object. */
+#define RBIPC_CREATE_EXCL                                                      \
+  0x0000U /**< Fail if shared memory object already exists (default safe       \
+             mode). */
+#define RBIPC_CREATE_OVERWRITE                                                 \
+  0x0001U /**< Unlink and overwrite pre-existing shared memory object. */
 
 /**
  * @def RBIPC_DEFAULT_SHM_MODE
  * @brief Default POSIX shared memory permissions (0660: rw-rw----).
  */
-#define RBIPC_DEFAULT_SHM_MODE   0660
+#define RBIPC_DEFAULT_SHM_MODE 0660
 
-#define RBIPC_ROLE_PRODUCER      0x0002U /**< Process produces/writes messages to the ring buffer. */
-#define RBIPC_ROLE_CONSUMER      0x0004U /**< Process consumes/reads messages from the ring buffer. */
-#define RBIPC_ROLE_MONITOR       0x0008U /**< Process observes/monitors telemetry; does not increment active counters. */
+#define RBIPC_ROLE_PRODUCER                                                    \
+  0x0002U /**< Process produces/writes messages to the ring buffer. */
+#define RBIPC_ROLE_CONSUMER                                                    \
+  0x0004U /**< Process consumes/reads messages from the ring buffer. */
+#define RBIPC_ROLE_MONITOR                                                     \
+  0x0008U /**< Process observes/monitors telemetry; does not increment active  \
+             counters. */
 /** @} */
 
 /**
@@ -180,8 +229,11 @@ extern "C" {
  * @brief Policies controlling thread backoff synchronization behavior.
  * @{
  */
-#define RBIPC_WAIT_ZERO_SPIN     0x0000U /**< Pure passive futex wait (zero CPU spin, lowest CPU usage). */
-#define RBIPC_WAIT_ADAPTIVE      0x0001U /**< Two-phase adaptive spin-then-wait (bounded CPU pause before futex). */
+#define RBIPC_WAIT_ZERO_SPIN                                                   \
+  0x0000U /**< Pure passive futex wait (zero CPU spin, lowest CPU usage). */
+#define RBIPC_WAIT_ADAPTIVE                                                    \
+  0x0001U /**< Two-phase adaptive spin-then-wait (bounded CPU pause before     \
+             futex). */
 /** @} */
 
 /**
@@ -189,102 +241,172 @@ extern "C" {
  * @brief Architecture-specific, operational, and structural constants.
  * @{
  */
-#define RBIPC_MAGIC                 0x5242495043323032ULL /**< 64-bit structural header identifier ('RBIPC202'). */
-#define RBIPC_VERSION               1U                    /**< Protocol layout format version number. */
-#define RBIPC_CACHE_LINE            64U                   /**< Host hardware cache-line boundary in bytes (x86_64 / arm64). */
-#define RBIPC_MIN_CAPACITY          2U                    /**< Minimum allowable ring slot capacity (power-of-two). */
-#define RBIPC_MAX_CAPACITY          (1U << 30U)           /**< Maximum allowable ring slot capacity (2^30 slots, satisfying RFC 1982 sequence distance). */
-#define RBIPC_MAX_SLOT_SIZE         (UINT32_MAX - RBIPC_CACHE_LINE) /**< Maximum permissible slot payload size before alignment overflow. */
-#define RBIPC_SHM_MODE              (S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP) /**< Default POSIX shared memory permissions (0660: rw-rw----). */
-#define RBIPC_ANON_MEMFD_NAME       "rbipc_anon"          /**< Kernel descriptor name for anonymous memory files created via memfd_create(). */
-#define RBIPC_NSEC_PER_SEC          1000000000ULL         /**< Number of nanoseconds per second. */
-#define RBIPC_NSEC_PER_MSEC         1000000ULL            /**< Number of nanoseconds per millisecond. */
+#define RBIPC_MAGIC                                                            \
+  0x5242495043323032ULL /**< 64-bit structural header identifier ('RBIPC202'). \
+                         */
+#define RBIPC_VERSION 1U /**< Protocol layout format version number. */
+#define RBIPC_CACHE_LINE                                                       \
+  64U /**< Host hardware cache-line boundary in bytes (x86_64 / arm64). */
+#define RBIPC_MIN_CAPACITY                                                     \
+  2U /**< Minimum allowable ring slot capacity (power-of-two). */
+#define RBIPC_MAX_CAPACITY                                                     \
+  (1U << 30U) /**< Maximum allowable ring slot capacity (2^30 slots,           \
+                 satisfying RFC 1982 sequence distance). */
+#define RBIPC_MAX_SLOT_SIZE                                                    \
+  (UINT32_MAX - RBIPC_CACHE_LINE) /**< Maximum permissible slot payload size   \
+                                     before alignment overflow. */
+#define RBIPC_SHM_MODE                                                         \
+  (S_IRUSR | S_IWUSR | S_IRGRP |                                               \
+   S_IWGRP) /**< Default POSIX shared memory permissions (0660: rw-rw----). */
+#define RBIPC_ANON_MEMFD_NAME                                                  \
+  "rbipc_anon" /**< Kernel descriptor name for anonymous memory files created  \
+                  via memfd_create(). */
+#define RBIPC_NSEC_PER_SEC                                                     \
+  1000000000ULL /**< Number of nanoseconds per second. */
+#define RBIPC_NSEC_PER_MSEC                                                    \
+  1000000ULL /**< Number of nanoseconds per millisecond. */
 /** @} */
-
 
 /* ============================================================================
  * State Machine Constants
- * ============================================================================ */
+ * ============================================================================
+ */
 
 /**
  * @enum rbipc_slot_state
  * @brief Lifecycle progression states of a ring buffer slot descriptor.
  */
 enum rbipc_slot_state {
-    RBIPC_SLOT_EMPTY     = 0, /**< Slot is vacant and available for write ticket reservation. */
-    RBIPC_SLOT_RESERVING = 1, /**< Slot is being reserved by producer; intermediate state for crash detection. */
-    RBIPC_SLOT_RESERVED  = 2, /**< Slot is reserved by a producer; active in-place write payload population. */
-    RBIPC_SLOT_COMMITTED = 3, /**< Slot payload write is committed; visible and available for reader consumption. */
-    RBIPC_SLOT_POISONED  = 4  /**< Reserving producer crashed or aborted write; slot poisoned to enable reader skip. */
+  RBIPC_SLOT_EMPTY =
+      0, /**< Slot is vacant and available for write ticket reservation. */
+  RBIPC_SLOT_RESERVING = 1, /**< Slot is being reserved by producer;
+                               intermediate state for crash detection. */
+  RBIPC_SLOT_RESERVED = 2,  /**< Slot is reserved by a producer; active in-place
+                               write payload population. */
+  RBIPC_SLOT_COMMITTED = 3, /**< Slot payload write is committed; visible and
+                               available for reader consumption. */
+  RBIPC_SLOT_POISONED = 4 /**< Reserving producer crashed or aborted write; slot
+                             poisoned to enable reader skip. */
 };
 
 /* ============================================================================
  * Shared Memory Data Structures
- * ============================================================================ */
+ * ============================================================================
+ */
 
 /**
  * @struct rbipc_slot_t
  * @brief Cache-line aligned slot control descriptor residing in shared memory.
- * @details Every slot descriptor manages a single message container within the ring buffer.
- * It is aligned to a 64-byte boundary to prevent false sharing between concurrent worker cores.
+ * @details Every slot descriptor manages a single message container within the
+ * ring buffer. It is aligned to a 64-byte boundary to prevent false sharing
+ * between concurrent worker cores.
  */
 typedef struct {
-    _Alignas(RBIPC_CACHE_LINE) _Atomic uint64_t sequence;    /**< Monotonically increasing sequence number for turn scheduling. */
-    _Atomic uint32_t state;                                  /**< Slot lifecycle state, represented by @ref rbipc_slot_state. */
-    _Atomic uint32_t producer_pid;                           /**< Process ID of the reserving producer (for ESRCH crash detection). */
-    _Atomic uint32_t len;                                    /**< Valid committed byte length of the written payload. */
-    _Atomic uint32_t consumer_pid;                           /**< Process ID of acquiring consumer (for crash recovery). */
-    _Atomic uint64_t acquire_timestamp_ns;                   /**< Monotonic timestamp in nanoseconds when slot was acquired. */
+  _Alignas(RBIPC_CACHE_LINE) _Atomic uint64_t
+      sequence; /**< Monotonically increasing sequence number for turn
+                   scheduling. */
+  _Atomic uint32_t
+      state; /**< Slot lifecycle state, represented by @ref rbipc_slot_state. */
+  _Atomic uint32_t producer_pid; /**< Process ID of the reserving producer (for
+                                    ESRCH crash detection). */
+  _Atomic uint32_t
+      len; /**< Valid committed byte length of the written payload. */
+  _Atomic uint32_t consumer_pid; /**< Process ID of acquiring consumer (for
+                                    crash recovery). */
+  _Atomic uint64_t acquire_timestamp_ns; /**< Monotonic timestamp in nanoseconds
+                                            when slot was acquired. */
 } rbipc_slot_t;
 
 /**
  * @struct rbipc_shm_header_t
- * @brief Control header residing at byte offset 0 of the POSIX shared memory file.
- * @details Encapsulates geometric dimensions, protocol versioning, and cache-line isolated
- * atomic synchronization counters for coordinating producers and consumers.
+ * @brief Control header residing at byte offset 0 of the POSIX shared memory
+ * file.
+ * @details Encapsulates geometric dimensions, protocol versioning, and
+ * cache-line isolated atomic synchronization counters for coordinating
+ * producers and consumers.
  */
 typedef struct {
-    _Atomic uint64_t magic;      /**< Structural header identification signature (@ref RBIPC_MAGIC) published last with release semantics. */
-    uint32_t version;            /**< Header protocol layout format version (@ref RBIPC_VERSION). */
-    uint32_t _reserved0;         /**< Explicit 32-bit alignment padding for deterministic CRC calculation. */
-    uint64_t total_shm_size;     /**< Total file size in bytes of the shared memory region. */
-    uint64_t data_offset;        /**< Page-aligned byte offset from base where payload ring data begins. */
-    uint64_t data_size;          /**< Page-aligned byte size of the single circular buffer. */
-    uint32_t capacity;           /**< Total number of slot descriptors (strictly a power of two). */
-    uint32_t capacity_mask;      /**< Fast bitwise indexing mask, precomputed as (capacity - 1). */
-    uint32_t slot_size;          /**< Maximum allowable payload byte capacity allocated per slot. */
-    uint32_t header_crc;         /**< Hardware-accelerated CRC32C over immutable configuration layout fields. */
+  _Atomic uint64_t
+      magic; /**< Structural header identification signature (@ref RBIPC_MAGIC)
+                published last with release semantics. */
+  uint32_t version;    /**< Header protocol layout format version (@ref
+                          RBIPC_VERSION). */
+  uint32_t _reserved0; /**< Explicit 32-bit alignment padding for deterministic
+                          CRC calculation. */
+  uint64_t total_shm_size; /**< Total file size in bytes of the shared memory
+                              region. */
+  uint64_t data_offset;    /**< Page-aligned byte offset from base where payload
+                              ring data begins. */
+  uint64_t
+      data_size; /**< Page-aligned byte size of the single circular buffer. */
+  uint32_t capacity; /**< Total number of slot descriptors (strictly a power of
+                        two). */
+  uint32_t capacity_mask; /**< Fast bitwise indexing mask, precomputed as
+                             (capacity - 1). */
+  uint32_t slot_size; /**< Maximum allowable payload byte capacity allocated per
+                         slot. */
+  uint32_t header_crc; /**< Hardware-accelerated CRC32C over immutable
+                          configuration layout fields. */
 
-    /* Cache-line isolated atomic synchronization variables */
-    _Alignas(RBIPC_CACHE_LINE) _Atomic uint64_t write_ticket;     /**< Monotonic ticket counter claimed by reserving producers. */
-    _Alignas(RBIPC_CACHE_LINE) _Atomic uint64_t read_ticket;      /**< Monotonic ticket counter claimed by acquiring consumers. */
-    _Alignas(RBIPC_CACHE_LINE) _Atomic uint32_t futex_seq;        /**< Futex word sequence counter for consumer wakeups (data ready). */
-    _Alignas(RBIPC_CACHE_LINE) _Atomic uint32_t futex_waiters;    /**< Count of consumer threads actively sleeping on @c futex_seq. */
-    _Alignas(RBIPC_CACHE_LINE) _Atomic uint32_t write_futex_seq;  /**< Futex word sequence counter for producer wakeups (space ready). */
-    _Alignas(RBIPC_CACHE_LINE) _Atomic uint32_t write_waiters;    /**< Count of producer threads actively sleeping on @c write_futex_seq. */
-    _Alignas(RBIPC_CACHE_LINE) _Atomic uint32_t active_producers; /**< Number of currently attached producer handles. */
-    _Alignas(RBIPC_CACHE_LINE) _Atomic uint32_t active_consumers; /**< Number of currently attached consumer handles. */
-    _Alignas(RBIPC_CACHE_LINE) _Atomic uint32_t shutdown_flag;    /**< Atomic flag set to 1 when cooperative shutdown is requested. */
-    _Alignas(RBIPC_CACHE_LINE) _Atomic uint32_t eventfd_waiters;  /**< Count of active eventfd/epoll reactor waiters registered. */
-    _Alignas(RBIPC_CACHE_LINE) _Atomic uint64_t lease_timeout_ns;   /**< Configurable consumer lease duration in nanoseconds (0 = disabled). */
+  /* Cache-line isolated atomic synchronization variables */
+  _Alignas(RBIPC_CACHE_LINE) _Atomic uint64_t
+      write_ticket; /**< Monotonic ticket counter claimed by reserving
+                       producers. */
+  _Alignas(RBIPC_CACHE_LINE) _Atomic uint64_t
+      read_ticket; /**< Monotonic ticket counter claimed by acquiring consumers.
+                    */
+  _Alignas(RBIPC_CACHE_LINE) _Atomic uint32_t
+      futex_seq; /**< Futex word sequence counter for consumer wakeups (data
+                    ready). */
+  _Alignas(RBIPC_CACHE_LINE) _Atomic uint32_t
+      futex_waiters; /**< Count of consumer threads actively sleeping on @c
+                        futex_seq. */
+  _Alignas(RBIPC_CACHE_LINE) _Atomic uint32_t
+      write_futex_seq; /**< Futex word sequence counter for producer wakeups
+                          (space ready). */
+  _Alignas(RBIPC_CACHE_LINE) _Atomic uint32_t
+      write_waiters; /**< Count of producer threads actively sleeping on @c
+                        write_futex_seq. */
+  _Alignas(RBIPC_CACHE_LINE) _Atomic uint32_t
+      active_producers; /**< Number of currently attached producer handles. */
+  _Alignas(RBIPC_CACHE_LINE) _Atomic uint32_t
+      active_consumers; /**< Number of currently attached consumer handles. */
+  _Alignas(RBIPC_CACHE_LINE) _Atomic uint32_t
+      shutdown_flag; /**< Atomic flag set to 1 when cooperative shutdown is
+                        requested. */
+  _Alignas(RBIPC_CACHE_LINE) _Atomic uint32_t
+      eventfd_waiters; /**< Count of active eventfd/epoll reactor waiters
+                          registered. */
+  _Alignas(RBIPC_CACHE_LINE) _Atomic uint64_t
+      lease_timeout_ns; /**< Configurable consumer lease duration in nanoseconds
+                           (0 = disabled). */
 } rbipc_shm_header_t;
 
 /**
  * @struct rbipc_stats_t
- * @brief Point-in-time telemetry snapshot of ring buffer state and operational counters.
+ * @brief Point-in-time telemetry snapshot of ring buffer state and operational
+ * counters.
  */
 typedef struct {
-    uint64_t total_shm_size;     /**< Total size in bytes of the underlying shared memory file. */
-    uint64_t data_size;          /**< Byte size of the single circular payload buffer. */
-    uint32_t capacity;           /**< Total slot capacity of the ring buffer. */
-    uint32_t slot_size;          /**< Maximum payload capacity in bytes per slot. */
-    uint64_t write_ticket;       /**< Next ticket number to be claimed by writing producers. */
-    uint64_t read_ticket;        /**< Next ticket number to be claimed by acquiring consumers. */
-    uint32_t active_producers;   /**< Total count of attached active producer processes. */
-    uint32_t active_consumers;   /**< Total count of attached active consumer processes. */
-    uint32_t futex_waiters;      /**< Total count of consumer threads currently suspended in futex sleep. */
-    uint32_t eventfd_waiters;    /**< Count of registered eventfd/epoll reactor waiters. */
-    bool is_shutdown;            /**< Boolean indicator confirming if ring shutdown has been signaled. */
+  uint64_t total_shm_size; /**< Total size in bytes of the underlying shared
+                              memory file. */
+  uint64_t data_size; /**< Byte size of the single circular payload buffer. */
+  uint32_t capacity;  /**< Total slot capacity of the ring buffer. */
+  uint32_t slot_size; /**< Maximum payload capacity in bytes per slot. */
+  uint64_t write_ticket;     /**< Next ticket number to be claimed by writing
+                                producers. */
+  uint64_t read_ticket;      /**< Next ticket number to be claimed by acquiring
+                                consumers. */
+  uint32_t active_producers; /**< Total count of attached active producer
+                                processes. */
+  uint32_t active_consumers; /**< Total count of attached active consumer
+                                processes. */
+  uint32_t futex_waiters;    /**< Total count of consumer threads currently
+                                suspended in futex sleep. */
+  uint32_t eventfd_waiters;  /**< Count of registered eventfd/epoll reactor
+                                waiters. */
+  bool is_shutdown; /**< Boolean indicator confirming if ring shutdown has been
+                       signaled. */
 } rbipc_stats_t;
 
 /**
@@ -292,9 +414,11 @@ typedef struct {
  * @brief Vector descriptor for B-Queue batch write reservations.
  */
 typedef struct {
-    void *buf;           /**< Direct pointer to reserved payload buffer in shared memory. */
-    uint64_t ticket;     /**< Monotonic 64-bit ticket identifier assigned to this slot reservation. */
-    uint32_t max_len;    /**< Maximum allowable payload length in bytes for this slot. */
+  void *buf; /**< Direct pointer to reserved payload buffer in shared memory. */
+  uint64_t ticket; /**< Monotonic 64-bit ticket identifier assigned to this slot
+                      reservation. */
+  uint32_t
+      max_len; /**< Maximum allowable payload length in bytes for this slot. */
 } rbipc_iovec_t;
 
 /**
@@ -302,65 +426,82 @@ typedef struct {
  * @brief Vector descriptor for B-Queue batch read acquisitions.
  */
 typedef struct {
-    const void *buf;     /**< Direct read-only pointer to payload data in shared memory. */
-    uint64_t ticket;     /**< Monotonic 64-bit ticket identifier assigned to this acquired slot. */
-    uint32_t len;        /**< Exact byte length of the committed message payload. */
+  const void
+      *buf; /**< Direct read-only pointer to payload data in shared memory. */
+  uint64_t ticket; /**< Monotonic 64-bit ticket identifier assigned to this
+                      acquired slot. */
+  uint32_t len;    /**< Exact byte length of the committed message payload. */
 } rbipc_rovec_t;
 
 /* ============================================================================
  * Opaque Local Handle
- * ============================================================================ */
+ * ============================================================================
+ */
 
 /**
  * @typedef rbipc_ring_t
- * @brief Opaque process-local handle referencing an attached ring buffer instance.
+ * @brief Opaque process-local handle referencing an attached ring buffer
+ * instance.
  */
 typedef struct rbipc_ring rbipc_ring_t;
 
 /* ============================================================================
  * Public API Surface
- * ============================================================================ */
+ * ============================================================================
+ */
 
 /**
  * @brief Create and initialize a new shared-memory IPC ring buffer.
  *
- * @details Allocates a POSIX shared memory object or an anonymous memfd, truncates it to
- * the precomputed geometric size (control header, cache-aligned slot table, and page-aligned
- * payload buffer), configures Linux file seals (F_SEAL_SHRINK | F_SEAL_GROW), initializes
- * slot sequence state machines, and establishes the shared memory virtual address region.
+ * @details Allocates a POSIX shared memory object or an anonymous memfd,
+ * truncates it to the precomputed geometric size (control header, cache-aligned
+ * slot table, and page-aligned payload buffer), configures Linux file seals
+ * (F_SEAL_SHRINK | F_SEAL_GROW), initializes slot sequence state machines, and
+ * establishes the shared memory virtual address region.
  *
  * @param[in]  name      POSIX shared memory object name (e.g. "/my_ring").
- *                       Per POSIX.1-2008 (shm_open(3)), the identifier must begin with an initial
- *                       slash followed by characters containing no further slashes. This is an
- *                       abstract identifier backed by the kernel RAM tmpfs filesystem at /dev/shm/[name],
- *                       NOT a file path on the root filesystem (/). If NULL, an anonymous
- *                       memfd is created that can be passed across UNIX sockets via SCM_RIGHTS.
- * @param[in]  capacity  Requested slot count. Automatically rounded up to the nearest power of two.
- *                       Must be between 2 and 2^30.
+ *                       Per POSIX.1-2008 (shm_open(3)), the identifier must
+ * begin with an initial slash followed by characters containing no further
+ * slashes. This is an abstract identifier backed by the kernel RAM tmpfs
+ * filesystem at /dev/shm/[name], NOT a file path on the root filesystem (/). If
+ * NULL, an anonymous memfd is created that can be passed across UNIX sockets
+ * via SCM_RIGHTS.
+ * @param[in]  capacity  Requested slot count. Automatically rounded up to the
+ * nearest power of two. Must be between 2 and 2^30.
  * @param[in]  slot_size Maximum allowable payload byte capacity per slot.
- * @param[out] out_ring  Location to store the pointer to the newly allocated ring handle.
+ * @param[out] out_ring  Location to store the pointer to the newly allocated
+ * ring handle.
  *
  * @return @ref RBIPC_OK on successful initialization.
- * @retval RBIPC_ERR_INVAL if parameters are invalid (null @p out_ring, zero @p slot_size, invalid @p name).
+ * @retval RBIPC_ERR_INVAL if parameters are invalid (null @p out_ring, zero @p
+ * slot_size, invalid @p name).
  * @retval RBIPC_ERR_NOMEM if process virtual memory allocation or mmap fails.
- * @retval RBIPC_ERR_SYS   if an underlying kernel syscall fails (shm_open, ftruncate, fcntl).
+ * @retval RBIPC_ERR_SYS   if an underlying kernel syscall fails (shm_open,
+ * ftruncate, fcntl).
  *
  * @see rbipc_attach
  * @see rbipc_detach
  * @see rbipc_destroy
  */
 /**
- * @brief Creates a new shared memory IPC ring buffer with creation flags and permissions.
+ * @brief Creates a new shared memory IPC ring buffer with creation flags and
+ * permissions.
  *
- * @param[in]  name      POSIX shared memory object name (e.g. "/my_ring"), or NULL for anonymous memory.
- * @param[in]  capacity  Requested slot count (must be power of two, >= @ref RBIPC_MIN_CAPACITY).
+ * @param[in]  name      POSIX shared memory object name (e.g. "/my_ring"), or
+ * NULL for anonymous memory.
+ * @param[in]  capacity  Requested slot count (must be power of two, >= @ref
+ * RBIPC_MIN_CAPACITY).
  * @param[in]  slot_size Requested payload size per slot in bytes.
- * @param[in]  flags     Creation flags (@ref RBIPC_CREATE_EXCL or @ref RBIPC_CREATE_OVERWRITE).
- * @param[in]  mode      POSIX file permission mode bits (e.g. 0660; masked against system umask).
- * @param[out] out_ring  Location to store pointer to the allocated ring buffer handle.
+ * @param[in]  flags     Creation flags (@ref RBIPC_CREATE_EXCL or @ref
+ * RBIPC_CREATE_OVERWRITE).
+ * @param[in]  mode      POSIX file permission mode bits (e.g. 0660; masked
+ * against system umask).
+ * @param[out] out_ring  Location to store pointer to the allocated ring buffer
+ * handle.
  *
  * @return @ref RBIPC_OK on successful initialization.
- * @retval RBIPC_ERR_EXISTS if object exists and @ref RBIPC_CREATE_OVERWRITE was not specified.
+ * @retval RBIPC_ERR_EXISTS if object exists and @ref RBIPC_CREATE_OVERWRITE was
+ * not specified.
  * @retval RBIPC_ERR_INVAL  if parameters or flags are invalid.
  * @retval RBIPC_ERR_NOMEM  if virtual memory allocation or mmap fails.
  * @retval RBIPC_ERR_SYS    if an underlying kernel syscall fails.
@@ -368,18 +509,24 @@ typedef struct rbipc_ring rbipc_ring_t;
  * @see rbipc_create
  * @see rbipc_destroy
  */
-RBIPC_NODISCARD RBIPC_LEAF
-int rbipc_create_ex(const char * RBIPC_RESTRICT name, size_t capacity, uint32_t slot_size, uint32_t flags, mode_t mode, rbipc_ring_t ** RBIPC_RESTRICT out_ring);
+RBIPC_NODISCARD RBIPC_LEAF int
+rbipc_create_ex(const char *RBIPC_RESTRICT name, size_t capacity,
+                uint32_t slot_size, uint32_t flags, mode_t mode,
+                rbipc_ring_t **RBIPC_RESTRICT out_ring);
 
 /**
- * @brief Create a new named shared-memory IPC ring buffer with default permissions and exclusive creation.
+ * @brief Create a new named shared-memory IPC ring buffer with default
+ * permissions and exclusive creation.
  *
- * @details Equivalent to calling rbipc_create_ex(name, capacity, slot_size, RBIPC_CREATE_EXCL, 0660, out_ring).
+ * @details Equivalent to calling rbipc_create_ex(name, capacity, slot_size,
+ * RBIPC_CREATE_EXCL, 0660, out_ring).
  *
  * @param[in]  name      POSIX shared memory object name (e.g. "/my_ring").
- * @param[in]  capacity  Requested slot count (automatically rounded up to next power of two).
+ * @param[in]  capacity  Requested slot count (automatically rounded up to next
+ * power of two).
  * @param[in]  slot_size Requested payload size per slot in bytes.
- * @param[out] out_ring  Location to store pointer to the allocated ring buffer handle.
+ * @param[out] out_ring  Location to store pointer to the allocated ring buffer
+ * handle.
  *
  * @return @ref RBIPC_OK on successful initialization.
  * @retval RBIPC_ERR_EXISTS if object exists.
@@ -390,18 +537,23 @@ int rbipc_create_ex(const char * RBIPC_RESTRICT name, size_t capacity, uint32_t 
  * @see rbipc_create_ex
  * @see rbipc_destroy
  */
-RBIPC_NODISCARD RBIPC_LEAF
-int rbipc_create(const char * RBIPC_RESTRICT name, size_t capacity, uint32_t slot_size, rbipc_ring_t ** RBIPC_RESTRICT out_ring);
+RBIPC_NODISCARD RBIPC_LEAF int
+rbipc_create(const char *RBIPC_RESTRICT name, size_t capacity,
+             uint32_t slot_size, rbipc_ring_t **RBIPC_RESTRICT out_ring);
 
 /**
- * @brief Attach to an existing named shared-memory IPC ring buffer with participant role flags.
+ * @brief Attach to an existing named shared-memory IPC ring buffer with
+ * participant role flags.
  *
  * @param[in]  name       POSIX shared memory object name (e.g. "/my_ring").
- * @param[in]  role_flags Role flags (@ref RBIPC_ROLE_PRODUCER, @ref RBIPC_ROLE_CONSUMER, or @ref RBIPC_ROLE_MONITOR).
- * @param[out] out_ring   Location to store the pointer to the allocated ring handle.
+ * @param[in]  role_flags Role flags (@ref RBIPC_ROLE_PRODUCER, @ref
+ * RBIPC_ROLE_CONSUMER, or @ref RBIPC_ROLE_MONITOR).
+ * @param[out] out_ring   Location to store the pointer to the allocated ring
+ * handle.
  *
  * @return @ref RBIPC_OK on success.
- * @retval RBIPC_ERR_INVAL if @p name or @p out_ring is NULL or @p role_flags is invalid.
+ * @retval RBIPC_ERR_INVAL if @p name or @p out_ring is NULL or @p role_flags is
+ * invalid.
  * @retval RBIPC_ERR_NOMEM if virtual address space mapping fails.
  * @retval RBIPC_ERR_SYS   if shm_open or fstat fails.
  *
@@ -409,43 +561,54 @@ int rbipc_create(const char * RBIPC_RESTRICT name, size_t capacity, uint32_t slo
  * @see rbipc_create
  * @see rbipc_detach
  */
-RBIPC_NODISCARD RBIPC_LEAF
-int rbipc_attach_ex(const char * RBIPC_RESTRICT name, uint32_t role_flags, rbipc_ring_t ** RBIPC_RESTRICT out_ring);
+RBIPC_NODISCARD RBIPC_LEAF int
+rbipc_attach_ex(const char *RBIPC_RESTRICT name, uint32_t role_flags,
+                rbipc_ring_t **RBIPC_RESTRICT out_ring);
 
 /**
- * @brief Attach to an existing named shared-memory IPC ring buffer as standard consumer.
+ * @brief Attach to an existing named shared-memory IPC ring buffer as standard
+ * consumer.
  *
- * @details Opens an existing POSIX shared memory object by name, probes and verifies the
- * structural integrity of the control header (@ref RBIPC_MAGIC, version, power-of-two capacity),
- * maps the metadata and shared data regions into the caller's virtual address space,
- * and increments the active attachee counter with default consumer role.
+ * @details Opens an existing POSIX shared memory object by name, probes and
+ * verifies the structural integrity of the control header (@ref RBIPC_MAGIC,
+ * version, power-of-two capacity), maps the metadata and shared data regions
+ * into the caller's virtual address space, and increments the active attachee
+ * counter with default consumer role.
  *
  * @param[in]  name     POSIX shared memory object name (e.g. "/my_ring").
- *                      Must begin with an initial slash and contain no subsequent slashes (POSIX shm_open(3)).
- * @param[out] out_ring Location to store the pointer to the allocated ring handle.
+ *                      Must begin with an initial slash and contain no
+ * subsequent slashes (POSIX shm_open(3)).
+ * @param[out] out_ring Location to store the pointer to the allocated ring
+ * handle.
  *
  * @return @ref RBIPC_OK on success.
  * @retval RBIPC_ERR_INVAL if @p name or @p out_ring is NULL or invalid.
  * @retval RBIPC_ERR_NOMEM if virtual address space mapping fails.
- * @retval RBIPC_ERR_SYS   if shm_open or fstat fails (e.g. ENOENT if ring does not exist).
+ * @retval RBIPC_ERR_SYS   if shm_open or fstat fails (e.g. ENOENT if ring does
+ * not exist).
  *
  * @see rbipc_attach_ex
  * @see rbipc_create
  * @see rbipc_attach_fd
  * @see rbipc_detach
  */
-RBIPC_NODISCARD RBIPC_LEAF
-int rbipc_attach(const char * RBIPC_RESTRICT name, rbipc_ring_t ** RBIPC_RESTRICT out_ring);
+RBIPC_NODISCARD RBIPC_LEAF int
+rbipc_attach(const char *RBIPC_RESTRICT name,
+             rbipc_ring_t **RBIPC_RESTRICT out_ring);
 
 /**
- * @brief Attach to an existing shared-memory IPC ring buffer via open fd with participant role flags.
+ * @brief Attach to an existing shared-memory IPC ring buffer via open fd with
+ * participant role flags.
  *
  * @param[in]  fd         Open shared memory file descriptor.
- * @param[in]  role_flags Role flags (@ref RBIPC_ROLE_PRODUCER, @ref RBIPC_ROLE_CONSUMER, or @ref RBIPC_ROLE_MONITOR).
- * @param[out] out_ring   Location to store the pointer to the allocated ring handle.
+ * @param[in]  role_flags Role flags (@ref RBIPC_ROLE_PRODUCER, @ref
+ * RBIPC_ROLE_CONSUMER, or @ref RBIPC_ROLE_MONITOR).
+ * @param[out] out_ring   Location to store the pointer to the allocated ring
+ * handle.
  *
  * @return @ref RBIPC_OK on success.
- * @retval RBIPC_ERR_INVAL if @p fd or @p out_ring is invalid or @p role_flags is invalid.
+ * @retval RBIPC_ERR_INVAL if @p fd or @p out_ring is invalid or @p role_flags
+ * is invalid.
  * @retval RBIPC_ERR_NOMEM if virtual memory allocation or mmap fails.
  * @retval RBIPC_ERR_SYS   if system calls fail.
  *
@@ -453,18 +616,23 @@ int rbipc_attach(const char * RBIPC_RESTRICT name, rbipc_ring_t ** RBIPC_RESTRIC
  * @see rbipc_attach
  * @see rbipc_get_fd
  */
-RBIPC_NODISCARD RBIPC_LEAF
-int rbipc_attach_fd_ex(int fd, uint32_t role_flags, rbipc_ring_t ** RBIPC_RESTRICT out_ring);
+RBIPC_NODISCARD RBIPC_LEAF int
+rbipc_attach_fd_ex(int fd, uint32_t role_flags,
+                   rbipc_ring_t **RBIPC_RESTRICT out_ring);
 
 /**
- * @brief Attach to an existing shared-memory IPC ring buffer via open file descriptor.
+ * @brief Attach to an existing shared-memory IPC ring buffer via open file
+ * descriptor.
  *
- * @details Facilitates anonymous IPC across process boundaries where file descriptors
- * are inherited via fork() or received across UNIX domain sockets via SCM_RIGHTS ancillary data.
- * Validates header geometry and establishes shared memory virtual addresses as standard consumer.
+ * @details Facilitates anonymous IPC across process boundaries where file
+ * descriptors are inherited via fork() or received across UNIX domain sockets
+ * via SCM_RIGHTS ancillary data. Validates header geometry and establishes
+ * shared memory virtual addresses as standard consumer.
  *
- * @param[in]  fd       Open, readable and writable file descriptor referencing the shared memory object.
- * @param[out] out_ring Location to store the pointer to the allocated ring handle.
+ * @param[in]  fd       Open, readable and writable file descriptor referencing
+ * the shared memory object.
+ * @param[out] out_ring Location to store the pointer to the allocated ring
+ * handle.
  *
  * @return @ref RBIPC_OK on success.
  * @retval RBIPC_ERR_INVAL if @p fd is invalid or @p out_ring is NULL.
@@ -475,17 +643,20 @@ int rbipc_attach_fd_ex(int fd, uint32_t role_flags, rbipc_ring_t ** RBIPC_RESTRI
  * @see rbipc_attach
  * @see rbipc_get_fd
  */
-RBIPC_NODISCARD RBIPC_LEAF
-int rbipc_attach_fd(int fd, rbipc_ring_t ** RBIPC_RESTRICT out_ring);
+RBIPC_NODISCARD RBIPC_LEAF int
+rbipc_attach_fd(int fd, rbipc_ring_t **RBIPC_RESTRICT out_ring);
 
 /**
- * @brief Detach from the ring buffer, unmapping virtual memory regions and closing handles.
+ * @brief Detach from the ring buffer, unmapping virtual memory regions and
+ * closing handles.
  *
- * @details Decrements active attachee counters in the control header, unmaps metadata and
- * shared circular memory windows via munmap, closes open file descriptors, and frees
- * process-local handle memory. Does not unlink named shared memory objects from the system.
+ * @details Decrements active attachee counters in the control header, unmaps
+ * metadata and shared circular memory windows via munmap, closes open file
+ * descriptors, and frees process-local handle memory. Does not unlink named
+ * shared memory objects from the system.
  *
- * @param[in,out] ring Pointer to ring buffer handle allocated by create or attach.
+ * @param[in,out] ring Pointer to ring buffer handle allocated by create or
+ * attach.
  *
  * @return @ref RBIPC_OK on successful detachment.
  * @retval RBIPC_ERR_INVAL if @p ring is NULL.
@@ -496,13 +667,16 @@ RBIPC_LEAF
 int rbipc_detach(rbipc_ring_t *ring);
 
 /**
- * @brief Unlink and remove the named shared memory object from the operating system.
+ * @brief Unlink and remove the named shared memory object from the operating
+ system.
  *
- * @details Calls shm_unlink() to dissociate the object name from the filesystem namespace.
+ * @details Calls shm_unlink() to dissociate the object name from the filesystem
+ namespace.
  * Existing attached processes retain access until all handles are detached.
  *
  * @param[in] name POSIX shared memory object name (e.g. "/my_ring").
- *                 Must begin with an initial slash and contain no subsequent slashes.
+ *                 Must begin with an initial slash and contain no subsequent
+ slashes.
 
  *
  * @return @ref RBIPC_OK on success.
@@ -516,10 +690,12 @@ RBIPC_LEAF
 int rbipc_destroy(const char *name);
 
 /**
- * @brief Configure the wait and backoff synchronization policy for the ring handle.
+ * @brief Configure the wait and backoff synchronization policy for the ring
+ * handle.
  *
  * @param[in,out] ring   Ring buffer handle.
- * @param[in]     policy Wait policy flags (@ref RBIPC_WAIT_ZERO_SPIN or @ref RBIPC_WAIT_ADAPTIVE).
+ * @param[in]     policy Wait policy flags (@ref RBIPC_WAIT_ZERO_SPIN or @ref
+ * RBIPC_WAIT_ADAPTIVE).
  *
  * @return @ref RBIPC_OK on success.
  * @retval RBIPC_ERR_INVAL if @p ring is NULL or @p policy is unsupported.
@@ -532,67 +708,82 @@ int rbipc_set_wait_policy(rbipc_ring_t *ring, uint32_t policy);
  *
  * @param[in] ring Ring buffer handle.
  *
- * @return Active policy flag mask, or @ref RBIPC_WAIT_ZERO_SPIN if @p ring is NULL.
+ * @return Active policy flag mask, or @ref RBIPC_WAIT_ZERO_SPIN if @p ring is
+ * NULL.
  */
-RBIPC_NODISCARD RBIPC_LEAF
-uint32_t rbipc_get_wait_policy(const rbipc_ring_t *ring);
+RBIPC_NODISCARD RBIPC_LEAF uint32_t
+rbipc_get_wait_policy(const rbipc_ring_t *ring);
 
 /**
  * @brief Reserve a slot in the ring buffer for writing (Zero-Copy, Blocking).
  *
- * @details Atomically reserves the next available sequential slot using ticket-based CAS.
- * If the ring buffer is completely full, suspends the thread immediately via Linux sys_futex
- * in a zero-spin passive wait until consumers release occupied slots. On success, provides
- * direct pointer access to the shared slot buffer for in-place writing.
+ * @details Atomically reserves the next available sequential slot using
+ * ticket-based CAS. If the ring buffer is completely full, suspends the thread
+ * immediately via Linux sys_futex in a zero-spin passive wait until consumers
+ * release occupied slots. On success, provides direct pointer access to the
+ * shared slot buffer for in-place writing.
  *
  * @param[in]  ring       Ring buffer handle.
- * @param[in]  len        Requested payload length in bytes (must satisfy 0 < len <= slot_size).
+ * @param[in]  len        Requested payload length in bytes (must satisfy 0 <
+ * len <= slot_size).
  * @param[out] out_buf    Direct memory pointer into the shared payload buffer.
- * @param[out] ticket     Assigned ticket number, required for subsequent commit or abort.
+ * @param[out] ticket     Assigned ticket number, required for subsequent commit
+ * or abort.
  *
  * @return @ref RBIPC_OK on successful slot reservation.
- * @retval RBIPC_ERR_INVAL    if arguments are null or @p len exceeds configured slot capacity.
+ * @retval RBIPC_ERR_INVAL    if arguments are null or @p len exceeds configured
+ * slot capacity.
  * @retval RBIPC_ERR_SHUTDOWN if ring buffer has entered shutdown state.
  *
- * @note The returned @p out_buf is guaranteed to be cache-line aligned (64 bytes).
- * @warning The caller MUST call @ref rbipc_commit_write or @ref rbipc_abort_write with @p ticket.
+ * @note The returned @p out_buf is guaranteed to be cache-line aligned (64
+ * bytes).
+ * @warning The caller MUST call @ref rbipc_commit_write or @ref
+ * rbipc_abort_write with @p ticket.
  *
  * @see rbipc_commit_write
  * @see rbipc_abort_write
  * @see rbipc_reserve_write_timeout
  * @see rbipc_reserve_write_nonblock
  */
-RBIPC_NODISCARD RBIPC_HOT RBIPC_LEAF
-int rbipc_reserve_write(rbipc_ring_t * RBIPC_RESTRICT ring, uint32_t len,
-                        void ** RBIPC_RESTRICT out_buf, uint64_t * RBIPC_RESTRICT ticket);
+RBIPC_NODISCARD RBIPC_HOT RBIPC_LEAF int
+rbipc_reserve_write(rbipc_ring_t *RBIPC_RESTRICT ring, uint32_t len,
+                    void **RBIPC_RESTRICT out_buf,
+                    uint64_t *RBIPC_RESTRICT ticket);
 
 /**
- * @brief Reserve a slot in the ring buffer for writing with timeout (Zero-Copy).
+ * @brief Reserve a slot in the ring buffer for writing with timeout
+ * (Zero-Copy).
  *
- * @details Identical to @ref rbipc_reserve_write, with a bounded timeout in nanoseconds.
+ * @details Identical to @ref rbipc_reserve_write, with a bounded timeout in
+ * nanoseconds.
  *
  * @param[in]  ring       Ring buffer handle.
  * @param[in]  len        Requested payload length in bytes.
- * @param[in]  timeout_ns Timeout duration in nanoseconds (0 for non-blocking attempt).
+ * @param[in]  timeout_ns Timeout duration in nanoseconds (0 for non-blocking
+ * attempt).
  * @param[out] out_buf    Direct memory pointer into the shared payload buffer.
  * @param[out] ticket     Assigned ticket number.
  *
  * @return @ref RBIPC_OK on success.
- * @retval RBIPC_ERR_TIMEOUT  if deadline expires before space becomes available.
- * @retval RBIPC_ERR_FULL     if @p timeout_ns is 0 and no slot is immediately vacant.
+ * @retval RBIPC_ERR_TIMEOUT  if deadline expires before space becomes
+ * available.
+ * @retval RBIPC_ERR_FULL     if @p timeout_ns is 0 and no slot is immediately
+ * vacant.
  * @retval RBIPC_ERR_SHUTDOWN if ring buffer is shutting down.
  * @retval RBIPC_ERR_INVAL    if arguments are invalid.
  *
  * @see rbipc_reserve_write
  */
-RBIPC_NODISCARD RBIPC_LEAF
-int rbipc_reserve_write_timeout(rbipc_ring_t * RBIPC_RESTRICT ring, uint32_t len, uint64_t timeout_ns,
-                                void ** RBIPC_RESTRICT out_buf, uint64_t * RBIPC_RESTRICT ticket);
+RBIPC_NODISCARD RBIPC_LEAF int
+rbipc_reserve_write_timeout(rbipc_ring_t *RBIPC_RESTRICT ring, uint32_t len,
+                            uint64_t timeout_ns, void **RBIPC_RESTRICT out_buf,
+                            uint64_t *RBIPC_RESTRICT ticket);
 
 /**
  * @brief Non-blocking write reservation attempt (Zero-Copy).
  *
- * @details Attempts immediate single-pass reservation of a slot. Never enters futex sleep.
+ * @details Attempts immediate single-pass reservation of a slot. Never enters
+ * futex sleep.
  *
  * @param[in]  ring       Ring buffer handle.
  * @param[in]  len        Requested payload length in bytes.
@@ -606,35 +797,43 @@ int rbipc_reserve_write_timeout(rbipc_ring_t * RBIPC_RESTRICT ring, uint32_t len
  *
  * @see rbipc_reserve_write
  */
-RBIPC_NODISCARD RBIPC_HOT RBIPC_LEAF
-int rbipc_reserve_write_nonblock(rbipc_ring_t * RBIPC_RESTRICT ring, uint32_t len,
-                                 void ** RBIPC_RESTRICT out_buf, uint64_t * RBIPC_RESTRICT ticket);
+RBIPC_NODISCARD RBIPC_HOT RBIPC_LEAF int
+rbipc_reserve_write_nonblock(rbipc_ring_t *RBIPC_RESTRICT ring, uint32_t len,
+                             void **RBIPC_RESTRICT out_buf,
+                             uint64_t *RBIPC_RESTRICT ticket);
 
 /**
- * @brief Commit a previously reserved slot, publishing its payload to consumers.
+ * @brief Commit a previously reserved slot, publishing its payload to
+ * consumers.
  *
- * @details Stores the written byte length, transitions the slot state to COMMITTED, and
- * advances the slot sequence with release memory ordering. Evaluates waiter counters and
- * triggers a sys_futex wake only if sleeping consumers are present.
+ * @details Stores the written byte length, transitions the slot state to
+ * COMMITTED, and advances the slot sequence with release memory ordering.
+ * Evaluates waiter counters and triggers a sys_futex wake only if sleeping
+ * consumers are present.
  *
  * @param[in,out] ring        Ring buffer handle.
- * @param[in]     ticket      Ticket number obtained from @ref rbipc_reserve_write.
- * @param[in]     written_len Actual byte length written into the payload buffer.
+ * @param[in]     ticket      Ticket number obtained from @ref
+ * rbipc_reserve_write.
+ * @param[in]     written_len Actual byte length written into the payload
+ * buffer.
  *
  * @return @ref RBIPC_OK on successful commit.
- * @retval RBIPC_ERR_INVAL if @p ring is NULL or @p written_len exceeds slot size.
+ * @retval RBIPC_ERR_INVAL if @p ring is NULL or @p written_len exceeds slot
+ * size.
  *
  * @see rbipc_reserve_write
  * @see rbipc_abort_write
  */
-RBIPC_HOT RBIPC_LEAF
-int rbipc_commit_write(rbipc_ring_t * RBIPC_RESTRICT ring, uint64_t ticket, uint32_t written_len);
+RBIPC_HOT RBIPC_LEAF int rbipc_commit_write(rbipc_ring_t *RBIPC_RESTRICT ring,
+                                            uint64_t ticket,
+                                            uint32_t written_len);
 
 /**
  * @brief Abort a previously reserved slot without publishing payload data.
  *
- * @details Marks the slot state as POISONED and increments its sequence turn. Consumers
- * encountering this slot will safely skip over it without deadlock or stalling.
+ * @details Marks the slot state as POISONED and increments its sequence turn.
+ * Consumers encountering this slot will safely skip over it without deadlock or
+ * stalling.
  *
  * @param[in,out] ring   Ring buffer handle.
  * @param[in]     ticket Ticket number obtained from @ref rbipc_reserve_write.
@@ -645,21 +844,24 @@ int rbipc_commit_write(rbipc_ring_t * RBIPC_RESTRICT ring, uint64_t ticket, uint
  * @see rbipc_reserve_write
  * @see rbipc_commit_write
  */
-RBIPC_COLD RBIPC_LEAF
-int rbipc_abort_write(rbipc_ring_t * RBIPC_RESTRICT ring, uint64_t ticket);
+RBIPC_COLD RBIPC_LEAF int rbipc_abort_write(rbipc_ring_t *RBIPC_RESTRICT ring,
+                                            uint64_t ticket);
 
 /**
  * @brief Acquire the next committed message for reading (Zero-Copy, Blocking).
  *
- * @details Claims the next read ticket in sequence. If the corresponding slot is not yet
- * committed, enters passive futex suspension until the producer publishes the message.
- * Audits the producer PID; if the producer crashes before committing, marks the slot POISONED
- * and returns @ref RBIPC_ERR_POISONED to allow the pipeline to proceed seamlessly.
+ * @details Claims the next read ticket in sequence. If the corresponding slot
+ * is not yet committed, enters passive futex suspension until the producer
+ * publishes the message. Audits the producer PID; if the producer crashes
+ * before committing, marks the slot POISONED and returns @ref
+ * RBIPC_ERR_POISONED to allow the pipeline to proceed seamlessly.
  *
  * @param[in,out] ring       Ring buffer handle.
- * @param[out]    out_buf    Direct read-only pointer to payload in shared memory.
+ * @param[out]    out_buf    Direct read-only pointer to payload in shared
+ * memory.
  * @param[out]    out_len    Pointer receiving committed payload byte length.
- * @param[out]    ticket     Assigned ticket number, required for subsequent release.
+ * @param[out]    ticket     Assigned ticket number, required for subsequent
+ * release.
  *
  * @return @ref RBIPC_OK on successful message acquisition.
  * @retval RBIPC_ERR_POISONED if producer crashed; slot skipped safely.
@@ -671,17 +873,19 @@ int rbipc_abort_write(rbipc_ring_t * RBIPC_RESTRICT ring, uint64_t ticket);
  * @see rbipc_read_acquire_timeout
  * @see rbipc_read_acquire_nonblock
  */
-RBIPC_NODISCARD RBIPC_HOT RBIPC_LEAF
-int rbipc_read_acquire(rbipc_ring_t * RBIPC_RESTRICT ring, const void ** RBIPC_RESTRICT out_buf,
-                       uint32_t * RBIPC_RESTRICT out_len, uint64_t * RBIPC_RESTRICT ticket);
+RBIPC_NODISCARD RBIPC_HOT RBIPC_LEAF int rbipc_read_acquire(
+    rbipc_ring_t *RBIPC_RESTRICT ring, const void **RBIPC_RESTRICT out_buf,
+    uint32_t *RBIPC_RESTRICT out_len, uint64_t *RBIPC_RESTRICT ticket);
 
 /**
  * @brief Acquire the next committed message with timeout (Zero-Copy).
  *
- * @details Identical to @ref rbipc_read_acquire, bounded by a nanosecond timeout.
+ * @details Identical to @ref rbipc_read_acquire, bounded by a nanosecond
+ * timeout.
  *
  * @param[in,out] ring       Ring buffer handle.
- * @param[in]     timeout_ns Timeout duration in nanoseconds (0 for non-blocking attempt).
+ * @param[in]     timeout_ns Timeout duration in nanoseconds (0 for non-blocking
+ * attempt).
  * @param[out]    out_buf    Direct read-only pointer to payload.
  * @param[out]    out_len    Pointer receiving payload length.
  * @param[out]    ticket     Assigned ticket number.
@@ -695,15 +899,16 @@ int rbipc_read_acquire(rbipc_ring_t * RBIPC_RESTRICT ring, const void ** RBIPC_R
  *
  * @see rbipc_read_acquire
  */
-RBIPC_NODISCARD RBIPC_LEAF
-int rbipc_read_acquire_timeout(rbipc_ring_t * RBIPC_RESTRICT ring, uint64_t timeout_ns,
-                               const void ** RBIPC_RESTRICT out_buf, uint32_t * RBIPC_RESTRICT out_len,
-                               uint64_t * RBIPC_RESTRICT ticket);
+RBIPC_NODISCARD RBIPC_LEAF int rbipc_read_acquire_timeout(
+    rbipc_ring_t *RBIPC_RESTRICT ring, uint64_t timeout_ns,
+    const void **RBIPC_RESTRICT out_buf, uint32_t *RBIPC_RESTRICT out_len,
+    uint64_t *RBIPC_RESTRICT ticket);
 
 /**
  * @brief Non-blocking read acquire attempt (Zero-Copy).
  *
- * @details Attempts immediate single-pass acquisition of a committed message without blocking.
+ * @details Attempts immediate single-pass acquisition of a committed message
+ * without blocking.
  *
  * @param[in,out] ring       Ring buffer handle.
  * @param[out]    out_buf    Direct read-only pointer to payload.
@@ -718,15 +923,16 @@ int rbipc_read_acquire_timeout(rbipc_ring_t * RBIPC_RESTRICT ring, uint64_t time
  *
  * @see rbipc_read_acquire
  */
-RBIPC_NODISCARD RBIPC_HOT RBIPC_LEAF
-int rbipc_read_acquire_nonblock(rbipc_ring_t * RBIPC_RESTRICT ring, const void ** RBIPC_RESTRICT out_buf,
-                                uint32_t * RBIPC_RESTRICT out_len, uint64_t * RBIPC_RESTRICT ticket);
+RBIPC_NODISCARD RBIPC_HOT RBIPC_LEAF int rbipc_read_acquire_nonblock(
+    rbipc_ring_t *RBIPC_RESTRICT ring, const void **RBIPC_RESTRICT out_buf,
+    uint32_t *RBIPC_RESTRICT out_len, uint64_t *RBIPC_RESTRICT ticket);
 
 /**
  * @brief Release a consumed slot back to the ring buffer for reuse.
  *
- * @details Transitions slot state back to EMPTY and advances its turn sequence by capacity.
- * If producer threads are sleeping waiting for space, dispatches a futex wakeup.
+ * @details Transitions slot state back to EMPTY and advances its turn sequence
+ * by capacity. If producer threads are sleeping waiting for space, dispatches a
+ * futex wakeup.
  *
  * @param[in,out] ring   Ring buffer handle.
  * @param[in]     ticket Ticket number obtained from @ref rbipc_read_acquire.
@@ -736,19 +942,24 @@ int rbipc_read_acquire_nonblock(rbipc_ring_t * RBIPC_RESTRICT ring, const void *
  *
  * @see rbipc_read_acquire
  */
-RBIPC_HOT RBIPC_LEAF
-int rbipc_read_release(rbipc_ring_t * RBIPC_RESTRICT ring, uint64_t ticket);
+RBIPC_HOT RBIPC_LEAF int rbipc_read_release(rbipc_ring_t *RBIPC_RESTRICT ring,
+                                            uint64_t ticket);
 
 /**
- * @brief Reserve a batch of contiguous slots for writing (Zero-Copy, B-Queue Batching).
+ * @brief Reserve a batch of contiguous slots for writing (Zero-Copy, B-Queue
+ * Batching).
  *
- * @details Implements B-Queue vector batching to amortize atomic ticket claims and CAS
- * synchronization overhead over @p count slots in a single atomic fetch-and-add operation.
+ * @details Implements B-Queue vector batching to amortize atomic ticket claims
+ * and CAS synchronization overhead over @p count slots in a single atomic
+ * fetch-and-add operation.
  *
  * @param[in,out] ring         Ring buffer handle.
- * @param[in]     count        Requested slot count (must be > 0 and <= capacity).
- * @param[out]    iovecs       Caller-provided array of at least @p count vector descriptors.
- * @param[out]    out_reserved Pointer receiving actual number of successfully reserved slots.
+ * @param[in]     count        Requested slot count (must be > 0 and <=
+ * capacity).
+ * @param[out]    iovecs       Caller-provided array of at least @p count vector
+ * descriptors.
+ * @param[out]    out_reserved Pointer receiving actual number of successfully
+ * reserved slots.
  *
  * @return @ref RBIPC_OK on success.
  * @retval RBIPC_ERR_INVAL    if arguments are null or count is zero.
@@ -757,66 +968,84 @@ int rbipc_read_release(rbipc_ring_t * RBIPC_RESTRICT ring, uint64_t ticket);
  * @see rbipc_commit_write_batch
  * @see rbipc_read_acquire_batch
  */
-RBIPC_NODISCARD RBIPC_HOT RBIPC_LEAF
-int rbipc_reserve_write_batch(rbipc_ring_t * RBIPC_RESTRICT ring, uint32_t count,
-                              rbipc_iovec_t * RBIPC_RESTRICT iovecs, uint32_t * RBIPC_RESTRICT out_reserved);
+RBIPC_NODISCARD RBIPC_HOT RBIPC_LEAF int
+rbipc_reserve_write_batch(rbipc_ring_t *RBIPC_RESTRICT ring, uint32_t count,
+                          rbipc_iovec_t *RBIPC_RESTRICT iovecs,
+                          uint32_t *RBIPC_RESTRICT out_reserved);
 
 /**
- * @brief Reserve a batch of contiguous slots non-blocking (Zero-Copy, B-Queue Batching).
+ * @brief Reserve a batch of contiguous slots non-blocking (Zero-Copy, B-Queue
+ * Batching).
  *
  * @param[in,out] ring         Ring buffer handle.
  * @param[in]     count        Requested slot count.
  * @param[out]    iovecs       Caller-allocated vector buffer.
  * @param[out]    out_reserved Pointer receiving reserved count.
- * @return RBIPC_OK on success, RBIPC_ERR_FULL if no slots available immediately.
+ * @return RBIPC_OK on success, RBIPC_ERR_FULL if no slots available
+ * immediately.
  */
-RBIPC_NODISCARD RBIPC_HOT RBIPC_LEAF
-int rbipc_reserve_write_batch_nonblock(rbipc_ring_t * RBIPC_RESTRICT ring, uint32_t count,
-                                       rbipc_iovec_t * RBIPC_RESTRICT iovecs, uint32_t * RBIPC_RESTRICT out_reserved);
+RBIPC_NODISCARD RBIPC_HOT RBIPC_LEAF int
+rbipc_reserve_write_batch_nonblock(rbipc_ring_t *RBIPC_RESTRICT ring,
+                                   uint32_t count,
+                                   rbipc_iovec_t *RBIPC_RESTRICT iovecs,
+                                   uint32_t *RBIPC_RESTRICT out_reserved);
 
 /**
- * @brief Reserve a batch of contiguous slots with timeout (Zero-Copy, B-Queue Batching).
+ * @brief Reserve a batch of contiguous slots with timeout (Zero-Copy, B-Queue
+ * Batching).
  *
  * @param[in,out] ring         Ring buffer handle.
  * @param[in]     count        Requested slot count.
- * @param[in]     timeout_ns   Timeout in nanoseconds (0 = non-blocking, UINT64_MAX = blocking).
+ * @param[in]     timeout_ns   Timeout in nanoseconds (0 = non-blocking,
+ * UINT64_MAX = blocking).
  * @param[out]    iovecs       Caller-allocated vector buffer.
  * @param[out]    out_reserved Pointer receiving reserved count.
- * @return RBIPC_OK on success, RBIPC_ERR_TIMEOUT on expiry, RBIPC_ERR_FULL if nonblock full.
+ * @return RBIPC_OK on success, RBIPC_ERR_TIMEOUT on expiry, RBIPC_ERR_FULL if
+ * nonblock full.
  */
-RBIPC_NODISCARD RBIPC_HOT RBIPC_LEAF
-int rbipc_reserve_write_batch_timeout(rbipc_ring_t * RBIPC_RESTRICT ring, uint32_t count, uint64_t timeout_ns,
-                                      rbipc_iovec_t * RBIPC_RESTRICT iovecs, uint32_t * RBIPC_RESTRICT out_reserved);
+RBIPC_NODISCARD RBIPC_HOT RBIPC_LEAF int
+rbipc_reserve_write_batch_timeout(rbipc_ring_t *RBIPC_RESTRICT ring,
+                                  uint32_t count, uint64_t timeout_ns,
+                                  rbipc_iovec_t *RBIPC_RESTRICT iovecs,
+                                  uint32_t *RBIPC_RESTRICT out_reserved);
 
 /**
  * @brief Commit a batch of previously reserved slots.
  *
- * @details Publishes multiple reserved slots to consumers in ticket order, triggering a
- * single coalesced futex wake notification if consumers are sleeping.
+ * @details Publishes multiple reserved slots to consumers in ticket order,
+ * triggering a single coalesced futex wake notification if consumers are
+ * sleeping.
  *
  * @param[in,out] ring    Ring buffer handle.
  * @param[in]     count   Number of slots to commit.
- * @param[in]     tickets Array of ticket numbers from @ref rbipc_reserve_write_batch.
+ * @param[in]     tickets Array of ticket numbers from @ref
+ * rbipc_reserve_write_batch.
  * @param[in]     lens    Array of written payload lengths for each slot.
  *
  * @return @ref RBIPC_OK on success.
- * @retval RBIPC_ERR_INVAL if arguments are null or any length exceeds slot capacity.
+ * @retval RBIPC_ERR_INVAL if arguments are null or any length exceeds slot
+ * capacity.
  *
  * @see rbipc_reserve_write_batch
  */
-RBIPC_HOT RBIPC_LEAF
-int rbipc_commit_write_batch(rbipc_ring_t * RBIPC_RESTRICT ring, uint32_t count,
-                             const uint64_t * RBIPC_RESTRICT tickets, const uint32_t * RBIPC_RESTRICT lens);
+RBIPC_HOT RBIPC_LEAF int
+rbipc_commit_write_batch(rbipc_ring_t *RBIPC_RESTRICT ring, uint32_t count,
+                         const uint64_t *RBIPC_RESTRICT tickets,
+                         const uint32_t *RBIPC_RESTRICT lens);
 
 /**
- * @brief Acquire a batch of committed messages for reading (Zero-Copy, B-Queue Batching).
+ * @brief Acquire a batch of committed messages for reading (Zero-Copy, B-Queue
+ * Batching).
  *
- * @details Claims up to @p count contiguous committed slots in a single atomic claim.
+ * @details Claims up to @p count contiguous committed slots in a single atomic
+ * claim.
  *
  * @param[in,out] ring         Ring buffer handle.
  * @param[in]     count        Maximum number of messages to acquire.
- * @param[out]    rovecs       Caller-provided array of at least @p count vector descriptors.
- * @param[out]    out_acquired Pointer receiving number of messages successfully acquired.
+ * @param[out]    rovecs       Caller-provided array of at least @p count vector
+ * descriptors.
+ * @param[out]    out_acquired Pointer receiving number of messages successfully
+ * acquired.
  *
  * @return @ref RBIPC_OK on success.
  * @retval RBIPC_ERR_INVAL    if arguments are null or count is zero.
@@ -824,55 +1053,70 @@ int rbipc_commit_write_batch(rbipc_ring_t * RBIPC_RESTRICT ring, uint32_t count,
  *
  * @see rbipc_read_release_batch
  */
-RBIPC_NODISCARD RBIPC_HOT RBIPC_LEAF
-int rbipc_read_acquire_batch(rbipc_ring_t * RBIPC_RESTRICT ring, uint32_t count,
-                             rbipc_rovec_t * RBIPC_RESTRICT rovecs, uint32_t * RBIPC_RESTRICT out_acquired);
+RBIPC_NODISCARD RBIPC_HOT RBIPC_LEAF int
+rbipc_read_acquire_batch(rbipc_ring_t *RBIPC_RESTRICT ring, uint32_t count,
+                         rbipc_rovec_t *RBIPC_RESTRICT rovecs,
+                         uint32_t *RBIPC_RESTRICT out_acquired);
 
 /**
- * @brief Acquire a batch of committed messages non-blocking (Zero-Copy, B-Queue Batching).
+ * @brief Acquire a batch of committed messages non-blocking (Zero-Copy, B-Queue
+ * Batching).
  *
  * @param[in,out] ring         Ring buffer handle.
  * @param[in]     count        Maximum number of messages to acquire.
- * @param[out]    rovecs       Caller-provided array of at least @p count vector descriptors.
- * @param[out]    out_acquired Pointer receiving number of messages successfully acquired.
- * @return RBIPC_OK on success, RBIPC_ERR_EMPTY if no messages available immediately.
+ * @param[out]    rovecs       Caller-provided array of at least @p count vector
+ * descriptors.
+ * @param[out]    out_acquired Pointer receiving number of messages successfully
+ * acquired.
+ * @return RBIPC_OK on success, RBIPC_ERR_EMPTY if no messages available
+ * immediately.
  */
-RBIPC_NODISCARD RBIPC_HOT RBIPC_LEAF
-int rbipc_read_acquire_batch_nonblock(rbipc_ring_t * RBIPC_RESTRICT ring, uint32_t count,
-                                      rbipc_rovec_t * RBIPC_RESTRICT rovecs, uint32_t * RBIPC_RESTRICT out_acquired);
+RBIPC_NODISCARD RBIPC_HOT RBIPC_LEAF int
+rbipc_read_acquire_batch_nonblock(rbipc_ring_t *RBIPC_RESTRICT ring,
+                                  uint32_t count,
+                                  rbipc_rovec_t *RBIPC_RESTRICT rovecs,
+                                  uint32_t *RBIPC_RESTRICT out_acquired);
 
 /**
- * @brief Acquire a batch of committed messages with timeout (Zero-Copy, B-Queue Batching).
+ * @brief Acquire a batch of committed messages with timeout (Zero-Copy, B-Queue
+ * Batching).
  *
  * @param[in,out] ring         Ring buffer handle.
  * @param[in]     count        Maximum number of messages to acquire.
- * @param[in]     timeout_ns   Timeout in nanoseconds (0 = non-blocking, UINT64_MAX = blocking).
- * @param[out]    rovecs       Caller-provided array of at least @p count vector descriptors.
- * @param[out]    out_acquired Pointer receiving number of messages successfully acquired.
- * @return RBIPC_OK on success, RBIPC_ERR_TIMEOUT on expiry, RBIPC_ERR_EMPTY if nonblock empty.
+ * @param[in]     timeout_ns   Timeout in nanoseconds (0 = non-blocking,
+ * UINT64_MAX = blocking).
+ * @param[out]    rovecs       Caller-provided array of at least @p count vector
+ * descriptors.
+ * @param[out]    out_acquired Pointer receiving number of messages successfully
+ * acquired.
+ * @return RBIPC_OK on success, RBIPC_ERR_TIMEOUT on expiry, RBIPC_ERR_EMPTY if
+ * nonblock empty.
  */
-RBIPC_NODISCARD RBIPC_HOT RBIPC_LEAF
-int rbipc_read_acquire_batch_timeout(rbipc_ring_t * RBIPC_RESTRICT ring, uint32_t count, uint64_t timeout_ns,
-                                     rbipc_rovec_t * RBIPC_RESTRICT rovecs, uint32_t * RBIPC_RESTRICT out_acquired);
+RBIPC_NODISCARD RBIPC_HOT RBIPC_LEAF int
+rbipc_read_acquire_batch_timeout(rbipc_ring_t *RBIPC_RESTRICT ring,
+                                 uint32_t count, uint64_t timeout_ns,
+                                 rbipc_rovec_t *RBIPC_RESTRICT rovecs,
+                                 uint32_t *RBIPC_RESTRICT out_acquired);
 
 /**
  * @brief Release a batch of consumed slots back to the ring buffer.
  *
- * @details Releases an array of consumed tickets in a single vector sweep, notifying
- * waiting producers with a single coalesced wakeup.
+ * @details Releases an array of consumed tickets in a single vector sweep,
+ * notifying waiting producers with a single coalesced wakeup.
  *
  * @param[in,out] ring    Ring buffer handle.
  * @param[in]     count   Number of slots to release.
- * @param[in]     tickets Array of ticket numbers from @ref rbipc_read_acquire_batch.
+ * @param[in]     tickets Array of ticket numbers from @ref
+ * rbipc_read_acquire_batch.
  *
  * @return @ref RBIPC_OK on success.
  * @retval RBIPC_ERR_INVAL if arguments are null or count is zero.
  *
  * @see rbipc_read_acquire_batch
  */
-RBIPC_HOT RBIPC_LEAF
-int rbipc_read_release_batch(rbipc_ring_t * RBIPC_RESTRICT ring, uint32_t count,
-                             const uint64_t * RBIPC_RESTRICT tickets);
+RBIPC_HOT RBIPC_LEAF int
+rbipc_read_release_batch(rbipc_ring_t *RBIPC_RESTRICT ring, uint32_t count,
+                         const uint64_t *RBIPC_RESTRICT tickets);
 
 /**
  * @defgroup rbipc_streaming Streaming & Cache-Bypassing I/O Operations
@@ -883,9 +1127,10 @@ int rbipc_read_release_batch(rbipc_ring_t * RBIPC_RESTRICT ring, uint32_t count,
 /**
  * @brief Copy memory using cache-bypassing non-temporal streaming stores.
  *
- * @details Utilizes hardware streaming store instructions (AVX2 _mm256_stream_si256,
- * SSE2 _mm_stream_si128, or ARM NEON/stnp) and memory fences to bypass L1/L2 cache
- * hierarchies, preventing cache line eviction of ring buffer control structures.
+ * @details Utilizes hardware streaming store instructions (AVX2
+ * _mm256_stream_si256, SSE2 _mm_stream_si128, or ARM NEON/stnp) and memory
+ * fences to bypass L1/L2 cache hierarchies, preventing cache line eviction of
+ * ring buffer control structures.
  *
  * @param[out] dst  Destination buffer (must be valid memory).
  * @param[in]  src  Source data buffer.
@@ -895,10 +1140,12 @@ int rbipc_read_release_batch(rbipc_ring_t * RBIPC_RESTRICT ring, uint32_t count,
  * @retval RBIPC_ERR_INVAL if @p dst or @p src is NULL.
  */
 RBIPC_LEAF
-int rbipc_stream_copy(void * RBIPC_RESTRICT dst, const void * RBIPC_RESTRICT src, size_t size);
+int rbipc_stream_copy(void *RBIPC_RESTRICT dst, const void *RBIPC_RESTRICT src,
+                      size_t size);
 
 /**
- * @brief Reserve a slot, copy payload via non-temporal streaming stores, and commit.
+ * @brief Reserve a slot, copy payload via non-temporal streaming stores, and
+ * commit.
  *
  * @param[in,out] ring       Ring buffer handle.
  * @param[in]     src        Source payload buffer.
@@ -906,13 +1153,17 @@ int rbipc_stream_copy(void * RBIPC_RESTRICT dst, const void * RBIPC_RESTRICT src
  * @param[out]    out_ticket Location to receive assigned ticket.
  *
  * @return @ref RBIPC_OK on success.
- * @retval RBIPC_ERR_INVAL if arguments are invalid or @p len exceeds slot capacity.
+ * @retval RBIPC_ERR_INVAL if arguments are invalid or @p len exceeds slot
+ * capacity.
  */
-RBIPC_NODISCARD RBIPC_LEAF
-int rbipc_write_stream(rbipc_ring_t * RBIPC_RESTRICT ring, const void * RBIPC_RESTRICT src, uint32_t len, uint64_t * RBIPC_RESTRICT out_ticket);
+RBIPC_NODISCARD RBIPC_LEAF int
+rbipc_write_stream(rbipc_ring_t *RBIPC_RESTRICT ring,
+                   const void *RBIPC_RESTRICT src, uint32_t len,
+                   uint64_t *RBIPC_RESTRICT out_ticket);
 
 /**
- * @brief Non-blocking variant of @ref rbipc_write_stream using non-temporal streaming stores.
+ * @brief Non-blocking variant of @ref rbipc_write_stream using non-temporal
+ * streaming stores.
  *
  * @param[in,out] ring       Ring buffer handle.
  * @param[in]     src        Source payload buffer.
@@ -921,34 +1172,41 @@ int rbipc_write_stream(rbipc_ring_t * RBIPC_RESTRICT ring, const void * RBIPC_RE
  *
  * @return @ref RBIPC_OK on success.
  * @retval RBIPC_ERR_FULL  if ring buffer is currently full.
- * @retval RBIPC_ERR_INVAL if arguments are invalid or @p len exceeds slot capacity.
+ * @retval RBIPC_ERR_INVAL if arguments are invalid or @p len exceeds slot
+ * capacity.
  */
-RBIPC_NODISCARD RBIPC_LEAF
-int rbipc_write_stream_nonblock(rbipc_ring_t * RBIPC_RESTRICT ring, const void * RBIPC_RESTRICT src, uint32_t len, uint64_t * RBIPC_RESTRICT out_ticket);
+RBIPC_NODISCARD RBIPC_LEAF int
+rbipc_write_stream_nonblock(rbipc_ring_t *RBIPC_RESTRICT ring,
+                            const void *RBIPC_RESTRICT src, uint32_t len,
+                            uint64_t *RBIPC_RESTRICT out_ticket);
 
 /**
- * @brief Timeout-bounded variant of @ref rbipc_write_stream using non-temporal streaming stores.
+ * @brief Timeout-bounded variant of @ref rbipc_write_stream using non-temporal
+ * streaming stores.
  *
  * @param[in,out] ring       Ring buffer handle.
  * @param[in]     src        Source payload buffer.
  * @param[in]     len        Length in bytes of payload to transmit.
- * @param[in]     timeout_ns Bounded deadline duration in nanoseconds (0 = non-blocking).
+ * @param[in]     timeout_ns Bounded deadline duration in nanoseconds (0 =
+ * non-blocking).
  * @param[out]    out_ticket Location to receive assigned ticket.
  *
  * @return @ref RBIPC_OK on success.
  * @retval RBIPC_ERR_TIMEOUT if deadline expires before slot availability.
  * @retval RBIPC_ERR_FULL    if non-blocking attempt found full ring.
- * @retval RBIPC_ERR_INVAL   if arguments are invalid or @p len exceeds slot capacity.
+ * @retval RBIPC_ERR_INVAL   if arguments are invalid or @p len exceeds slot
+ * capacity.
  */
-RBIPC_NODISCARD RBIPC_LEAF
-int rbipc_write_stream_timeout(rbipc_ring_t * RBIPC_RESTRICT ring, const void * RBIPC_RESTRICT src, uint32_t len, uint64_t timeout_ns, uint64_t * RBIPC_RESTRICT out_ticket);
+RBIPC_NODISCARD RBIPC_LEAF int rbipc_write_stream_timeout(
+    rbipc_ring_t *RBIPC_RESTRICT ring, const void *RBIPC_RESTRICT src,
+    uint32_t len, uint64_t timeout_ns, uint64_t *RBIPC_RESTRICT out_ticket);
 /** @} */
 
 /**
  * @brief Signal cooperative shutdown to all waiting producers and consumers.
  *
- * @details Atomically sets the shutdown flag and executes futex wakeups across both
- * producer and consumer channels to awaken blocked workers.
+ * @details Atomically sets the shutdown flag and executes futex wakeups across
+ * both producer and consumer channels to awaken blocked workers.
  *
  * @param[in,out] ring Ring buffer handle.
  *
@@ -963,22 +1221,26 @@ int rbipc_signal_shutdown(rbipc_ring_t *ring);
 /**
  * @brief Enable asynchronous eventfd signaling on the ring buffer handle.
  *
- * @details Creates a non-blocking, close-on-exec eventfd (EFD_NONBLOCK | EFD_CLOEXEC)
- * associated with this ring buffer handle for integration with Linux epoll reactors
- * (Tokio, libuv, epoll_wait) and io_uring. When messages are committed or released,
- * a notification is dispatched to wake epoll listeners.
+ * @details Creates a non-blocking, close-on-exec eventfd (EFD_NONBLOCK |
+ * EFD_CLOEXEC) associated with this ring buffer handle for integration with
+ * Linux epoll reactors (Tokio, libuv, epoll_wait) and io_uring. When messages
+ * are committed or released, a notification is dispatched to wake epoll
+ * listeners.
  *
  * @param[in,out] ring   Ring buffer handle.
- * @param[out]    out_fd Pointer receiving the newly created eventfd file descriptor.
+ * @param[out]    out_fd Pointer receiving the newly created eventfd file
+ * descriptor.
  *
  * @return @ref RBIPC_OK on success.
  * @retval RBIPC_ERR_INVAL if arguments are null or descriptor creation fails.
  */
-RBIPC_NODISCARD RBIPC_LEAF
-int rbipc_enable_eventfd(rbipc_ring_t * RBIPC_RESTRICT ring, int * RBIPC_RESTRICT out_fd);
+RBIPC_NODISCARD RBIPC_LEAF int
+rbipc_enable_eventfd(rbipc_ring_t *RBIPC_RESTRICT ring,
+                     int *RBIPC_RESTRICT out_fd);
 
 /**
- * @brief Bind an existing external eventfd descriptor to the ring buffer handle.
+ * @brief Bind an existing external eventfd descriptor to the ring buffer
+ * handle.
  *
  * @param[in,out] ring     Ring buffer handle.
  * @param[in]     event_fd Open eventfd descriptor (must be >= 0).
@@ -986,11 +1248,12 @@ int rbipc_enable_eventfd(rbipc_ring_t * RBIPC_RESTRICT ring, int * RBIPC_RESTRIC
  * @return @ref RBIPC_OK on success.
  * @retval RBIPC_ERR_INVAL if ring is null or event_fd is negative.
  */
-RBIPC_NODISCARD RBIPC_LEAF
-int rbipc_set_eventfd(rbipc_ring_t * RBIPC_RESTRICT ring, int event_fd);
+RBIPC_NODISCARD RBIPC_LEAF int
+rbipc_set_eventfd(rbipc_ring_t *RBIPC_RESTRICT ring, int event_fd);
 
 /**
- * @brief Retrieve the currently bound eventfd file descriptor from the ring buffer handle.
+ * @brief Retrieve the currently bound eventfd file descriptor from the ring
+ * buffer handle.
  *
  * @param[in]  ring   Ring buffer handle.
  * @param[out] out_fd Pointer receiving the bound eventfd descriptor.
@@ -999,8 +1262,9 @@ int rbipc_set_eventfd(rbipc_ring_t * RBIPC_RESTRICT ring, int event_fd);
  * @retval RBIPC_ERR_INVAL if arguments are null.
  * @retval RBIPC_ERR_NOTSUP if no eventfd is currently bound to the ring handle.
  */
-RBIPC_NODISCARD RBIPC_LEAF
-int rbipc_get_eventfd(const rbipc_ring_t * RBIPC_RESTRICT ring, int * RBIPC_RESTRICT out_fd);
+RBIPC_NODISCARD RBIPC_LEAF int
+rbipc_get_eventfd(const rbipc_ring_t *RBIPC_RESTRICT ring,
+                  int *RBIPC_RESTRICT out_fd);
 
 /**
  * @brief Drain accumulated counter notifications from the bound eventfd.
@@ -1011,8 +1275,8 @@ int rbipc_get_eventfd(const rbipc_ring_t * RBIPC_RESTRICT ring, int * RBIPC_REST
  * @retval RBIPC_ERR_INVAL if ring is null.
  * @retval RBIPC_ERR_NOTSUP if no eventfd is bound.
  */
-RBIPC_NODISCARD RBIPC_LEAF
-int rbipc_eventfd_drain(const rbipc_ring_t * RBIPC_RESTRICT ring);
+RBIPC_NODISCARD RBIPC_LEAF int
+rbipc_eventfd_drain(const rbipc_ring_t *RBIPC_RESTRICT ring);
 
 /**
  * @brief Retrieve underlying shared memory file descriptor.
@@ -1023,14 +1287,14 @@ int rbipc_eventfd_drain(const rbipc_ring_t * RBIPC_RESTRICT ring);
  *
  * @see rbipc_attach_fd
  */
-RBIPC_NODISCARD RBIPC_PURE RBIPC_LEAF
-int rbipc_get_fd(const rbipc_ring_t *ring);
+RBIPC_NODISCARD RBIPC_PURE RBIPC_LEAF int
+rbipc_get_fd(const rbipc_ring_t *ring);
 
 /**
  * @brief Collect a point-in-time snapshot of ring buffer telemetry metrics.
  *
- * @details Captures memory geometry, current ticket positions, active producer/consumer
- * counts, and futex waiter metrics into @p out_stats.
+ * @details Captures memory geometry, current ticket positions, active
+ * producer/consumer counts, and futex waiter metrics into @p out_stats.
  *
  * @param[in]  ring      Ring buffer handle.
  * @param[out] out_stats Output statistics snapshot structure.
@@ -1038,12 +1302,14 @@ int rbipc_get_fd(const rbipc_ring_t *ring);
  * @return @ref RBIPC_OK on success.
  * @retval RBIPC_ERR_INVAL if @p ring or @p out_stats is NULL.
  */
-RBIPC_NODISCARD RBIPC_LEAF
-int rbipc_get_stats(const rbipc_ring_t * RBIPC_RESTRICT ring, rbipc_stats_t * RBIPC_RESTRICT out_stats);
+RBIPC_NODISCARD RBIPC_LEAF int
+rbipc_get_stats(const rbipc_ring_t *RBIPC_RESTRICT ring,
+                rbipc_stats_t *RBIPC_RESTRICT out_stats);
 
 /**
  * @defgroup rbipc_lease Consumer Lease Timeouts & Head-of-Line Defense
- * @brief Dynamic consumer lease configuration and head-of-line blocking mitigation.
+ * @brief Dynamic consumer lease configuration and head-of-line blocking
+ * mitigation.
  * @{
  */
 
@@ -1051,13 +1317,14 @@ int rbipc_get_stats(const rbipc_ring_t * RBIPC_RESTRICT ring, rbipc_stats_t * RB
  * @brief Configure consumer slot holding lease duration in nanoseconds.
  *
  * @param[in,out] ring             Ring buffer handle.
- * @param[in]     lease_timeout_ns Maximum lease duration in nanoseconds (0 to disable).
+ * @param[in]     lease_timeout_ns Maximum lease duration in nanoseconds (0 to
+ * disable).
  *
  * @return @ref RBIPC_OK on success.
  * @retval RBIPC_ERR_INVAL if @p ring is NULL.
  */
-RBIPC_NODISCARD RBIPC_LEAF
-int rbipc_set_lease_timeout(rbipc_ring_t *ring, uint64_t lease_timeout_ns);
+RBIPC_NODISCARD RBIPC_LEAF int
+rbipc_set_lease_timeout(rbipc_ring_t *ring, uint64_t lease_timeout_ns);
 
 /**
  * @brief Retrieve current consumer slot holding lease duration in nanoseconds.
@@ -1066,8 +1333,8 @@ int rbipc_set_lease_timeout(rbipc_ring_t *ring, uint64_t lease_timeout_ns);
  *
  * @return Lease timeout in nanoseconds (0 if disabled or invalid ring).
  */
-RBIPC_NODISCARD RBIPC_LEAF
-uint64_t rbipc_get_lease_timeout(const rbipc_ring_t *ring);
+RBIPC_NODISCARD RBIPC_LEAF uint64_t
+rbipc_get_lease_timeout(const rbipc_ring_t *ring);
 
 /**
  * @brief Audit ring buffer and proactively revoke expired consumer leases.
@@ -1076,10 +1343,8 @@ uint64_t rbipc_get_lease_timeout(const rbipc_ring_t *ring);
  *
  * @return Number of expired leases revoked (>= 0), or negative error code.
  */
-RBIPC_NODISCARD RBIPC_LEAF
-int rbipc_revoke_expired_leases(rbipc_ring_t *ring);
+RBIPC_NODISCARD RBIPC_LEAF int rbipc_revoke_expired_leases(rbipc_ring_t *ring);
 /** @} */
-
 
 /**
  * @brief Convert an error code into a human-readable description string.
@@ -1088,8 +1353,8 @@ int rbipc_revoke_expired_leases(rbipc_ring_t *ring);
  *
  * @return Static constant string describing the status code.
  */
-RBIPC_RETURNS_NONNULL RBIPC_CONST RBIPC_COLD RBIPC_LEAF
-const char *rbipc_strerror(int err);
+RBIPC_RETURNS_NONNULL RBIPC_CONST RBIPC_COLD RBIPC_LEAF const char *
+rbipc_strerror(int err);
 
 #ifdef __cplusplus
 }

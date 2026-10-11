@@ -1,0 +1,4 @@
+---
+Checks: 'bugprone-*,clang-analyzer-*,performance-*,-clang-analyzer-optin.performance.Padding,-bugprone-easily-swappable-parameters,-clang-analyzer-security.insecureAPI.DeprecatedOrUnsafeBufferHandling'
+HeaderFilterRegex: 'include/.*|src/.*'
+WarningsAsErrors: '*'

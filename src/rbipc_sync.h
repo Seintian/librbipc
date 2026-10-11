@@ -1,12 +1,14 @@
 /**
  * @file rbipc_sync.h
- * @brief Zero-spin passive IPC synchronization engine based on Linux Fast Userspace Mutexes.
+ * @brief Zero-spin passive IPC synchronization engine based on Linux Fast
+ * Userspace Mutexes.
  *
- * @details Implements thread-local deadline tracking and zero-spin futex backoff. Completely
- * eliminates active CPU busy-waiting loops, yielding immediate thread suspension on kernel
- * wait-queues and preserving zero-percent CPU usage during idling or backpressure periods.
+ * @details Implements thread-local deadline tracking and zero-spin futex
+ * backoff. Completely eliminates active CPU busy-waiting loops, yielding
+ * immediate thread suspension on kernel wait-queues and preserving zero-percent
+ * CPU usage during idling or backpressure periods.
  *
- * @author Christian Santarelli
+ * @author Seintian
  * @date 2026
  * @copyright Apache License 2.0
  */
@@ -15,13 +17,14 @@
 #define RBIPC_SYNC_H
 
 #include "rbipc.h"
-#include "rbipc_attr.h"
 #include "rbipc_arch.h"
+#include "rbipc_attr.h"
 
 #include <stdint.h>
 
 /**
- * @brief Default bounded CPU pause count for adaptive micro-spinning before passive futex wait.
+ * @brief Default bounded CPU pause count for adaptive micro-spinning before
+ * passive futex wait.
  */
 #define RBIPC_SPIN_COUNT_DEFAULT 48U
 
@@ -34,33 +37,41 @@ typedef bool (*rbipc_spin_pred_t)(void *arg);
  * @brief Bounded CPU micro-pause execution helper.
  */
 RBIPC_INLINE void rbipc_sync_spin_pause(uint32_t count) {
-    for (uint32_t i = 0; i < count; ++i) {
-        rbipc_cpu_pause();
-    }
+  for (uint32_t i = 0; i < count; ++i) {
+    rbipc_cpu_pause();
+  }
 }
 #include <stdatomic.h>
 #include <stdbool.h>
 
-#define RBIPC_FUTEX_PERIOD_NS    20000000ULL
+#define RBIPC_FUTEX_PERIOD_NS 20000000ULL
 
 /**
  * @struct rbipc_sync_state_t
- * @brief Thread-local state tracking for backoff progression and deadline timeout management.
+ * @brief Thread-local state tracking for backoff progression and deadline
+ * timeout management.
  */
 typedef struct {
-    uint64_t deadline_ns;        /**< Monotonic timestamp deadline in nanoseconds (valid when @ref has_deadline is true). */
-    bool has_deadline;           /**< Boolean flag indicating if an explicit operation timeout deadline is active. */
-    uint64_t hole_first_seen_ns; /**< Monotonic timestamp when an empty ticket-hole was first observed. */
+  uint64_t deadline_ns; /**< Monotonic timestamp deadline in nanoseconds (valid
+                           when @ref has_deadline is true). */
+  bool has_deadline;    /**< Boolean flag indicating if an explicit operation
+                           timeout deadline is active. */
+  uint64_t hole_first_seen_ns; /**< Monotonic timestamp when an empty
+                                  ticket-hole was first observed. */
 } rbipc_sync_state_t;
 
 /**
- * @brief Initialize a thread-local synchronization state object with an optional timeout.
+ * @brief Initialize a thread-local synchronization state object with an
+ * optional timeout.
  *
- * @param[out] state      Pointer to synchronization state structure to initialize.
- * @param[in]  timeout_ns Requested timeout in nanoseconds (0 for non-blocking, UINT64_MAX for unbounded).
+ * @param[out] state      Pointer to synchronization state structure to
+ * initialize.
+ * @param[in]  timeout_ns Requested timeout in nanoseconds (0 for non-blocking,
+ * UINT64_MAX for unbounded).
  */
 RBIPC_LEAF
-void rbipc_sync_state_init(rbipc_sync_state_t * RBIPC_RESTRICT state, uint64_t timeout_ns);
+void rbipc_sync_state_init(rbipc_sync_state_t *RBIPC_RESTRICT state,
+                           uint64_t timeout_ns);
 
 /**
  * @brief Increment active waiter counter using sequential consistency.
@@ -81,90 +92,109 @@ void rbipc_sync_deregister_waiter(_Atomic uint32_t *futex_waiters);
 /**
  * @brief Execute a passive futex wait when a waiter is already registered.
  *
- * @details Evaluates deadline expiration. If time remains, waits on @p futex_word.
- * Unconditionally decrements @p futex_waiters upon returning or timing out.
+ * @details Evaluates deadline expiration. If time remains, waits on @p
+ * futex_word. Unconditionally decrements @p futex_waiters upon returning or
+ * timing out.
  *
- * @param[in,out] state         Thread-local synchronization state tracking deadline.
- * @param[in]     futex_word    Pointer to atomic futex sequence word in shared memory.
+ * @param[in,out] state         Thread-local synchronization state tracking
+ * deadline.
+ * @param[in]     futex_word    Pointer to atomic futex sequence word in shared
+ * memory.
  * @param[in,out] futex_waiters Pointer to atomic waiter count in shared memory.
  *
  * @return 0 on continued wait / successful wake.
  * @retval RBIPC_ERR_TIMEOUT if deadline timestamp has been exceeded.
  */
-RBIPC_NODISCARD RBIPC_LEAF
-int rbipc_sync_wait_registered(rbipc_sync_state_t * RBIPC_RESTRICT state, _Atomic uint32_t *futex_word,
-                               _Atomic uint32_t *futex_waiters);
+RBIPC_NODISCARD RBIPC_LEAF int
+rbipc_sync_wait_registered(rbipc_sync_state_t *RBIPC_RESTRICT state,
+                           _Atomic uint32_t *futex_word,
+                           _Atomic uint32_t *futex_waiters);
 
 /**
  * @brief Execute a passive backoff step via Linux sys_futex suspension.
  *
- * @details Evaluates deadline expiration. If time remains, increments the atomic @p futex_waiters
- * counter, calls `SYS_futex` with `FUTEX_WAIT`, and decrements @p futex_waiters upon waking.
+ * @details Evaluates deadline expiration. If time remains, increments the
+ * atomic @p futex_waiters counter, calls `SYS_futex` with `FUTEX_WAIT`, and
+ * decrements @p futex_waiters upon waking.
  *
- * @param[in,out] state         Thread-local synchronization state tracking deadline.
- * @param[in]     futex_word    Pointer to atomic futex sequence word in shared memory.
+ * @param[in,out] state         Thread-local synchronization state tracking
+ * deadline.
+ * @param[in]     futex_word    Pointer to atomic futex sequence word in shared
+ * memory.
  * @param[in]     futex_waiters Pointer to atomic waiter count in shared memory.
  *
  * @return 0 on continued wait / successful wake.
  * @retval RBIPC_ERR_TIMEOUT if deadline timestamp has been exceeded.
  */
-RBIPC_NODISCARD RBIPC_LEAF
-int rbipc_sync_backoff(rbipc_sync_state_t * RBIPC_RESTRICT state, _Atomic uint32_t *futex_word,
-                       _Atomic uint32_t *futex_waiters);
+RBIPC_NODISCARD RBIPC_LEAF int
+rbipc_sync_backoff(rbipc_sync_state_t *RBIPC_RESTRICT state,
+                   _Atomic uint32_t *futex_word,
+                   _Atomic uint32_t *futex_waiters);
 
 /**
  * @brief Execute adaptive backoff with spin-then-wait policy.
  *
  * @param[in,out] state         Synchronization state tracking deadline.
- * @param[in]     futex_word    Pointer to atomic futex sequence word in shared memory.
+ * @param[in]     futex_word    Pointer to atomic futex sequence word in shared
+ * memory.
  * @param[in,out] futex_waiters Pointer to atomic waiter count in shared memory.
- * @param[in]     policy        Wait policy flags (@ref RBIPC_WAIT_ZERO_SPIN or @ref RBIPC_WAIT_ADAPTIVE).
- * @param[in]     spin_budget   Number of spin pause iterations if adaptive (e.g. @ref RBIPC_SPIN_COUNT_DEFAULT).
- * @param[in]     predicate     Optional predicate checking if wait condition cleared.
+ * @param[in]     policy        Wait policy flags (@ref RBIPC_WAIT_ZERO_SPIN or
+ * @ref RBIPC_WAIT_ADAPTIVE).
+ * @param[in]     spin_budget   Number of spin pause iterations if adaptive
+ * (e.g. @ref RBIPC_SPIN_COUNT_DEFAULT).
+ * @param[in]     predicate     Optional predicate checking if wait condition
+ * cleared.
  * @param[in]     arg           Context passed to @p predicate.
  *
- * @return 0 on success / condition met, @ref RBIPC_ERR_TIMEOUT on expiration, or error code.
+ * @return 0 on success / condition met, @ref RBIPC_ERR_TIMEOUT on expiration,
+ * or error code.
  */
-RBIPC_NODISCARD RBIPC_LEAF
-int rbipc_sync_backoff_adaptive(rbipc_sync_state_t * RBIPC_RESTRICT state,
-                                _Atomic uint32_t *futex_word,
-                                _Atomic uint32_t *futex_waiters,
-                                uint32_t policy,
-                                uint32_t spin_budget,
-                                rbipc_spin_pred_t predicate,
-                                void *arg);
+RBIPC_NODISCARD RBIPC_LEAF int rbipc_sync_backoff_adaptive(
+    rbipc_sync_state_t *RBIPC_RESTRICT state, _Atomic uint32_t *futex_word,
+    _Atomic uint32_t *futex_waiters, uint32_t policy, uint32_t spin_budget,
+    rbipc_spin_pred_t predicate, void *arg);
 
 /**
  * @brief Wake up to @p count waiting threads on the specified futex word.
  *
- * @param[in] futex_word    Pointer to atomic futex sequence word in shared memory.
+ * @param[in] futex_word    Pointer to atomic futex sequence word in shared
+ * memory.
  * @param[in] futex_waiters Pointer to atomic waiter count in shared memory.
  * @param[in] count         Maximum number of waiting threads to awaken.
  */
 RBIPC_LEAF
-void rbipc_sync_wake_n(_Atomic uint32_t *futex_word, _Atomic uint32_t *futex_waiters, uint32_t count);
+void rbipc_sync_wake_n(_Atomic uint32_t *futex_word,
+                       _Atomic uint32_t *futex_waiters, uint32_t count);
 
 /**
- * @brief Wake one waiting thread on the specified futex word after state changes.
+ * @brief Wake one waiting thread on the specified futex word after state
+ * changes.
  *
- * @details Checks @p futex_waiters using atomic load with sequential consistency. If 0 waiters
- * are present, the expensive kernel syscall is completely bypassed (0 context switches).
+ * @details Checks @p futex_waiters using atomic load with sequential
+ * consistency. If 0 waiters are present, the expensive kernel syscall is
+ * completely bypassed (0 context switches).
  *
- * @param[in] futex_word    Pointer to atomic futex sequence word in shared memory.
+ * @param[in] futex_word    Pointer to atomic futex sequence word in shared
+ * memory.
  * @param[in] futex_waiters Pointer to atomic waiter count in shared memory.
  */
 RBIPC_LEAF
-void rbipc_sync_wake_one(_Atomic uint32_t *futex_word, _Atomic uint32_t *futex_waiters);
+void rbipc_sync_wake_one(_Atomic uint32_t *futex_word,
+                         _Atomic uint32_t *futex_waiters);
 
 /**
- * @brief Wake all waiting threads on the specified futex word (e.g. for shutdown broadcast).
+ * @brief Wake all waiting threads on the specified futex word (e.g. for
+ * shutdown broadcast).
  *
- * @details Dispatches `FUTEX_WAKE` with `INT_MAX` if waiters are currently sleeping.
+ * @details Dispatches `FUTEX_WAKE` with `INT_MAX` if waiters are currently
+ * sleeping.
  *
- * @param[in] futex_word    Pointer to atomic futex sequence word in shared memory.
+ * @param[in] futex_word    Pointer to atomic futex sequence word in shared
+ * memory.
  * @param[in] futex_waiters Pointer to atomic waiter count in shared memory.
  */
 RBIPC_LEAF
-void rbipc_sync_wake_all(_Atomic uint32_t *futex_word, _Atomic uint32_t *futex_waiters);
+void rbipc_sync_wake_all(_Atomic uint32_t *futex_word,
+                         _Atomic uint32_t *futex_waiters);
 
 #endif /* RBIPC_SYNC_H */

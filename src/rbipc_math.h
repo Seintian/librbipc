@@ -1,11 +1,13 @@
 /**
  * @file rbipc_math.h
- * @brief Discrete mathematics, alignment geometry, and modular sequence arithmetic.
+ * @brief Discrete mathematics, alignment geometry, and modular sequence
+ * arithmetic.
  *
- * @details Implements bitwise power-of-two rounding, address alignment, and modulo-2^32
- * sequence difference calculations based on RFC 1982 serial number arithmetic.
+ * @details Implements bitwise power-of-two rounding, address alignment, and
+ * modulo-2^32 sequence difference calculations based on RFC 1982 serial number
+ * arithmetic.
  *
- * @author Christian Santarelli
+ * @author Seintian
  * @date 2026
  * @copyright Apache License 2.0
  */
@@ -30,9 +32,11 @@
  *
  * @details Emits branch-free bit-smearing operations:
  * \f[
- *   v' = v - 1, \quad v' \leftarrow v' \mid (v' \gg 1), \dots, \quad v' \leftarrow v' \mid (v' \gg 16), \quad \text{result} = v' + 1
+ *   v' = v - 1, \quad v' \leftarrow v' \mid (v' \gg 1), \dots, \quad v'
+ * \leftarrow v' \mid (v' \gg 16), \quad \text{result} = v' + 1
  * \f]
- * Safely guards against integer overflow when @p v exceeds \f$2^{31}\f$ (@ref RBIPC_MAX_POW2_32).
+ * Safely guards against integer overflow when @p v exceeds \f$2^{31}\f$ (@ref
+ * RBIPC_MAX_POW2_32).
  *
  * @param[in] v Unsigned 32-bit integer input.
  *
@@ -40,17 +44,20 @@
  * @retval 1 if @p v is 0.
  * @retval 0 if @p v exceeds @ref RBIPC_MAX_POW2_32 (overflow).
  */
-RBIPC_INLINE RBIPC_CONST RBIPC_NODISCARD uint32_t rbipc_round_up_pow2_32(uint32_t v) {
-    if (v == 0) return 1;
-    if (v > RBIPC_MAX_POW2_32) return 0; /* Overflow */
+RBIPC_INLINE RBIPC_CONST RBIPC_NODISCARD uint32_t
+rbipc_round_up_pow2_32(uint32_t v) {
+  if (v == 0)
+    return 1;
+  if (v > RBIPC_MAX_POW2_32)
+    return 0; /* Overflow */
 
-    v--;
-    v |= v >> 1U;
-    v |= v >> 2U;
-    v |= v >> 4U;
-    v |= v >> 8U;
-    v |= v >> 16U;
-    return v + 1;
+  v--;
+  v |= v >> 1U;
+  v |= v >> 2U;
+  v |= v >> 4U;
+  v |= v >> 8U;
+  v |= v >> 16U;
+  return v + 1;
 }
 
 /**
@@ -62,19 +69,23 @@ RBIPC_INLINE RBIPC_CONST RBIPC_NODISCARD uint32_t rbipc_round_up_pow2_32(uint32_
  * \f]
  *
  * @param[in] val       Base integer value to align.
- * @param[in] alignment Power-of-two alignment boundary (e.g. 64 for cache line, 4096 for page).
+ * @param[in] alignment Power-of-two alignment boundary (e.g. 64 for cache line,
+ * 4096 for page).
  *
  * @return Value rounded up to the nearest multiple of @p alignment.
  */
-RBIPC_INLINE RBIPC_CONST RBIPC_NODISCARD size_t rbipc_align_up(size_t val, size_t alignment) {
-    return (val + alignment - 1) & ~(alignment - 1);
+RBIPC_INLINE RBIPC_CONST RBIPC_NODISCARD size_t
+rbipc_align_up(size_t val, size_t alignment) {
+  return (val + alignment - 1) & ~(alignment - 1);
 }
 
 /**
- * @brief Calculate the signed difference between two 32-bit sequence numbers under modular arithmetic.
+ * @brief Calculate the signed difference between two 32-bit sequence numbers
+ * under modular arithmetic.
  *
- * @details Adheres to RFC 1982 Serial Number Arithmetic rules. Correctly handles unsigned
- * 32-bit overflow and wrap-around as long as the absolute difference is strictly less than \f$2^{31}\f$:
+ * @details Adheres to RFC 1982 Serial Number Arithmetic rules. Correctly
+ * handles unsigned 32-bit overflow and wrap-around as long as the absolute
+ * difference is strictly less than \f$2^{31}\f$:
  * \f[
  *   \Delta = (\text{int32\_t})(a - b)
  * \f]
@@ -83,10 +94,12 @@ RBIPC_INLINE RBIPC_CONST RBIPC_NODISCARD size_t rbipc_align_up(size_t val, size_
  * @param[in] b Monotonic sequence number B.
  *
  * @return Signed 32-bit integer representing the distance from @p b to @p a.
- *         A positive value indicates @p a is ahead of @p b; negative indicates @p a is behind @p b.
+ *         A positive value indicates @p a is ahead of @p b; negative indicates
+ * @p a is behind @p b.
  */
-RBIPC_INLINE RBIPC_CONST RBIPC_NODISCARD int64_t rbipc_seq_diff(uint64_t a, uint64_t b) {
-    return (int64_t)(a - b);
+RBIPC_INLINE RBIPC_CONST RBIPC_NODISCARD int64_t rbipc_seq_diff(uint64_t a,
+                                                                uint64_t b) {
+  return (int64_t)(a - b);
 }
 
 #endif /* RBIPC_MATH_H */

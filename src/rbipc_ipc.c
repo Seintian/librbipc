@@ -39,8 +39,7 @@ int rbipc_ipc_send_fd(int socket_fd, int fd_to_send) {
     msg.msg_iov = &iov;
     msg.msg_iovlen = 1;
 
-    char cmsg_buf[CMSG_SPACE(sizeof(int))];
-    memset(cmsg_buf, 0, sizeof(cmsg_buf));
+    char cmsg_buf[CMSG_SPACE(sizeof(int))] = {0};
     msg.msg_control = cmsg_buf;
     msg.msg_controllen = sizeof(cmsg_buf);
 
@@ -85,8 +84,7 @@ int rbipc_ipc_recv_fd(int socket_fd, int *out_received_fd) {
     msg.msg_iov = &iov;
     msg.msg_iovlen = 1;
 
-    char cmsg_buf[CMSG_SPACE(sizeof(int))];
-    memset(cmsg_buf, 0, sizeof(cmsg_buf));
+    char cmsg_buf[CMSG_SPACE(sizeof(int))] = {0};
     msg.msg_control = cmsg_buf;
     msg.msg_controllen = sizeof(cmsg_buf);
 
