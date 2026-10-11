@@ -101,6 +101,8 @@ static void rbipc_ring_init_header_fields(rbipc_shm_header_t * RBIPC_RESTRICT hd
     atomic_init(&hdr->active_producers, (roles & RBIPC_ROLE_PRODUCER) ? 1 : 0);
     atomic_init(&hdr->active_consumers, (roles & RBIPC_ROLE_CONSUMER) ? 1 : 0);
     atomic_init(&hdr->shutdown_flag, 0);
+    atomic_init(&hdr->eventfd_waiters, 0);
+    atomic_init(&hdr->lease_timeout_ns, 0);
 }
 
 /**
@@ -387,10 +389,11 @@ void rbipc_ring_unmap_regions(rbipc_ring_t *ring) {
 }
 
 /**
- * @brief Decrements active participant counter according to process role.
- * @details Decrements active_producers if creator, otherwise active_consumers.
+ * @brief Decrements active participant counters according to declared process roles.
+ * @details Atomically decrements active_producers if RBIPC_ROLE_PRODUCER is configured,
+ *          and active_consumers if RBIPC_ROLE_CONSUMER is configured.
  *
- * @param[in] ring Pointer to ring handle.
+ * @param[in,out] ring Pointer to ring handle.
  */
 static void rbipc_ring_deregister(rbipc_ring_t *ring) {
     if (!ring || !ring->hdr) return;
@@ -410,6 +413,17 @@ static void rbipc_ring_deregister(rbipc_ring_t *ring) {
 int rbipc_detach(rbipc_ring_t *ring) {
     if (RBIPC_UNLIKELY(!ring)) {
         return RBIPC_ERR_INVAL;
+    }
+
+    if (ring->event_fd >= 0) {
+        if (ring->hdr) {
+            atomic_fetch_sub_explicit(&ring->hdr->eventfd_waiters, 1, memory_order_release);
+        }
+        if (ring->owns_eventfd) {
+            close(ring->event_fd);
+        }
+        ring->event_fd = -1;
+        ring->owns_eventfd = false;
     }
 
     rbipc_ring_deregister(ring);
@@ -546,6 +560,7 @@ int rbipc_get_stats(const rbipc_ring_t * RBIPC_RESTRICT ring, rbipc_stats_t * RB
     out_stats->active_consumers = atomic_load_explicit(&hdr->active_consumers, memory_order_relaxed);
     out_stats->futex_waiters = atomic_load_explicit(&hdr->futex_waiters, memory_order_relaxed) +
                                atomic_load_explicit(&hdr->write_waiters, memory_order_relaxed);
+    out_stats->eventfd_waiters = atomic_load_explicit(&hdr->eventfd_waiters, memory_order_relaxed);
     out_stats->is_shutdown = (atomic_load_explicit(&hdr->shutdown_flag, memory_order_relaxed) != 0);
 
     return RBIPC_OK;

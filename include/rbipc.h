@@ -276,6 +276,7 @@ typedef struct {
     uint32_t active_producers;   /**< Total count of attached active producer processes. */
     uint32_t active_consumers;   /**< Total count of attached active consumer processes. */
     uint32_t futex_waiters;      /**< Total count of consumer threads currently suspended in futex sleep. */
+    uint32_t eventfd_waiters;    /**< Count of registered eventfd/epoll reactor waiters. */
     bool is_shutdown;            /**< Boolean indicator confirming if ring shutdown has been signaled. */
 } rbipc_stats_t;
 

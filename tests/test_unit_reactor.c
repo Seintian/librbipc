@@ -48,7 +48,23 @@ static void test_reactor_eventfd_lifecycle(void) {
     rc = rbipc_eventfd_drain(ring);
     assert(rc == RBIPC_OK);
 
+    /* Verify eventfd_waiters is tracked in shared memory via public telemetry */
+    rbipc_ring_t *peer = NULL;
+    rc = rbipc_attach(REACTOR_RING_NAME, &peer);
+    assert(rc == RBIPC_OK);
+
+    rbipc_stats_t stats_before;
+    assert(rbipc_get_stats(peer, &stats_before) == RBIPC_OK);
+    assert(stats_before.eventfd_waiters == 1);
+
+    /* Detaching the ring with the enabled eventfd should clean up fd and decrement waiters */
     rbipc_detach(ring);
+
+    rbipc_stats_t stats_after;
+    assert(rbipc_get_stats(peer, &stats_after) == RBIPC_OK);
+    assert(stats_after.eventfd_waiters == 0);
+
+    rbipc_detach(peer);
     rbipc_destroy(REACTOR_RING_NAME);
 }
 
