@@ -57,7 +57,7 @@ int rbipc_stream_copy(void *RBIPC_RESTRICT dst, const void *RBIPC_RESTRICT src,
 #if defined(__x86_64__) || defined(_M_X64)
   if (size >= RBIPC_STREAM_THRESHOLD) {
     uintptr_t d_addr = (uintptr_t)d;
-    size_t align_offset = (32 - (d_addr & 31)) & 31;
+    size_t align_offset = (32U - (d_addr & 31U)) & 31U;
     if (align_offset > 0 && align_offset <= size) {
       memcpy(d, s, align_offset);
       d += align_offset;

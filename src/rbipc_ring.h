@@ -29,6 +29,7 @@
  * @param[in] ctrl_map_size Size in bytes of the mapped control region.
  * @param[in] data_map      Base virtual address of the shared data mapping (1x linear for slot queues).
  * @param[in] data_size     Size in bytes of a single circular data buffer.
+ * @param[in] roles         Bitmask of active participant role flags (@ref RBIPC_ROLE_PRODUCER).
  * @param[in] is_creator    @c true if this process initialized the shared memory region; @c false otherwise.
  *
  * @return Pointer to the allocated and initialized ring handle, or @c NULL if heap allocation fails.

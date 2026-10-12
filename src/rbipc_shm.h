@@ -70,6 +70,8 @@ rbipc_shm_calc_layout(uint32_t capacity, uint32_t slot_size, size_t page_size,
  *
  * @param[in]  name       POSIX shared memory name, or NULL for anonymous memfd.
  * @param[in]  total_size Allocation byte size to truncate file to.
+ * @param[in]  flags      Creation behavior flags (e.g. @ref RBIPC_CREATE_EXCL or @ref RBIPC_CREATE_OVERWRITE).
+ * @param[in]  mode       POSIX file permission mode bits (or 0 for default @c 0600).
  * @param[out] out_fd     Location to store the opened file descriptor.
  *
  * @return @ref RBIPC_OK on success.

@@ -172,7 +172,8 @@ RBIPC_INLINE int rbipc_shm_create_anonymous(mode_t mode,
   if (fd < 0) {
     return RBIPC_ERR_SYS;
   }
-  mode_t actual_mode = (mode == 0) ? RBIPC_DEFAULT_SHM_MODE : (mode & 07777);
+  mode_t actual_mode =
+      (mode == 0) ? RBIPC_DEFAULT_SHM_MODE : (mode & (mode_t)07777U);
   if (fchmod(fd, actual_mode) != 0) {
     int err = errno;
     close(fd);
@@ -196,7 +197,8 @@ RBIPC_INLINE int rbipc_shm_create_named(const char *RBIPC_RESTRICT name,
   if (flags & RBIPC_CREATE_OVERWRITE) {
     shm_unlink(name);
   }
-  mode_t actual_mode = (mode == 0) ? RBIPC_DEFAULT_SHM_MODE : (mode & 07777);
+  mode_t actual_mode =
+      (mode == 0) ? RBIPC_DEFAULT_SHM_MODE : (mode & (mode_t)07777U);
   int fd = shm_open(name, O_CREAT | O_EXCL | O_RDWR, actual_mode);
   if (fd < 0) {
     if (errno == EEXIST) {

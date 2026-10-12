@@ -80,20 +80,20 @@ rbipc_align_up(size_t val, size_t alignment) {
 }
 
 /**
- * @brief Calculate the signed difference between two 32-bit sequence numbers
+ * @brief Calculate the signed difference between two 64-bit sequence numbers
  * under modular arithmetic.
  *
  * @details Adheres to RFC 1982 Serial Number Arithmetic rules. Correctly
- * handles unsigned 32-bit overflow and wrap-around as long as the absolute
- * difference is strictly less than \f$2^{31}\f$:
+ * handles unsigned 64-bit overflow and wrap-around as long as the absolute
+ * difference is strictly less than \f$2^{63}\f$:
  * \f[
- *   \Delta = (\text{int32\_t})(a - b)
+ *   \Delta = (\text{int64\_t})(a - b)
  * \f]
  *
  * @param[in] a Monotonic sequence number A.
  * @param[in] b Monotonic sequence number B.
  *
- * @return Signed 32-bit integer representing the distance from @p b to @p a.
+ * @return Signed 64-bit integer representing the distance from @p b to @p a.
  *         A positive value indicates @p a is ahead of @p b; negative indicates
  * @p a is behind @p b.
  */

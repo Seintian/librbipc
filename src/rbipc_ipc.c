@@ -18,11 +18,6 @@
 
 /**
  * @brief Transmit a raw file descriptor across a UNIX domain socket via SCM_RIGHTS.
- *
- * @param[in] socket_fd  Connected UNIX domain socket descriptor.
- * @param[in] fd_to_send File descriptor to transmit.
- *
- * @return RBIPC_OK on success, or RBIPC_ERR_INVAL / RBIPC_ERR_SYS on failure.
  */
 RBIPC_LEAF
 int rbipc_ipc_send_fd(int socket_fd, int fd_to_send) {
@@ -62,11 +57,6 @@ int rbipc_ipc_send_fd(int socket_fd, int fd_to_send) {
 
 /**
  * @brief Receive a raw file descriptor from a UNIX domain socket via SCM_RIGHTS.
- *
- * @param[in]  socket_fd       Connected UNIX domain socket descriptor.
- * @param[out] out_received_fd Location to store received file descriptor.
- *
- * @return RBIPC_OK on success, or error code on failure.
  */
 RBIPC_LEAF
 int rbipc_ipc_recv_fd(int socket_fd, int *out_received_fd) {
@@ -113,11 +103,6 @@ int rbipc_ipc_recv_fd(int socket_fd, int *out_received_fd) {
 
 /**
  * @brief Transmit the backing file descriptor of a ring buffer across a UNIX domain socket.
- *
- * @param[in] socket_fd Connected UNIX domain socket descriptor.
- * @param[in] ring      Ring buffer handle whose backing descriptor will be sent.
- *
- * @return RBIPC_OK on success, or error code on failure.
  */
 RBIPC_LEAF
 int rbipc_send_fd(int socket_fd, const rbipc_ring_t *ring) {
@@ -133,12 +118,6 @@ int rbipc_send_fd(int socket_fd, const rbipc_ring_t *ring) {
 
 /**
  * @brief Receive a ring buffer descriptor across a socket and attach with role flags.
- *
- * @param[in]  socket_fd  Connected UNIX domain socket descriptor.
- * @param[in]  role_flags Participant role flags.
- * @param[out] out_ring   Location to store attached ring buffer handle.
- *
- * @return RBIPC_OK on success, or error code on failure.
  */
 RBIPC_LEAF
 int rbipc_recv_fd_ex(int socket_fd, uint32_t role_flags, rbipc_ring_t **out_ring) {
@@ -169,11 +148,6 @@ int rbipc_recv_fd_ex(int socket_fd, uint32_t role_flags, rbipc_ring_t **out_ring
 
 /**
  * @brief Receive a ring buffer descriptor across a socket and attach as producer and consumer.
- *
- * @param[in]  socket_fd Connected UNIX domain socket descriptor.
- * @param[out] out_ring  Location to store attached ring buffer handle.
- *
- * @return RBIPC_OK on success, or error code on failure.
  */
 RBIPC_LEAF
 int rbipc_recv_fd(int socket_fd, rbipc_ring_t **out_ring) {

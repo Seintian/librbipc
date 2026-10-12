@@ -21,7 +21,7 @@ DOCS_HTML_DIR = os.path.join(REPO_DIR, "docs", "html")
 
 
 def copy_auxiliary_assets():
-    """Copy auxiliary benchmark sources and datasets into docs/html/benchmarks/."""
+    """Copy auxiliary benchmark, test, and script sources and datasets into docs/html/."""
     benchmarks_src_dir = os.path.join(REPO_DIR, "benchmarks")
     benchmarks_dest_dir = os.path.join(DOCS_HTML_DIR, "benchmarks")
     results_src_dir = os.path.join(benchmarks_src_dir, "results")
@@ -29,16 +29,31 @@ def copy_auxiliary_assets():
 
     os.makedirs(results_dest_dir, exist_ok=True)
 
-    # Copy benchmark source suite
-    bench_suite_src = os.path.join(benchmarks_src_dir, "bench_suite.c")
-    if os.path.exists(bench_suite_src):
-        shutil.copy2(bench_suite_src, os.path.join(benchmarks_dest_dir, "bench_suite.c"))
+    # Copy all benchmark source suites
+    if os.path.exists(benchmarks_src_dir):
+        for fname in os.listdir(benchmarks_src_dir):
+            if fname.endswith(".c"):
+                shutil.copy2(
+                    os.path.join(benchmarks_src_dir, fname),
+                    os.path.join(benchmarks_dest_dir, fname),
+                )
 
     # Copy benchmark json datasets
     if os.path.exists(results_src_dir):
         for fname in os.listdir(results_src_dir):
             if fname.endswith(".json"):
                 shutil.copy2(os.path.join(results_src_dir, fname), os.path.join(results_dest_dir, fname))
+
+    # Copy include, src, tests, and scripts referenced by relative links in README.md and TECHNICAL_REPORT.md
+    for subdir in ("include", "src", "tests", "scripts"):
+        src_dir = os.path.join(REPO_DIR, subdir)
+        dest_dir = os.path.join(DOCS_HTML_DIR, subdir)
+        if os.path.exists(src_dir):
+            os.makedirs(dest_dir, exist_ok=True)
+            for fname in os.listdir(src_dir):
+                src_path = os.path.join(src_dir, fname)
+                if os.path.isfile(src_path):
+                    shutil.copy2(src_path, os.path.join(dest_dir, fname))
 
 
 def fix_missing_single_letter_anchors():

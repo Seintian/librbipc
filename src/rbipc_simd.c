@@ -94,16 +94,16 @@ static uint32_t rbipc_simd_scan_avx2(const rbipc_slot_t *slots, uint32_t mask,
     long long t0 = (long long)base_t + (long long)offset;
     __m256i vtgt = _mm256_set_epi64x(t0 + 3, t0 + 2, t0 + 1, t0);
     __m256i cmp = _mm256_cmpeq_epi64(vseq, vtgt);
-    int match_mask = _mm256_movemask_pd((__m256d)cmp);
+    uint32_t match_mask = (uint32_t)_mm256_movemask_pd((__m256d)cmp);
 
-    if (match_mask == 0x0F) {
+    if (match_mask == 0x0FU) {
       avail += 4;
     } else {
-      if ((match_mask & 0x01) == 0)
+      if ((match_mask & 0x01U) == 0U)
         return avail;
-      if ((match_mask & 0x02) == 0)
+      if ((match_mask & 0x02U) == 0U)
         return avail + 1;
-      if ((match_mask & 0x04) == 0)
+      if ((match_mask & 0x04U) == 0U)
         return avail + 2;
       return avail + 3;
     }

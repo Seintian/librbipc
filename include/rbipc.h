@@ -451,7 +451,8 @@ typedef struct rbipc_ring rbipc_ring_t;
  */
 
 /**
- * @brief Create and initialize a new shared-memory IPC ring buffer.
+ * @brief Creates a new shared memory IPC ring buffer with creation flags and
+ * permissions.
  *
  * @details Allocates a POSIX shared memory object or an anonymous memfd,
  * truncates it to the precomputed geometric size (control header, cache-aligned
@@ -459,43 +460,15 @@ typedef struct rbipc_ring rbipc_ring_t;
  * (F_SEAL_SHRINK | F_SEAL_GROW), initializes slot sequence state machines, and
  * establishes the shared memory virtual address region.
  *
- * @param[in]  name      POSIX shared memory object name (e.g. "/my_ring").
- *                       Per POSIX.1-2008 (shm_open(3)), the identifier must
- * begin with an initial slash followed by characters containing no further
- * slashes. This is an abstract identifier backed by the kernel RAM tmpfs
- * filesystem at /dev/shm/[name], NOT a file path on the root filesystem (/). If
- * NULL, an anonymous memfd is created that can be passed across UNIX sockets
- * via SCM_RIGHTS.
- * @param[in]  capacity  Requested slot count. Automatically rounded up to the
- * nearest power of two. Must be between 2 and 2^30.
- * @param[in]  slot_size Maximum allowable payload byte capacity per slot.
- * @param[out] out_ring  Location to store the pointer to the newly allocated
- * ring handle.
- *
- * @return @ref RBIPC_OK on successful initialization.
- * @retval RBIPC_ERR_INVAL if parameters are invalid (null @p out_ring, zero @p
- * slot_size, invalid @p name).
- * @retval RBIPC_ERR_NOMEM if process virtual memory allocation or mmap fails.
- * @retval RBIPC_ERR_SYS   if an underlying kernel syscall fails (shm_open,
- * ftruncate, fcntl).
- *
- * @see rbipc_attach
- * @see rbipc_detach
- * @see rbipc_destroy
- */
-/**
- * @brief Creates a new shared memory IPC ring buffer with creation flags and
- * permissions.
- *
  * @param[in]  name      POSIX shared memory object name (e.g. "/my_ring"), or
  * NULL for anonymous memory.
  * @param[in]  capacity  Requested slot count (must be power of two, >= @ref
  * RBIPC_MIN_CAPACITY).
  * @param[in]  slot_size Requested payload size per slot in bytes.
  * @param[in]  flags     Creation flags (@ref RBIPC_CREATE_EXCL or @ref
- * RBIPC_CREATE_OVERWRITE).
- * @param[in]  mode      POSIX file permission mode bits (e.g. 0660; masked
- * against system umask).
+ * RBIPC_CREATE_OVERWRITE) combined with optional role flags (@ref RBIPC_ROLE_PRODUCER).
+ * @param[in]  mode      POSIX file permission mode bits (e.g. 0660; enforced via
+ * fchmod).
  * @param[out] out_ring  Location to store pointer to the allocated ring buffer
  * handle.
  *

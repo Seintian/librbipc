@@ -135,7 +135,7 @@ RBIPC_INLINE RBIPC_CONST bool rbipc_is_valid_page_size(size_t page_size) {
  * ============================================================================ */
 
 /**
- * @brief Evaluate whether two monotonic sequence numbers are equal under modulo-2^32 arithmetic.
+ * @brief Evaluate whether two monotonic sequence numbers are equal under modulo-2^64 arithmetic.
  *
  * @param[in] a Sequence number A.
  * @param[in] b Sequence number B.

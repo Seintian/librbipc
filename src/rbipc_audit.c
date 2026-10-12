@@ -51,7 +51,10 @@ bool rbipc_audit_is_peer_alive(pid_t pid) {
     struct pollfd fds = {.fd = pfd, .events = POLLIN, .revents = 0};
     int ret = poll(&fds, 1, 0);
     close(pfd);
-    if (ret > 0 && (fds.revents & (POLLIN | POLLHUP | POLLERR))) {
+    uint32_t revents = (uint32_t)(uint16_t)fds.revents;
+    uint32_t poll_mask =
+        (uint32_t)POLLIN | (uint32_t)POLLHUP | (uint32_t)POLLERR;
+    if (ret > 0 && (revents & poll_mask) != 0U) {
       return false; /* Process has terminated / exited */
     }
     if (ret == 0) {

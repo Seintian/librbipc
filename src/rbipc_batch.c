@@ -108,15 +108,12 @@ rbipc_batch_populate_acquired(const rbipc_ring_t *RBIPC_RESTRICT ring,
       rbipc_slot_mark_acquired(slot, my_pid, now_ts);
       rovecs[i].buf = data_base + ((size_t)idx * slot_size);
       rovecs[i].len = atomic_load_explicit(&slot->len, memory_order_acquire);
+      RBIPC_PREFETCH(rovecs[i].buf, RBIPC_PREFETCH_READ,
+                     RBIPC_PREFETCH_LOCALITY_HIGH);
     } else {
       rbipc_slot_mark_acquired(slot, my_pid, now_ts);
       rovecs[i].buf = NULL;
       rovecs[i].len = 0;
-    }
-
-    if (rovecs[i].buf) {
-      RBIPC_PREFETCH(rovecs[i].buf, RBIPC_PREFETCH_READ,
-                     RBIPC_PREFETCH_LOCALITY_HIGH);
     }
   }
   RBIPC_PREFETCH(&slots[(t + count) & mask], RBIPC_PREFETCH_READ,

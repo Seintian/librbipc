@@ -153,9 +153,9 @@ rbipc_sub_poll_batch(rbipc_sub_t *sub, uint32_t max_count,
  * @param[out] out_seq    Pointer to receive message sequence number.
  *
  * @return @ref RBIPC_OK on success.
- * @retval @ref RBIPC_ERR_TIMEOUT if timeout budget expired before a message was
+ * @retval RBIPC_ERR_TIMEOUT if timeout budget expired before a message was
  * published.
- * @retval @ref RBIPC_ERR_SHUTDOWN if the topic ring was shut down.
+ * @retval RBIPC_ERR_SHUTDOWN if the topic ring was shut down.
  */
 RBIPC_NODISCARD RBIPC_LEAF int
 rbipc_sub_read(rbipc_sub_t *sub, uint64_t timeout_ns, const void **out_buf,
