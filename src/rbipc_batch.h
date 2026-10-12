@@ -8,8 +8,8 @@
  * traffic, and kernel synchronization transitions.
  *
  * Grounded in systems literature:
- * - J. Yang & H. Zhou (ISCA 2012), "B-Queue: Efficient and Practical Queuing
- * for Fast Core-to-Core Communication".
+ * - J. Wang, K. Zhang, X. Tang, B. Hua (IJPP 2013), "B-Queue: Efficient and
+ * Practical Queuing for Fast Core-to-Core Communication".
  *
  * @author Seintian
  * @date 2026

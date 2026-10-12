@@ -22,8 +22,8 @@
  * Grounded in peer-reviewed scientific systems literature and industry
  * standards:
  * - Dmitry Vyukov (2010), "Bounded MPMC Queue", 1024cores.
- * - J. Yang & H. Zhou (ISCA 2012), "B-Queue: Efficient and Practical Queuing
- * for Fast Core-to-Core Communication".
+ * - J. Wang, K. Zhang, X. Tang, B. Hua (IJPP 2013), "B-Queue: Efficient and
+ * Practical Queuing for Fast Core-to-Core Communication".
  * - LMAX Disruptor (Thompson, Farley, Barker, Gee, Stewart, 2011), "Disruptor:
  * High performance alternative to bounded queues".
  * - Giacomoni, Moseley, Vachharajani (PPoPP 2008), "FastForward for efficient
