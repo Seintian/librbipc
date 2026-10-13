@@ -497,8 +497,9 @@ int rbipc_set_wait_policy(rbipc_ring_t *ring, uint32_t policy) {
   if (RBIPC_UNLIKELY(!ring)) {
     return RBIPC_ERR_INVAL;
   }
-  if (RBIPC_UNLIKELY(policy != RBIPC_WAIT_ZERO_SPIN &&
-                     policy != RBIPC_WAIT_ADAPTIVE)) {
+  uint32_t valid_mask =
+      RBIPC_WAIT_ZERO_SPIN | RBIPC_WAIT_ADAPTIVE | RBIPC_WAIT_HW_MONITOR;
+  if (RBIPC_UNLIKELY((policy & ~valid_mask) != 0)) {
     return RBIPC_ERR_INVAL;
   }
   ring->wait_policy = policy;

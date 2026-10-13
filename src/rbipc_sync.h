@@ -202,6 +202,22 @@ rbipc_sync_hardware_wait(const void *monitored_addr, uint64_t timeout_ns,
                          rbipc_spin_pred_t predicate, void *arg);
 
 /**
+ * @brief Execute a hardware-assisted monitor-wait with explicit CPU power substate.
+ *
+ * @param[in] monitored_addr Memory address to monitor for stores.
+ * @param[in] timeout_ns     Maximum wait duration in nanoseconds (capped to 5000 ns).
+ * @param[in] predicate      Optional predicate callback to verify completion.
+ * @param[in] arg            User argument passed to predicate.
+ * @param[in] substate       Hardware power substate: 0 = C0.2 (deep power saving), 1 = C0.1 (low latency).
+ *
+ * @return 0 on condition met, RBIPC_ERR_TIMEOUT on deadline, or -ENOSYS if unsupported.
+ */
+RBIPC_NODISCARD RBIPC_LEAF int
+rbipc_sync_hardware_wait_substate(const void *monitored_addr, uint64_t timeout_ns,
+                                  rbipc_spin_pred_t predicate, void *arg,
+                                  uint32_t substate);
+
+/**
  * @brief Wake up to @p count waiting threads on the specified futex word.
  *
  * @param[in] futex_word    Pointer to atomic futex sequence word in shared

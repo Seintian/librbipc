@@ -279,11 +279,12 @@ static uint64_t rbipc_get_tsc_ticks_per_ns(void) {
 #endif
 
 /**
- * @brief Execute a hardware-assisted monitor-wait (Tier 1: Intel WAITPKG / ARM64 WFET).
+ * @brief Execute a hardware-assisted monitor-wait with explicit CPU power substate.
  */
 RBIPC_LEAF int
-rbipc_sync_hardware_wait(const void *monitored_addr, uint64_t timeout_ns,
-                         rbipc_spin_pred_t predicate, void *arg) {
+rbipc_sync_hardware_wait_substate(const void *monitored_addr, uint64_t timeout_ns,
+                                  rbipc_spin_pred_t predicate, void *arg,
+                                  uint32_t substate) {
   if (RBIPC_UNLIKELY(!monitored_addr)) {
     return RBIPC_ERR_INVAL;
   }
@@ -306,8 +307,8 @@ rbipc_sync_hardware_wait(const void *monitored_addr, uint64_t timeout_ns,
     }
     uint64_t ticks_per_ns = rbipc_get_tsc_ticks_per_ns();
     uint64_t tsc_deadline = rbipc_rdtsc() + (timeout_ns * ticks_per_ns);
-    /* Substate 1: C0.1 fast wake */
-    rbipc_cpu_umwait(1, tsc_deadline);
+    /* Substate: 0 = C0.2 deep power save, 1 = C0.1 fast wake */
+    rbipc_cpu_umwait(substate != 0 ? 1 : 0, tsc_deadline);
     if (predicate && predicate(arg)) {
       return RBIPC_OK;
     }
@@ -340,9 +341,20 @@ rbipc_sync_hardware_wait(const void *monitored_addr, uint64_t timeout_ns,
   (void)timeout_ns;
   (void)predicate;
   (void)arg;
+  (void)substate;
 #endif
 
   return -ENOSYS;
+}
+
+/**
+ * @brief Execute a hardware-assisted monitor-wait (Tier 1: Intel WAITPKG / ARM64 WFET).
+ */
+RBIPC_LEAF int
+rbipc_sync_hardware_wait(const void *monitored_addr, uint64_t timeout_ns,
+                         rbipc_spin_pred_t predicate, void *arg) {
+  return rbipc_sync_hardware_wait_substate(monitored_addr, timeout_ns,
+                                           predicate, arg, 1);
 }
 
 /**
@@ -366,9 +378,13 @@ int rbipc_sync_backoff_adaptive(rbipc_sync_state_t *RBIPC_RESTRICT state,
         return 0;
       }
     }
+  }
+  if (((policy & RBIPC_WAIT_ADAPTIVE) || (policy & RBIPC_WAIT_HW_MONITOR)) &&
+      predicate) {
     if (rbipc_cpu_has_waitpkg() || rbipc_cpu_has_wfxt()) {
-      int hw_rc =
-          rbipc_sync_hardware_wait(futex_word, 5000ULL, predicate, arg);
+      uint32_t substate = (policy & RBIPC_WAIT_ADAPTIVE) ? 1 : 0;
+      int hw_rc = rbipc_sync_hardware_wait_substate(futex_word, 5000ULL,
+                                                    predicate, arg, substate);
       if (hw_rc == 0) {
         return 0;
       }

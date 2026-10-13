@@ -176,16 +176,21 @@ static int rbipc_io_handle_write_backoff(
         return RBIPC_OK;
       }
     }
-    /* Tier 1: Hardware-assisted monitor-wait (WAITPKG / WFET) */
+  }
+
+  /* Tier 1: Hardware-assisted monitor-wait (WAITPKG / WFET) */
+  if (ring && ((ring->wait_policy & RBIPC_WAIT_ADAPTIVE) ||
+               (ring->wait_policy & RBIPC_WAIT_HW_MONITOR))) {
     if (rbipc_cpu_has_waitpkg() || rbipc_cpu_has_wfxt()) {
       rbipc_io_slot_pred_ctx_t ctx = {
           .hdr = hdr,
           .slot = slot,
           .ticket = t_ticket,
       };
-      if (rbipc_sync_hardware_wait(&slot->sequence, 5000ULL,
-                                   rbipc_io_pred_slot_vacant,
-                                   &ctx) == RBIPC_OK) {
+      uint32_t substate = (ring->wait_policy & RBIPC_WAIT_ADAPTIVE) ? 1 : 0;
+      if (rbipc_sync_hardware_wait_substate(&slot->sequence, 5000ULL,
+                                            rbipc_io_pred_slot_vacant,
+                                            &ctx, substate) == RBIPC_OK) {
         *t = atomic_load_explicit(&hdr->write_ticket, memory_order_relaxed);
         return RBIPC_OK;
       }
@@ -244,16 +249,21 @@ static int rbipc_io_handle_read_backoff(
         return RBIPC_OK;
       }
     }
-    /* Tier 1: Hardware-assisted monitor-wait (WAITPKG / WFET) */
+  }
+
+  /* Tier 1: Hardware-assisted monitor-wait (WAITPKG / WFET) */
+  if (ring && ((ring->wait_policy & RBIPC_WAIT_ADAPTIVE) ||
+               (ring->wait_policy & RBIPC_WAIT_HW_MONITOR))) {
     if (rbipc_cpu_has_waitpkg() || rbipc_cpu_has_wfxt()) {
       rbipc_io_slot_pred_ctx_t ctx = {
           .hdr = hdr,
           .slot = slot,
           .ticket = t,
       };
-      if (rbipc_sync_hardware_wait(&slot->sequence, 5000ULL,
-                                   rbipc_io_pred_slot_ready,
-                                   &ctx) == RBIPC_OK) {
+      uint32_t substate = (ring->wait_policy & RBIPC_WAIT_ADAPTIVE) ? 1 : 0;
+      if (rbipc_sync_hardware_wait_substate(&slot->sequence, 5000ULL,
+                                            rbipc_io_pred_slot_ready,
+                                            &ctx, substate) == RBIPC_OK) {
         *out_next_t =
             atomic_load_explicit(&hdr->read_ticket, memory_order_relaxed);
         return RBIPC_OK;

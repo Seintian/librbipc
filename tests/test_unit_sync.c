@@ -187,9 +187,17 @@ static void test_wait_policy_api(void) {
     assert(rbipc_set_wait_policy(ring, RBIPC_WAIT_ADAPTIVE) == RBIPC_OK);
     assert(rbipc_get_wait_policy(ring) == RBIPC_WAIT_ADAPTIVE);
 
+    /* Change to HW_MONITOR */
+    assert(rbipc_set_wait_policy(ring, RBIPC_WAIT_HW_MONITOR) == RBIPC_OK);
+    assert(rbipc_get_wait_policy(ring) == RBIPC_WAIT_HW_MONITOR);
+
+    /* Change to composite policy */
+    assert(rbipc_set_wait_policy(ring, RBIPC_WAIT_ADAPTIVE | RBIPC_WAIT_HW_MONITOR) == RBIPC_OK);
+    assert(rbipc_get_wait_policy(ring) == (RBIPC_WAIT_ADAPTIVE | RBIPC_WAIT_HW_MONITOR));
+
     /* Invalid policy */
     assert(rbipc_set_wait_policy(ring, 0x00FFU) == RBIPC_ERR_INVAL);
-    assert(rbipc_get_wait_policy(ring) == RBIPC_WAIT_ADAPTIVE);
+    assert(rbipc_get_wait_policy(ring) == (RBIPC_WAIT_ADAPTIVE | RBIPC_WAIT_HW_MONITOR));
 
     /* Change back to ZERO_SPIN */
     assert(rbipc_set_wait_policy(ring, RBIPC_WAIT_ZERO_SPIN) == RBIPC_OK);
@@ -199,8 +207,8 @@ static void test_wait_policy_api(void) {
     assert(rbipc_set_wait_policy(NULL, RBIPC_WAIT_ADAPTIVE) == RBIPC_ERR_INVAL);
     assert(rbipc_get_wait_policy(NULL) == RBIPC_WAIT_ZERO_SPIN);
 
-    /* Test write and read with adaptive policy */
-    assert(rbipc_set_wait_policy(ring, RBIPC_WAIT_ADAPTIVE) == RBIPC_OK);
+    /* Test write and read with HW_MONITOR policy */
+    assert(rbipc_set_wait_policy(ring, RBIPC_WAIT_HW_MONITOR) == RBIPC_OK);
     void *wbuf = NULL;
     uint64_t wt = 0;
     rc = rbipc_reserve_write(ring, 16, &wbuf, &wt);
@@ -261,6 +269,11 @@ static void test_hardware_wait(void) {
     } else {
         assert(rc == -ENOSYS);
     }
+
+    /* Hardware wait substate validation (0 = C0.2, 1 = C0.1) */
+    assert(rbipc_sync_hardware_wait_substate(NULL, 500, NULL, NULL, 0) == RBIPC_ERR_INVAL);
+    assert(rbipc_sync_hardware_wait_substate(&dummy_word, 500, dummy_pred_true, NULL, 0) == RBIPC_OK);
+    assert(rbipc_sync_hardware_wait_substate(&dummy_word, 500, dummy_pred_true, NULL, 1) == RBIPC_OK);
 }
 
 static void test_futex2_waitv(void) {
