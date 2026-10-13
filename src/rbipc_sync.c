@@ -389,6 +389,19 @@ RBIPC_INLINE void rbipc_sync_dispatch_wake(_Atomic uint32_t *futex_word,
                                            int count) {
   if (RBIPC_UNLIKELY(!futex_word))
     return;
+
+#if defined(__linux__) && defined(FUTEX_WAKE_OP)
+  if (rbipc_sync_should_wake(futex_waiters)) {
+    _Atomic uint32_t dummy = 0;
+    int ret = rbipc_futex_wake_op(&dummy, 0, futex_word, count,
+                                  FUTEX_OP_ADD, 1,
+                                  FUTEX_OP_CMP_GE, 0);
+    if (RBIPC_LIKELY(ret >= 0)) {
+      return;
+    }
+  }
+#endif
+
   atomic_fetch_add_explicit(futex_word, 1, memory_order_release);
   if (rbipc_sync_should_wake(futex_waiters)) {
     rbipc_futex_wake(futex_word, count);

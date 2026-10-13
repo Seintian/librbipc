@@ -56,11 +56,39 @@
 #ifndef FUTEX_WAKE_OP
 #define FUTEX_WAKE_OP 5
 #endif
+#ifndef FUTEX_OP_SET
+#define FUTEX_OP_SET 0
+#endif
 #ifndef FUTEX_OP_ADD
 #define FUTEX_OP_ADD 1
 #endif
+#ifndef FUTEX_OP_OR
+#define FUTEX_OP_OR 2
+#endif
+#ifndef FUTEX_OP_ANDN
+#define FUTEX_OP_ANDN 3
+#endif
+#ifndef FUTEX_OP_XOR
+#define FUTEX_OP_XOR 4
+#endif
+
+#ifndef FUTEX_OP_CMP_EQ
+#define FUTEX_OP_CMP_EQ 0
+#endif
+#ifndef FUTEX_OP_CMP_NE
+#define FUTEX_OP_CMP_NE 1
+#endif
+#ifndef FUTEX_OP_CMP_LT
+#define FUTEX_OP_CMP_LT 2
+#endif
+#ifndef FUTEX_OP_CMP_LE
+#define FUTEX_OP_CMP_LE 3
+#endif
 #ifndef FUTEX_OP_CMP_GT
 #define FUTEX_OP_CMP_GT 4
+#endif
+#ifndef FUTEX_OP_CMP_GE
+#define FUTEX_OP_CMP_GE 5
 #endif
 
 #if !defined(__linux__) || !defined(FUTEX_32)
