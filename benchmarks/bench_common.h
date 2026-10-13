@@ -17,6 +17,7 @@
 #include <string.h>
 #include <unistd.h>
 #include <sched.h>
+#include <time.h>
 #include <sys/stat.h>
 #include <sys/utsname.h>
 
@@ -140,7 +141,7 @@ static inline uint64_t bench_scale_iterations(uint64_t default_iters, uint64_t l
  * @brief Yielding spin backoff to prevent CFS thread starvation during thread oversubscription.
  */
 static inline void bench_spin_pause(uint32_t *spin_count) {
-    if (++(*spin_count) < 64) {
+    if (++(*spin_count) < 32) {
 #if defined(__x86_64__) || defined(_M_X64)
         __asm__ volatile("pause" ::: "memory");
 #elif defined(__aarch64__)
@@ -148,8 +149,11 @@ static inline void bench_spin_pause(uint32_t *spin_count) {
 #else
         __asm__ volatile("" ::: "memory");
 #endif
-    } else {
+    } else if (*spin_count < 64) {
         sched_yield();
+    } else {
+        struct timespec ts = {0, 500};
+        nanosleep(&ts, NULL);
         *spin_count = 0;
     }
 }

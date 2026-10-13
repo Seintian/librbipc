@@ -266,6 +266,10 @@ static inline bool disruptor_consume_wp(disruptor_ring_t *d, int64_t max_seq, ui
         bench_spin_pause(&spins);
     }
     *out = disruptor_slots(d)[(uint32_t)next & d->mask];
+    spins = 0;
+    while (atomic_load_explicit(&d->cons_gating, memory_order_acquire) != next - 1) {
+        bench_spin_pause(&spins);
+    }
     atomic_store_explicit(&d->cons_gating, next, memory_order_release);
     return true;
 }

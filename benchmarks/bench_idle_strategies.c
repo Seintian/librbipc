@@ -51,10 +51,12 @@
 #define CACHE_LINE_SIZE       64
 #define MSG_PAYLOAD_SIZE      64U
 
-#define TPUT_ITERATIONS       100000ULL
-#define TPUT_WARMUP           1000ULL
-#define LAT_ITERATIONS        10000ULL
-#define WAKE_ITERATIONS       100ULL
+static uint64_t g_tput_iters   = 100000ULL;
+static uint64_t g_tput_warmup  = 1000ULL;
+static uint64_t g_lat_iters    = 10000ULL;
+static uint64_t g_wake_iters   = 100ULL;
+static uint64_t g_idle_obs_ns  = 1000000000ULL;
+static uint64_t g_wake_gap_ns  = 15000000ULL;
 
 #define COL_RESET   "\033[0m"
 #define COL_BOLD    "\033[1m"
@@ -516,7 +518,7 @@ static void *dpdk_tput_worker(void *p) {
     dpdk_th_arg_t *a = (dpdk_th_arg_t *)p;
     while (!atomic_load_explicit(a->start, memory_order_acquire)) cpu_pause();
     uintptr_t val;
-    for (uint64_t i = 0; i < TPUT_ITERATIONS; i++) {
+    for (uint64_t i = 0; i < g_tput_iters; i++) {
         if (a->strat == 0) dpdk_dequeue_busyspin(a->r, &val);
         else if (a->strat == 1) dpdk_dequeue_pauseloop(a->r, &val);
         else dpdk_dequeue_interrupt(a->r, &val);
@@ -532,7 +534,7 @@ static double run_dpdk_tput(dpdk_ring_t *r, int strat_mode) {
     pthread_t th;
     pthread_create(&th, NULL, dpdk_tput_worker, &arg);
 
-    for (uint64_t i = 0; i < TPUT_WARMUP; i++) {
+    for (uint64_t i = 0; i < g_tput_warmup; i++) {
         while (dpdk_try_enqueue(r, (uintptr_t)i) == -ENOBUFS) cpu_pause();
         uintptr_t tmp;
         while (dpdk_try_dequeue(r, &tmp) == -ENOENT) cpu_pause();
@@ -540,14 +542,14 @@ static double run_dpdk_tput(dpdk_ring_t *r, int strat_mode) {
 
     uint64_t t0 = get_ns();
     atomic_store_explicit(&start, true, memory_order_release);
-    for (uint64_t i = 0; i < TPUT_ITERATIONS; i++) {
+    for (uint64_t i = 0; i < g_tput_iters; i++) {
         while (dpdk_try_enqueue(r, (uintptr_t)i) == -ENOBUFS) cpu_pause();
     }
     pthread_join(th, NULL);
     uint64_t t1 = get_ns();
 
     double sec = (double)(t1 - t0) / 1e9;
-    return (double)TPUT_ITERATIONS / sec;
+    return (double)g_tput_iters / sec;
 }
 
 typedef struct {
@@ -561,8 +563,8 @@ static void *lmax_tput_worker(void *p) {
     lmax_th_arg_t *a = (lmax_th_arg_t *)p;
     while (!atomic_load_explicit(a->start, memory_order_acquire)) cpu_pause();
     uintptr_t val;
-    for (uint64_t i = 0; i < TPUT_ITERATIONS; i++) {
-        lmax_consume(a->d, (int64_t)TPUT_ITERATIONS, &val, a->strat);
+    for (uint64_t i = 0; i < g_tput_iters; i++) {
+        lmax_consume(a->d, (int64_t)g_tput_iters, &val, a->strat);
     }
     atomic_store_explicit(a->done, true, memory_order_release);
     return NULL;
@@ -577,14 +579,14 @@ static double run_lmax_tput(lmax_ring_t *d, lmax_strat_t strat) {
 
     uint64_t t0 = get_ns();
     atomic_store_explicit(&start, true, memory_order_release);
-    for (uint64_t i = 0; i < TPUT_ITERATIONS; i++) {
+    for (uint64_t i = 0; i < g_tput_iters; i++) {
         lmax_publish(d, (int64_t)i, (uintptr_t)i, strat);
     }
     pthread_join(th, NULL);
     uint64_t t1 = get_ns();
 
     double sec = (double)(t1 - t0) / 1e9;
-    return (double)TPUT_ITERATIONS / sec;
+    return (double)g_tput_iters / sec;
 }
 
 typedef struct {
@@ -599,7 +601,7 @@ static void *rbipc_tput_worker(void *p) {
     const void *buf;
     uint32_t len;
     uint64_t ticket;
-    for (uint64_t i = 0; i < TPUT_ITERATIONS; i++) {
+    for (uint64_t i = 0; i < g_tput_iters; i++) {
         while (rbipc_read_acquire(a->r, &buf, &len, &ticket) != RBIPC_OK) cpu_pause();
         rbipc_read_release(a->r, ticket);
     }
@@ -618,7 +620,7 @@ static double run_rbipc_tput(rbipc_env_t *env) {
     atomic_store_explicit(&start, true, memory_order_release);
     void *wbuf;
     uint64_t wtick;
-    for (uint64_t i = 0; i < TPUT_ITERATIONS; i++) {
+    for (uint64_t i = 0; i < g_tput_iters; i++) {
         while (rbipc_reserve_write(env->ring_ab_prod, MSG_PAYLOAD_SIZE, &wbuf, &wtick) != RBIPC_OK) cpu_pause();
         rbipc_commit_write(env->ring_ab_prod, wtick, MSG_PAYLOAD_SIZE);
     }
@@ -626,7 +628,7 @@ static double run_rbipc_tput(rbipc_env_t *env) {
     uint64_t t1 = get_ns();
 
     double sec = (double)(t1 - t0) / 1e9;
-    return (double)TPUT_ITERATIONS / sec;
+    return (double)g_tput_iters / sec;
 }
 
 /* --- Latency Helpers --- */
@@ -659,7 +661,7 @@ static void run_dpdk_lat(dpdk_ring_t *ab, dpdk_ring_t *ba, int strat, uint64_t *
     pthread_create(&th, NULL, dpdk_lat_worker, &arg);
 
     uintptr_t resp;
-    for (uint64_t i = 0; i < LAT_ITERATIONS; i++) {
+    for (uint64_t i = 0; i < g_lat_iters; i++) {
         uint64_t t0 = get_ns();
         while (dpdk_try_enqueue(ab, (uintptr_t)i) == -ENOBUFS) cpu_pause();
         if (strat == 0) dpdk_dequeue_busyspin(ba, &resp);
@@ -700,7 +702,7 @@ static void run_lmax_lat(lmax_ring_t *ab, lmax_ring_t *ba, lmax_strat_t strat, u
     pthread_create(&th, NULL, lmax_lat_worker, &arg);
 
     uintptr_t resp;
-    for (uint64_t i = 0; i < LAT_ITERATIONS; i++) {
+    for (uint64_t i = 0; i < g_lat_iters; i++) {
         uint64_t t0 = get_ns();
         lmax_publish(ab, (int64_t)i, (uintptr_t)i, strat);
         lmax_consume(ba, -1, &resp, strat);
@@ -708,7 +710,7 @@ static void run_lmax_lat(lmax_ring_t *ab, lmax_ring_t *ba, lmax_strat_t strat, u
         samples[i] = (t1 - t0) / 2;
     }
     atomic_store_explicit(&stop, true, memory_order_release);
-    lmax_publish(ab, (int64_t)LAT_ITERATIONS, UINTPTR_MAX, strat);
+    lmax_publish(ab, (int64_t)g_lat_iters, UINTPTR_MAX, strat);
     pthread_join(th, NULL);
 }
 
@@ -749,7 +751,7 @@ static void run_rbipc_lat(rbipc_env_t *env, uint64_t *samples) {
     void *wbuf;
     uint64_t wtick;
 
-    for (uint64_t i = 0; i < LAT_ITERATIONS; i++) {
+    for (uint64_t i = 0; i < g_lat_iters; i++) {
         uint64_t t0 = get_ns();
         while (rbipc_reserve_write(env->ring_ab_prod, MSG_PAYLOAD_SIZE, &wbuf, &wtick) != RBIPC_OK) cpu_pause();
         rbipc_commit_write(env->ring_ab_prod, wtick, MSG_PAYLOAD_SIZE);
@@ -795,13 +797,18 @@ static void run_dpdk_wake(dpdk_ring_t *r, int strat, uint64_t *wake_samples) {
     pthread_t th;
     pthread_create(&th, NULL, dpdk_wake_worker, &arg);
 
-    struct timespec sleep_gap = { .tv_sec = 0, .tv_nsec = 15000000 };
-    for (uint64_t i = 0; i < WAKE_ITERATIONS; i++) {
+    struct timespec sleep_gap = {
+        .tv_sec = (time_t)(g_wake_gap_ns / 1000000000ULL),
+        .tv_nsec = (long)(g_wake_gap_ns % 1000000000ULL)
+    };
+    for (uint64_t i = 0; i < g_wake_iters; i++) {
         nanosleep(&sleep_gap, NULL);
         atomic_store_explicit(&recv_ts, 0, memory_order_relaxed);
         uint64_t send_ts = get_ns();
-        while (dpdk_try_enqueue(r, (uintptr_t)i) == -ENOBUFS) cpu_pause();
-        while (atomic_load_explicit(&recv_ts, memory_order_acquire) == 0) cpu_pause();
+        uint32_t spins = 0;
+        while (dpdk_try_enqueue(r, (uintptr_t)i) == -ENOBUFS) bench_spin_pause(&spins);
+        spins = 0;
+        while (atomic_load_explicit(&recv_ts, memory_order_acquire) == 0) bench_spin_pause(&spins);
         uint64_t rts = atomic_load_explicit(&recv_ts, memory_order_acquire);
         wake_samples[i] = (rts > send_ts) ? (rts - send_ts) : 0;
     }
@@ -838,19 +845,23 @@ static void run_lmax_wake(lmax_ring_t *d, lmax_strat_t strat, uint64_t *wake_sam
     pthread_t th;
     pthread_create(&th, NULL, lmax_wake_worker, &arg);
 
-    struct timespec sleep_gap = { .tv_sec = 0, .tv_nsec = 15000000 };
-    for (uint64_t i = 0; i < WAKE_ITERATIONS; i++) {
+    struct timespec sleep_gap = {
+        .tv_sec = (time_t)(g_wake_gap_ns / 1000000000ULL),
+        .tv_nsec = (long)(g_wake_gap_ns % 1000000000ULL)
+    };
+    for (uint64_t i = 0; i < g_wake_iters; i++) {
         nanosleep(&sleep_gap, NULL);
         atomic_store_explicit(&recv_ts, 0, memory_order_relaxed);
         uint64_t send_ts = get_ns();
         lmax_publish(d, (int64_t)i, (uintptr_t)i, strat);
-        while (atomic_load_explicit(&recv_ts, memory_order_acquire) == 0) cpu_pause();
+        uint32_t spins = 0;
+        while (atomic_load_explicit(&recv_ts, memory_order_acquire) == 0) bench_spin_pause(&spins);
         uint64_t rts = atomic_load_explicit(&recv_ts, memory_order_acquire);
         wake_samples[i] = (rts > send_ts) ? (rts - send_ts) : 0;
     }
 
     atomic_store_explicit(&stop, true, memory_order_release);
-    lmax_publish(d, (int64_t)WAKE_ITERATIONS, UINTPTR_MAX, strat);
+    lmax_publish(d, (int64_t)g_wake_iters, UINTPTR_MAX, strat);
     pthread_join(th, NULL);
 }
 
@@ -886,14 +897,19 @@ static void run_rbipc_wake(rbipc_env_t *env, uint64_t *wake_samples) {
 
     void *wbuf;
     uint64_t wtick;
-    struct timespec sleep_gap = { .tv_sec = 0, .tv_nsec = 15000000 };
-    for (uint64_t i = 0; i < WAKE_ITERATIONS; i++) {
+    struct timespec sleep_gap = {
+        .tv_sec = (time_t)(g_wake_gap_ns / 1000000000ULL),
+        .tv_nsec = (long)(g_wake_gap_ns % 1000000000ULL)
+    };
+    for (uint64_t i = 0; i < g_wake_iters; i++) {
         nanosleep(&sleep_gap, NULL);
         atomic_store_explicit(&recv_ts, 0, memory_order_relaxed);
         uint64_t send_ts = get_ns();
-        while (rbipc_reserve_write(env->ring_ab_prod, MSG_PAYLOAD_SIZE, &wbuf, &wtick) != RBIPC_OK) cpu_pause();
+        uint32_t spins = 0;
+        while (rbipc_reserve_write(env->ring_ab_prod, MSG_PAYLOAD_SIZE, &wbuf, &wtick) != RBIPC_OK) bench_spin_pause(&spins);
         rbipc_commit_write(env->ring_ab_prod, wtick, MSG_PAYLOAD_SIZE);
-        while (atomic_load_explicit(&recv_ts, memory_order_acquire) == 0) cpu_pause();
+        spins = 0;
+        while (atomic_load_explicit(&recv_ts, memory_order_acquire) == 0) bench_spin_pause(&spins);
         uint64_t rts = atomic_load_explicit(&recv_ts, memory_order_acquire);
         wake_samples[i] = (rts > send_ts) ? (rts - send_ts) : 0;
     }
@@ -953,7 +969,10 @@ static double measure_dpdk_idle_cpu(dpdk_ring_t *r, int strat, long *vol_ctx, lo
 
     uint64_t w0 = get_ns();
     atomic_store_explicit(&start, true, memory_order_release);
-    struct timespec sleep_sec = { .tv_sec = 1, .tv_nsec = 0 };
+    struct timespec sleep_sec = {
+        .tv_sec = (time_t)(g_idle_obs_ns / 1000000000ULL),
+        .tv_nsec = (long)(g_idle_obs_ns % 1000000000ULL)
+    };
     nanosleep(&sleep_sec, NULL);
     atomic_store_explicit(&stop, true, memory_order_release);
 
@@ -1023,7 +1042,10 @@ static double measure_lmax_idle_cpu(lmax_ring_t *d, lmax_strat_t strat, long *vo
 
     uint64_t w0 = get_ns();
     atomic_store_explicit(&start, true, memory_order_release);
-    struct timespec sleep_sec = { .tv_sec = 1, .tv_nsec = 0 };
+    struct timespec sleep_sec = {
+        .tv_sec = (time_t)(g_idle_obs_ns / 1000000000ULL),
+        .tv_nsec = (long)(g_idle_obs_ns % 1000000000ULL)
+    };
     nanosleep(&sleep_sec, NULL);
     atomic_store_explicit(&stop, true, memory_order_release);
 
@@ -1080,7 +1102,10 @@ static double measure_rbipc_idle_cpu(rbipc_env_t *env, long *vol_ctx, long *invo
 
     uint64_t w0 = get_ns();
     atomic_store_explicit(&start, true, memory_order_release);
-    struct timespec sleep_sec = { .tv_sec = 1, .tv_nsec = 0 };
+    struct timespec sleep_sec = {
+        .tv_sec = (time_t)(g_idle_obs_ns / 1000000000ULL),
+        .tv_nsec = (long)(g_idle_obs_ns % 1000000000ULL)
+    };
     nanosleep(&sleep_sec, NULL);
     atomic_store_explicit(&stop, true, memory_order_release);
 
@@ -1099,24 +1124,24 @@ static double measure_rbipc_idle_cpu(rbipc_env_t *env, long *vol_ctx, long *invo
 static void record_res(idle_bench_result_t *results, size_t *n_res,
                        const char *name, const char *cat, double tput,
                        uint64_t *lats, uint64_t *wakes, double idle_cpu, long vol, long invol) {
-    qsort(lats, LAT_ITERATIONS, sizeof(uint64_t), cmp_u64);
-    qsort(wakes, WAKE_ITERATIONS, sizeof(uint64_t), cmp_u64);
+    qsort(lats, g_lat_iters, sizeof(uint64_t), cmp_u64);
+    qsort(wakes, g_wake_iters, sizeof(uint64_t), cmp_u64);
     idle_bench_result_t *r = &results[(*n_res)++];
     strncpy(r->strategy_name, name, sizeof(r->strategy_name) - 1);
     strncpy(r->category, cat, sizeof(r->category) - 1);
     r->tput_mops = tput / 1e6;
     r->tput_mbs  = (tput * (double)MSG_PAYLOAD_SIZE) / (1024.0 * 1024.0);
     r->lat_min   = lats[0];
-    r->lat_p50   = pct64(lats, LAT_ITERATIONS, 50.0);
-    r->lat_p90   = pct64(lats, LAT_ITERATIONS, 90.0);
-    r->lat_p99   = pct64(lats, LAT_ITERATIONS, 99.0);
-    r->lat_p999  = pct64(lats, LAT_ITERATIONS, 99.9);
-    r->lat_max   = lats[LAT_ITERATIONS - 1];
+    r->lat_p50   = pct64(lats, g_lat_iters, 50.0);
+    r->lat_p90   = pct64(lats, g_lat_iters, 90.0);
+    r->lat_p99   = pct64(lats, g_lat_iters, 99.0);
+    r->lat_p999  = pct64(lats, g_lat_iters, 99.9);
+    r->lat_max   = lats[g_lat_iters - 1];
     r->wake_min  = wakes[0];
-    r->wake_p50  = pct64(wakes, WAKE_ITERATIONS, 50.0);
-    r->wake_p90  = pct64(wakes, WAKE_ITERATIONS, 90.0);
-    r->wake_p99  = pct64(wakes, WAKE_ITERATIONS, 99.0);
-    r->wake_max  = wakes[WAKE_ITERATIONS - 1];
+    r->wake_p50  = pct64(wakes, g_wake_iters, 50.0);
+    r->wake_p90  = pct64(wakes, g_wake_iters, 90.0);
+    r->wake_p99  = pct64(wakes, g_wake_iters, 99.0);
+    r->wake_max  = wakes[g_wake_iters - 1];
     r->idle_cpu_pct = idle_cpu;
     r->voluntary_ctx = vol;
     r->involuntary_ctx = invol;
@@ -1131,16 +1156,28 @@ static void record_res(idle_bench_result_t *results, size_t *n_res,
 }
 
 int main(void) {
+    bench_hardware_info_t hw;
+    bench_get_hardware_info(&hw);
+
+    g_tput_iters  = bench_scale_iterations(100000ULL, 25000ULL);
+    g_tput_warmup = bench_scale_iterations(1000ULL, 250ULL);
+    g_lat_iters   = bench_scale_iterations(10000ULL, 2500ULL);
+    g_wake_iters  = bench_scale_iterations(100ULL, 25ULL);
+    g_idle_obs_ns = bench_scale_iterations(1000000000ULL, 250000000ULL);
+    g_wake_gap_ns = bench_scale_iterations(15000000ULL, 5000000ULL);
+
     printf("%s%s========================================================================================%s\n",
            COL_BOLD, COL_CYAN, COL_RESET);
     printf("%s%s   EXHAUSTIVE INVESTIGATION: DPDK & LMAX DISRUPTOR IDLE & WAIT STRATEGIES BENCHMARK   %s\n",
            COL_BOLD, COL_YELLOW, COL_RESET);
+    printf("%s   [Hardware Profile: %s%s%s | CPU: %s | %d cores / %d threads]\n",
+           COL_CYAN, COL_BOLD, hw.profile_name, COL_CYAN, hw.cpu_model, hw.physical_cores, hw.logical_threads);
     printf("%s%s========================================================================================%s\n\n",
            COL_BOLD, COL_CYAN, COL_RESET);
     fflush(stdout);
 
-    uint64_t *lat_buf  = (uint64_t *)malloc(LAT_ITERATIONS * sizeof(uint64_t));
-    uint64_t *wake_buf = (uint64_t *)malloc(WAKE_ITERATIONS * sizeof(uint64_t));
+    uint64_t *lat_buf  = (uint64_t *)malloc(g_lat_iters * sizeof(uint64_t));
+    uint64_t *wake_buf = (uint64_t *)malloc(g_wake_iters * sizeof(uint64_t));
     assert(lat_buf && wake_buf);
 
     idle_bench_result_t results[10];
@@ -1299,8 +1336,17 @@ int main(void) {
         const char *ba_name = "/rbench_idle_ba";
         rbipc_env_t env = rbipc_init(ab_name, ba_name);
         double tput = run_rbipc_tput(&env);
+        rbipc_cleanup(&env, ab_name, ba_name);
+
+        env = rbipc_init(ab_name, ba_name);
         run_rbipc_lat(&env, lat_buf);
+        rbipc_cleanup(&env, ab_name, ba_name);
+
+        env = rbipc_init(ab_name, ba_name);
         run_rbipc_wake(&env, wake_buf);
+        rbipc_cleanup(&env, ab_name, ba_name);
+
+        env = rbipc_init(ab_name, ba_name);
         long vol = 0, invol = 0;
         double cpu = measure_rbipc_idle_cpu(&env, &vol, &invol);
         record_res(results, &n_res, "librbipc-Futex", "Adaptive Futex", tput, lat_buf, wake_buf, cpu, vol, invol);
@@ -1331,6 +1377,14 @@ int main(void) {
     if (fp) {
         fprintf(fp, "{\n");
         fprintf(fp, "  \"timestamp\": %lu,\n", get_ns());
+        fprintf(fp, "  \"hardware\": {\n");
+        fprintf(fp, "    \"profile\": \"%s\",\n", hw.profile_name);
+        fprintf(fp, "    \"cpu\": \"%s\",\n", hw.cpu_model);
+        fprintf(fp, "    \"cores\": %d,\n", hw.physical_cores);
+        fprintf(fp, "    \"threads\": %d,\n", hw.logical_threads);
+        fprintf(fp, "    \"hostname\": \"%s\",\n", hw.hostname);
+        fprintf(fp, "    \"kernel\": \"%s\"\n", hw.kernel);
+        fprintf(fp, "  },\n");
         fprintf(fp, "  \"results\": [\n");
         for (size_t i = 0; i < n_res; i++) {
             idle_bench_result_t *r = &results[i];
