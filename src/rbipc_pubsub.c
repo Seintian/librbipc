@@ -296,8 +296,9 @@ int rbipc_sub_read(rbipc_sub_t *sub, uint64_t timeout_ns, const void **out_buf,
       return RBIPC_OK;
     }
 
-    int wait_rc = rbipc_sync_wait_registered(&sync_state, &hdr->futex_seq,
-                                             &hdr->futex_waiters);
+    int wait_rc = rbipc_sync_wait_registered_or_shutdown(
+        &sync_state, &hdr->futex_seq, &hdr->futex_waiters,
+        &hdr->shutdown_flag);
     if (wait_rc != 0) {
       return wait_rc;
     }

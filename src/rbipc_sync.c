@@ -152,12 +152,12 @@ void rbipc_sync_deregister_waiter(_Atomic uint32_t *futex_waiters) {
 }
 
 /**
- * @brief Execute futex wait when waiter is already registered.
+ * @brief Execute futex wait when waiter is already registered, checking cooperative shutdown.
  */
 RBIPC_LEAF
-int rbipc_sync_wait_registered(rbipc_sync_state_t *RBIPC_RESTRICT state,
-                               _Atomic uint32_t *futex_word,
-                               _Atomic uint32_t *futex_waiters) {
+int rbipc_sync_wait_registered_or_shutdown(
+    rbipc_sync_state_t *RBIPC_RESTRICT state, _Atomic uint32_t *futex_word,
+    _Atomic uint32_t *futex_waiters, const _Atomic uint32_t *shutdown_flag) {
   if (RBIPC_UNLIKELY(!state || !futex_word)) {
     rbipc_sync_deregister_waiter(futex_waiters);
     return RBIPC_ERR_INVAL;
@@ -169,18 +169,41 @@ int rbipc_sync_wait_registered(rbipc_sync_state_t *RBIPC_RESTRICT state,
     return RBIPC_ERR_TIMEOUT;
   }
 
-  struct timespec ts;
-  int rc = rbipc_sync_calc_timeout_spec(state, now, &ts);
-  if (RBIPC_UNLIKELY(rc != 0)) {
-    rbipc_sync_deregister_waiter(futex_waiters);
-    return rc;
+  uint64_t remaining_ns = RBIPC_FUTEX_PERIOD_NS;
+  if (state->has_deadline) {
+    if (RBIPC_UNLIKELY(now >= state->deadline_ns)) {
+      rbipc_sync_deregister_waiter(futex_waiters);
+      return RBIPC_ERR_TIMEOUT;
+    }
+    remaining_ns = state->deadline_ns - now;
+    if (remaining_ns > RBIPC_FUTEX_PERIOD_NS) {
+      remaining_ns = RBIPC_FUTEX_PERIOD_NS;
+    }
   }
 
   uint32_t current_val = atomic_load_explicit(futex_word, memory_order_relaxed);
-  rbipc_futex_wait(futex_word, current_val, &ts);
+  int rc = rbipc_futex_wait_or_shutdown(futex_word, current_val, shutdown_flag,
+                                        remaining_ns);
   rbipc_sync_deregister_waiter(futex_waiters);
 
+  if (rc == RBIPC_ERR_TIMEOUT && state->has_deadline) {
+    uint64_t post_now = rbipc_clock_monotonic_ns();
+    if (post_now >= state->deadline_ns) {
+      return RBIPC_ERR_TIMEOUT;
+    }
+  }
   return 0;
+}
+
+/**
+ * @brief Execute futex wait when waiter is already registered.
+ */
+RBIPC_LEAF
+int rbipc_sync_wait_registered(rbipc_sync_state_t *RBIPC_RESTRICT state,
+                               _Atomic uint32_t *futex_word,
+                               _Atomic uint32_t *futex_waiters) {
+  return rbipc_sync_wait_registered_or_shutdown(state, futex_word,
+                                                futex_waiters, NULL);
 }
 
 /**

@@ -61,3 +61,198 @@ int rbipc_futex_wake(_Atomic uint32_t *uaddr, int count) {
     }
     return (int)ret;
 }
+
+RBIPC_LEAF
+bool rbipc_futex_has_waitv(void) {
+#if defined(__linux__) && defined(SYS_futex_waitv)
+  static int s_has_waitv = -1;
+  if (RBIPC_LIKELY(s_has_waitv != -1)) {
+    return s_has_waitv == 1;
+  }
+  long ret = syscall(SYS_futex_waitv, NULL, 0, 0, NULL, 0);
+  if (ret < 0 && errno == ENOSYS) {
+    s_has_waitv = 0;
+  } else {
+    s_has_waitv = 1;
+  }
+  return s_has_waitv == 1;
+#else
+  return false;
+#endif
+}
+
+static bool rbipc_futex2_has_u64(void) {
+#if defined(__linux__) && defined(SYS_futex_waitv)
+  static int s_has_u64 = -1;
+  if (RBIPC_LIKELY(s_has_u64 != -1)) {
+    return s_has_u64 == 1;
+  }
+  if (!rbipc_futex_has_waitv()) {
+    s_has_u64 = 0;
+    return false;
+  }
+  uint64_t dummy = 0;
+  struct futex_waitv w = {
+      .val = 1,
+      .uaddr = (uintptr_t)&dummy,
+      .flags = FUTEX2_SIZE_U64,
+      .__reserved = 0,
+  };
+  long ret = syscall(SYS_futex_waitv, &w, 1, 0, NULL, CLOCK_MONOTONIC);
+  if (ret < 0 && errno == EINVAL) {
+    s_has_u64 = 0;
+  } else {
+    s_has_u64 = 1;
+  }
+  return s_has_u64 == 1;
+#else
+  return false;
+#endif
+}
+
+RBIPC_LEAF
+int rbipc_futex_waitv(const struct futex_waitv *waiters, unsigned int nr_waiters,
+                      uint64_t timeout_ns) {
+#if defined(__linux__) && defined(SYS_futex_waitv)
+  if (RBIPC_UNLIKELY(rbipc_is_null(waiters) || nr_waiters == 0 ||
+                     nr_waiters > FUTEX_WAITV_MAX)) {
+    return -EINVAL;
+  }
+
+  struct timespec ts;
+  struct timespec *pts = NULL;
+  if (timeout_ns != UINT64_MAX) {
+    clock_gettime(CLOCK_MONOTONIC, &ts);
+    uint64_t sec_add = timeout_ns / RBIPC_NSEC_PER_SEC;
+    uint64_t nsec_add = timeout_ns % RBIPC_NSEC_PER_SEC;
+    ts.tv_sec += (time_t)sec_add;
+    ts.tv_nsec += (long)nsec_add;
+    if (ts.tv_nsec >= (long)RBIPC_NSEC_PER_SEC) {
+      ts.tv_sec += 1;
+      ts.tv_nsec -= (long)RBIPC_NSEC_PER_SEC;
+    }
+    pts = &ts;
+  }
+
+  long ret = syscall(SYS_futex_waitv, waiters, nr_waiters, 0, pts, CLOCK_MONOTONIC);
+  if (ret < 0) {
+    return -errno;
+  }
+  return (int)ret;
+#else
+  (void)waiters;
+  (void)nr_waiters;
+  (void)timeout_ns;
+  return -ENOSYS;
+#endif
+}
+
+RBIPC_LEAF
+int rbipc_futex_wait_or_shutdown(_Atomic uint32_t *uaddr, uint32_t val,
+                                 const _Atomic uint32_t *shutdown_flag,
+                                 uint64_t timeout_ns) {
+  if (RBIPC_UNLIKELY(rbipc_is_null(uaddr))) {
+    return RBIPC_ERR_INVAL;
+  }
+
+  if (shutdown_flag && rbipc_futex_has_waitv()) {
+    struct futex_waitv waiters[2];
+    waiters[0].val = val;
+    waiters[0].uaddr = (uintptr_t)uaddr;
+    waiters[0].flags = FUTEX2_SIZE_U32;
+    waiters[0].__reserved = 0;
+
+    waiters[1].val = 0;
+    waiters[1].uaddr = (uintptr_t)shutdown_flag;
+    waiters[1].flags = FUTEX2_SIZE_U32;
+    waiters[1].__reserved = 0;
+
+    int rc = rbipc_futex_waitv(waiters, 2, timeout_ns);
+    if (rc >= 0) {
+      return RBIPC_OK;
+    }
+    if (rc == -EAGAIN || rc == -EWOULDBLOCK) {
+      return RBIPC_OK;
+    }
+    if (rc == -ETIMEDOUT) {
+      return RBIPC_ERR_TIMEOUT;
+    }
+    if (rc != -ENOSYS) {
+      return rc;
+    }
+  }
+
+  struct timespec ts;
+  struct timespec *pts = NULL;
+  if (timeout_ns != UINT64_MAX) {
+    rbipc_ns_to_timespec(timeout_ns, &ts);
+    pts = &ts;
+  }
+  int rc = rbipc_futex_wait(uaddr, val, pts);
+  if (rc == 0 || rc == -EAGAIN || rc == -EWOULDBLOCK) {
+    return RBIPC_OK;
+  }
+  if (rc == -ETIMEDOUT) {
+    return RBIPC_ERR_TIMEOUT;
+  }
+  return rc;
+}
+
+RBIPC_LEAF
+int rbipc_futex2_wait_slot_or_shutdown(const _Atomic uint64_t *slot_seq,
+                                       uint64_t expected_seq,
+                                       const _Atomic uint32_t *shutdown_flag,
+                                       uint64_t timeout_ns) {
+  if (RBIPC_UNLIKELY(rbipc_is_null(slot_seq))) {
+    return RBIPC_ERR_INVAL;
+  }
+
+  if (rbipc_futex_has_waitv()) {
+    struct futex_waitv waiters[2];
+    bool use_u64 = rbipc_futex2_has_u64();
+
+    waiters[0].val = use_u64 ? expected_seq : (uint32_t)expected_seq;
+    waiters[0].uaddr = (uintptr_t)slot_seq;
+    waiters[0].flags = use_u64 ? FUTEX2_SIZE_U64 : FUTEX2_SIZE_U32;
+    waiters[0].__reserved = 0;
+
+    unsigned int nr = 1;
+    if (shutdown_flag) {
+      waiters[1].val = 0;
+      waiters[1].uaddr = (uintptr_t)shutdown_flag;
+      waiters[1].flags = FUTEX2_SIZE_U32;
+      waiters[1].__reserved = 0;
+      nr = 2;
+    }
+
+    int rc = rbipc_futex_waitv(waiters, nr, timeout_ns);
+    if (rc >= 0) {
+      return RBIPC_OK;
+    }
+    if (rc == -EAGAIN || rc == -EWOULDBLOCK) {
+      return RBIPC_OK;
+    }
+    if (rc == -ETIMEDOUT) {
+      return RBIPC_ERR_TIMEOUT;
+    }
+    if (rc != -ENOSYS) {
+      return rc;
+    }
+  }
+
+  struct timespec ts;
+  struct timespec *pts = NULL;
+  if (timeout_ns != UINT64_MAX) {
+    rbipc_ns_to_timespec(timeout_ns, &ts);
+    pts = &ts;
+  }
+  _Atomic uint32_t *low_uaddr = (_Atomic uint32_t *)(void *)slot_seq;
+  int rc = rbipc_futex_wait(low_uaddr, (uint32_t)expected_seq, pts);
+  if (rc == 0 || rc == -EAGAIN || rc == -EWOULDBLOCK) {
+    return RBIPC_OK;
+  }
+  if (rc == -ETIMEDOUT) {
+    return RBIPC_ERR_TIMEOUT;
+  }
+  return rc;
+}

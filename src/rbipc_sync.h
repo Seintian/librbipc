@@ -121,6 +121,23 @@ rbipc_sync_wait_registered(rbipc_sync_state_t *RBIPC_RESTRICT state,
                            _Atomic uint32_t *futex_waiters);
 
 /**
+ * @brief Execute a passive futex wait when a waiter is already registered, checking
+ * cooperative shutdown via vectorized sys_futex_waitv.
+ *
+ * @param[in,out] state         Thread-local synchronization state tracking deadline.
+ * @param[in]     futex_word    Pointer to atomic futex sequence word in shared memory.
+ * @param[in,out] futex_waiters Pointer to atomic waiter count in shared memory.
+ * @param[in]     shutdown_flag Pointer to cooperative shutdown flag (or NULL).
+ *
+ * @return 0 on continued wait / successful wake.
+ * @retval RBIPC_ERR_TIMEOUT if deadline timestamp has been exceeded.
+ */
+RBIPC_NODISCARD RBIPC_LEAF int
+rbipc_sync_wait_registered_or_shutdown(
+    rbipc_sync_state_t *RBIPC_RESTRICT state, _Atomic uint32_t *futex_word,
+    _Atomic uint32_t *futex_waiters, const _Atomic uint32_t *shutdown_flag);
+
+/**
  * @brief Execute a passive backoff step via Linux sys_futex suspension.
  *
  * @details Evaluates deadline expiration. If time remains, increments the

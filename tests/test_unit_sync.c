@@ -258,6 +258,75 @@ static void test_hardware_wait(void) {
     }
 }
 
+static void test_futex2_waitv(void) {
+    bool has_waitv = rbipc_futex_has_waitv();
+    printf("  [test_futex2_waitv] Kernel sys_futex_waitv support: %d\n", (int)has_waitv);
+
+    /* Parameter validation */
+    assert(rbipc_futex_waitv(NULL, 1, 1000) == -EINVAL);
+    struct futex_waitv w_dummy;
+    assert(rbipc_futex_waitv(&w_dummy, 0, 1000) == -EINVAL);
+    assert(rbipc_futex_waitv(&w_dummy, 129, 1000) == -EINVAL);
+
+    /* Value mismatch immediate return */
+    _Atomic uint32_t fword = 100;
+    struct futex_waitv w_test = {
+        .val = 99, /* Mismatch with actual 100 */
+        .uaddr = (uintptr_t)&fword,
+        .flags = FUTEX2_SIZE_U32,
+        .__reserved = 0,
+    };
+    int rc = rbipc_futex_waitv(&w_test, 1, 1000000);
+    if (has_waitv) {
+        assert(rc == -EAGAIN || rc == -EWOULDBLOCK);
+    } else {
+        assert(rc == -ENOSYS);
+    }
+
+    /* Timeout test */
+    w_test.val = 100; /* Matching value */
+    rc = rbipc_futex_waitv(&w_test, 1, 50000); /* 50 us */
+    if (has_waitv) {
+        assert(rc == -ETIMEDOUT);
+    } else {
+        assert(rc == -ENOSYS);
+    }
+
+    /* Test rbipc_futex_wait_or_shutdown */
+    assert(rbipc_futex_wait_or_shutdown(NULL, 100, NULL, 1000) == RBIPC_ERR_INVAL);
+    _Atomic uint32_t sflag = 0;
+    /* Immediate return on mismatch */
+    assert(rbipc_futex_wait_or_shutdown(&fword, 99, &sflag, 1000000) == RBIPC_OK);
+    /* Timeout */
+    assert(rbipc_futex_wait_or_shutdown(&fword, 100, &sflag, 50000) == RBIPC_ERR_TIMEOUT);
+
+    /* Test rbipc_futex2_wait_slot_or_shutdown */
+    _Atomic uint64_t slot_seq = 200;
+    assert(rbipc_futex2_wait_slot_or_shutdown(NULL, 200, &sflag, 1000) == RBIPC_ERR_INVAL);
+    /* Immediate return on mismatch */
+    assert(rbipc_futex2_wait_slot_or_shutdown(&slot_seq, 199, &sflag, 1000000) == RBIPC_OK);
+    /* Timeout */
+    assert(rbipc_futex2_wait_slot_or_shutdown(&slot_seq, 200, &sflag, 50000) == RBIPC_ERR_TIMEOUT);
+
+    /* Test rbipc_sync_wait_registered_or_shutdown */
+    _Atomic uint32_t sync_waiters = 0;
+    rbipc_sync_state_t state;
+    rbipc_sync_state_init(&state, 1); /* 1ns */
+    rbipc_sync_register_waiter(&sync_waiters);
+    assert(atomic_load(&sync_waiters) == 1);
+    rc = rbipc_sync_wait_registered_or_shutdown(&state, &fword, &sync_waiters, &sflag);
+    while (rc == 0) {
+        rbipc_sync_register_waiter(&sync_waiters);
+        rc = rbipc_sync_wait_registered_or_shutdown(&state, &fword, &sync_waiters, &sflag);
+    }
+    assert(rc == RBIPC_ERR_TIMEOUT);
+    assert(atomic_load(&sync_waiters) == 0);
+
+    /* NULL validation */
+    assert(rbipc_sync_wait_registered_or_shutdown(NULL, &fword, &sync_waiters, &sflag) == RBIPC_ERR_INVAL);
+    assert(rbipc_sync_wait_registered_or_shutdown(&state, NULL, &sync_waiters, &sflag) == RBIPC_ERR_INVAL);
+}
+
 int main(void) {
     printf("[test_unit_sync] Running tests...\n");
     test_sync_state();
@@ -266,6 +335,7 @@ int main(void) {
     test_adaptive_spin_backoff();
     test_wait_policy_api();
     test_hardware_wait();
+    test_futex2_waitv();
     printf("[test_unit_sync] All tests passed!\n");
     return 0;
 }

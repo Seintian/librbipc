@@ -28,6 +28,7 @@
 #include "rbipc_shm.h"
 #include "rbipc_slot.h"
 #include "rbipc_sync.h"
+#include "rbipc_futex.h"
 #include "rbipc_vmem.h"
 
 #include <errno.h>
@@ -450,6 +451,7 @@ int rbipc_signal_shutdown(rbipc_ring_t *ring) {
   atomic_store_explicit(&ring->hdr->shutdown_flag, 1, memory_order_release);
   rbipc_sync_wake_all(&ring->hdr->futex_seq, &ring->hdr->futex_waiters);
   rbipc_sync_wake_all(&ring->hdr->write_futex_seq, &ring->hdr->write_waiters);
+  rbipc_futex_wake(&ring->hdr->shutdown_flag, INT32_MAX);
   rbipc_reactor_signal(ring);
   return RBIPC_OK;
 }

@@ -237,8 +237,9 @@ int rbipc_reserve_write_batch_timeout(rbipc_ring_t *RBIPC_RESTRICT ring,
         rbipc_sync_deregister_waiter(&hdr->write_waiters);
         continue;
       }
-      int rc = rbipc_sync_wait_registered(&sync_state, &hdr->write_futex_seq,
-                                          &hdr->write_waiters);
+      int rc = rbipc_sync_wait_registered_or_shutdown(
+          &sync_state, &hdr->write_futex_seq, &hdr->write_waiters,
+          &hdr->shutdown_flag);
       if (RBIPC_UNLIKELY(rc != 0)) {
         return rc;
       }
@@ -353,8 +354,9 @@ int rbipc_read_acquire_batch_timeout(rbipc_ring_t *RBIPC_RESTRICT ring,
         rbipc_sync_deregister_waiter(&hdr->futex_waiters);
         continue;
       }
-      int rc = rbipc_sync_wait_registered(&sync_state, &hdr->futex_seq,
-                                          &hdr->futex_waiters);
+      int rc = rbipc_sync_wait_registered_or_shutdown(
+          &sync_state, &hdr->futex_seq, &hdr->futex_waiters,
+          &hdr->shutdown_flag);
       if (RBIPC_UNLIKELY(rc != 0)) {
         return rc;
       }

@@ -204,8 +204,9 @@ static int rbipc_io_handle_write_backoff(
     return RBIPC_OK;
   }
 
-  int rc = rbipc_sync_wait_registered(sync_state, &hdr->write_futex_seq,
-                                      &hdr->write_waiters);
+  int rc = rbipc_sync_wait_registered_or_shutdown(
+      sync_state, &hdr->write_futex_seq, &hdr->write_waiters,
+      &hdr->shutdown_flag);
   if (RBIPC_UNLIKELY(rc != 0)) {
     return rc;
   }
@@ -272,8 +273,8 @@ static int rbipc_io_handle_read_backoff(
     return RBIPC_OK;
   }
 
-  int rc = rbipc_sync_wait_registered(sync_state, &hdr->futex_seq,
-                                      &hdr->futex_waiters);
+  int rc = rbipc_sync_wait_registered_or_shutdown(
+      sync_state, &hdr->futex_seq, &hdr->futex_waiters, &hdr->shutdown_flag);
   if (RBIPC_UNLIKELY(rc != 0)) {
     return rc;
   }
