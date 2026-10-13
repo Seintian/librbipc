@@ -1,0 +1,54 @@
+{
+  "timestamp": 1791881514,
+  "hardware": {
+    "profile": "laptop",
+    "cpu": "Intel(R) Core(TM) i5-6300U CPU @ 2.40GHz",
+    "cores": 2,
+    "threads": 4,
+    "hostname": "CHRIS-LAPTOP",
+    "kernel": "Linux 7.2.9-1-cachyos x86_64"
+  },
+  "throughput_64b": [
+    {"name": "librbipc", "ops_sec": 2429005.51, "mb_sec": 148.25},
+    {"name": "rte_ring (DPDK alg)", "ops_sec": 16655421.48, "mb_sec": 1016.57},
+    {"name": "LMAX Disruptor", "ops_sec": 63659558.86, "mb_sec": 3885.47},
+    {"name": "POSIX mqueue", "ops_sec": 476072.73, "mb_sec": 29.06},
+    {"name": "AF_UNIX DGRAM", "ops_sec": 471447.96, "mb_sec": 28.77}
+  ],
+  "latency_distribution": [
+    {"name": "librbipc", "min_ns": 733, "p50_ns": 3695, "p90_ns": 4925, "p99_ns": 10806, "p999_ns": 214116, "max_ns": 10135032},
+    {"name": "rte_ring (DPDK alg)", "min_ns": 43, "p50_ns": 48, "p90_ns": 73, "p99_ns": 78, "p999_ns": 5295, "max_ns": 421718},
+    {"name": "LMAX Disruptor", "min_ns": 40, "p50_ns": 135, "p90_ns": 142, "p99_ns": 205, "p999_ns": 6208, "max_ns": 469551},
+    {"name": "POSIX mqueue", "min_ns": 3184, "p50_ns": 4247, "p90_ns": 5076, "p99_ns": 11966, "p999_ns": 80921, "max_ns": 586102},
+    {"name": "AF_UNIX DGRAM", "min_ns": 3216, "p50_ns": 4771, "p90_ns": 5954, "p99_ns": 11446, "p999_ns": 57784, "max_ns": 622124}
+  ],
+  "payload_scaling": [
+    {"size": 64, "librbipc": 8920777.70, "rte_ring": 35351241.09, "disruptor": 54623765.16, "mqueue": 506775.99, "af_unix": 372768.48},
+    {"size": 256, "librbipc": 3210207.43, "rte_ring": 17346339.62, "disruptor": 33981704.25, "mqueue": 389208.72, "af_unix": 305878.55},
+    {"size": 1024, "librbipc": 3091385.05, "rte_ring": 16613710.46, "disruptor": 8307000.14, "mqueue": 380913.78, "af_unix": 451590.54},
+    {"size": 4096, "librbipc": 799828.26, "rte_ring": 38149446.64, "disruptor": 48043085.04, "mqueue": 398626.10, "af_unix": 393476.37},
+    {"size": 16384, "librbipc": 219662.16, "rte_ring": 16112270.30, "disruptor": 54181453.69, "mqueue": 0.00, "af_unix": 226882.03},
+    {"size": 65536, "librbipc": 62750.40, "rte_ring": 6850520.95, "disruptor": 32349896.48, "mqueue": 0.00, "af_unix": 79441.99}
+  ],
+  "idle_cpu": {
+    "rte_ring": 97.8,
+    "disruptor": 98.9,
+    "mqueue": 98.2,
+    "af_unix": 98.5,
+    "librbipc": 0.2
+  },
+  "mpmc_scalability": [
+    {"config": "1P-1C", "librbipc": 2304431.01, "rte_ring": 36141321.24, "disruptor": 12931090.22},
+    {"config": "2P-2C", "librbipc": 798309.86, "rte_ring": 13801894.78, "disruptor": 20277962.19},
+    {"config": "4P-2C", "librbipc": 687149.94, "rte_ring": 12488819.38, "disruptor": 147550.70},
+    {"config": "4P-4C", "librbipc": 1162362.31, "rte_ring": 32097.72, "disruptor": 216879.80}
+  ],
+  "batch_scaling": [
+    {"batch_size": 1, "ops_sec": 6178501.61},
+    {"batch_size": 4, "ops_sec": 7251938.21},
+    {"batch_size": 8, "ops_sec": 7823992.71},
+    {"batch_size": 16, "ops_sec": 8219091.39},
+    {"batch_size": 32, "ops_sec": 8578089.83},
+    {"batch_size": 64, "ops_sec": 8608679.06}
+  ]
+}

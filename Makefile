@@ -22,7 +22,7 @@ TEST_BINS = $(patsubst $(TESTDIR)/%.c, $(BINDIR)/%, $(TEST_SRCS))
 BENCH_SRCS = $(wildcard $(BENCHDIR)/*.c)
 BENCH_BINS = $(patsubst $(BENCHDIR)/%.c, $(BINDIR)/%, $(BENCH_SRCS))
 
-.PHONY: all clean test bench coverage valgrind clang-tidy compile_commands docs tsan asan
+.PHONY: all clean test bench bench-laptop bench-home-pc coverage valgrind clang-tidy compile_commands docs tsan asan
 
 all: $(STATIC_LIB) $(SHARED_LIB) $(TEST_BINS) compile_commands.json
 
@@ -41,7 +41,7 @@ $(SHARED_LIB): $(OBJS) | $(LIBDIR)
 $(BINDIR)/%: $(TESTDIR)/%.c $(STATIC_LIB) | $(BINDIR)
 	$(CC) $(CFLAGS) $< $(STATIC_LIB) $(LDFLAGS) -o $@
 
-$(BINDIR)/%: $(BENCHDIR)/%.c $(STATIC_LIB) | $(BINDIR)
+$(BINDIR)/%: $(BENCHDIR)/%.c $(BENCHDIR)/bench_common.h $(STATIC_LIB) | $(BINDIR)
 	$(CC) $(CFLAGS) $< $(STATIC_LIB) $(LDFLAGS) -o $@
 
 test: $(STATIC_LIB) $(TEST_BINS)
@@ -64,6 +64,26 @@ bench: $(STATIC_LIB) $(BENCH_BINS)
 	@for b in $(BENCH_BINS); do \
 		echo "--> Running $$b ..."; \
 		$$b || exit 1; \
+		echo ""; \
+	done
+
+bench-laptop: $(STATIC_LIB) $(BENCH_BINS)
+	@echo "=================================================="
+	@echo "      Running Benchmark Suite (Laptop Profile)    "
+	@echo "=================================================="
+	@for b in $(BENCH_BINS); do \
+		echo "--> Running $$b ..."; \
+		RBIPC_BENCH_PROFILE=laptop $$b || exit 1; \
+		echo ""; \
+	done
+
+bench-home-pc: $(STATIC_LIB) $(BENCH_BINS)
+	@echo "=================================================="
+	@echo "    Running Benchmark Suite (Home PC Profile)     "
+	@echo "=================================================="
+	@for b in $(BENCH_BINS); do \
+		echo "--> Running $$b ..."; \
+		RBIPC_BENCH_PROFILE=home_pc $$b || exit 1; \
 		echo ""; \
 	done
 

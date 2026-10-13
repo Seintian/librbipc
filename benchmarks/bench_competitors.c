@@ -48,6 +48,7 @@
 #include <sched.h>
 
 #include "rbipc.h"
+#include "bench_common.h"
 
 /* ======================================================================
  * Constants & Configuration
@@ -171,10 +172,12 @@ static int rte_mc_dequeue(rte_ring_t *r, uintptr_t *out) {
 }
 
 static void rte_enqueue_wait(rte_ring_t *r, uintptr_t v) {
-    while (rte_mp_enqueue(r, v) == -ENOBUFS) __asm__ volatile("pause" ::: "memory");
+    uint32_t spins = 0;
+    while (rte_mp_enqueue(r, v) == -ENOBUFS) bench_spin_pause(&spins);
 }
 static void rte_dequeue_wait(rte_ring_t *r, uintptr_t *v) {
-    while (rte_mc_dequeue(r, v) == -ENOENT) __asm__ volatile("pause" ::: "memory");
+    uint32_t spins = 0;
+    while (rte_mc_dequeue(r, v) == -ENOENT) bench_spin_pause(&spins);
 }
 
 /* ======================================================================
@@ -217,8 +220,9 @@ static inline uintptr_t *disruptor_slots(disruptor_ring_t *d) {
 
 /* Single-producer publishing */
 static inline void disruptor_publish_sp(disruptor_ring_t *d, int64_t seq, uintptr_t val) {
+    uint32_t spins = 0;
     while (seq - atomic_load_explicit(&d->cons_gating, memory_order_acquire) >= (int64_t)d->capacity) {
-        __asm__ volatile("pause" ::: "memory");
+        bench_spin_pause(&spins);
     }
     disruptor_slots(d)[(uint32_t)seq & d->mask] = val;
     atomic_store_explicit(&d->prod_cursor, seq, memory_order_release);
@@ -227,18 +231,20 @@ static inline void disruptor_publish_sp(disruptor_ring_t *d, int64_t seq, uintpt
 /* Multi-producer publishing */
 static inline void disruptor_publish_mp(disruptor_ring_t *d, uintptr_t val) {
     int64_t cur, next;
+    uint32_t spins = 0;
     do {
         cur = atomic_load_explicit(&d->prod_claim, memory_order_relaxed);
         next = cur + 1;
         while (next - atomic_load_explicit(&d->cons_gating, memory_order_acquire) >= (int64_t)d->capacity) {
-            __asm__ volatile("pause" ::: "memory");
+            bench_spin_pause(&spins);
         }
     } while (!atomic_compare_exchange_weak_explicit(&d->prod_claim, &cur, next,
                                                     memory_order_acq_rel, memory_order_relaxed));
 
     disruptor_slots(d)[(uint32_t)next & d->mask] = val;
+    spins = 0;
     while (atomic_load_explicit(&d->prod_cursor, memory_order_acquire) != next - 1) {
-        __asm__ volatile("pause" ::: "memory");
+        bench_spin_pause(&spins);
     }
     atomic_store_explicit(&d->prod_cursor, next, memory_order_release);
 }
@@ -253,8 +259,9 @@ static inline bool disruptor_consume_wp(disruptor_ring_t *d, int64_t max_seq, ui
     } while (!atomic_compare_exchange_weak_explicit(&d->work_sequence, &cur, next,
                                                     memory_order_acq_rel, memory_order_relaxed));
 
+    uint32_t spins = 0;
     while (atomic_load_explicit(&d->prod_cursor, memory_order_acquire) < next) {
-        __asm__ volatile("pause" ::: "memory");
+        bench_spin_pause(&spins);
     }
     *out = disruptor_slots(d)[(uint32_t)next & d->mask];
     atomic_store_explicit(&d->cons_gating, next, memory_order_release);
@@ -864,9 +871,14 @@ static void *rte_cons_th(void *a) {
     rte_mc_t *c = a;
     uint64_t tgt = (uint64_t)c->n_prod * c->iters / (uint64_t)c->n_cons;
     uint64_t n = 0; uintptr_t v;
+    uint32_t spins = 0;
     while (n < tgt) {
-        if (rte_mc_dequeue(c->ring, &v) == 0) n++;
-        else __asm__ volatile("pause":::"memory");
+        if (rte_mc_dequeue(c->ring, &v) == 0) {
+            n++;
+            spins = 0;
+        } else {
+            bench_spin_pause(&spins);
+        }
     }
     return NULL;
 }
@@ -939,8 +951,9 @@ static void *rbi_prod_th(void *a) {
     char *pay = malloc(c->msgsz); memset(pay, 0xAB, c->msgsz);
     for (uint64_t i = 0; i < c->iters; i++) {
         void *buf; uint64_t tk;
+        uint32_t spins = 0;
         while (rbipc_reserve_write(c->ring, (uint32_t)c->msgsz, &buf, &tk) != RBIPC_OK)
-            __asm__ volatile("pause":::"memory");
+            bench_spin_pause(&spins);
         memcpy(buf, pay, c->msgsz);
         rbipc_commit_write(c->ring, tk, (uint32_t)c->msgsz);
     }
@@ -949,13 +962,15 @@ static void *rbi_prod_th(void *a) {
 }
 static void *rbi_cons_th(void *a) {
     rbi_mc_t *c = a;
+    uint32_t spins = 0;
     while (atomic_load(&c->recv) < c->total_msgs) {
         const void *buf; uint64_t tk; uint32_t ln;
         if (rbipc_read_acquire_nonblock(c->ring, &buf, &ln, &tk) == RBIPC_OK) {
             rbipc_read_release(c->ring, tk);
             atomic_fetch_add(&c->recv, 1);
+            spins = 0;
         } else {
-            __asm__ volatile("pause":::"memory");
+            bench_spin_pause(&spins);
         }
     }
     return NULL;
@@ -1019,32 +1034,45 @@ int main(void) {
     printf("%s%s    Exhaustive Cross-System Competing-Consumer IPC Benchmark%s\n", COL_BOLD, COL_CYAN, COL_RESET);
     printf("%s%s    Source Repos: ~/repos/{dpdk, linux, Disruptor-cpp, disruptor, librbipc}%s\n\n", COL_BOLD, COL_CYAN, COL_RESET);
 
-    FILE *json_fp = fopen("benchmarks/results/competitors_benchmark.json", "w");
+    char json_path[256];
+    bench_get_result_path(json_path, sizeof(json_path), "competitors_benchmark.json");
+    FILE *json_fp = fopen(json_path, "w");
     if (json_fp) {
+        bench_hardware_info_t hw;
+        bench_get_hardware_info(&hw);
         fprintf(json_fp, "{\n  \"timestamp\": %lu,\n", (unsigned long)time(NULL));
         fprintf(json_fp, "  \"hardware\": {\n");
-        fprintf(json_fp, "    \"cpu\": \"Intel Core i5-10400F @ 2.90GHz\",\n");
-        fprintf(json_fp, "    \"cores\": 6,\n    \"threads\": 12,\n    \"wsl_vcpus\": 10,\n");
-        fprintf(json_fp, "    \"l1d_kb\": 160,\n    \"l2_mb\": 1.3,\n    \"l3_mb\": 12,\n");
-        fprintf(json_fp, "    \"kernel\": \"Linux 6.18.33.2-microsoft-standard-WSL2 PREEMPT_DYNAMIC x86_64\"\n  },\n");
+        fprintf(json_fp, "    \"profile\": \"%s\",\n", hw.profile_name);
+        fprintf(json_fp, "    \"cpu\": \"%s\",\n", hw.cpu_model);
+        fprintf(json_fp, "    \"cores\": %d,\n    \"threads\": %d,\n", hw.physical_cores, hw.logical_threads);
+        fprintf(json_fp, "    \"hostname\": \"%s\",\n", hw.hostname);
+        fprintf(json_fp, "    \"kernel\": \"%s\"\n  },\n", hw.kernel);
     }
+
+    uint64_t bench_iters = bench_scale_iterations(BENCH_ITERATIONS, 100000ULL);
+    uint64_t lat_iters = bench_scale_iterations(LAT_ITERATIONS, 15000ULL);
+    uint64_t payload_iters = bench_scale_iterations(50000ULL, 20000ULL);
+    uint64_t mpmc_iters = bench_scale_iterations(100000ULL, 25000ULL);
+    uint64_t batch_iters = bench_scale_iterations(200000ULL, 100000ULL);
 
     /* -----------------------------------------------------------------
      * BENCH 1: 1P-1C Throughput (64 B)
      * ----------------------------------------------------------------- */
-    print_hdr("BENCH 1: 1P-1C Throughput -- 64 B Payloads, 200,000 Iterations");
+    char hdr_buf[128];
+    snprintf(hdr_buf, sizeof(hdr_buf), "BENCH 1: 1P-1C Throughput -- 64 B Payloads, %lu Iterations", (unsigned long)bench_iters);
+    print_hdr(hdr_buf);
 
     result_t tput[5];
     printf("  [1/5] librbipc ...\n");
-    tput[0] = bench_rbipc_tput(64, BENCH_ITERATIONS);
+    tput[0] = bench_rbipc_tput(64, bench_iters);
     printf("  [2/5] rte_ring (DPDK algorithm) ...\n");
-    tput[1] = bench_rte_tput(64, BENCH_ITERATIONS);
+    tput[1] = bench_rte_tput(64, bench_iters);
     printf("  [3/5] LMAX Disruptor (WorkProcessor) ...\n");
-    tput[2] = bench_disruptor_tput(64, BENCH_ITERATIONS);
+    tput[2] = bench_disruptor_tput(64, bench_iters);
     printf("  [4/5] POSIX mqueue ...\n");
-    tput[3] = bench_mq_tput(64, BENCH_ITERATIONS);
+    tput[3] = bench_mq_tput(64, bench_iters);
     printf("  [5/5] AF_UNIX SOCK_DGRAM ...\n");
-    tput[4] = bench_uds_tput(64, BENCH_ITERATIONS);
+    tput[4] = bench_uds_tput(64, bench_iters);
 
     for (int i = 0; i < 5; i++) { printf("\n"); print_result(&tput[i]); }
     print_table(tput, 5, "1P-1C Streaming Throughput");
@@ -1061,19 +1089,20 @@ int main(void) {
     /* -----------------------------------------------------------------
      * BENCH 2: Half-RTT Ping-Pong Latency Distribution
      * ----------------------------------------------------------------- */
-    print_hdr("BENCH 2: Half-RTT Ping-Pong Latency Distribution -- 30,000 Iterations");
+    snprintf(hdr_buf, sizeof(hdr_buf), "BENCH 2: Half-RTT Ping-Pong Latency Distribution -- %lu Iterations", (unsigned long)lat_iters);
+    print_hdr(hdr_buf);
 
     result_t lat[5];
     printf("  [1/5] librbipc latency ...\n");
-    lat[0] = bench_rbipc_lat(LAT_ITERATIONS);
+    lat[0] = bench_rbipc_lat(lat_iters);
     printf("  [2/5] rte_ring latency ...\n");
-    lat[1] = bench_rte_lat(LAT_ITERATIONS);
+    lat[1] = bench_rte_lat(lat_iters);
     printf("  [3/5] LMAX Disruptor latency ...\n");
-    lat[2] = bench_disruptor_lat(LAT_ITERATIONS);
+    lat[2] = bench_disruptor_lat(lat_iters);
     printf("  [4/5] POSIX mqueue latency ...\n");
-    lat[3] = bench_mq_lat(LAT_ITERATIONS);
+    lat[3] = bench_mq_lat(lat_iters);
     printf("  [5/5] AF_UNIX DGRAM latency ...\n");
-    lat[4] = bench_uds_lat(LAT_ITERATIONS);
+    lat[4] = bench_uds_lat(lat_iters);
 
     for (int i = 0; i < 5; i++) { printf("\n"); print_result(&lat[i]); }
     print_table(lat, 5, "Half-RTT Latency Distribution");
@@ -1093,7 +1122,8 @@ int main(void) {
     /* -----------------------------------------------------------------
      * BENCH 3: Payload-Size Scaling
      * ----------------------------------------------------------------- */
-    print_hdr("BENCH 3: Payload-Size Scaling -- 50K Iterations per Size");
+    snprintf(hdr_buf, sizeof(hdr_buf), "BENCH 3: Payload-Size Scaling -- %lu Iterations per Size", (unsigned long)payload_iters);
+    print_hdr(hdr_buf);
 
     printf("\n  %-8s  %s%16s%s  %16s  %16s  %16s  %16s\n",
            "Size", COL_BOLD, "librbipc", COL_RESET,
@@ -1106,11 +1136,11 @@ int main(void) {
 
     for (int s = 0; s < NPSIZES; s++) {
         size_t sz = psizes[s].sz;
-        result_t rb = bench_rbipc_tput(sz, 50000);
-        result_t rt = bench_rte_tput(sz, 50000);
-        result_t ds = bench_disruptor_tput(sz, 50000);
-        result_t mq = (sz <= 8192) ? bench_mq_tput(sz, 50000) : (result_t){.name="POSIX mqueue", .tput_ops=0};
-        result_t ud = bench_uds_tput(sz, 50000);
+        result_t rb = bench_rbipc_tput(sz, payload_iters);
+        result_t rt = bench_rte_tput(sz, payload_iters);
+        result_t ds = bench_disruptor_tput(sz, payload_iters);
+        result_t mq = (sz <= 8192) ? bench_mq_tput(sz, payload_iters) : (result_t){.name="POSIX mqueue", .tput_ops=0};
+        result_t ud = bench_uds_tput(sz, payload_iters);
 
         printf("  %-8s  %15.2fM  %15.2fM  %15.2fM  %15.2fM  %15.2fM\n",
                psizes[s].label,
@@ -1230,7 +1260,8 @@ int main(void) {
     /* -----------------------------------------------------------------
      * BENCH 5: MPMC Thread Scalability
      * ----------------------------------------------------------------- */
-    print_hdr("BENCH 5: MPMC Thread Scalability -- 100,000 Iterations / Producer");
+    snprintf(hdr_buf, sizeof(hdr_buf), "BENCH 5: MPMC Thread Scalability -- %lu Iterations / Producer", (unsigned long)mpmc_iters);
+    print_hdr(hdr_buf);
 
     rbipc_ring_t *mpmc_r = NULL;
     rbipc_destroy("/rbench_mpmc");
@@ -1246,9 +1277,9 @@ int main(void) {
         if (json_fp) fprintf(json_fp, "  \"mpmc_scalability\": [\n");
 
         for (int i = 0; i < ncfgs; i++) {
-            double rbi = bench_rbi_mpmc(cfgs[i].np, cfgs[i].nc, 100000, mpmc_r, 64);
-            double rte = bench_rte_mpmc(cfgs[i].np, cfgs[i].nc, 100000);
-            double dis = bench_disruptor_mpmc(cfgs[i].np, cfgs[i].nc, 100000);
+            double rbi = bench_rbi_mpmc(cfgs[i].np, cfgs[i].nc, mpmc_iters, mpmc_r, 64);
+            double rte = bench_rte_mpmc(cfgs[i].np, cfgs[i].nc, mpmc_iters);
+            double dis = bench_disruptor_mpmc(cfgs[i].np, cfgs[i].nc, mpmc_iters);
 
             printf("  %dP-%-6dC  %18.2f  %18.2f  %18.2f\n",
                    cfgs[i].np, cfgs[i].nc,
@@ -1267,7 +1298,8 @@ int main(void) {
     /* -----------------------------------------------------------------
      * BENCH 6: librbipc Batch API Scaling
      * ----------------------------------------------------------------- */
-    print_hdr("BENCH 6: librbipc Vector/Batch Enqueue Scaling -- 200K Ops");
+    snprintf(hdr_buf, sizeof(hdr_buf), "BENCH 6: librbipc Vector/Batch Enqueue Scaling -- %lu Ops", (unsigned long)batch_iters);
+    print_hdr(hdr_buf);
 
     int bsizes[] = {1, 4, 8, 16, 32, 64};
     int nb = (int)(sizeof(bsizes)/sizeof(bsizes[0]));
@@ -1282,7 +1314,7 @@ int main(void) {
         rbipc_ring_t *br = NULL;
         rbipc_destroy("/rbench_batch");
         if (rbipc_create("/rbench_batch", RING_CAPACITY, 128, &br) == RBIPC_OK) {
-            uint64_t total = 200000, iters = total / batch;
+            uint64_t total = batch_iters, iters = total / batch;
             uint64_t t0 = get_ns();
             rbipc_iovec_t iovecs[64];
             uint64_t tickets[64];
@@ -1290,8 +1322,9 @@ int main(void) {
 
             for (uint64_t i = 0; i < iters; i++) {
                 uint32_t reserved = 0;
+                uint32_t spins = 0;
                 while (rbipc_reserve_write_batch(br, batch, iovecs, &reserved) != RBIPC_OK)
-                    __asm__ volatile("pause":::"memory");
+                    bench_spin_pause(&spins);
                 for (uint32_t k = 0; k < reserved; k++) {
                     tickets[k] = iovecs[k].ticket;
                     lens[k] = 64;
@@ -1300,8 +1333,9 @@ int main(void) {
 
                 for (uint32_t j = 0; j < reserved; j++) {
                     const void *rb; uint64_t rt; uint32_t rl;
+                    spins = 0;
                     while (rbipc_read_acquire_nonblock(br, &rb, &rl, &rt) != RBIPC_OK)
-                        __asm__ volatile("pause":::"memory");
+                        bench_spin_pause(&spins);
                     rbipc_read_release(br, rt);
                 }
             }
@@ -1323,7 +1357,7 @@ int main(void) {
     }
 
     print_sep();
-    printf("  Benchmark complete. JSON results exported to benchmarks/results/competitors_benchmark.json\n");
+    printf("  Benchmark complete. JSON results exported to %s\n", json_path);
     print_sep();
 
     return 0;

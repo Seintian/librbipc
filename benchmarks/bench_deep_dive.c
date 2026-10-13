@@ -15,6 +15,7 @@
 
 #include "rbipc.h"
 #include "../src/rbipc_internal.h"
+#include "bench_common.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdint.h>
@@ -554,7 +555,9 @@ int main(void) {
            lease_res.with_lease_msgs_per_sec, lease_res.overhead_pct);
 
     /* Export JSON */
-    FILE *fp = fopen("benchmarks/results/deep_dive_features.json", "w");
+    char json_path[256];
+    bench_get_result_path(json_path, sizeof(json_path), "deep_dive_features.json");
+    FILE *fp = fopen(json_path, "w");
     if (fp) {
         fprintf(fp, "{\n");
         fprintf(fp, "  \"adaptive_vs_zerospin\": {\n");
@@ -587,7 +590,7 @@ int main(void) {
                 lease_res.no_lease_msgs_per_sec, lease_res.with_lease_msgs_per_sec, lease_res.overhead_pct);
         fprintf(fp, "}\n");
         fclose(fp);
-        printf("\nExported deep dive metrics to benchmarks/results/deep_dive_features.json\n");
+        printf("\nExported deep dive metrics to %s\n", json_path);
     }
 
     printf("================================================================================\n");

@@ -56,7 +56,8 @@ librbipc/
 │   ├── rbipc_ipc.c          # Ancillary SCM_RIGHTS file descriptor transmission and attachment
 │   └── rbipc_pubsub.c       # 1-to-N multicast topic publishing and independent subscriber cursor polling
 ├── tests/                   # 25 automated verification suites (16 unit, 3 I/O, 6 E2E & chaos fault-injection)
-├── benchmarks/              # 4 benchmark suites + canonical JSON datasets (benchmarks/results/*.json)
+├── benchmarks/              # 4 benchmark suites + partitioned datasets (benchmarks/results/{home_pc,laptop}/*.json)
+│   ├── bench_common.h       # Shared hardware telemetry, path routing, and adaptive spin backoff
 │   ├── bench_suite.c        # Core latency, 1P-1C streaming, B-Queue batching, zero-copy payloads, MPMC
 │   ├── bench_deep_dive.c    # Adaptive spin, non-temporal streaming stores, pub-sub, reactor, SIMD, leases
 │   ├── bench_competitors.c  # Cross-system: librbipc vs. DPDK rte_ring, LMAX Disruptor, mqueue, AF_UNIX
@@ -174,7 +175,7 @@ Verified across all 25 test suites via `make coverage` (`gcov` with `-O0 -g --co
 
 ## Performance Benchmarks Summary
 
-Measured on **Intel Core i5-10400F @ 2.90 GHz** (6C/12T, 12 MiB L3 cache, Linux `6.18.33.2-microsoft-standard-WSL2 x86_64`, `-O3 -std=c23`; raw JSON datasets in `benchmarks/results/`):
+Measured on **Intel Core i5-10400F @ 2.90 GHz** (6C/12T desktop) and **Intel Core i5-6300U @ 2.40 GHz** (2C/4T mobile laptop; raw JSON datasets in `benchmarks/results/{home_pc,laptop}/`):
 
 | Benchmark Workload | Measured Performance | Key Architectural Takeaway |
 | :--- | :--- | :--- |

@@ -16,6 +16,7 @@
 #endif
 
 #include "rbipc.h"
+#include "bench_common.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdint.h>
@@ -767,11 +768,9 @@ int main(int argc, char **argv) {
 
     /* Write JSON results file */
     char json_filename[256];
-    if (access("benchmarks/results", W_OK) == 0) {
-        snprintf(json_filename, sizeof(json_filename), "benchmarks/results/%s.json", tag);
-    } else {
-        snprintf(json_filename, sizeof(json_filename), "bench_%s.json", tag);
-    }
+    char leaf_name[128];
+    snprintf(leaf_name, sizeof(leaf_name), "%s.json", tag);
+    bench_get_result_path(json_filename, sizeof(json_filename), leaf_name);
     FILE *fp = fopen(json_filename, "w");
     if (fp) {
         fprintf(fp, "{\n");

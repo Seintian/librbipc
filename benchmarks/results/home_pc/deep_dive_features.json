@@ -1,0 +1,20 @@
+{
+  "adaptive_vs_zerospin": {
+    "zerospin": {"msgs_per_sec": 29478.65, "p50_ns": 28052, "p90_ns": 36253, "p99_ns": 60254, "max_ns": 10096887},
+    "adaptive": {"msgs_per_sec": 34993.86, "p50_ns": 25951, "p90_ns": 34002, "p99_ns": 52604, "max_ns": 10109588}
+  },
+  "streaming_stores": [
+    {"size": 65536, "std_mb_s": 14452.33, "stream_mb_s": 19867.19, "speedup_pct": 37.47},
+    {"size": 262144, "std_mb_s": 7851.41, "stream_mb_s": 15677.75, "speedup_pct": 99.68},
+    {"size": 1048576, "std_mb_s": 7194.22, "stream_mb_s": 14746.30, "speedup_pct": 104.97},
+    {"size": 4194304, "std_mb_s": 5478.18, "stream_mb_s": 8282.34, "speedup_pct": 51.19}
+  ],
+  "pubsub": [
+    {"subs": 1, "publish_msgs_s": 7083830.62, "publish_mb_s": 54.05, "delivered_msgs_s": 7083830.62},
+    {"subs": 2, "publish_msgs_s": 3008006.23, "publish_mb_s": 22.95, "delivered_msgs_s": 6016012.46},
+    {"subs": 4, "publish_msgs_s": 67665.19, "publish_mb_s": 0.52, "delivered_msgs_s": 270660.77}
+  ],
+  "reactor": {"events_per_sec": 874791.74, "avg_latency_ns": 1143.13},
+  "simd_scanning": {"scalar_ns": 30.08, "simd_ns": 33.86, "speedup_pct": -12.56},
+  "lease_overhead": {"no_lease_msgs_s": 11626175.49, "with_lease_msgs_s": 11788457.82, "overhead_pct": -1.38}
+}

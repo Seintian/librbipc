@@ -403,19 +403,23 @@ To support sandboxed, containerized, or privilege-separated architectures where 
 
 ### 8.1 Experimental Testbed & Methodology
 
-All benchmark datasets in `benchmarks/results/` were collected on the reference x86-64 hardware platform using `-O3 -std=c23 -pthread`:
+All benchmark datasets are systematically partitioned and versioned into two hardware profiles under [`benchmarks/results/`](benchmarks/results/):
+- **Desktop Reference Profile (`home_pc`):** [`benchmarks/results/home_pc/`](benchmarks/results/home_pc/)
+- **Mobile Laptop Profile (`laptop`):** [`benchmarks/results/laptop/`](benchmarks/results/laptop/)
 
-| Parameter | Reference Testbed Specification |
-| :--- | :--- |
-| **Processor** | Intel Core i5-10400F @ 2.90 GHz (Comet Lake, 6 Physical Cores / 12 Threads, 10 WSL2 vCPUs) |
-| **Cache Hierarchy** | L1d: 32 KiB/core (160 KiB active), L1i: 32 KiB/core, L2: 256 KiB/core (1.3 MiB), L3 (LLC): 12 MiB shared |
-| **Kernel & OS** | Linux `6.18.33.2-microsoft-standard-WSL2` (`SMP PREEMPT_DYNAMIC x86_64`) |
-| **Timing Source** | `clock_gettime(CLOCK_MONOTONIC)` vDSO (nanosecond resolution, zero-syscall user-space `RDTSC` scaling) |
-| **Ring Configuration** | C = 4096 slots (`RING_CAPACITY`), S = 64 B default slot size (unless sweeping payload sizes up to 16 MiB) |
+| Parameter | Reference Home PC Testbed (`home_pc`) | Mobile Laptop Testbed (`laptop`) |
+| :--- | :--- | :--- |
+| **Processor** | Intel Core i5-10400F @ 2.90 GHz (Comet Lake) | Intel Core i5-6300U @ 2.40 GHz (Skylake Mobile) |
+| **Physical Cores / Threads** | 6 Cores / 12 Threads (10 WSL2 vCPUs) | 2 Cores / 4 Threads |
+| **Cache Hierarchy** | L1d: 32 KiB/core, L2: 256 KiB/core, L3: 12 MiB shared | L1d: 32 KiB/core, L2: 256 KiB/core, L3: 3 MiB shared |
+| **Kernel & OS** | Linux `6.18.33.2-microsoft-standard-WSL2` x86_64 | Linux `7.2.9-1-cachyos` x86_64 (`PREEMPT_DYNAMIC`) |
+| **Thermal / Power Envelope** | 65 W TDP (Unconstrained Desktop) | 15 W TDP (Ultra-Low-Power Mobile) |
+| **Timing Source** | `clock_gettime(CLOCK_MONOTONIC)` vDSO | `clock_gettime(CLOCK_MONOTONIC)` vDSO |
+| **Ring Configuration** | C = 4096 slots, S = 64 B default | C = 4096 slots, S = 64 B default |
 
 > [!NOTE]
-> **Reproducibility Across Hardware Profiles:**
-> The JSON datasets in `benchmarks/results/` preserve the canonical **Intel Core i5-10400F** (6C/12T desktop) empirical measurements. When executing the test or benchmark suites on mobile or ultra-low-power dual-core processors (such as an **Intel Core i5-6300U @ 2.40 GHz**, 2C/4T Skylake with 3 MiB L3 cache and energy-saving frequency governors), absolute multi-thread MPMC throughput (`4P-4C`) and DRAM streaming bandwidth scale proportionally to physical core count (2C vs. 6C) and memory channel clock speed, while relative algorithmic speedups (B-Queue batching, non-temporal streaming stores, and 0% idle futex sleep) remain invariant.
+> **Cross-Platform Scalability:**
+> Multi-threaded MPMC throughput (`4P-4C`) and non-temporal DRAM streaming bandwidth scale with core counts (2C on mobile vs. 6C on desktop) and memory bus widths, while core architectural invariants (B-Queue vector batching acceleration, non-temporal cache bypassing, and 0% idle futex sleep) hold uniformly across both platforms. Backward-compatible symlinks at `benchmarks/results/*.json` point to the canonical desktop datasets.
 
 ### 8.2 Architectural Evolution Across `librbipc` Releases
 

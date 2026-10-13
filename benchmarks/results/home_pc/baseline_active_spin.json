@@ -1,0 +1,54 @@
+{
+  "tag": "BASELINE",
+  "idle": {
+    "user_sec": 0.016278,
+    "sys_sec": 0.004333,
+    "total_sec": 0.020611,
+    "cpu_pct": 1.03,
+    "vol_cs": 92,
+    "invol_cs": 130
+  },
+  "latency": {
+    "min_ns": 1215,
+    "mean_ns": 1459.08,
+    "p50_ns": 1273,
+    "p90_ns": 1331,
+    "p99_ns": 1508,
+    "p99_9_ns": 23877,
+    "p99_99_ns": 201602,
+    "max_ns": 1817073,
+    "stddev_ns": 8981.52
+  },
+  "streaming": {
+    "msgs_per_sec": 815625.35,
+    "mb_per_sec": 49.78,
+    "avg_latency_ns": 1226.05,
+    "producer_vol_cs": 0,
+    "producer_invol_cs": 185,
+    "consumer_vol_cs": 14,
+    "consumer_invol_cs": 359
+  },
+  "batching": [
+    {"size": 1, "msgs_per_sec": 773460.38, "mb_per_sec": 47.21, "avg_latency_ns": 1292.89},
+    {"size": 4, "msgs_per_sec": 2845679.82, "mb_per_sec": 173.69, "avg_latency_ns": 351.41},
+    {"size": 8, "msgs_per_sec": 5591313.40, "mb_per_sec": 341.27, "avg_latency_ns": 178.85},
+    {"size": 16, "msgs_per_sec": 8288439.76, "mb_per_sec": 505.89, "avg_latency_ns": 120.65},
+    {"size": 32, "msgs_per_sec": 16088180.48, "mb_per_sec": 981.94, "avg_latency_ns": 62.16},
+    {"size": 64, "msgs_per_sec": 17437282.98, "mb_per_sec": 1064.29, "avg_latency_ns": 57.35},
+    {"size": 128, "msgs_per_sec": 25771519.40, "mb_per_sec": 1572.97, "avg_latency_ns": 38.80}
+  ],
+  "payloads": [
+    {"size": 64, "msgs_per_sec": 776263.08, "mb_per_sec": 47.38},
+    {"size": 256, "msgs_per_sec": 785548.89, "mb_per_sec": 191.78},
+    {"size": 1024, "msgs_per_sec": 795399.50, "mb_per_sec": 776.76},
+    {"size": 4096, "msgs_per_sec": 747252.73, "mb_per_sec": 2918.96},
+    {"size": 16384, "msgs_per_sec": 804917.51, "mb_per_sec": 12576.84},
+    {"size": 65536, "msgs_per_sec": 739849.86, "mb_per_sec": 46240.62}
+  ],
+  "mpmc": [
+    {"p": 1, "c": 1, "msgs_per_sec": 695913.42, "avg_latency_ns": 1436.96},
+    {"p": 2, "c": 2, "msgs_per_sec": 1074470.52, "avg_latency_ns": 930.69},
+    {"p": 4, "c": 2, "msgs_per_sec": 903741.93, "avg_latency_ns": 1106.51},
+    {"p": 4, "c": 4, "msgs_per_sec": 897722.10, "avg_latency_ns": 1113.93}
+  ]
+}

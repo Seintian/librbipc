@@ -25,6 +25,7 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include <stdatomic.h>
+#include "bench_common.h"
 #include <string.h>
 #include <unistd.h>
 #include <time.h>
@@ -1324,7 +1325,9 @@ int main(void) {
     fflush(stdout);
 
     /* Output JSON */
-    FILE *fp = fopen("benchmarks/results/idle_strategies_benchmark.json", "w");
+    char json_path[256];
+    bench_get_result_path(json_path, sizeof(json_path), "idle_strategies_benchmark.json");
+    FILE *fp = fopen(json_path, "w");
     if (fp) {
         fprintf(fp, "{\n");
         fprintf(fp, "  \"timestamp\": %lu,\n", get_ns());
@@ -1352,8 +1355,8 @@ int main(void) {
         fprintf(fp, "  ]\n");
         fprintf(fp, "}\n");
         fclose(fp);
-        printf("%s[INFO]%s JSON output saved to benchmarks/results/idle_strategies_benchmark.json\n",
-               COL_GREEN, COL_RESET);
+        printf("%s[INFO]%s JSON output saved to %s\n",
+               COL_GREEN, COL_RESET, json_path);
     }
 
     free(lat_buf);
