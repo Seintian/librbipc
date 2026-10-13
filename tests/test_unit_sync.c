@@ -249,8 +249,13 @@ static void test_hardware_wait(void) {
         assert(rc_pred == -ENOSYS);
     }
 
+    /* Hardware wait execution edge cases */
+    assert(rbipc_sync_hardware_wait(NULL, 500, NULL, NULL) == RBIPC_ERR_INVAL);
+    assert(rbipc_sync_hardware_wait(&dummy_word, 500, dummy_pred_true, NULL) == RBIPC_OK);
+    assert(rbipc_sync_hardware_wait(&dummy_word, 0, NULL, NULL) == RBIPC_ERR_TIMEOUT);
+
     /* Hardware wait execution or fallback behavior without predicate */
-    int rc = rbipc_sync_hardware_wait(&dummy_word, 500, NULL, NULL);
+    int rc = rbipc_sync_hardware_wait(&dummy_word, 6000, NULL, NULL);
     if (has_waitpkg || has_wfxt) {
         assert(rc == RBIPC_ERR_TIMEOUT);
     } else {
@@ -297,16 +302,32 @@ static void test_futex2_waitv(void) {
     _Atomic uint32_t sflag = 0;
     /* Immediate return on mismatch */
     assert(rbipc_futex_wait_or_shutdown(&fword, 99, &sflag, 1000000) == RBIPC_OK);
+    /* Immediate return when shutdown flag is non-zero */
+    atomic_store(&sflag, 1);
+    assert(rbipc_futex_wait_or_shutdown(&fword, 100, &sflag, 1000000) == RBIPC_OK);
+    atomic_store(&sflag, 0);
+
     /* Timeout */
     assert(rbipc_futex_wait_or_shutdown(&fword, 100, &sflag, 50000) == RBIPC_ERR_TIMEOUT);
+    /* Test fallback when shutdown_flag is NULL */
+    assert(rbipc_futex_wait_or_shutdown(&fword, 99, NULL, 50000) == RBIPC_OK);
+    assert(rbipc_futex_wait_or_shutdown(&fword, 100, NULL, 50000) == RBIPC_ERR_TIMEOUT);
 
     /* Test rbipc_futex2_wait_slot_or_shutdown */
     _Atomic uint64_t slot_seq = 200;
     assert(rbipc_futex2_wait_slot_or_shutdown(NULL, 200, &sflag, 1000) == RBIPC_ERR_INVAL);
     /* Immediate return on mismatch */
     assert(rbipc_futex2_wait_slot_or_shutdown(&slot_seq, 199, &sflag, 1000000) == RBIPC_OK);
+    /* Immediate return when shutdown flag is non-zero */
+    atomic_store(&sflag, 1);
+    assert(rbipc_futex2_wait_slot_or_shutdown(&slot_seq, 200, &sflag, 1000000) == RBIPC_OK);
+    atomic_store(&sflag, 0);
+
     /* Timeout */
     assert(rbipc_futex2_wait_slot_or_shutdown(&slot_seq, 200, &sflag, 50000) == RBIPC_ERR_TIMEOUT);
+    /* Test with NULL shutdown_flag */
+    assert(rbipc_futex2_wait_slot_or_shutdown(&slot_seq, 199, NULL, 50000) == RBIPC_OK);
+    assert(rbipc_futex2_wait_slot_or_shutdown(&slot_seq, 200, NULL, 50000) == RBIPC_ERR_TIMEOUT);
 
     /* Test rbipc_sync_wait_registered_or_shutdown */
     _Atomic uint32_t sync_waiters = 0;
@@ -322,9 +343,23 @@ static void test_futex2_waitv(void) {
     assert(rc == RBIPC_ERR_TIMEOUT);
     assert(atomic_load(&sync_waiters) == 0);
 
+    /* Pre-expired state */
+    rbipc_sync_register_waiter(&sync_waiters);
+    assert(rbipc_sync_wait_registered_or_shutdown(&state, &fword, &sync_waiters, &sflag) == RBIPC_ERR_TIMEOUT);
+    assert(atomic_load(&sync_waiters) == 0);
+
+    /* Shutdown flag active returns immediately */
+    atomic_store(&sflag, 1);
+    rbipc_sync_state_init(&state, UINT64_MAX);
+    rbipc_sync_register_waiter(&sync_waiters);
+    assert(rbipc_sync_wait_registered_or_shutdown(&state, &fword, &sync_waiters, &sflag) == RBIPC_OK);
+    assert(atomic_load(&sync_waiters) == 0);
+    atomic_store(&sflag, 0);
+
     /* NULL validation */
     assert(rbipc_sync_wait_registered_or_shutdown(NULL, &fword, &sync_waiters, &sflag) == RBIPC_ERR_INVAL);
     assert(rbipc_sync_wait_registered_or_shutdown(&state, NULL, &sync_waiters, &sflag) == RBIPC_ERR_INVAL);
+    rbipc_sync_deregister_waiter(NULL); /* NULL safety check */
 }
 
 static void test_futex_wake_op(void) {
@@ -340,6 +375,26 @@ static void test_futex_wake_op(void) {
     assert(rc >= 0);
     /* u2 was 10, added 5 -> should now be 15 */
     assert(atomic_load(&u2) == 15);
+
+    /* Test FUTEX_OP_SET */
+    rc = rbipc_futex_wake_op(&u1, 0, &u2, 1, FUTEX_OP_SET, 42, FUTEX_OP_CMP_EQ, 15);
+    assert(rc >= 0);
+    assert(atomic_load(&u2) == 42);
+
+    /* Test FUTEX_OP_OR */
+    rc = rbipc_futex_wake_op(&u1, 0, &u2, 1, FUTEX_OP_OR, 0x10, FUTEX_OP_CMP_NE, 0);
+    assert(rc >= 0);
+    assert(atomic_load(&u2) == (42 | 0x10));
+
+    /* Test FUTEX_OP_ANDN */
+    rc = rbipc_futex_wake_op(&u1, 0, &u2, 1, FUTEX_OP_ANDN, 0x10, FUTEX_OP_CMP_GE, 0);
+    assert(rc >= 0);
+    assert(atomic_load(&u2) == 42);
+
+    /* Test FUTEX_OP_XOR */
+    rc = rbipc_futex_wake_op(&u1, 0, &u2, 1, FUTEX_OP_XOR, 2, FUTEX_OP_CMP_LE, 100);
+    assert(rc >= 0);
+    assert(atomic_load(&u2) == (42 ^ 2));
 #else
     assert(rc == -ENOSYS);
 #endif
