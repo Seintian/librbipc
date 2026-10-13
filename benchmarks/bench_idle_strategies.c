@@ -491,6 +491,10 @@ static rbipc_env_t rbipc_init(const char *name_ab, const char *name_ba) {
     int rc3 = rbipc_attach(name_ab, &env.ring_ab_cons);
     int rc4 = rbipc_attach(name_ba, &env.ring_ba_cons);
     assert(rc3 == RBIPC_OK && rc4 == RBIPC_OK);
+    rbipc_set_wait_policy(env.ring_ab_prod, RBIPC_WAIT_ADAPTIVE);
+    rbipc_set_wait_policy(env.ring_ab_cons, RBIPC_WAIT_ADAPTIVE);
+    rbipc_set_wait_policy(env.ring_ba_prod, RBIPC_WAIT_ADAPTIVE);
+    rbipc_set_wait_policy(env.ring_ba_cons, RBIPC_WAIT_ADAPTIVE);
     return env;
 }
 

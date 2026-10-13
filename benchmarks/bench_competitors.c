@@ -360,6 +360,8 @@ static result_t bench_rbipc_tput(size_t msgsz, uint64_t iters) {
     rbipc_destroy(shm);
     if (rbipc_create(shm, RING_CAPACITY, slot, &rp) != RBIPC_OK ||
         rbipc_attach(shm, &rc) != RBIPC_OK) return r;
+    rbipc_set_wait_policy(rp, RBIPC_WAIT_ADAPTIVE);
+    rbipc_set_wait_policy(rc, RBIPC_WAIT_ADAPTIVE);
 
     int sync_pipe[2];
     assert(pipe(sync_pipe) == 0);
@@ -633,6 +635,10 @@ static result_t bench_rbipc_lat(uint64_t iters) {
     assert(rbipc_create(sb, 256, 72, &rp2) == RBIPC_OK);
     assert(rbipc_attach(sa, &rc) == RBIPC_OK);
     assert(rbipc_attach(sb, &rc2) == RBIPC_OK);
+    rbipc_set_wait_policy(rp, RBIPC_WAIT_ADAPTIVE);
+    rbipc_set_wait_policy(rp2, RBIPC_WAIT_ADAPTIVE);
+    rbipc_set_wait_policy(rc, RBIPC_WAIT_ADAPTIVE);
+    rbipc_set_wait_policy(rc2, RBIPC_WAIT_ADAPTIVE);
 
     uint64_t *samp = malloc(iters * sizeof(uint64_t));
     int sync_pipe[2];
@@ -1272,6 +1278,7 @@ int main(void) {
     rbipc_ring_t *mpmc_r = NULL;
     rbipc_destroy("/rbench_mpmc");
     if (rbipc_create("/rbench_mpmc", RING_CAPACITY, 128, &mpmc_r) == RBIPC_OK) {
+        rbipc_set_wait_policy(mpmc_r, RBIPC_WAIT_ADAPTIVE);
         typedef struct { int np, nc; } cfg_t;
         cfg_t cfgs[] = { {1,1}, {2,2}, {4,2}, {4,4} };
         int ncfgs = (int)(sizeof(cfgs)/sizeof(cfgs[0]));
@@ -1320,6 +1327,7 @@ int main(void) {
         rbipc_ring_t *br = NULL;
         rbipc_destroy("/rbench_batch");
         if (rbipc_create("/rbench_batch", RING_CAPACITY, 128, &br) == RBIPC_OK) {
+            rbipc_set_wait_policy(br, RBIPC_WAIT_ADAPTIVE);
             uint64_t total = batch_iters, iters = total / batch;
             uint64_t t0 = get_ns();
             rbipc_iovec_t iovecs[64];
