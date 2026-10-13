@@ -8,6 +8,7 @@
 #include "../src/rbipc_futex.h"
 #include <stdio.h>
 #include <assert.h>
+#include <errno.h>
 #include <stdatomic.h>
 
 static void test_sync_state(void) {
@@ -218,6 +219,42 @@ static void test_wait_policy_api(void) {
     rbipc_detach(ring);
 }
 
+static void test_hardware_wait(void) {
+    bool has_waitpkg = rbipc_cpu_has_waitpkg();
+    bool has_wfxt = rbipc_cpu_has_wfxt();
+    printf("  [test_hardware_wait] CPU features: waitpkg=%d, wfxt=%d\n",
+           (int)has_waitpkg, (int)has_wfxt);
+
+    _Atomic uint64_t dummy_word;
+    atomic_init(&dummy_word, 42);
+
+    /* Invalid pointer check */
+    assert(rbipc_sync_hardware_wait(NULL, 1000, NULL, NULL) == RBIPC_ERR_INVAL);
+
+    /* Zero timeout with no satisfied predicate */
+    assert(rbipc_sync_hardware_wait(&dummy_word, 0, NULL, NULL) == RBIPC_ERR_TIMEOUT);
+
+    /* Immediate predicate match */
+    assert(rbipc_sync_hardware_wait(&dummy_word, 1000, dummy_pred_true, NULL) == RBIPC_OK);
+
+    /* Non-satisfied predicate returns OK if satisfied, or timeout/ENOSYS depending on CPU support */
+    int countdown = 3;
+    int rc_pred = rbipc_sync_hardware_wait(&dummy_word, 1000, dummy_pred_countdown, &countdown);
+    if (has_waitpkg || has_wfxt) {
+        assert(rc_pred == RBIPC_OK || rc_pred == RBIPC_ERR_TIMEOUT);
+    } else {
+        assert(rc_pred == -ENOSYS);
+    }
+
+    /* Hardware wait execution or fallback behavior without predicate */
+    int rc = rbipc_sync_hardware_wait(&dummy_word, 500, NULL, NULL);
+    if (has_waitpkg || has_wfxt) {
+        assert(rc == RBIPC_ERR_TIMEOUT);
+    } else {
+        assert(rc == -ENOSYS);
+    }
+}
+
 int main(void) {
     printf("[test_unit_sync] Running tests...\n");
     test_sync_state();
@@ -225,6 +262,7 @@ int main(void) {
     test_asymmetric_waiter_registration();
     test_adaptive_spin_backoff();
     test_wait_policy_api();
+    test_hardware_wait();
     printf("[test_unit_sync] All tests passed!\n");
     return 0;
 }

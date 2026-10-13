@@ -122,6 +122,28 @@ RBIPC_INLINE int rbipc_io_complete_read_acquisition(
   return RBIPC_ERR_BUSY;
 }
 
+typedef struct {
+  const rbipc_shm_header_t *hdr;
+  const rbipc_slot_t *slot;
+  uint64_t ticket;
+} rbipc_io_slot_pred_ctx_t;
+
+static bool rbipc_io_pred_slot_vacant(void *arg) {
+  const rbipc_io_slot_pred_ctx_t *ctx = (const rbipc_io_slot_pred_ctx_t *)arg;
+  uint64_t seq =
+      atomic_load_explicit(&ctx->slot->sequence, memory_order_acquire);
+  return rbipc_slot_is_vacant(seq, ctx->ticket) ||
+         rbipc_ring_is_shutdown(ctx->hdr);
+}
+
+static bool rbipc_io_pred_slot_ready(void *arg) {
+  const rbipc_io_slot_pred_ctx_t *ctx = (const rbipc_io_slot_pred_ctx_t *)arg;
+  uint64_t seq =
+      atomic_load_explicit(&ctx->slot->sequence, memory_order_acquire);
+  return rbipc_slot_is_ready(seq, ctx->ticket) ||
+         rbipc_ring_is_shutdown(ctx->hdr);
+}
+
 /**
  * @brief Handle backoff progression and futex suspension when writer encounters
  * full ring.
@@ -151,6 +173,20 @@ static int rbipc_io_handle_write_backoff(
           atomic_load_explicit(&slot->sequence, memory_order_acquire);
       if (RBIPC_LIKELY(rbipc_slot_is_vacant(spin_seq, t_ticket)) ||
           RBIPC_UNLIKELY(rbipc_ring_is_shutdown(hdr))) {
+        *t = atomic_load_explicit(&hdr->write_ticket, memory_order_relaxed);
+        return RBIPC_OK;
+      }
+    }
+    /* Tier 1: Hardware-assisted monitor-wait (WAITPKG / WFET) */
+    if (rbipc_cpu_has_waitpkg() || rbipc_cpu_has_wfxt()) {
+      rbipc_io_slot_pred_ctx_t ctx = {
+          .hdr = hdr,
+          .slot = slot,
+          .ticket = t_ticket,
+      };
+      if (rbipc_sync_hardware_wait(&slot->sequence, 5000ULL,
+                                   rbipc_io_pred_slot_vacant,
+                                   &ctx) == RBIPC_OK) {
         *t = atomic_load_explicit(&hdr->write_ticket, memory_order_relaxed);
         return RBIPC_OK;
       }
@@ -203,6 +239,21 @@ static int rbipc_io_handle_read_backoff(
           atomic_load_explicit(&slot->sequence, memory_order_acquire);
       if (RBIPC_LIKELY(rbipc_slot_is_ready(spin_seq, t)) ||
           RBIPC_UNLIKELY(rbipc_ring_is_shutdown(hdr))) {
+        *out_next_t =
+            atomic_load_explicit(&hdr->read_ticket, memory_order_relaxed);
+        return RBIPC_OK;
+      }
+    }
+    /* Tier 1: Hardware-assisted monitor-wait (WAITPKG / WFET) */
+    if (rbipc_cpu_has_waitpkg() || rbipc_cpu_has_wfxt()) {
+      rbipc_io_slot_pred_ctx_t ctx = {
+          .hdr = hdr,
+          .slot = slot,
+          .ticket = t,
+      };
+      if (rbipc_sync_hardware_wait(&slot->sequence, 5000ULL,
+                                   rbipc_io_pred_slot_ready,
+                                   &ctx) == RBIPC_OK) {
         *out_next_t =
             atomic_load_explicit(&hdr->read_ticket, memory_order_relaxed);
         return RBIPC_OK;

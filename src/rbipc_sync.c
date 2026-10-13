@@ -22,7 +22,9 @@
 #include "rbipc_predicate.h"
 
 #include <errno.h>
+#include <inttypes.h>
 #include <sched.h>
+#include <stdio.h>
 
 /**
  * @brief Initialize synchronization state and deadline timestamp.
@@ -138,6 +140,118 @@ int rbipc_sync_backoff(rbipc_sync_state_t *RBIPC_RESTRICT state,
   return rbipc_sync_wait_registered(state, futex_word, futex_waiters);
 }
 
+#if defined(__x86_64__) || defined(_M_X64) || defined(__i386__) ||             \
+    defined(_M_IX86)
+static uint64_t rbipc_get_tsc_ticks_per_ns(void) {
+  static uint64_t s_ticks_per_ns = 0;
+  if (RBIPC_LIKELY(s_ticks_per_ns != 0)) {
+    return s_ticks_per_ns;
+  }
+  FILE *f = fopen("/sys/devices/system/cpu/cpu0/tsc_freq_khz", "r");
+  if (f) {
+    char buf[64];
+    if (fgets(buf, sizeof(buf), f)) {
+      char *endptr = NULL;
+      uint64_t khz = strtoull(buf, &endptr, 10);
+      if (khz > 0) {
+        s_ticks_per_ns = (khz + 500000ULL) / 1000000ULL;
+        if (s_ticks_per_ns == 0) {
+          s_ticks_per_ns = 1;
+        }
+      }
+    }
+    fclose(f);
+  }
+  if (s_ticks_per_ns == 0) {
+    struct timespec ts1, ts2;
+    clock_gettime(CLOCK_MONOTONIC, &ts1);
+    uint64_t tsc1 = rbipc_rdtsc();
+    for (volatile int i = 0; i < 2000; i++) {
+      rbipc_cpu_pause();
+    }
+    clock_gettime(CLOCK_MONOTONIC, &ts2);
+    uint64_t tsc2 = rbipc_rdtsc();
+    uint64_t elapsed_ns =
+        (uint64_t)(ts2.tv_sec - ts1.tv_sec) * 1000000000ULL +
+        (uint64_t)(ts2.tv_nsec - ts1.tv_nsec);
+    if (elapsed_ns > 0 && tsc2 > tsc1) {
+      s_ticks_per_ns = (tsc2 - tsc1) / elapsed_ns;
+    }
+    if (s_ticks_per_ns == 0) {
+      s_ticks_per_ns = 3;
+    }
+  }
+  return s_ticks_per_ns;
+}
+#endif
+
+/**
+ * @brief Execute a hardware-assisted monitor-wait (Tier 1: Intel WAITPKG / ARM64 WFET).
+ */
+RBIPC_LEAF int
+rbipc_sync_hardware_wait(const void *monitored_addr, uint64_t timeout_ns,
+                         rbipc_spin_pred_t predicate, void *arg) {
+  if (RBIPC_UNLIKELY(!monitored_addr)) {
+    return RBIPC_ERR_INVAL;
+  }
+  if (predicate && predicate(arg)) {
+    return RBIPC_OK;
+  }
+  if (timeout_ns == 0) {
+    return RBIPC_ERR_TIMEOUT;
+  }
+  if (timeout_ns > 5000ULL) {
+    timeout_ns = 5000ULL;
+  }
+
+#if defined(__x86_64__) || defined(_M_X64) || defined(__i386__) ||             \
+    defined(_M_IX86)
+  if (rbipc_cpu_has_waitpkg()) {
+    rbipc_cpu_umonitor(monitored_addr);
+    if (predicate && predicate(arg)) {
+      return RBIPC_OK;
+    }
+    uint64_t ticks_per_ns = rbipc_get_tsc_ticks_per_ns();
+    uint64_t tsc_deadline = rbipc_rdtsc() + (timeout_ns * ticks_per_ns);
+    /* Substate 1: C0.1 fast wake */
+    rbipc_cpu_umwait(1, tsc_deadline);
+    if (predicate && predicate(arg)) {
+      return RBIPC_OK;
+    }
+    return RBIPC_ERR_TIMEOUT;
+  }
+#elif defined(__aarch64__)
+  if (rbipc_cpu_has_wfxt()) {
+    uint64_t timer_freq = rbipc_arm_cntfrq();
+    uint64_t cur_cnt = rbipc_arm_cntvct();
+    uint64_t target_cnt = cur_cnt + (timeout_ns * timer_freq / 1000000000ULL);
+
+    uint64_t dummy = 0;
+    __asm__ __volatile__("ldaxr %0, [%1]"
+                         : "=r"(dummy)
+                         : "r"(monitored_addr)
+                         : "memory");
+    if (predicate && predicate(arg)) {
+      __asm__ __volatile__("clrex" ::: "memory");
+      return RBIPC_OK;
+    }
+    __asm__ __volatile__("wfet %0" :: "r"(target_cnt) : "memory");
+    __asm__ __volatile__("clrex" ::: "memory");
+    if (predicate && predicate(arg)) {
+      return RBIPC_OK;
+    }
+    return RBIPC_ERR_TIMEOUT;
+  }
+#else
+  (void)monitored_addr;
+  (void)timeout_ns;
+  (void)predicate;
+  (void)arg;
+#endif
+
+  return -ENOSYS;
+}
+
 /**
  * @brief Adaptive two-phase spin-then-wait backoff engine.
  */
@@ -156,6 +270,13 @@ int rbipc_sync_backoff_adaptive(rbipc_sync_state_t *RBIPC_RESTRICT state,
     for (uint32_t i = 0; i < budget; ++i) {
       rbipc_cpu_pause();
       if (predicate(arg)) {
+        return 0;
+      }
+    }
+    if (rbipc_cpu_has_waitpkg() || rbipc_cpu_has_wfxt()) {
+      int hw_rc =
+          rbipc_sync_hardware_wait(futex_word, 5000ULL, predicate, arg);
+      if (hw_rc == 0) {
         return 0;
       }
     }

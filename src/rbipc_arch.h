@@ -24,7 +24,134 @@
 
 #if defined(__x86_64__) || defined(_M_X64) || defined(__i386__) ||             \
     defined(_M_IX86)
+#include <cpuid.h>
 #include <immintrin.h>
+#include <x86intrin.h>
+
+/**
+ * @brief Query Time-Stamp Counter (TSC) tick value.
+ * @return 64-bit current TSC cycle counter.
+ */
+RBIPC_INLINE RBIPC_NODISCARD uint64_t rbipc_rdtsc(void) {
+  return __rdtsc();
+}
+
+/**
+ * @brief Dynamic CPUID check for Intel WAITPKG instructions (UMONITOR, UMWAIT, TPAUSE).
+ * @return True if host CPU supports WAITPKG (Intel Tremont, Alder Lake+, AMD Zen 5+).
+ */
+RBIPC_INLINE RBIPC_NODISCARD bool rbipc_cpu_has_waitpkg(void) {
+  static int cached = -1;
+  if (RBIPC_LIKELY(cached != -1)) {
+    return cached == 1;
+  }
+  unsigned int eax = 0, ebx = 0, ecx = 0, edx = 0;
+  if (__get_cpuid_count(7, 0, &eax, &ebx, &ecx, &edx)) {
+    cached = ((ecx & (1U << 5U)) != 0U) ? 1 : 0;
+  } else {
+    cached = 0;
+  }
+  return cached == 1;
+}
+
+/**
+ * @brief Arm processor hardware address monitor on a memory address.
+ * @param[in] addr Target memory address / cache line to monitor.
+ */
+RBIPC_INLINE void rbipc_cpu_umonitor(const void *addr) {
+  __asm__ __volatile__("umonitor %0" :: "r"(addr) : "memory");
+}
+
+/**
+ * @brief Enter low-power user-mode substate C0.1 or C0.2 until address invalidation.
+ * @param[in] state        Substate target (1 for C0.1 fast wake, 0 for C0.2 deep power save).
+ * @param[in] tsc_deadline Monotonic TSC cycle count expiration deadline.
+ * @return Carry flag from instruction (0 on address invalidate/event, 1 on timeout expiration).
+ */
+RBIPC_INLINE uint8_t rbipc_cpu_umwait(uint32_t state, uint64_t tsc_deadline) {
+  uint8_t cf = 0;
+  __asm__ __volatile__("umwait %1"
+                       : "=@ccc"(cf)
+                       : "r"(state), "a"((uint32_t)tsc_deadline),
+                         "d"((uint32_t)(tsc_deadline >> 32U))
+                       : "memory");
+  return cf;
+}
+
+/**
+ * @brief Timed low-power pause without address monitoring.
+ * @param[in] state        Substate target (1 for C0.1, 0 for C0.2).
+ * @param[in] tsc_deadline Monotonic TSC cycle count expiration deadline.
+ * @return Carry flag from instruction (0 on event, 1 on timeout expiration).
+ */
+RBIPC_INLINE uint8_t rbipc_cpu_tpause(uint32_t state, uint64_t tsc_deadline) {
+  uint8_t cf = 0;
+  __asm__ __volatile__("tpause %1"
+                       : "=@ccc"(cf)
+                       : "r"(state), "a"((uint32_t)tsc_deadline),
+                         "d"((uint32_t)(tsc_deadline >> 32U))
+                       : "memory");
+  return cf;
+}
+
+#else
+
+RBIPC_INLINE RBIPC_NODISCARD uint64_t rbipc_rdtsc(void) {
+  return rbipc_clock_monotonic_ns();
+}
+
+RBIPC_INLINE RBIPC_NODISCARD bool rbipc_cpu_has_waitpkg(void) {
+  return false;
+}
+
+#endif
+
+#if defined(__aarch64__)
+#include <sys/auxv.h>
+#ifndef HWCAP2_WFXT
+#define HWCAP2_WFXT (1UL << 31)
+#endif
+
+/**
+ * @brief Dynamic runtime check for ARM64 FEAT_WFxT (WFET instruction).
+ * @return True if host CPU supports WFET (ARMv8.7-A / ARMv9.2-A+).
+ */
+RBIPC_INLINE RBIPC_NODISCARD bool rbipc_cpu_has_wfxt(void) {
+  static int cached = -1;
+  if (RBIPC_LIKELY(cached != -1)) {
+    return cached == 1;
+  }
+  unsigned long hwcap2 = getauxval(AT_HWCAP2);
+  cached = ((hwcap2 & HWCAP2_WFXT) != 0) ? 1 : 0;
+  return cached == 1;
+}
+
+/**
+ * @brief Read ARM64 virtual system counter frequency (CNTFRQ_EL0).
+ * @return Virtual counter frequency in Hz.
+ */
+RBIPC_INLINE RBIPC_NODISCARD uint64_t rbipc_arm_cntfrq(void) {
+  uint64_t freq = 0;
+  __asm__ __volatile__("mrs %0, cntfrq_el0" : "=r"(freq));
+  return freq;
+}
+
+/**
+ * @brief Read ARM64 virtual system counter (CNTVCT_EL0).
+ * @return Current virtual counter value.
+ */
+RBIPC_INLINE RBIPC_NODISCARD uint64_t rbipc_arm_cntvct(void) {
+  uint64_t cnt = 0;
+  __asm__ __volatile__("mrs %0, cntvct_el0" : "=r"(cnt));
+  return cnt;
+}
+
+#else
+
+RBIPC_INLINE RBIPC_NODISCARD bool rbipc_cpu_has_wfxt(void) {
+  return false;
+}
+
 #endif
 
 /**
