@@ -92,13 +92,14 @@ rbipc_sync_calc_timeout_spec(const rbipc_sync_state_t *RBIPC_RESTRICT state,
   return 0;
 }
 
+static int s_membarrier_cmd = -1;
+
 /**
- * @brief Execute an asymmetric memory barrier on the slow wait path (Linux sys_membarrier).
+ * @brief Initialize process-level synchronization capabilities (e.g. sys_membarrier registration).
  */
 RBIPC_LEAF
-void rbipc_sync_asymmetric_barrier(void) {
+void rbipc_sync_init_process(void) {
 #if defined(__linux__) && defined(SYS_membarrier)
-  static int s_membarrier_cmd = -1;
   if (RBIPC_UNLIKELY(s_membarrier_cmd == -1)) {
     long sup_ret = syscall(SYS_membarrier, MEMBARRIER_CMD_QUERY, 0, 0);
     if (sup_ret > 0) {
@@ -119,6 +120,18 @@ void rbipc_sync_asymmetric_barrier(void) {
     } else {
       s_membarrier_cmd = 0;
     }
+  }
+#endif
+}
+
+/**
+ * @brief Execute an asymmetric memory barrier on the slow wait path (Linux sys_membarrier).
+ */
+RBIPC_LEAF
+void rbipc_sync_asymmetric_barrier(void) {
+#if defined(__linux__) && defined(SYS_membarrier)
+  if (RBIPC_UNLIKELY(s_membarrier_cmd == -1)) {
+    rbipc_sync_init_process();
   }
 
   if (RBIPC_LIKELY(s_membarrier_cmd > 0)) {

@@ -15,11 +15,12 @@ benchmarks/results/
 │   ├── deep_dive_features.json        # Deep dive into adaptive wait, streaming, pubsub, reactor
 │   ├── idle_strategies_benchmark.json # 10 DPDK, Disruptor, and librbipc wait strategies
 │   └── competitors_benchmark.json     # Comprehensive comparison vs DPDK, Disruptor, mqueue, AF_UNIX
-└── laptop/                            # Datasets measured on Mobile/Laptop Hardware Profile
-    ├── deep_dive_features.json        # Micro-architectural feature evaluation on laptop
-    ├── idle_strategies_benchmark.json # Idle wait strategy evaluation on laptop
-    ├── zero_spin_optimized.json       # Streaming, ping-pong, batch, and MPMC on laptop
-    └── competitors_benchmark.json     # 5-system comparative benchmarks on laptop
+├── laptop/                            # Datasets measured on Mobile/Laptop Hardware Profile (Plugged in / Performance)
+│   ├── deep_dive_features.json        # Micro-architectural feature evaluation on laptop
+│   ├── idle_strategies_benchmark.json # Idle wait strategy evaluation on laptop
+│   ├── zero_spin_optimized.json       # Streaming, ping-pong, batch, and MPMC on laptop
+│   └── competitors_benchmark.json     # 5-system comparative benchmarks on laptop
+└── laptop_powersave/                  # Datasets measured on Mobile Profile in Power-Save Mode (Unplugged on Battery)
 ```
 
 > [!NOTE]
@@ -37,26 +38,35 @@ benchmarks/results/
 - **OS & Kernel:** Linux `6.18.33.2-microsoft-standard-WSL2` x86_64
 - **Characteristics:** Unconstrained desktop thermal TDP (65W), dual-channel high-frequency DRAM, no thread oversubscription for MPMC workloads up to 8 threads.
 
-### Profile: `laptop` (Mobile Ultra-Low-Power Architecture)
+### Profile: `laptop` (Mobile Ultra-Low-Power Architecture - Performance Mode)
 
 - **CPU Model:** Intel Core i5-6300U @ 2.40 GHz (Skylake Mobile)
 - **Topology:** 2 Physical Cores / 4 Logical Hardware Threads
 - **Caches:** 32 KiB L1d / Core, 256 KiB L2 / Core, 3 MiB Shared L3 Cache
 - **OS & Kernel:** Linux `7.2.9-1-cachyos` x86_64 (Preempt Dynamic)
-- **Characteristics:** Thermally constrained mobile TDP (15W), aggressive frequency governor scaling, thread oversubscription (2x) when running 8 concurrent worker threads (`4P-4C`).
+- **Characteristics:** Plugged into AC power, dynamic turbo boost enabled, thread oversubscription (2x) when running 8 concurrent worker threads (`4P-4C`).
+
+### Profile: `laptop_powersave` (Mobile Architecture - Battery Power-Save Mode)
+
+- **CPU Model:** Intel Core i5-6300U @ 2.40 GHz (Skylake Mobile)
+- **Topology:** 2 Physical Cores / 4 Logical Hardware Threads
+- **Characteristics:** Unplugged on battery power (`/sys/class/power_supply/AC/online == 0`), frequency scaled down by power-saving governor, increased context switch latency and clock throttling.
 
 ---
 
 ## 3. Running Benchmarks with Profile Routing
 
-Benchmarks automatically detect the host profile (`laptop` vs. `home_pc`) via hostname and online CPU core count, or you can explicitly specify the target profile via the `RBIPC_BENCH_PROFILE` environment variable or Makefile targets:
+Benchmarks automatically detect the host profile (`home_pc`, `laptop`, or `laptop_powersave` based on host characteristics and AC power status), or you can explicitly specify the target profile via the `RBIPC_BENCH_PROFILE` environment variable or Makefile targets:
 
 ```bash
-# Auto-detected profile
+# Auto-detected profile (detects AC power status on laptop automatically)
 make bench
 
-# Explicit laptop profile execution
+# Explicit laptop profile execution (performance mode)
 make bench-laptop
+
+# Explicit laptop profile execution (power-save mode)
+make bench-laptop-powersave
 
 # Explicit home PC profile execution
 make bench-home-pc

@@ -74,6 +74,12 @@ void rbipc_sync_state_init(rbipc_sync_state_t *RBIPC_RESTRICT state,
                            uint64_t timeout_ns);
 
 /**
+ * @brief Initialize process-level synchronization capabilities (e.g. sys_membarrier registration).
+ */
+RBIPC_LEAF
+void rbipc_sync_init_process(void);
+
+/**
  * @brief Execute an asymmetric memory barrier on the slow wait path (Linux sys_membarrier).
  *
  * @details Shifts the sequential consistency ordering tax away from the high-frequency

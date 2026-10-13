@@ -79,7 +79,7 @@ void rbipc_slot_commit(rbipc_slot_t *slot, uint64_t ticket, uint32_t len) {
     return;
   atomic_store_explicit(&slot->len, len, memory_order_relaxed);
   atomic_store_explicit(&slot->state, RBIPC_SLOT_COMMITTED,
-                        memory_order_release);
+                        memory_order_relaxed);
   atomic_store_explicit(&slot->sequence, ticket + 1, memory_order_release);
 }
 

@@ -32,7 +32,35 @@ typedef struct {
 } bench_hardware_info_t;
 
 /**
- * @brief Detect current hardware profile ("laptop" or "home_pc").
+ * @brief Check whether system is currently running on battery (power-save mode).
+ */
+static inline bool bench_is_on_battery(void) {
+    FILE *f = fopen("/sys/class/power_supply/AC/online", "r");
+    if (f) {
+        int online = 1;
+        if (fscanf(f, "%d", &online) == 1) {
+            fclose(f);
+            return (online == 0);
+        }
+        fclose(f);
+    }
+    f = fopen("/sys/class/power_supply/BAT0/status", "r");
+    if (f) {
+        char status[32] = {0};
+        if (fgets(status, sizeof(status), f)) {
+            fclose(f);
+            if (strstr(status, "Discharging")) {
+                return true;
+            }
+        } else {
+            fclose(f);
+        }
+    }
+    return false;
+}
+
+/**
+ * @brief Detect current hardware profile ("laptop_powersave", "laptop", or "home_pc").
  */
 static inline const char *bench_detect_profile(void) {
     const char *env = getenv("RBIPC_BENCH_PROFILE");
@@ -40,28 +68,40 @@ static inline const char *bench_detect_profile(void) {
         return env;
     }
 
+    bool is_laptop_hw = false;
     char host[64] = {0};
     if (gethostname(host, sizeof(host) - 1) == 0) {
         if (strstr(host, "LAPTOP") || strstr(host, "laptop")) {
-            return "laptop";
+            is_laptop_hw = true;
         }
     }
 
-    long procs = sysconf(_SC_NPROCESSORS_ONLN);
-    if (procs > 0 && procs <= 4) {
-        return "laptop";
+    if (!is_laptop_hw) {
+        long procs = sysconf(_SC_NPROCESSORS_ONLN);
+        if (procs > 0 && procs <= 4) {
+            is_laptop_hw = true;
+        }
     }
 
-    FILE *f = fopen("/proc/cpuinfo", "r");
-    if (f) {
-        char line[256];
-        while (fgets(line, sizeof(line), f)) {
-            if (strstr(line, "model name") && (strstr(line, "6300U") || strstr(line, "Mobile") || strstr(line, "Laptop"))) {
-                fclose(f);
-                return "laptop";
+    if (!is_laptop_hw) {
+        FILE *f = fopen("/proc/cpuinfo", "r");
+        if (f) {
+            char line[256];
+            while (fgets(line, sizeof(line), f)) {
+                if (strstr(line, "model name") && (strstr(line, "6300U") || strstr(line, "Mobile") || strstr(line, "Laptop"))) {
+                    is_laptop_hw = true;
+                    break;
+                }
             }
+            fclose(f);
         }
-        fclose(f);
+    }
+
+    if (is_laptop_hw) {
+        if (bench_is_on_battery()) {
+            return "laptop_powersave";
+        }
+        return "laptop";
     }
 
     return "home_pc";
@@ -73,7 +113,7 @@ static inline const char *bench_detect_profile(void) {
 static inline void bench_get_hardware_info(bench_hardware_info_t *info) {
     memset(info, 0, sizeof(*info));
     info->profile_name = bench_detect_profile();
-    info->is_laptop = (strcmp(info->profile_name, "laptop") == 0);
+    info->is_laptop = (strncmp(info->profile_name, "laptop", 6) == 0);
 
     if (gethostname(info->hostname, sizeof(info->hostname) - 1) != 0) {
         strncpy(info->hostname, "unknown", sizeof(info->hostname) - 1);
@@ -131,7 +171,7 @@ static inline void bench_get_result_path(char *out_path, size_t max_len, const c
  */
 static inline uint64_t bench_scale_iterations(uint64_t default_iters, uint64_t laptop_iters) {
     const char *profile = bench_detect_profile();
-    if (strcmp(profile, "laptop") == 0) {
+    if (strncmp(profile, "laptop", 6) == 0) {
         return laptop_iters;
     }
     return default_iters;

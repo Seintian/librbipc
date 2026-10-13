@@ -182,6 +182,8 @@ rbipc_ring_t *rbipc_ring_alloc_handle(int fd, const char *RBIPC_RESTRICT name,
   ring->event_fd = -1;
   ring->owns_eventfd = false;
 
+  rbipc_sync_init_process();
+
   return ring;
 }
 

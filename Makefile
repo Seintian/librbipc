@@ -22,7 +22,7 @@ TEST_BINS = $(patsubst $(TESTDIR)/%.c, $(BINDIR)/%, $(TEST_SRCS))
 BENCH_SRCS = $(wildcard $(BENCHDIR)/*.c)
 BENCH_BINS = $(patsubst $(BENCHDIR)/%.c, $(BINDIR)/%, $(BENCH_SRCS))
 
-.PHONY: all clean test bench bench-laptop bench-home-pc coverage valgrind clang-tidy compile_commands docs tsan asan
+.PHONY: all clean test bench bench-laptop bench-laptop-powersave bench-home-pc coverage valgrind clang-tidy compile_commands docs tsan asan
 
 all: $(STATIC_LIB) $(SHARED_LIB) $(TEST_BINS) compile_commands.json
 
@@ -74,6 +74,16 @@ bench-laptop: $(STATIC_LIB) $(BENCH_BINS)
 	@for b in $(BENCH_BINS); do \
 		echo "--> Running $$b ..."; \
 		RBIPC_BENCH_PROFILE=laptop $$b || exit 1; \
+		echo ""; \
+	done
+
+bench-laptop-powersave: $(STATIC_LIB) $(BENCH_BINS)
+	@echo "=================================================="
+	@echo " Running Benchmark Suite (Laptop Power-Save Mode) "
+	@echo "=================================================="
+	@for b in $(BENCH_BINS); do \
+		echo "--> Running $$b ..."; \
+		RBIPC_BENCH_PROFILE=laptop_powersave $$b || exit 1; \
 		echo ""; \
 	done
 
