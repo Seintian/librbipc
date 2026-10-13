@@ -256,3 +256,27 @@ int rbipc_futex2_wait_slot_or_shutdown(const _Atomic uint64_t *slot_seq,
   }
   return rc;
 }
+
+RBIPC_LEAF
+int rbipc_futex_wake_op(_Atomic uint32_t *uaddr1, int val1,
+                        _Atomic uint32_t *uaddr2, int val2,
+                        uint32_t op, uint32_t oparg,
+                        uint32_t cmp, uint32_t cmparg) {
+#if defined(__linux__) && defined(FUTEX_WAKE_OP)
+  if (RBIPC_UNLIKELY(rbipc_is_null(uaddr1) || rbipc_is_null(uaddr2))) {
+    return -EINVAL;
+  }
+  uint32_t val3 = (((op & 0x0fU) << 28U) | ((cmp & 0x0fU) << 24U) |
+                   ((oparg & 0x0fffU) << 12U) | (cmparg & 0x0fffU));
+  long ret = syscall(SYS_futex, (uint32_t *)uaddr1, FUTEX_WAKE_OP, val1, val2,
+                     (uint32_t *)uaddr2, val3);
+  if (ret < 0) {
+    return -errno;
+  }
+  return (int)ret;
+#else
+  (void)uaddr1; (void)val1; (void)uaddr2; (void)val2;
+  (void)op; (void)oparg; (void)cmp; (void)cmparg;
+  return -ENOSYS;
+#endif
+}

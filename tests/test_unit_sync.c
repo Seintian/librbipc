@@ -327,6 +327,24 @@ static void test_futex2_waitv(void) {
     assert(rbipc_sync_wait_registered_or_shutdown(&state, NULL, &sync_waiters, &sflag) == RBIPC_ERR_INVAL);
 }
 
+static void test_futex_wake_op(void) {
+    /* Parameter validation */
+    _Atomic uint32_t u1 = 0;
+    _Atomic uint32_t u2 = 10;
+    assert(rbipc_futex_wake_op(NULL, 1, &u2, 1, FUTEX_OP_ADD, 1, FUTEX_OP_CMP_GT, 0) == -EINVAL);
+    assert(rbipc_futex_wake_op(&u1, 1, NULL, 1, FUTEX_OP_ADD, 1, FUTEX_OP_CMP_GT, 0) == -EINVAL);
+
+    /* Atomic secondary modification with conditional wake */
+    int rc = rbipc_futex_wake_op(&u1, 0, &u2, 1, FUTEX_OP_ADD, 5, FUTEX_OP_CMP_GT, 0);
+#if defined(__linux__)
+    assert(rc >= 0);
+    /* u2 was 10, added 5 -> should now be 15 */
+    assert(atomic_load(&u2) == 15);
+#else
+    assert(rc == -ENOSYS);
+#endif
+}
+
 int main(void) {
     printf("[test_unit_sync] Running tests...\n");
     test_sync_state();
@@ -336,6 +354,7 @@ int main(void) {
     test_wait_policy_api();
     test_hardware_wait();
     test_futex2_waitv();
+    test_futex_wake_op();
     printf("[test_unit_sync] All tests passed!\n");
     return 0;
 }

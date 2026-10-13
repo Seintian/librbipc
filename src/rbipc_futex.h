@@ -53,6 +53,16 @@
 #define FUTEX_WAITV_MAX 128
 #endif
 
+#ifndef FUTEX_WAKE_OP
+#define FUTEX_WAKE_OP 5
+#endif
+#ifndef FUTEX_OP_ADD
+#define FUTEX_OP_ADD 1
+#endif
+#ifndef FUTEX_OP_CMP_GT
+#define FUTEX_OP_CMP_GT 4
+#endif
+
 #if !defined(__linux__) || !defined(FUTEX_32)
 /**
  * @struct futex_waitv
@@ -186,5 +196,26 @@ int rbipc_futex2_wait_slot_or_shutdown(const _Atomic uint64_t *slot_seq,
                                        uint64_t expected_seq,
                                        const _Atomic uint32_t *shutdown_flag,
                                        uint64_t timeout_ns);
+
+/**
+ * @brief Atomically modify a secondary futex word and wake waiters on two distinct
+ * futex words in a single kernel syscall via FUTEX_WAKE_OP.
+ *
+ * @param[in,out] uaddr1 First futex word to unconditionally wake up to @p val1 waiters on.
+ * @param[in]     val1   Maximum number of waiters to wake on @p uaddr1.
+ * @param[in,out] uaddr2 Second futex word to atomically modify and conditionally wake on.
+ * @param[in]     val2   Maximum number of waiters to wake on @p uaddr2 if condition holds.
+ * @param[in]     op     Arithmetic operation to apply to @p uaddr2 (e.g. FUTEX_OP_ADD).
+ * @param[in]     oparg  Argument for @p op (e.g. 1).
+ * @param[in]     cmp    Comparison operator against old value of @p uaddr2 (e.g. FUTEX_OP_CMP_GT).
+ * @param[in]     cmparg Value to compare old value against (e.g. 0).
+ *
+ * @return Total number of awakened waiters on success, or negative errno on error.
+ */
+RBIPC_LEAF
+int rbipc_futex_wake_op(_Atomic uint32_t *uaddr1, int val1,
+                        _Atomic uint32_t *uaddr2, int val2,
+                        uint32_t op, uint32_t oparg,
+                        uint32_t cmp, uint32_t cmparg);
 
 #endif /* RBIPC_FUTEX_H */
