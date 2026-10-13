@@ -144,6 +144,24 @@ rbipc_sync_wait_registered_or_shutdown(
     _Atomic uint32_t *futex_waiters, const _Atomic uint32_t *shutdown_flag);
 
 /**
+ * @brief Execute a passive futex wait on direct slot sequence or proxy sequence via sys_futex_waitv.
+ *
+ * @param[in,out] state         Thread-local synchronization state tracking deadline.
+ * @param[in]     slot_seq      Direct 64-bit slot sequence pointer.
+ * @param[in]     expected_seq  Expected 64-bit sequence value.
+ * @param[in]     proxy_seq     Shared proxy 32-bit futex sequence word.
+ * @param[in,out] futex_waiters Pointer to atomic waiter count in shared memory.
+ * @param[in]     shutdown_flag Pointer to cooperative shutdown flag (or NULL).
+ *
+ * @return 0 on continued wait / successful wake, RBIPC_ERR_TIMEOUT on expiration.
+ */
+RBIPC_NODISCARD RBIPC_LEAF int
+rbipc_sync_wait_slot_registered(
+    rbipc_sync_state_t *RBIPC_RESTRICT state, const _Atomic uint64_t *slot_seq,
+    uint64_t expected_seq, _Atomic uint32_t *proxy_seq,
+    _Atomic uint32_t *futex_waiters, const _Atomic uint32_t *shutdown_flag);
+
+/**
  * @brief Execute a passive backoff step via Linux sys_futex suspension.
  *
  * @details Evaluates deadline expiration. If time remains, increments the

@@ -208,6 +208,47 @@ int rbipc_sync_wait_registered_or_shutdown(
   return 0;
 }
 
+RBIPC_LEAF
+int rbipc_sync_wait_slot_registered(
+    rbipc_sync_state_t *RBIPC_RESTRICT state, const _Atomic uint64_t *slot_seq,
+    uint64_t expected_seq, _Atomic uint32_t *proxy_seq,
+    _Atomic uint32_t *futex_waiters, const _Atomic uint32_t *shutdown_flag) {
+  if (RBIPC_UNLIKELY(!state || !slot_seq)) {
+    rbipc_sync_deregister_waiter(futex_waiters);
+    return RBIPC_ERR_INVAL;
+  }
+
+  uint64_t now = rbipc_clock_monotonic_ns();
+  if (RBIPC_UNLIKELY(rbipc_sync_is_expired(state, now))) {
+    rbipc_sync_deregister_waiter(futex_waiters);
+    return RBIPC_ERR_TIMEOUT;
+  }
+
+  uint64_t remaining_ns = RBIPC_FUTEX_PERIOD_NS;
+  if (state->has_deadline) {
+    if (RBIPC_UNLIKELY(now >= state->deadline_ns)) {
+      rbipc_sync_deregister_waiter(futex_waiters);
+      return RBIPC_ERR_TIMEOUT;
+    }
+    remaining_ns = state->deadline_ns - now;
+    if (remaining_ns > RBIPC_FUTEX_PERIOD_NS) {
+      remaining_ns = RBIPC_FUTEX_PERIOD_NS;
+    }
+  }
+
+  int rc = rbipc_futex2_wait_slot_or_proxy_or_shutdown(
+      slot_seq, expected_seq, proxy_seq, shutdown_flag, remaining_ns);
+  rbipc_sync_deregister_waiter(futex_waiters);
+
+  if (rc == RBIPC_ERR_TIMEOUT && state->has_deadline) {
+    uint64_t post_now = rbipc_clock_monotonic_ns();
+    if (post_now >= state->deadline_ns) {
+      return RBIPC_ERR_TIMEOUT;
+    }
+  }
+  return (rc == RBIPC_ERR_TIMEOUT) ? 0 : rc;
+}
+
 /**
  * @brief Execute futex wait when waiter is already registered.
  */

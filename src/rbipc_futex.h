@@ -226,6 +226,23 @@ int rbipc_futex2_wait_slot_or_shutdown(const _Atomic uint64_t *slot_seq,
                                        uint64_t timeout_ns);
 
 /**
+ * @brief Wait on direct low-word slot sequence, proxy sequence, or shutdown flag via sys_futex_waitv.
+ *
+ * @param[in] slot_seq      Pointer to 64-bit atomic sequence word.
+ * @param[in] expected_seq  Expected 64-bit sequence value.
+ * @param[in] proxy_seq     Shared proxy 32-bit sequence word.
+ * @param[in] shutdown_flag Pointer to 32-bit cooperative shutdown flag (expected 0).
+ * @param[in] timeout_ns    Relative timeout in nanoseconds (UINT64_MAX for unbounded).
+ *
+ * @return 0 on success / condition satisfied, RBIPC_ERR_TIMEOUT on expiration, or error.
+ */
+RBIPC_LEAF
+int rbipc_futex2_wait_slot_or_proxy_or_shutdown(
+    const _Atomic uint64_t *slot_seq, uint64_t expected_seq,
+    _Atomic uint32_t *proxy_seq, const _Atomic uint32_t *shutdown_flag,
+    uint64_t timeout_ns);
+
+/**
  * @brief Atomically modify a secondary futex word and wake waiters on two distinct
  * futex words in a single kernel syscall via FUTEX_WAKE_OP.
  *

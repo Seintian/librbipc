@@ -258,6 +258,81 @@ int rbipc_futex2_wait_slot_or_shutdown(const _Atomic uint64_t *slot_seq,
 }
 
 RBIPC_LEAF
+int rbipc_futex2_wait_slot_or_proxy_or_shutdown(
+    const _Atomic uint64_t *slot_seq, uint64_t expected_seq,
+    _Atomic uint32_t *proxy_seq, const _Atomic uint32_t *shutdown_flag,
+    uint64_t timeout_ns) {
+  if (RBIPC_UNLIKELY(rbipc_is_null(slot_seq))) {
+    return RBIPC_ERR_INVAL;
+  }
+
+  if (rbipc_futex_has_waitv()) {
+    struct futex_waitv waiters[3];
+    unsigned int nr = 0;
+    bool use_u64 = rbipc_futex2_has_u64();
+
+    waiters[nr].val = use_u64 ? expected_seq : (uint32_t)expected_seq;
+    waiters[nr].uaddr = (uintptr_t)slot_seq;
+    waiters[nr].flags = use_u64 ? FUTEX2_SIZE_U64 : FUTEX2_SIZE_U32;
+    waiters[nr].__reserved = 0;
+    nr++;
+
+    if (proxy_seq) {
+      waiters[nr].val = atomic_load_explicit(proxy_seq, memory_order_relaxed);
+      waiters[nr].uaddr = (uintptr_t)proxy_seq;
+      waiters[nr].flags = FUTEX2_SIZE_U32;
+      waiters[nr].__reserved = 0;
+      nr++;
+    }
+
+    if (shutdown_flag) {
+      waiters[nr].val = 0;
+      waiters[nr].uaddr = (uintptr_t)shutdown_flag;
+      waiters[nr].flags = FUTEX2_SIZE_U32;
+      waiters[nr].__reserved = 0;
+      nr++;
+    }
+
+    int rc = rbipc_futex_waitv(waiters, nr, timeout_ns);
+    if (rc >= 0) {
+      return RBIPC_OK;
+    }
+    if (rc == -EAGAIN || rc == -EWOULDBLOCK) {
+      return RBIPC_OK;
+    }
+    if (rc == -ETIMEDOUT) {
+      return RBIPC_ERR_TIMEOUT;
+    }
+    if (rc != -ENOSYS) {
+      return rc;
+    }
+  }
+
+  /* Fallback: wait on proxy_seq if available, else slot_seq */
+  if (proxy_seq) {
+    uint32_t cur_val = atomic_load_explicit(proxy_seq, memory_order_relaxed);
+    return rbipc_futex_wait_or_shutdown(proxy_seq, cur_val, shutdown_flag,
+                                        timeout_ns);
+  }
+
+  struct timespec ts;
+  struct timespec *pts = NULL;
+  if (timeout_ns != UINT64_MAX) {
+    rbipc_ns_to_timespec(timeout_ns, &ts);
+    pts = &ts;
+  }
+  _Atomic uint32_t *low_uaddr = (_Atomic uint32_t *)(void *)slot_seq;
+  int rc = rbipc_futex_wait(low_uaddr, (uint32_t)expected_seq, pts);
+  if (rc == 0 || rc == -EAGAIN || rc == -EWOULDBLOCK) {
+    return RBIPC_OK;
+  }
+  if (rc == -ETIMEDOUT) {
+    return RBIPC_ERR_TIMEOUT;
+  }
+  return rc;
+}
+
+RBIPC_LEAF
 int rbipc_futex_wake_op(_Atomic uint32_t *uaddr1, int val1,
                         _Atomic uint32_t *uaddr2, int val2,
                         uint32_t op, uint32_t oparg,
