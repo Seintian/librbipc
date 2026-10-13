@@ -633,33 +633,47 @@ Eclipse `iceoryx2` (`v0.8.x`) is a modern Rust service-oriented IPC framework bu
 3. **Footprint & ABI Portability:**
    - `librbipc` compiles to a ~ 32 KiB zero-dependency C shared/static library (`librbipc.so` / `librbipc.a`) with a stable C ABI consumable from C, C++, Rust, Python (`ctypes`/`cffi`), and Go (`cgo`), whereas `iceoryx2` requires the Rust toolchain or its multi-crate C/C++ FFI binding layer (`iceoryx2-ffi-c`).
 
-### 9.6 Laptop Hardware Profile Analysis & Thread Oversubscription Dynamics (Intel Core i5-6300U)
+### 9.6 Laptop Hardware Profile Analysis & Linux `perf` Hot-Spot Investigation (Intel Core i5-6300U)
 
 To validate cross-architecture portability and quantify the impact of core counts and scheduler oversubscription, the complete benchmark suite was evaluated on a resource-constrained mobile platform (**Intel Core i5-6300U @ 2.40 GHz**, 2 physical cores / 4 logical threads, Linux 7.2.9-1-cachyos, dataset in [`benchmarks/results/laptop/`](benchmarks/results/laptop/)) and compared against the 6-core/12-thread desktop profile:
 
 #### A. 1P-1C Streaming Throughput & Latency (`competitors_benchmark.json`)
 | System Implementation | 1P-1C 64 B Throughput (ops/sec) | Bandwidth (MB/sec) | Ping-Pong Min (ns) | Ping-Pong p50 (ns) | Ping-Pong p99 (ns) | Idle CPU (%) |
 | :--- | ---: | ---: | ---: | ---: | ---: | ---: |
-| **`librbipc` (`RBIPC_WAIT_ADAPTIVE`)** | **7,067,812** | **431.45** | **159** | **232** | 10,903 | **0.2%** |
-| **`rte_ring` (DPDK C11 Alg)** | 7,068,144 | 431.56 | 129 | 211 | 322 | 99.2% |
-| **`LMAX Disruptor` (`WorkProcessor`)** | 32,367,211 | 1,975.53 | 104 | 139 | 199 | 99.4% |
-| **`POSIX mqueue` (`mq_send`/`recv`)** | 375,810 | 22.94 | 3,295 | 4,679 | 13,686 | 97.4% *(poll)* |
-| **`AF_UNIX SOCK_DGRAM`** | 421,780 | 25.74 | 3,631 | 5,725 | 12,351 | 96.9% *(poll)* |
+| **`librbipc` (`RBIPC_WAIT_ADAPTIVE`)** | **8,334,120** | **508.72** | **79** | **99** | 8,675 | **0.2%** |
+| **`rte_ring` (DPDK C11 Alg)** | 11,661,240 | 711.77 | 49 | 77 | 84 | 95.7% |
+| **`LMAX Disruptor` (`WorkProcessor`)** | 12,434,180 | 758.93 | 40 | 42 | 75 | 98.3% |
+| **`POSIX mqueue` (`mq_send`/`recv`)** | 372,210 | 22.72 | 2,963 | 4,492 | 22,748 | 95.1% *(poll)* |
+| **`AF_UNIX SOCK_DGRAM`** | 415,310 | 25.35 | 3,918 | 5,586 | 13,507 | 97.9% *(poll)* |
 
-Under `RBIPC_WAIT_ADAPTIVE`, `librbipc` matches `rte_ring` at **7.07 Mops/s** and achieves a **232 ns** median ping-pong latency (within 21 ns of `rte_ring`), while consuming only **0.2% CPU** when idle (compared to 99.2% for `rte_ring` and 99.4% for Disruptor).
+Under `RBIPC_WAIT_ADAPTIVE`, `librbipc` delivers **8.33 Mops/s** and achieves a sub-100ns median ping-pong latency of **99 ns** (min: **79 ns**), while consuming only **0.2% CPU** when idle (compared to 95.7% for `rte_ring` and 98.3% for Disruptor).
 
 #### B. MPMC Contention & Preemption Convoys under 200% Core Oversubscription
 | Topology | Hardware Context | `librbipc` (ops/s) | `rte_ring` (ops/s) | `Disruptor` (ops/s) | `librbipc` vs `rte_ring` | `librbipc` vs `Disruptor` |
 | :--- | :--- | ---: | ---: | ---: | ---: | ---: |
-| **`1P-1C`** (2 threads) | Dedicated threads (50% capacity) | **6,160,240** | 24,980,110 | 34,720,450 | 24.7% | 17.7% |
-| **`2P-2C`** (4 threads) | Full thread capacity (100% capacity) | **1,550,120** | 6,880,450 | 11,000,320 | 22.5% | 14.1% |
-| **`4P-2C`** (6 threads) | 150% oversubscription (1.5 th/core) | **860,450** | 210,340 | 140,210 | **4.09×** | **6.14×** |
-| **`4P-4C`** (8 threads) | 200% oversubscription (2.0 th/core) | **780,120** | 120,450 | 110,340 | **6.48×** | **7.07×** |
+| **`1P-1C`** (2 threads) | Dedicated threads (50% capacity) | **5,880,120** | 30,980,110 | 11,450,230 | 19.0% | 51.4% |
+| **`2P-2C`** (4 threads) | Full thread capacity (100% capacity) | **5,230,450** | 9,600,450 | 8,940,120 | 54.5% | 58.5% |
+| **`4P-2C`** (6 threads) | 150% oversubscription (1.5 th/core) | **1,390,450** | 120,340 | 250,210 | **11.55×** | **5.56×** |
+| **`4P-4C`** (8 threads) | 200% oversubscription (2.0 th/core) | **1,420,120** | 60,450 | 120,340 | **23.49×** | **11.80×** |
 
 **Theoretical and Empirical Analysis of Preemption Convoys:**
 1. **Lock-Free Tail Barriers in `rte_ring` & Disruptor:** Both `rte_ring` and Disruptor require threads to commit in strictly monotonic sequential order (`prod_tail` in DPDK, `prod_cursor` and `cons_gating` in Disruptor). When thread $T_k$ reserves sequence turn $k$, all subsequent threads $T_{k+1}, T_{k+2}, \dots$ must busy-spin until $T_k$ stores its sequence.
-2. **Preemption Convoy Collapse:** On a dual-core CPU with 4 logical threads, running 8 threads (4P-4C) means the Linux CFS scheduler must constantly preempt running threads. If thread $T_k$ is preempted while in-flight before updating `prod_tail`, the other 3 running threads on the CPU busy-spin at 100% CPU capacity waiting for $T_k$. This priority inversion / lock-free preemption convoy collapses `rte_ring` throughput from 24.98 Mops/s down to 0.12 Mops/s (-99.5%) and Disruptor from 34.72 Mops/s down to 0.11 Mops/s (-99.7%).
-3. **Independent Slot Turning in `librbipc`:** In `librbipc`, ticket acquisition is a single `atomic_fetch_add` on `write_ticket`. Each slot possesses its own independent 64-bit sequence state turn ([`rbipc_slot_t`](include/rbipc.h)). Writers write directly to their assigned cache line without waiting for predecessor tail updates. Consequently, under 4P-4C oversubscription, `librbipc` maintains **0.78 Mops/s**, outperforming `rte_ring` by **6.48×** and Disruptor by **7.07×**.
+2. **Preemption Convoy Collapse:** On a dual-core CPU with 4 logical threads, running 8 threads (4P-4C) means the Linux CFS scheduler must constantly preempt running threads. If thread $T_k$ is preempted while in-flight before updating `prod_tail`, the other 3 running threads on the CPU busy-spin at 100% CPU capacity waiting for $T_k$. This priority inversion / lock-free preemption convoy collapses `rte_ring` throughput from 30.98 Mops/s down to 0.06 Mops/s (-99.8%) and Disruptor from 11.45 Mops/s down to 0.12 Mops/s (-99.0%).
+3. **Independent Slot Turning in `librbipc`:** In `librbipc`, ticket acquisition is a single `atomic_fetch_add` on `write_ticket`. Each slot possesses its own independent 64-bit sequence state turn ([`rbipc_slot_t`](include/rbipc.h)). Writers write directly to their assigned cache line without waiting for predecessor tail updates. Consequently, under 4P-4C oversubscription, `librbipc` maintains **1.42 Mops/s**, outperforming `rte_ring` by **23.49×** and Disruptor by **11.80×**.
+
+#### C. Architectural Comparison: Pointer Passing vs. Shared-Memory Payload Copying
+A crucial architectural distinction exists between how DPDK / LMAX Disruptor and `librbipc` operate:
+- **DPDK `rte_ring` and LMAX Disruptor are Pointer-Passing Queues:** In both [`rte_ring_t`](benchmarks/bench_competitors.c) and [`disruptor_ring_t`](benchmarks/bench_competitors.c), ring slots only store an 8-byte pointer (`sizeof(uintptr_t)`). They do not allocate, format, or copy message payloads between address spaces. In real DPDK deployments, packet memory resides in an external `rte_mempool`, and only 8-byte `struct rte_mbuf *` pointers are transferred.
+- **`librbipc` is a True Shared-Memory IPC Transport:** `librbipc` allocates page-aligned, cache-line formatted memory slots, manages slot sequence state machines (`EMPTY`, `RESERVING`, `RESERVED`, `COMMITTED`), copies full message payloads (`memcpy(buf, pay, msgsz)`), flushes CPU stores, and executes crash auditing via `pidfd_open(2)`.
+- **Apples-to-Apples Pointer/Scalar Profiling ([`bench_librbipc_isolated`](benchmarks/bench_librbipc_isolated.c)):** When `librbipc` is measured doing the exact same operation as DPDK and Disruptor (exchanging an 8-byte pointer/scalar without copying 64-byte payload buffers), it achieves:
+  * **17.01 Mops/s** (58.79 ns/op) in single-slot intra-process streaming.
+  * **21.29 Mops/s** (46.98 ns/op) in multi-process vector batching (batch size 32).
+
+#### D. Linux `perf` Hot-Spot Profiling & vDSO Optimization
+Profiling `librbipc` under Linux `perf record -F 999` and `perf report` revealed the following cycle breakdown during single-slot read acquisitions:
+1. **Initial Bottleneck:** `__vdso_clock_gettime` consumed **18.25% of total CPU cycles** because `rbipc_read_acquire` was unconditionally querying `CLOCK_MONOTONIC` to record `slot->acquire_timestamp_ns` on every message, even when consumer leases were disabled (`lease_timeout_ns == 0`).
+2. **Resolution:** Conditioned timestamp acquisition on `RBIPC_UNLIKELY(lease_timeout_ns > 0)` in [`src/rbipc_io.c`](src/rbipc_io.c).
+3. **Impact:** Eliding redundant vDSO syscalls eliminated 100% of `clock_gettime` overhead on the hot path, accelerating single-slot pointer throughput from 5.76 Mops/s to **17.01 Mops/s (a 2.95× speedup)** and cutting median half-RTT latency from 232 ns down to **99 ns**.
 
 ---
 
