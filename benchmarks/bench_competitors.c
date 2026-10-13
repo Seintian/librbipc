@@ -148,8 +148,9 @@ static int rte_mp_enqueue(rte_ring_t *r, uintptr_t val) {
                 memory_order_acquire, memory_order_relaxed)) break;
     }
     rte_slots(r)[ph & r->mask] = val;
+    uint32_t tail_spins = 0;
     while (atomic_load_explicit(&r->prod_tail, memory_order_relaxed) != ph)
-        __asm__ volatile("pause" ::: "memory");
+        bench_spin_pause(&tail_spins);
     atomic_store_explicit(&r->prod_tail, pn, memory_order_release);
     return 0;
 }
@@ -165,8 +166,9 @@ static int rte_mc_dequeue(rte_ring_t *r, uintptr_t *out) {
                 memory_order_acquire, memory_order_relaxed)) break;
     }
     *out = rte_slots(r)[ch & r->mask];
+    uint32_t cons_spins = 0;
     while (atomic_load_explicit(&r->cons_tail, memory_order_relaxed) != ch)
-        __asm__ volatile("pause" ::: "memory");
+        bench_spin_pause(&cons_spins);
     atomic_store_explicit(&r->cons_tail, cn, memory_order_release);
     return 0;
 }

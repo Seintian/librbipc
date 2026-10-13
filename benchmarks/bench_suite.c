@@ -730,8 +730,9 @@ int main(int argc, char **argv) {
     idle_metrics_t idle;
     run_bench_idle(&idle);
 
+    int ping_pong_iters = (int)bench_scale_iterations(100000, 20000);
     latency_dist_t lat;
-    run_bench_ping_pong(100000, &lat);
+    run_bench_ping_pong(ping_pong_iters, &lat);
 
     latency_sla_result_t sla_res = {0};
     bool sla_ok = verify_latency_regression(&lat, strict_regression, custom_p99_9_us, custom_max_us, &sla_res);
@@ -740,31 +741,40 @@ int main(int argc, char **argv) {
         return 1;
     }
 
+    int stream_iters = (int)bench_scale_iterations(1000000, 200000);
     stream_metrics_t stream;
-    run_bench_streaming(1000000, &stream);
+    run_bench_streaming(stream_iters, &stream);
 
-    printf("\n[4/6] Running B-Queue Vector Batching Scaling (1,000,000 msgs each)...\n");
+    int batch_iters = (int)bench_scale_iterations(1000000, 200000);
+    printf("\n[4/6] Running B-Queue Vector Batching Scaling (%d msgs each)...\n", batch_iters);
     uint32_t batch_sizes[] = { 1, 4, 8, 16, 32, 64, 128 };
     size_t num_batches = sizeof(batch_sizes) / sizeof(batch_sizes[0]);
     batch_result_t batch_results[num_batches];
     for (size_t i = 0; i < num_batches; ++i) {
-        run_bench_batching(batch_sizes[i], 1000000, &batch_results[i]);
+        run_bench_batching(batch_sizes[i], batch_iters, &batch_results[i]);
     }
 
-    printf("\n[5/6] Running Payload Size Scaling (200,000 msgs each)...\n");
+    printf("\n[5/6] Running Payload Size Scaling...\n");
     uint32_t payloads[] = { 64, 256, 1024, 4096, 16384, 65536, 262144, 1048576, 4194304, 16777216 };
     size_t num_payloads = sizeof(payloads) / sizeof(payloads[0]);
     payload_result_t payload_results[num_payloads];
     for (size_t i = 0; i < num_payloads; ++i) {
-        run_bench_payload(payloads[i], 200000, &payload_results[i]);
+        int payload_iters = (int)bench_scale_iterations(200000, 50000);
+        if (payloads[i] >= 1048576) {
+            payload_iters = (int)bench_scale_iterations(10000, 2000);
+        } else if (payloads[i] >= 65536) {
+            payload_iters = (int)bench_scale_iterations(50000, 10000);
+        }
+        run_bench_payload(payloads[i], payload_iters, &payload_results[i]);
     }
 
-    printf("\n[6/6] Running MPMC Concurrent Contention Scalability (500,000 msgs each)...\n");
+    int mpmc_iters = (int)bench_scale_iterations(500000, 100000);
+    printf("\n[6/6] Running MPMC Concurrent Contention Scalability (%d msgs each)...\n", mpmc_iters);
     mpmc_result_t mpmc_results[4];
-    run_bench_mpmc(1, 1, 500000, &mpmc_results[0]);
-    run_bench_mpmc(2, 2, 500000, &mpmc_results[1]);
-    run_bench_mpmc(4, 2, 500000, &mpmc_results[2]);
-    run_bench_mpmc(4, 4, 500000, &mpmc_results[3]);
+    run_bench_mpmc(1, 1, mpmc_iters, &mpmc_results[0]);
+    run_bench_mpmc(2, 2, mpmc_iters, &mpmc_results[1]);
+    run_bench_mpmc(4, 2, mpmc_iters, &mpmc_results[2]);
+    run_bench_mpmc(4, 4, mpmc_iters, &mpmc_results[3]);
 
     /* Write JSON results file */
     char json_filename[256];
@@ -773,8 +783,16 @@ int main(int argc, char **argv) {
     bench_get_result_path(json_filename, sizeof(json_filename), leaf_name);
     FILE *fp = fopen(json_filename, "w");
     if (fp) {
+        bench_hardware_info_t hw;
+        bench_get_hardware_info(&hw);
         fprintf(fp, "{\n");
         fprintf(fp, "  \"tag\": \"%s\",\n", tag);
+        fprintf(fp, "  \"hardware\": {\n");
+        fprintf(fp, "    \"profile\": \"%s\",\n", hw.profile_name);
+        fprintf(fp, "    \"cpu\": \"%s\",\n", hw.cpu_model);
+        fprintf(fp, "    \"cores\": %d,\n    \"threads\": %d,\n", hw.physical_cores, hw.logical_threads);
+        fprintf(fp, "    \"hostname\": \"%s\",\n", hw.hostname);
+        fprintf(fp, "    \"kernel\": \"%s\"\n  },\n", hw.kernel);
         fprintf(fp, "  \"idle\": {\n");
         fprintf(fp, "    \"user_sec\": %.6f,\n", idle.user_sec);
         fprintf(fp, "    \"sys_sec\": %.6f,\n", idle.sys_sec);
