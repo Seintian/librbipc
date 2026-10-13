@@ -38,6 +38,9 @@ static void test_asymmetric_waiter_registration(void) {
     rbipc_sync_deregister_waiter(&waiters);
     assert(atomic_load(&waiters) == 0);
 
+    /* Explicit asymmetric barrier invocation */
+    rbipc_sync_asymmetric_barrier();
+
     /* Test wait registered timeout */
     _Atomic uint32_t futex_word;
     atomic_init(&futex_word, 0);

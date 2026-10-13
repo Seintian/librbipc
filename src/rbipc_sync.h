@@ -74,7 +74,17 @@ void rbipc_sync_state_init(rbipc_sync_state_t *RBIPC_RESTRICT state,
                            uint64_t timeout_ns);
 
 /**
- * @brief Increment active waiter counter using sequential consistency.
+ * @brief Execute an asymmetric memory barrier on the slow wait path (Linux sys_membarrier).
+ *
+ * @details Shifts the sequential consistency ordering tax away from the high-frequency
+ * producer/consumer commit and release fast paths onto this slow kernel sleep path.
+ * Forces a hardware memory barrier across all active execution cores/threads on the system.
+ */
+RBIPC_LEAF
+void rbipc_sync_asymmetric_barrier(void);
+
+/**
+ * @brief Increment active waiter counter and execute asymmetric memory barrier.
  *
  * @param[in,out] futex_waiters Atomic counter in shared memory.
  */

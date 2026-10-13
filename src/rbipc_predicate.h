@@ -336,7 +336,7 @@ RBIPC_INLINE RBIPC_PURE bool rbipc_sync_is_expired(const rbipc_sync_state_t *sta
  * @return true if waiter count > 0, false otherwise.
  */
 RBIPC_INLINE bool rbipc_sync_has_waiters(const _Atomic uint32_t *waiters) {
-    return waiters != NULL && atomic_load_explicit(waiters, memory_order_seq_cst) > 0;
+    return waiters != NULL && atomic_load_explicit(waiters, memory_order_acquire) > 0;
 }
 
 /**
@@ -346,7 +346,7 @@ RBIPC_INLINE bool rbipc_sync_has_waiters(const _Atomic uint32_t *waiters) {
  * @return true if @p waiters is NULL (defensive fallback) or waiter count > 0; false if 0 waiters.
  */
 RBIPC_INLINE bool rbipc_sync_should_wake(const _Atomic uint32_t *waiters) {
-    return !waiters || atomic_load_explicit(waiters, memory_order_seq_cst) > 0;
+    return !waiters || atomic_load_explicit(waiters, memory_order_acquire) > 0;
 }
 
 #endif /* RBIPC_PREDICATE_H */

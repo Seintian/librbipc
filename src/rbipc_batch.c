@@ -281,7 +281,7 @@ int rbipc_commit_write_batch(rbipc_ring_t *RBIPC_RESTRICT ring, uint32_t count,
 
   rbipc_batch_commit_slots(ring, count, tickets, written_lens);
 
-  atomic_thread_fence(memory_order_seq_cst);
+  atomic_signal_fence(memory_order_seq_cst);
   if (RBIPC_UNLIKELY(rbipc_sync_has_waiters(&hdr->futex_waiters))) {
     rbipc_sync_wake_n(&hdr->futex_seq, &hdr->futex_waiters, count);
   }
@@ -394,7 +394,7 @@ int rbipc_read_release_batch(rbipc_ring_t *RBIPC_RESTRICT ring, uint32_t count,
   rbipc_shm_header_t *hdr = ring->hdr;
   int rc = rbipc_batch_release_slots(ring, count, tickets);
 
-  atomic_thread_fence(memory_order_seq_cst);
+  atomic_signal_fence(memory_order_seq_cst);
   if (RBIPC_UNLIKELY(rbipc_sync_has_waiters(&hdr->write_waiters))) {
     rbipc_sync_wake_n(&hdr->write_futex_seq, &hdr->write_waiters, count);
   }

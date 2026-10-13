@@ -363,7 +363,7 @@ int rbipc_commit_write(rbipc_ring_t *RBIPC_RESTRICT ring, uint64_t ticket,
 
   rbipc_slot_commit(slot, ticket, written_len);
 
-  atomic_thread_fence(memory_order_seq_cst);
+  atomic_signal_fence(memory_order_seq_cst);
   if (RBIPC_UNLIKELY(rbipc_sync_has_waiters(&hdr->futex_waiters))) {
     rbipc_sync_wake_one(&hdr->futex_seq, &hdr->futex_waiters);
   }
@@ -384,7 +384,7 @@ int rbipc_abort_write(rbipc_ring_t *RBIPC_RESTRICT ring, uint64_t ticket) {
       (rbipc_slot_t *)RBIPC_ASSUME_ALIGNED(&ring->slots[idx], RBIPC_CACHE_LINE);
 
   if (rbipc_slot_poison(slot, ticket)) {
-    atomic_thread_fence(memory_order_seq_cst);
+    atomic_signal_fence(memory_order_seq_cst);
     if (RBIPC_UNLIKELY(rbipc_sync_has_waiters(&hdr->futex_waiters))) {
       rbipc_sync_wake_all(&hdr->futex_seq, &hdr->futex_waiters);
     }
@@ -470,7 +470,7 @@ int rbipc_read_release(rbipc_ring_t *RBIPC_RESTRICT ring, uint64_t ticket) {
 
   bool released = rbipc_slot_release_ex(slot, ticket, cap, ring->cached_pid);
 
-  atomic_thread_fence(memory_order_seq_cst);
+  atomic_signal_fence(memory_order_seq_cst);
   if (RBIPC_UNLIKELY(rbipc_sync_has_waiters(&hdr->write_waiters))) {
     rbipc_sync_wake_one(&hdr->write_futex_seq, &hdr->write_waiters);
   }

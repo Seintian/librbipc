@@ -96,7 +96,7 @@ int rbipc_publish(rbipc_ring_t *ring, const void *buf, uint32_t len) {
       atomic_fetch_add_explicit(&hdr->write_ticket, 1, memory_order_relaxed);
   rbipc_pubsub_commit_slot_payload(ring, ticket, buf, len);
 
-  atomic_thread_fence(memory_order_seq_cst);
+  atomic_signal_fence(memory_order_seq_cst);
   if (RBIPC_UNLIKELY(rbipc_sync_has_waiters(&hdr->futex_waiters))) {
     rbipc_sync_wake_all(&hdr->futex_seq, &hdr->futex_waiters);
   }
@@ -126,7 +126,7 @@ int rbipc_publish_batch(rbipc_ring_t *ring, uint32_t count,
                                      lens[i]);
   }
 
-  atomic_thread_fence(memory_order_seq_cst);
+  atomic_signal_fence(memory_order_seq_cst);
   if (RBIPC_UNLIKELY(rbipc_sync_has_waiters(&hdr->futex_waiters))) {
     rbipc_sync_wake_all(&hdr->futex_seq, &hdr->futex_waiters);
   }

@@ -25,6 +25,24 @@
 #include <inttypes.h>
 #include <sched.h>
 #include <stdio.h>
+#include <unistd.h>
+
+#if defined(__linux__)
+#include <linux/membarrier.h>
+#include <sys/syscall.h>
+
+#ifndef SYS_membarrier
+#if defined(__x86_64__)
+#define SYS_membarrier 324
+#elif defined(__aarch64__)
+#define SYS_membarrier 283
+#elif defined(__i386__)
+#define SYS_membarrier 375
+#elif defined(__arm__)
+#define SYS_membarrier 389
+#endif
+#endif
+#endif
 
 /**
  * @brief Initialize synchronization state and deadline timestamp.
@@ -75,12 +93,51 @@ rbipc_sync_calc_timeout_spec(const rbipc_sync_state_t *RBIPC_RESTRICT state,
 }
 
 /**
- * @brief Register intent to wait by incrementing waiter counter.
+ * @brief Execute an asymmetric memory barrier on the slow wait path (Linux sys_membarrier).
+ */
+RBIPC_LEAF
+void rbipc_sync_asymmetric_barrier(void) {
+#if defined(__linux__) && defined(SYS_membarrier)
+  static int s_membarrier_cmd = -1;
+  if (RBIPC_UNLIKELY(s_membarrier_cmd == -1)) {
+    long sup_ret = syscall(SYS_membarrier, MEMBARRIER_CMD_QUERY, 0, 0);
+    if (sup_ret > 0) {
+      uint32_t sup = (uint32_t)sup_ret;
+      if ((sup & (uint32_t)MEMBARRIER_CMD_GLOBAL_EXPEDITED) != 0U) {
+        if (syscall(SYS_membarrier, MEMBARRIER_CMD_REGISTER_GLOBAL_EXPEDITED, 0,
+                    0) == 0) {
+          s_membarrier_cmd = MEMBARRIER_CMD_GLOBAL_EXPEDITED;
+        }
+      }
+      if (s_membarrier_cmd == -1) {
+        if ((sup & (uint32_t)MEMBARRIER_CMD_GLOBAL) != 0U) {
+          s_membarrier_cmd = MEMBARRIER_CMD_GLOBAL;
+        } else {
+          s_membarrier_cmd = 0;
+        }
+      }
+    } else {
+      s_membarrier_cmd = 0;
+    }
+  }
+
+  if (RBIPC_LIKELY(s_membarrier_cmd > 0)) {
+    if (syscall(SYS_membarrier, s_membarrier_cmd, 0, 0) == 0) {
+      return;
+    }
+  }
+#endif
+  atomic_thread_fence(memory_order_seq_cst);
+}
+
+/**
+ * @brief Register intent to wait by incrementing waiter counter and issuing asymmetric barrier.
  */
 RBIPC_LEAF
 void rbipc_sync_register_waiter(_Atomic uint32_t *futex_waiters) {
   if (futex_waiters) {
     atomic_fetch_add_explicit(futex_waiters, 1, memory_order_seq_cst);
+    rbipc_sync_asymmetric_barrier();
   }
 }
 
