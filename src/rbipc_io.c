@@ -82,17 +82,18 @@ RBIPC_INLINE int rbipc_io_complete_read_acquisition(
     uint32_t *RBIPC_RESTRICT out_len, uint64_t *RBIPC_RESTRICT out_ticket) {
   *out_ticket = ticket;
   uint32_t state = atomic_load_explicit(&slot->state, memory_order_acquire);
+  uint64_t lease_timeout = atomic_load_explicit(&ring->hdr->lease_timeout_ns, memory_order_relaxed);
+  uint64_t acq_ts = RBIPC_UNLIKELY(lease_timeout > 0) ? rbipc_clock_monotonic_ns() : 0;
+
   if (RBIPC_LIKELY(rbipc_slot_state_is_committed(state))) {
-    rbipc_slot_mark_acquired(slot, ring->cached_pid,
-                             rbipc_clock_monotonic_ns());
+    rbipc_slot_mark_acquired(slot, ring->cached_pid, acq_ts);
     *out_buf = rbipc_io_calc_slot_ptr(ring, ticket);
     *out_len = atomic_load_explicit(&slot->len, memory_order_acquire);
     rbipc_io_prefetch_read_next(ring, ticket + 1);
     return RBIPC_OK;
   }
   if (rbipc_slot_state_is_poisoned(state)) {
-    rbipc_slot_mark_acquired(slot, ring->cached_pid,
-                             rbipc_clock_monotonic_ns());
+    rbipc_slot_mark_acquired(slot, ring->cached_pid, acq_ts);
     *out_buf = NULL;
     *out_len = 0;
     return RBIPC_ERR_POISONED;
@@ -104,16 +105,14 @@ RBIPC_INLINE int rbipc_io_complete_read_acquisition(
     rbipc_cpu_pause();
     state = atomic_load_explicit(&slot->state, memory_order_acquire);
     if (rbipc_slot_state_is_committed(state)) {
-      rbipc_slot_mark_acquired(slot, ring->cached_pid,
-                               rbipc_clock_monotonic_ns());
+      rbipc_slot_mark_acquired(slot, ring->cached_pid, acq_ts);
       *out_buf = rbipc_io_calc_slot_ptr(ring, ticket);
       *out_len = atomic_load_explicit(&slot->len, memory_order_acquire);
       rbipc_io_prefetch_read_next(ring, ticket + 1);
       return RBIPC_OK;
     }
     if (rbipc_slot_state_is_poisoned(state)) {
-      rbipc_slot_mark_acquired(slot, ring->cached_pid,
-                               rbipc_clock_monotonic_ns());
+      rbipc_slot_mark_acquired(slot, ring->cached_pid, acq_ts);
       *out_buf = NULL;
       *out_len = 0;
       return RBIPC_ERR_POISONED;
