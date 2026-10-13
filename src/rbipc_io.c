@@ -8,7 +8,7 @@
  * synchronization via cache-line isolated sequence state machines and adaptive
  * futex backoff.
  *
- * Grounded in systems literature:
+ * References:
  * - Dmitry Vyukov (2010), "Bounded MPMC Queue", 1024cores.
  * - Ulrich Drepper (2007), "What Every Programmer Should Know About Memory".
  *

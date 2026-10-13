@@ -85,7 +85,7 @@ void rbipc_vmem_unmap_data(void *data_map, size_t data_size);
  *          3. Overwrites the second half [anon + data_size, anon + 2 * data_size)
  *             with another shared mapping pointing to the exact same shared memory @p offset.
  *
- *          As a result, access spanning past the end of the first half seamlessly wraps
+ *          As a result, access spanning past the end of the first half wraps directly
  *          to the beginning of the underlying physical storage via CPU MMU translation.
  *
  * @param[in]  fd           Shared memory file descriptor.

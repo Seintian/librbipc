@@ -1,7 +1,7 @@
 # Doxyfile for librbipc
 PROJECT_NAME           = "librbipc"
 PROJECT_NUMBER         = "2.0.0"
-PROJECT_BRIEF          = "Ultra-Low-Latency Zero-Copy Shared-Memory IPC Ring Buffer Library"
+PROJECT_BRIEF          = "Lock-Free Shared-Memory Ring Buffer IPC Library in ISO C23"
 OUTPUT_DIRECTORY       = docs
 CREATE_SUBDIRS         = NO
 OUTPUT_LANGUAGE        = English

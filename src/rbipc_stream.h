@@ -8,7 +8,7 @@
  * bypass the CPU cache hierarchy during large payload transfers, minimizing
  * cache pollution.
  *
- * Grounded in systems literature:
+ * References:
  * - Ulrich Drepper (2007), "What Every Programmer Should Know About Memory".
  * - Intel 64 and IA-32 Architectures Optimization Reference Manual (Streaming
  * Stores).

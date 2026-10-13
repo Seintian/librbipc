@@ -1,6 +1,6 @@
 /**
  * @file test_unit_lifecycle.c
- * @brief Comprehensive lifecycle, parameter validation, and attachment tests
+ * @brief Unit tests for ring lifecycle, parameter validation, and attachment
  */
 
 #include "rbipc.h"

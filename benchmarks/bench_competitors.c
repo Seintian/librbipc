@@ -1,6 +1,6 @@
 /**
  * @file bench_competitors.c
- * @brief Comprehensive Cross-System IPC Benchmark:
+ * @brief Cross-System IPC Benchmark:
  *        librbipc vs. DPDK rte_ring, LMAX Disruptor, Linux POSIX mqueue, AF_UNIX DGRAM.
  *
  * Competing-Consumer Work Queue Paradigm:

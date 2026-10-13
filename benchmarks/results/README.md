@@ -12,9 +12,9 @@ benchmarks/results/
 │   ├── zero_spin_initial.json         # v1.5 initial zero-spin implementation
 │   ├── post_roadmap_v2.json           # v2.0 post-roadmap implementation
 │   ├── zero_spin_optimized.json       # v2.0-final SIMD & batching optimized
-│   ├── deep_dive_features.json        # Deep dive into adaptive wait, streaming, pubsub, reactor
+│   ├── deep_dive_features.json        # Evaluation of adaptive wait, streaming stores, pubsub, reactor
 │   ├── idle_strategies_benchmark.json # 10 DPDK, Disruptor, and librbipc wait strategies
-│   └── competitors_benchmark.json     # Comprehensive comparison vs DPDK, Disruptor, mqueue, AF_UNIX
+│   └── competitors_benchmark.json     # Comparative benchmarks vs DPDK, Disruptor, mqueue, AF_UNIX
 ├── laptop/                            # Datasets measured on Mobile/Laptop Hardware Profile (Plugged in / Performance)
 │   ├── deep_dive_features.json        # Micro-architectural feature evaluation on laptop
 │   ├── idle_strategies_benchmark.json # Idle wait strategy evaluation on laptop
@@ -23,8 +23,7 @@ benchmarks/results/
 └── laptop_powersave/                  # Datasets measured on Mobile Profile in Power-Save Mode (Unplugged on Battery)
 ```
 
-> [!NOTE]
-> Backward-compatibility symlinks are maintained at `benchmarks/results/*.json` pointing to the canonical `home_pc/` reference datasets.
+*Note:* Backward-compatibility symbolic links are maintained at `benchmarks/results/*.json` pointing to the canonical `home_pc/` reference datasets.
 
 ---
 

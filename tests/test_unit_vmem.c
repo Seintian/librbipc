@@ -57,7 +57,7 @@ static void test_vmem_double_map(void) {
     size_t boundary_offset = data_size - 10;
     memcpy(buf1 + boundary_offset, "STRADDLE_OK", 11);
     __asm__ __volatile__("" ::: "memory");
-    /* Contiguous reading from buf1 + boundary_offset reads across border seamlessly */
+    /* Contiguous reading from buf1 + boundary_offset reads across border without wrap-around splitting */
     assert(memcmp(buf1 + boundary_offset, "STRADDLE_OK", 11) == 0);
     assert(buf1[0] == 'K');
     assert(buf2[0] == 'K');

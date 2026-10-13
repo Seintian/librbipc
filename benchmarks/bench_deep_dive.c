@@ -1,6 +1,6 @@
 /**
  * @file bench_deep_dive.c
- * @brief Comprehensive Comparative Micro-Benchmark Suite for librbipc
+ * @brief Comparative Micro-Benchmark Suite for librbipc
  *
  * Specifically quantifies the performance impact of Phase 1-5 architectural changes:
  *  1. Adaptive Backoff (RBIPC_WAIT_ADAPTIVE) vs Pure Passive (RBIPC_WAIT_ZERO_SPIN)

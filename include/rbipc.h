@@ -6,7 +6,7 @@
  * @details Implements a bounded, multi-producer multi-consumer (MPMC) lock-free
  * ring buffer architecture situated within POSIX shared memory, targeted at ISO
  * C23 and modern Linux kernels. * The library combines three core architectural
- * paradigms grounded in prestigious literature:
+ * core architectural components:
  * 1. High-efficiency shared memory architecture: single 1x linear virtual
  * memory mapping for discrete slot queues with power-of-2 boundary masking,
  * with opt-in 2x virtual memory double-mapping (mirror windowing) for
@@ -19,8 +19,7 @@
  * ensuring 0% CPU consumption while maintaining sub-microsecond resumption
  * latency and automatic dead-peer crash recovery.
  *
- * Grounded in peer-reviewed scientific systems literature and industry
- * standards:
+ * References:
  * - Dmitry Vyukov (2010), "Bounded MPMC Queue", 1024cores.
  * - J. Wang, K. Zhang, X. Tang, B. Hua (IJPP 2013), "B-Queue: Efficient and
  * Practical Queuing for Fast Core-to-Core Communication".
@@ -600,7 +599,7 @@ rbipc_attach_fd_ex(int fd, uint32_t role_flags,
  * @brief Attach to an existing shared-memory IPC ring buffer via open file
  * descriptor.
  *
- * @details Facilitates anonymous IPC across process boundaries where file
+ * @details Enables anonymous IPC across process boundaries where file
  * descriptors are inherited via fork() or received across UNIX domain sockets
  * via SCM_RIGHTS ancillary data. Validates header geometry and establishes
  * shared memory virtual addresses as standard consumer.
@@ -830,7 +829,7 @@ RBIPC_COLD RBIPC_LEAF int rbipc_abort_write(rbipc_ring_t *RBIPC_RESTRICT ring,
  * is not yet committed, enters passive futex suspension until the producer
  * publishes the message. Audits the producer PID; if the producer crashes
  * before committing, marks the slot POISONED and returns @ref
- * RBIPC_ERR_POISONED to allow the pipeline to proceed seamlessly.
+ * RBIPC_ERR_POISONED so the caller can discard the slot and advance.
  *
  * @param[in,out] ring       Ring buffer handle.
  * @param[out]    out_buf    Direct read-only pointer to payload in shared

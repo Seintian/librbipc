@@ -7,7 +7,7 @@
  * NEON (ARM) vector comparison pipelines for scanning contiguous sequences of
  * slot descriptors, with portable scalar fallback.
  *
- * Grounded in systems literature:
+ * References:
  * - Intel 64 and IA-32 Architectures Optimization Reference Manual (AVX2
  * vectorization).
  * - ARM Architecture Reference Manual (NEON Advanced SIMD).

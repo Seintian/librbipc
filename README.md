@@ -16,7 +16,7 @@ For the complete formal concurrency model, memory layout geometry, crash-recover
 - **Lock-Free Vyukov 64-Bit Sequence Turn Engine:** Eliminates global `head`/`tail` CAS spin-wait bottlenecks using 64-bit monotonic `atomic_fetch_add` ticket allocation paired with per-slot 64-bit sequence turn verification (`slot->sequence == ticket` for vacancy, `slot->sequence == ticket + 1` for readiness), decoupled from 32-bit kernel futex words to prevent ABA wrap-around aliasing.
 - **Unified 4-Tier Hybrid Synchronization Engine:** Under sustained load, 100% of operations execute in user space with **zero system calls** and **zero hardware memory fences** on the commit/release fast path:
   - **Tier 0 (Micro-Turnaround):** Bounded user-space micro-spin (`RBIPC_WAIT_ADAPTIVE`, 48 `pause`/`yield` cycles ≈ 400 ns) catching in-flight commits.
-  - **Tier 1 (Hardware-Assisted Wait):** User-level monitor-wait leveraging **Intel WAITPKG** (`UMONITOR` + `UMWAIT` in low-latency C0.1 sub-state, `TPAUSE`) and **ARM64 FEAT_WFxT** (`WFET` + exclusive monitors), achieving 40–70 ns hardware wakeup at ≈ 0% core energy.
+  - **Tier 1 (Hardware-Assisted Wait):** User-level monitor-wait using **Intel WAITPKG** (`UMONITOR` + `UMWAIT` in low-latency C0.1 sub-state, `TPAUSE`) and **ARM64 FEAT_WFxT** (`WFET` + exclusive monitors), providing 40–70 ns hardware wakeup with minimal core power consumption.
   - **Tier 2 (Asymmetric Dekker & Linux 5.16+ `futex2`):** Eliminates CPU store buffer stalls (`MFENCE`) on high-frequency fast paths via **Asymmetric Dekker Synchronization** (`sys_membarrier(2)` on waiter registration). Implements native **Linux 5.16+ `futex2` (`sys_futex_waitv`)** vectorized multi-wait, monitoring sequence words and cooperative shutdown flags simultaneously with zero heartbeat polling drift.
   - **Tier 3 (Deep Suspension & Fault Healing):** Deterministic passive `SYS_futex` sleep with dual-word atomic `FUTEX_WAKE_OP` operations.
 - **Race-Free Crash Resilience & Time-Bounded Consumer Leases:** Uses Linux 5.3+ `pidfd_open(2)` + `poll(2)` (with `kill(pid, 0)` fallback) to audit slot-holding peers without PID-recycling races or zombie blind spots. Automatically poisons slots abandoned by crashed producers (`RBIPC_SLOT_POISONED`), heals orphaned ticket holes after a 50 ms grace period, recycles slots held by dead consumers, and enforces optional nanosecond consumer leases (`rbipc_set_lease_timeout`, `rbipc_revoke_expired_leases`).
@@ -127,7 +127,7 @@ librbipc/
 # Build static (lib/librbipc.a), shared (lib/librbipc.so), and all 25 test binaries (-O3 -std=c23)
 make -j4
 
-# Execute the full 25-suite verification matrix (Unit, I/O, MPMC, Crash Recovery, Chaos Monkey)
+# Execute the full 25-suite verification matrix (Unit, I/O, MPMC, Crash Recovery, Fault Injection)
 make test
 
 # Run AddressSanitizer + UndefinedBehaviorSanitizer or ThreadSanitizer verification
@@ -191,7 +191,7 @@ Measured on **Intel Core i5-10400F @ 2.90 GHz** (6C/12T desktop) and **Intel Cor
 | **Non-Temporal Streaming Copy** (`rbipc_write_stream`) | **19,867.2 MB/s** (64 KiB) / **14,746.3 MB/s** (1 MiB) | +104.97% bandwidth speedup over standard `memcpy` (7,194.2 MB/s at 1 MiB) via AVX2 `_mm256_stream_si256`. |
 | **Zero-Copy In-Place Slot Transfer** (1 MiB / 16 MiB) | **5.87M msgs/s** (5.74 TB/s) / **9.86M msgs/s** (154.1 TB/s) | Constant O(1) sequence turn publication overhead independent of slot payload size. |
 | **Symmetric `4P-4C` MPMC Contention** (64 B) | **7,019,693 ops/s** (`bench_competitors.c`) | Achieves 87.9% of busy-spin DPDK `rte_ring` (7.98M) and 87.1% of LMAX Disruptor (8.06M). |
-| **`eventfd` + `epoll_wait` Reactor** | **874,792 events/s** (1.14 μs/event) | Seamless integration with asynchronous `epoll(7)` and `io_uring` event loops. |
+| **`eventfd` + `epoll_wait` Reactor** | **874,792 events/s** (1.14 μs/event) | Direct integration with asynchronous `epoll(7)` and `io_uring` event loops. |
 
 See **[`TECHNICAL_REPORT.md`](TECHNICAL_REPORT.md)** for the complete experimental tables, latency distributions, and cross-system analyses.
 

@@ -7,7 +7,7 @@
  * vector descriptors, amortizing atomic CAS operations, cache-line invalidation
  * traffic, and kernel synchronization transitions.
  *
- * Grounded in systems literature:
+ * References:
  * - J. Wang, K. Zhang, X. Tang, B. Hua (IJPP 2013), "B-Queue: Efficient and
  * Practical Queuing for Fast Core-to-Core Communication".
  *

@@ -1,6 +1,6 @@
 /**
  * @file bench_suite.c
- * @brief Comprehensive, exhaustive benchmark suite for librbipc
+ * @brief Benchmark suite for librbipc
  *
  * Measures:
  *  1. Idle / Backpressure CPU Utilization & Context Switches (Active vs Passive waiting)

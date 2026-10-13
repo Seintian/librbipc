@@ -8,7 +8,7 @@
  * recovers slots abandoned by dead consumers, heals orphaned ticket allocations
  * (ticket-holes), and audits/revokes expired consumer leases.
  *
- * Grounded in systems literature:
+ * References:
  * - Christian Santarelli (2026), "librbipc: Lock-Free Shared-Memory Ring Buffer
  * IPC".
  * - Linux kernel pidfd_open(2) safe process recycling auditing.

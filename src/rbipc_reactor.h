@@ -6,7 +6,7 @@
  * notification dispatching, and counter draining for integration into event
  * loop reactors (epoll, io_uring).
  *
- * Grounded in Linux kernel systems architecture:
+ * References:
  * - eventfd(2) / epoll(7) asynchronous edge/level triggered readiness
  * multiplexing.
  *
