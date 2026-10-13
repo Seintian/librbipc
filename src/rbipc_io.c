@@ -314,13 +314,64 @@ int rbipc_reserve_write_timeout(rbipc_ring_t *RBIPC_RESTRICT ring, uint32_t len,
 
   rbipc_shm_header_t *hdr = ring->hdr;
   const uint32_t mask = hdr->capacity_mask;
-  uint64_t t = atomic_load_explicit(&hdr->write_ticket, memory_order_relaxed);
+  const uint32_t cap = hdr->capacity;
   rbipc_slot_t *slots =
       (rbipc_slot_t *)RBIPC_ASSUME_ALIGNED(ring->slots, RBIPC_CACHE_LINE);
 
   rbipc_sync_state_t sync_state;
   rbipc_sync_state_init(&sync_state, timeout_ns);
 
+  /* Bounded FAA Fast Path for Unbounded Blocking Writes (Nikolaev SCQ Pattern) */
+  if (timeout_ns == UINT64_MAX) {
+    for (;;) {
+      if (RBIPC_UNLIKELY(rbipc_ring_is_shutdown(hdr))) {
+        return RBIPC_ERR_SHUTDOWN;
+      }
+
+      uint64_t wt = atomic_load_explicit(&hdr->write_ticket, memory_order_relaxed);
+      uint64_t rt = atomic_load_explicit(&hdr->read_ticket, memory_order_relaxed);
+
+      if (RBIPC_LIKELY(wt < rt + (uint64_t)cap)) {
+        uint64_t t = atomic_fetch_add_explicit(&hdr->write_ticket, 1,
+                                               memory_order_acq_rel);
+        rbipc_slot_t *slot = &slots[t & mask];
+        uint64_t seq = atomic_load_explicit(&slot->sequence, memory_order_acquire);
+
+        if (RBIPC_LIKELY(rbipc_slot_is_vacant(seq, t))) {
+          rbipc_io_complete_write_reservation(ring, slot, t, out_buf, ticket);
+          return RBIPC_OK;
+        }
+
+        /* Slot is behind: wait specifically on slot t until consumer frees it */
+        uint64_t dummy_t = t;
+        while (!rbipc_slot_is_vacant(seq, t)) {
+          if (RBIPC_UNLIKELY(rbipc_ring_is_shutdown(hdr))) {
+            return RBIPC_ERR_SHUTDOWN;
+          }
+          int rc = rbipc_io_handle_write_backoff(ring, &sync_state, hdr, slot, t,
+                                                 timeout_ns, &dummy_t);
+          if (RBIPC_UNLIKELY(rc != RBIPC_OK)) {
+            return rc;
+          }
+          seq = atomic_load_explicit(&slot->sequence, memory_order_acquire);
+        }
+        rbipc_io_complete_write_reservation(ring, slot, t, out_buf, ticket);
+        return RBIPC_OK;
+      }
+
+      /* Ring is full: wait on oldest unvacant slot */
+      rbipc_slot_t *full_slot = &slots[wt & mask];
+      uint64_t dummy_wt = wt;
+      int rc = rbipc_io_handle_write_backoff(ring, &sync_state, hdr, full_slot, wt,
+                                             timeout_ns, &dummy_wt);
+      if (RBIPC_UNLIKELY(rc != RBIPC_OK)) {
+        return rc;
+      }
+    }
+  }
+
+  /* Standard Bounded CAS Path for Finite-Timeout and Nonblocking Writes */
+  uint64_t t = atomic_load_explicit(&hdr->write_ticket, memory_order_relaxed);
   for (;;) {
     if (RBIPC_UNLIKELY(rbipc_ring_is_shutdown(hdr))) {
       return RBIPC_ERR_SHUTDOWN;
@@ -334,6 +385,7 @@ int rbipc_reserve_write_timeout(rbipc_ring_t *RBIPC_RESTRICT ring, uint32_t len,
         rbipc_io_complete_write_reservation(ring, slot, t, out_buf, ticket);
         return RBIPC_OK;
       }
+      rbipc_cpu_pause();
     } else if (rbipc_seq_is_behind(seq, t)) {
       int rc = rbipc_io_handle_write_backoff(ring, &sync_state, hdr, slot, t,
                                              timeout_ns, &t);
@@ -342,6 +394,7 @@ int rbipc_reserve_write_timeout(rbipc_ring_t *RBIPC_RESTRICT ring, uint32_t len,
       }
     } else {
       t = atomic_load_explicit(&hdr->write_ticket, memory_order_relaxed);
+      rbipc_cpu_pause();
     }
   }
 }
@@ -442,6 +495,7 @@ int rbipc_read_acquire_timeout(rbipc_ring_t *RBIPC_RESTRICT ring,
         return rbipc_io_complete_read_acquisition(ring, slot, t, out_buf,
                                                   out_len, ticket);
       }
+      rbipc_cpu_pause();
     } else if (rbipc_seq_is_behind(seq, t + 1)) {
       int rc = rbipc_io_handle_read_backoff(ring, &sync_state, hdr, slot, t,
                                             timeout_ns, &t);
@@ -450,6 +504,7 @@ int rbipc_read_acquire_timeout(rbipc_ring_t *RBIPC_RESTRICT ring,
       }
     } else {
       t = atomic_load_explicit(&hdr->read_ticket, memory_order_relaxed);
+      rbipc_cpu_pause();
     }
   }
 }
