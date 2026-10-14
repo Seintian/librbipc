@@ -17,7 +17,6 @@
 
 #include "rbipc_reactor.h"
 #include "rbipc_internal.h"
-#include "rbipc_predicate.h"
 
 #include <errno.h>
 #include <sys/eventfd.h>

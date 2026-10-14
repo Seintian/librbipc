@@ -30,8 +30,6 @@
 #include "rbipc_sync.h"
 #include "rbipc_futex.h"
 
-#include <string.h>
-
 /* ============================================================================
  * Internal Fast-Path Ticket and Reservation Helpers
  * ============================================================================

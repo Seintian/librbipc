@@ -22,8 +22,6 @@
 #include "rbipc_predicate.h"
 
 #include <errno.h>
-#include <inttypes.h>
-#include <sched.h>
 #include <stdio.h>
 #include <unistd.h>
 

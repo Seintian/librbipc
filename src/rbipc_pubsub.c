@@ -23,7 +23,6 @@
 #include "rbipc_sync.h"
 
 #include <stdlib.h>
-#include <string.h>
 
 struct rbipc_sub {
   rbipc_ring_t *ring; /**< Attached ring buffer handle. */

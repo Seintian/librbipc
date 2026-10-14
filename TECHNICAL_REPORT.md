@@ -1,6 +1,6 @@
 # Technical Report: Architecture, Formal Verification, and Empirical Evaluation of librbipc
 
-### A High-Throughput, Zero-Idle-CPU, Crash-Resilient MPMC Shared-Memory IPC Engine in ISO C23
+## A High-Throughput, Zero-Idle-CPU, Crash-Resilient MPMC Shared-Memory IPC Engine in ISO C23
 
 **Author:** Seintian  
 **Date:** October 2026  
@@ -13,6 +13,7 @@
 Inter-process communication (IPC) on multi-core Linux systems typically involves trade-offs between busy-polling ring buffers (which consume entire CPU cores and suffer severe degradation under scheduler preemption) and kernel-mediated transports such as UNIX domain sockets or POSIX message queues (which introduce context-switch and copying overhead). This report presents the design, formal concurrency model, fault-tolerance mechanisms, and empirical evaluation of **`librbipc`**, a shared-memory IPC library implemented in ISO C23 designed for concurrent multi-producer multi-consumer (MPMC) execution with passive CPU utilization when idle and deterministic fault tolerance.
 
 The library incorporates five key design elements:
+
 1. **Per-slot sequence turn progression:** A Vyukov-style per-slot 64-bit sequence turn array ([`rbipc_slot_t`](include/rbipc.h)) decoupled from 32-bit process-shared Linux futex words, preventing the 32-bit counter wrap-around ABA problem.
 2. **Asymmetric Dekker synchronization and hybrid wait engine:** An asymmetric synchronization protocol ([`src/rbipc_sync.c`](src/rbipc_sync.c)) using `sys_membarrier` that eliminates hardware memory fences on the producer fast path, coupled with a bounded micro-spin ($B = 48$ pause/yield cycles, $\approx 400$ ns) transitioning into passive kernel `FUTEX_WAIT` suspension, achieving zero system calls under sustained load and 0.13% CPU utilization when idle.
 3. **Deterministic peer crash recovery:** A liveness auditing subsystem ([`src/rbipc_audit.c`](src/rbipc_audit.c)) using Linux process file descriptors (`pidfd_open`) to eliminate PID-recycling races, combined with atomic slot poisoning (`RBIPC_SLOT_POISONED`), bounded ticket-hole healing, dead-consumer slot reclamation, and time-bounded consumer leases.
@@ -28,12 +29,14 @@ Empirical evaluation on a reference Linux desktop architecture (Intel Core i5-10
 ### 1.1 Trade-Offs in Inter-Process Communication
 
 Low-latency systems—such as financial matching engines, high-frequency telemetry pipelines, and robotics middleware—require inter-process communication (IPC) mechanisms that address four fundamental requirements:
+
 1. **High throughput and low latency:** Communication latency minimized through zero-copy shared-memory access in user space.
 2. **Passive idle resource utilization:** Minimal CPU consumption during periods of low activity to coexist efficiently on multi-tenant systems.
 3. **Multi-Producer / Multi-Consumer (MPMC) scalability:** High concurrent throughput across independent operating system processes without lock convoys.
 4. **Crash fault tolerance:** Resilience against unexpected process termination (`SIGKILL`, abnormal exits) to prevent deadlock or shared memory corruption.
 
 Existing IPC frameworks typically optimize for a subset of these requirements:
+
 - **Busy-polling ring buffers (e.g., DPDK `rte_ring`, LMAX Disruptor):** These designs assume dedicated, pinned CPU cores executing spin loops. While effective when dedicated cores are available, busy polling consumes 100% of core capacity during idle periods and degrades severely under thread over-subscription when the operating system scheduler preempts a publisher or consumer thread.
 - **Kernel-mediated mechanisms (e.g., POSIX message queues, `AF_UNIX` sockets):** These mechanisms delegate synchronization and buffering to the kernel, providing clean process isolation and passive waiting, but incur context switch overhead, system call latency, and memory copying overhead.
 - **Shared-memory publish-subscribe middleware (e.g., Eclipse `iceoryx2`):** These platforms provide zero-copy loan semantics for 1-to-$N$ broadcast communication, but require complex multi-file management in `/dev/shm`, do not natively support competing-consumer load balancing ($1$-of-$N$ work distribution), and often depend on external coordinator daemons or timer-based polling.
@@ -84,23 +87,29 @@ The library is organized into a public C/C++ API layer (3 header files in `inclu
 A ring buffer in `librbipc` is parameterized by slot capacity $C$ and maximum payload size per slot $S_{\text{raw}}$. During creation and attachment, [`rbipc_shm_calc_layout()`](src/rbipc_shm.c) validates that $C = 2^k$ ($k \in [1, 24]$) and computes partition offsets using overflow-checked arithmetic prior to memory allocation:
 
 1. **Cache-Line Aligned Slot Capacity ($S$):**
+
    ```text
    S = align_up(S_raw, 64) = (S_raw + 63) & ~63
    ```
+
    Validated against `UINT32_MAX - 64` to prevent 32-bit arithmetic overflow.
 2. **Page-Aligned Metadata Region ($O_{\text{data}}$):**
    The control region comprises the 256-byte [`rbipc_shm_header_t`](include/rbipc.h) followed immediately by $C$ slot descriptors of 64 bytes each ([`rbipc_slot_t`](include/rbipc.h)):
+
    ```text
    O_data = align_up(sizeof(rbipc_shm_header_t) + C * sizeof(rbipc_slot_t), P) = align_up(256 + 64 * C, P)
    ```
+
    where $P = \text{sysconf}(\text{\_SC\_PAGESIZE})$ (typically 4096 B).
 3. **Page-Aligned Circular Data Region ($D$) and Total Backing Store Size ($T$):**
+
    ```text
    D = align_up(C * S, P),    T = O_data + D
    ```
+
    Multiplications and additions verify $a \le \text{SIZE\_MAX} / b$ and $a \le \text{SIZE\_MAX} - b$, returning `RBIPC_ERR_OVERFLOW` upon arithmetic overflow.
 
-```
+```text
 Shared Memory Backing Object (Total Size T = O_data + D, Page-Aligned):
 +-----------------------------------------------------------------------+
 | Offset 0x0000: rbipc_shm_header_t (256 Bytes = 4 x 64B Cache Lines)   |
@@ -122,13 +131,16 @@ Shared Memory Backing Object (Total Size T = O_data + D, Page-Aligned):
 ### 2.2 Backing Store Creation and Kernel File Sealing
 
 [`rbipc_shm_create_ex()`](src/rbipc_shm.c) supports two backing store mechanisms:
+
 - **Named POSIX Shared Memory (`name != NULL`):** Validates that `name` begins with `'/'`, contains no subsequent slashes, and satisfies $2 \le \text{len}(name) < \text{NAME\_MAX}$ ([`rbipc_is_valid_shm_name()`](src/rbipc_predicate.h)). The file is opened via `shm_open(name, O_CREAT | O_EXCL | O_RDWR, mode)` (or unlinked first if `RBIPC_CREATE_OVERWRITE` is specified). `fchmod(fd, actual_mode)` is called explicitly to bypass process `umask` restrictions.
 - **Anonymous Shared Memory (`name == NULL`):** Invokes `memfd_create("rbipc_anon_ring", MFD_CLOEXEC | MFD_ALLOW_SEALING)`. The resulting descriptor does not appear in `/dev/shm`, is reclaimed by the kernel when all references and memory mappings close, and can be passed to authorized processes via [`rbipc_send_fd()`](src/rbipc_ipc.c).
 
 Immediately following `ftruncate(fd, total_shm_size)`, [`rbipc_shm_seal()`](src/rbipc_shm.c) applies kernel file seals:
+
 ```c
 fcntl(fd, F_ADD_SEALS, F_SEAL_SHRINK | F_SEAL_GROW);
 ```
+
 Without file sealing, an aberrant process invoking `ftruncate(fd, 0)` on the descriptor would unmap backing pages beneath active processes, causing `SIGBUS` faults upon subsequent memory access. Applying `F_SEAL_SHRINK` and `F_SEAL_GROW` guarantees backing store size immutability within the virtual file system.
 
 ### 2.3 Two-Phase Control Header Initialization and CRC32C Validation
@@ -136,9 +148,11 @@ Without file sealing, an aberrant process invoking `ftruncate(fd, 0)` on the des
 In shared-memory architectures, a race condition can arise if an attaching process inspects metadata before the creator finishes writing geometry fields. To prevent premature attachment, initialization uses a two-phase atomic publication protocol ([`rbipc_ring_init_header()`](src/rbipc_ring.c), [`rbipc_ring_probe_and_validate_header()`](src/rbipc_ring.c)):
 
 1. The creator populates geometry fields (`magic = 0x52424950434D454DULL` (`"RBIPCMEM"`), `version = 2`, `endian_tag = 0x01020304U`, `capacity`, `capacity_mask = capacity - 1`, `slot_size`, `data_offset`, `data_size`, `total_shm_size`), computes a hardware-accelerated **CRC32C (Castagnoli)** checksum over bytes `[0 .. 59]` of [`rbipc_shm_header_t`](include/rbipc.h) via [`rbipc_crc32c()`](src/rbipc_arch.h) (`_mm_crc32_u64`/`_mm_crc32_u8` under SSE4.2), initializes the slot table ([`rbipc_slot_init_table()`](src/rbipc_slot.c)), and publishes the initialization state using a release store:
+
    ```c
    atomic_store_explicit(&hdr->init_state, RBIPC_HEADER_INIT_DONE, memory_order_release);
    ```
+
 2. Attaching peers (`rbipc_attach*`) poll with acquire semantics (up to $1000 \times 10$ $\mu$s) until `hdr->init_state == RBIPC_HEADER_INIT_DONE`. The peer then verifies the magic identifier, ABI version, endianness tag, CRC32C checksum, and reconstructed [`rbipc_layout_t`](src/rbipc_shm.h) structure before mapping the data region.
 
 ### 2.4 Cache-Line Padding and False-Sharing Elimination
@@ -161,9 +175,11 @@ The virtual memory subsystem ([`src/rbipc_vmem.c`](src/rbipc_vmem.c)) provides t
    Used by default for discrete slot payload arrays. Because capacity $C$ is a power of two and each slot payload has a uniform aligned size $S$, slot $i = \text{ticket} \ \& \ (C - 1)$ resides entirely within $[i \cdot S, (i + 1) \cdot S) \subseteq [0, D)$. Individual slot payloads never cross the boundary $D$. A single mapping `mmap(NULL, D, PROT_READ | PROT_WRITE, MAP_SHARED, fd, O_data)` minimizes page table entries (PTEs) and avoids virtual-address aliasing across the TLB hierarchy.
 2. **Double-Mapped Virtual Ring Mirror ([`rbipc_vmem_map_double()`](src/rbipc_vmem.c)):**
    Designed for variable-length streaming byte buffers that may cross the wrap-around boundary at offset $D$. [`rbipc_vmem_map_double()`](src/rbipc_vmem.c) reserves $2D$ bytes of contiguous virtual address space using an anonymous mapping:
+
    ```c
    void *anon = mmap(NULL, 2 * data_size, PROT_NONE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
    ```
+
    It then binds both the lower range `[anon, anon + D)` and upper range `[anon + D, anon + 2D)` using `MAP_SHARED | MAP_FIXED` to the same file descriptor offset $O_{\text{data}}$. Any read or write starting at offset $x \in [0, D)$ of length $L \le D$ is contiguous in virtual address space at `anon + x`, eliminating split-buffer boundary checks.
 
 ---
@@ -173,10 +189,13 @@ The virtual memory subsystem ([`src/rbipc_vmem.c`](src/rbipc_vmem.c)) provides t
 ### 3.1 Decoupling 64-Bit Sequence Turns from 32-Bit Futex Words
 
 Using 32-bit sequence counters directly as Linux futex wait words introduces vulnerability to counter wrap-around and the ABA problem under high throughput. At $10^8$ messages per second, a 32-bit counter wraps in approximately 43 seconds, creating the risk that a preempted thread wakes up and interprets an old sequence value as a valid turn. `librbipc` separates logical sequence coordination from kernel notification:
+
 - **64-Bit Monotonic Ticket and Sequence Counters:** `hdr->write_ticket`, `hdr->read_ticket`, and `slot->sequence` are 64-bit atomic unsigned integers (`_Atomic uint64_t`). At $10^9$ messages per second, a 64-bit counter requires approximately 584.9 years to wrap around. Sequence ordering is evaluated using RFC 1982 signed 64-bit modular arithmetic ([`rbipc_seq_diff()`](src/rbipc_math.h)):
+
   ```text
   Δ(a, b) = (int64_t)(a - b)
   ```
+
 - **32-Bit Futex Notification Counters:** `hdr->futex_seq` (consumer notification) and `hdr->write_futex_seq` (producer notification) are independent `_Atomic uint32_t` counters incremented only when waking suspended threads ([`rbipc_sync_dispatch_wake()`](src/rbipc_sync.c)).
 
 ### 3.2 Per-Slot Vyukov Sequence Turn Progression
@@ -185,23 +204,30 @@ Rather than serializing producers and consumers through global head and tail poi
 
 - **Producer Turn Verification:**
   A producer claims ticket $t_w = \text{atomic\_fetch\_add}(\&hdr->\text{write\_ticket}, 1)$ (or via compare-and-swap in non-blocking paths) and addresses slot $s = \&\text{slots}[t_w \ \& \ (C - 1)]$. Slot $s$ is vacant for ticket $t_w$ if and only if:
+
   ```text
   Δ(s->sequence, t_w) == 0  <==>  s->sequence == t_w
   ```
+
   If $\Delta(s->\text{sequence}, t_w) < 0$, the slot remains occupied by a prior turn ($t_w - C$) that has not yet been released; the producer waits on `hdr->write_futex_seq`.
 - **Producer Publication (Commit):**
   After writing the payload into the slot buffer, [`rbipc_slot_commit()`](src/rbipc_slot.c) updates `s->len = L` (`memory_order_relaxed`), transitions `s->state = RBIPC_SLOT_COMMITTED` (`memory_order_release`), and publishes:
+
   ```text
   s->sequence <- t_w + 1    (memory_order_release)
   ```
+
 - **Consumer Turn Verification:**
   A consumer claims ticket $t_r = \text{atomic\_fetch\_add}(\&hdr->\text{read\_ticket}, 1)$ and inspects $s = \&\text{slots}[t_r \ \& \ (C - 1)]$. Slot $s$ is ready for consumer ticket $t_r$ if and only if:
+
   ```text
   Δ(s->sequence, t_r + 1) == 0  <==>  s->sequence == t_r + 1
   ```
+
   Loading `s->sequence` with `memory_order_acquire` establishes a happens-before relation with the producer's release store, ensuring that all payload bytes written to the buffer and `s->len` are visible to the consumer without an explicit full barrier on the fast path.
 - **Consumer Slot Recycling (Release):**
   Upon consuming the payload, [`rbipc_slot_release_ex()`](src/rbipc_slot.c) resets `s->state = RBIPC_SLOT_EMPTY` (`memory_order_release`) and advances the sequence number by $C$ to arm the slot for turn $t_r + C$:
+
   ```text
   s->sequence <- t_r + C    (memory_order_release)
   ```
@@ -210,7 +236,7 @@ Rather than serializing producers and consumers through global head and tail poi
 
 Each slot progresses through discrete lifecycle states defined in [`include/rbipc.h`](include/rbipc.h):
 
-```
+```text
        +--------------------------------------------------------------+
        |                                                              |
        v                                                              |
@@ -263,7 +289,7 @@ Let $P$ denote a producer thread and $C$ denote a consumer thread interacting vi
 
 When immediate slot turn conditions are not satisfied, [`src/rbipc_sync.c`](src/rbipc_sync.c) initiates a multi-tier backoff sequence:
 
-```
+```text
 Fast-Path User-Space Turn Check
     | (Unsatisfied)
     v
@@ -299,6 +325,7 @@ To prevent lost wakeups between a producer transitioning a slot to ready and a c
 | | **C5.** Deregister: `atomic_fetch_sub_explicit(&hdr->futex_waiters, 1, memory_order_seq_cst);` |
 
 **Correctness:**
+
 1. Let $C$ register as a waiter ($C1$) and invoke `sys_membarrier` ($C2$). The kernel issues an inter-processor interrupt (IPI) or core flush that forces a memory barrier on the core executing $P$.
 2. If $P$ executed $P1$ before $C2$ completes, $P1$'s store to `slot->sequence` is visible to $C3$, causing $C3$ to observe `seq == t + 1`, deregister ($C5$), and proceed without sleeping.
 3. If $P$ executed $P1$ after $C2$ completes, then $P$ executes after $C1$, ensuring $P$'s load of `futex_waiters` ($P3$) observes `futex_waiters > 0` and executes $P4$ to wake $C$.
@@ -348,7 +375,8 @@ The benchmark suite [`benchmarks/bench_idle_strategies.c`](benchmarks/bench_idle
 | **`LMAX-PhasedBackoff`** | Disruptor Phased | 15.97 | 974.46 | 100 | 150 | 50,304 | 98,708 | 0.27% | 99 |
 | **`librbipc-Futex`** | Adaptive Futex | **7.58 *(13.82 peak)*** | **462.53 *(843.29)*** | **26,202** | **48,154** | **49,004** | **81,207** | **0.14%** | **60** |
 
-#### Summary of Wait Strategy Characteristics:
+#### Summary of Wait Strategy Characteristics
+
 1. **Idle CPU Utilization and Context Switches:** `librbipc-Futex` exhibits the lowest idle CPU consumption among evaluated strategies (0.14%) and the lowest burst wake $p99$ tail latency (81.2 $\mu$s) among kernel-sleeping strategies (`DPDK-Interrupt-Epoll` 116.5 $\mu$s, `LMAX-LiteBlocking` 156.2 $\mu$s, `LMAX-Sleeping` 104.8 $\mu$s).
 2. **Context Switch Churn:** `LMAX-Sleeping` (`clock_nanosleep`) causes 922 voluntary context switches during a 500 ms idle interval (1,844 switches per second per thread) and consumes 1.06% CPU due to continuous wake-sleep cycles. In contrast, `librbipc` remains suspended until signaled or until the 20 ms audit tick expires.
 3. **Crash Safety:** While `LMAX-LiteBlocking` achieves higher throughput in single-process microbenchmarks by omitting slot state bookkeeping, it depends on `pthread_mutex_t` and `pthread_cond_t` in shared memory. If a process terminates abnormally while holding a mutex, the queue remains locked. `librbipc`'s synchronization state resides in process-shared 32-bit futex words managed with kernel-assisted peer auditing.
@@ -360,6 +388,7 @@ The benchmark suite [`benchmarks/bench_idle_strategies.c`](benchmarks/bench_idle
 ### 5.1 Failure Model
 
 In shared-memory multi-process architectures, processes may terminate abruptly (e.g., via `SIGKILL`, hardware exceptions, or segmentation violations) or stall indefinitely (e.g., due to thread starvation or unhandled deadlocks). The fault tolerance subsystem addresses four failure conditions:
+
 1. **Producer crash during payload population:** A producer claims a ticket and writes to a slot buffer but crashes before committing sequence publication ($s\to\text{sequence} = t_w + 1$).
 2. **Producer crash during ticket allocation (ticket hole):** A producer crashes after updating `hdr->write_ticket` but before setting slot metadata.
 3. **Consumer crash during processing:** A consumer acquires a slot but crashes before issuing release ($s\to\text{sequence} = t_r + C$).
@@ -370,6 +399,7 @@ In shared-memory multi-process architectures, processes may terminate abruptly (
 Traditional process auditing uses `kill(pid, 0)` to probe process existence. However, under Linux process identifier wrap-around, an audit may probe a PID that has terminated and been reassigned to an unrelated process.
 
 `librbipc` resolves this race using Linux process descriptors ([`rbipc_audit_is_peer_alive()`](src/rbipc_audit.c)):
+
 ```c
 int pfd = syscall(SYS_pidfd_open, pid, 0);
 if (pfd >= 0) {
@@ -382,16 +412,19 @@ if (pfd >= 0) {
     return true; /* Process exists and is alive */
 }
 ```
+
 `pidfd_open(2)` returns a file descriptor bound to the precise lifetime of the target process instance. If the process terminates, polling the descriptor returns `POLLHUP` regardless of whether the numeric PID is reassigned.
 
 ### 5.3 Dead-Producer Slot Poisoning and Ticket-Hole Healing
 
 If a producer crashes while holding a reserved slot ($s\to\text{state} = \text{RBIPC\_SLOT\_RESERVED}$), subsequent consumers waiting for ticket $t_r = t_w$ would block indefinitely. When an audit tick occurs:
+
 1. The auditing process queries `s->producer_pid`.
 2. If `!rbipc_audit_is_peer_alive(s->producer_pid)`, [`rbipc_audit_poison_slot()`](src/rbipc_audit.c) transitions `s->state = RBIPC_SLOT_POISONED` and publishes `s->sequence = t_w + 1`.
 3. The consumer acquires the slot, receives error code `RBIPC_ERR_POISONED`, discards the payload, and releases the slot, allowing processing to advance.
 
 Orphaned ticket holes are addressed through two complementary mechanisms:
+
 1. **Pre-Reservation State ([`rbipc_slot_mark_reserving()`](src/rbipc_slot.c)):** In compare-and-swap reservation paths ([`rbipc_io_try_claim_vacant()`](src/rbipc_io.c)), the producer records `slot->producer_pid` and sets `slot->state = RBIPC_SLOT_RESERVING` prior to advancing `hdr->write_ticket`.
 2. **Bounded Ticket-Hole Reclamation ([`rbipc_audit_check_and_heal_ticket_hole()`](src/rbipc_audit.c)):** On the `atomic_fetch_add` fast path, if a consumer waiting on ticket $t_r$ observes `slot->state == RBIPC_SLOT_EMPTY` while $\Delta(hdr\to\text{write\_ticket}, t_r) > 0$, it records `sync_state->hole_first_seen_ns`. If `hdr->active_producers == 0` or the hole persists for $\ge 50$ ms (`RBIPC_TICKET_HOLE_GRACE_NS`), the subsystem marks the slot as poisoned (`RBIPC_SLOT_POISONED`, `sequence = t_r + 1`), resolving the sequence stall.
 
@@ -400,6 +433,7 @@ Orphaned ticket holes are addressed through two complementary mechanisms:
 If a consumer acquires a slot via [`rbipc_read_acquire()`](src/rbipc_io.c) and terminates before calling [`rbipc_read_release()`](src/rbipc_io.c), the slot sequence remains at $t_r + 1$ instead of advancing to $t_r + C$, causing the ring to become full on the subsequent lap.
 
 This condition is resolved via two mechanisms:
+
 1. **Dead-Consumer PID Recovery ([`rbipc_slot_recover_dead_consumer()`](src/rbipc_slot.c)):** Upon acquisition, [`rbipc_slot_mark_acquired()`](src/rbipc_slot.c) records `slot->consumer_pid`. When a producer waiting for vacancy at ticket $t_w = t_r + C$ discovers `!rbipc_audit_is_peer_alive(slot->consumer_pid)`, it resets the slot to `RBIPC_SLOT_EMPTY` and advances `slot->sequence = t_w`.
 2. **Time-Bounded Leases ([`rbipc_set_lease_timeout()`](src/rbipc_ring.c), [`rbipc_revoke_expired_leases()`](src/rbipc_ring.c)):** When a lease timeout $L_{\text{lease}} > 0$ ns is configured (`hdr->lease_timeout_ns`), each consumer acquisition records `slot->acquire_timestamp_ns = rbipc_clock_monotonic_ns()`. If a consumer stalls for $\ge L_{\text{lease}}$, a wrap-around producer or monitoring thread revokes the lease and recycles the slot ($t_{\text{target}} = (seq - 1) + C$). If the stalled consumer subsequently invokes [`rbipc_read_release()`](src/rbipc_io.c), an atomic compare-and-swap on `slot->consumer_pid` against `ring->cached_pid` detects lease revocation and returns `RBIPC_ERR_BUSY`, preventing sequence corruption.
 
@@ -416,6 +450,7 @@ Following principles from the B-Queue algorithm (Wang et al., IJPP 2013), [`src/
 ### 6.2 SIMD Sequence Turn Scanning and Strided Gather Analysis
 
 [`src/rbipc_simd.c`](src/rbipc_simd.c) accelerates sequence scanning across hardware architectures:
+
 - **x86-64 AVX2 ([`rbipc_simd_scan_avx2()`](src/rbipc_simd.c)):** Evaluates 4 slots per iteration using 256-bit registers. It loads four 64-bit `slot->sequence` values with acquire semantics, packs them via `_mm256_set_epi64x()`, compares against target sequence values using `_mm256_cmpeq_epi64`, and extracts a 4-bit match mask using `_mm256_movemask_pd`. If `match_mask == 0x0F`, all 4 slots match; otherwise, the first unset bit identifies the prefix length.
 - **ARM64 NEON ([`rbipc_simd_scan_neon()`](src/rbipc_simd.c)):** Evaluates 2 slots per iteration using 128-bit `uint64x2_t` vectors and `vceqq_u64`.
 
@@ -426,6 +461,7 @@ Following principles from the B-Queue algorithm (Wang et al., IJPP 2013), [`src/
 When transferring large payloads ($\ge 64$ KiB), standard `memcpy` executes temporal stores that invoke the Read-For-Ownership (RFO) protocol: cache lines must first be loaded from memory into L1d/L2 caches before being overwritten, displacing resident working sets and consuming memory bus bandwidth.
 
 [`rbipc_stream_copy()`](src/rbipc_stream.c) and [`rbipc_write_stream*()`](src/rbipc_stream.c) mitigate RFO traffic for payloads $\ge 256$ B (`RBIPC_STREAM_THRESHOLD`):
+
 1. Unaligned leading bytes up to a 32-byte boundary are copied using standard instructions.
 2. The primary payload is written directly to Write-Combining (WC) buffers using 256-bit AVX2 non-temporal store instructions (`_mm256_stream_si256` / `VMOVNTDQ`, or 128-bit SSE2 `_mm_stream_si128`), bypassing the cache hierarchy.
 3. An explicit store fence (`_mm_sfence()`) flushes Write-Combining buffers to coherent memory before `slot->sequence` is published.
@@ -437,6 +473,7 @@ When transferring large payloads ($\ge 64$ KiB), standard `memcpy` executes temp
 ### 7.1 Asynchronous `eventfd(2)` and `epoll(7)` Reactor Integration
 
 For event-driven architectures integrating network sockets, timers, and shared memory within an `epoll_wait(2)` or `io_uring` loop, blocking in `FUTEX_WAIT` is unsuitable because futexes do not expose file descriptors. [`src/rbipc_reactor.c`](src/rbipc_reactor.c) incorporates `eventfd(2)` signaling into the ring lifecycle:
+
 - [`rbipc_enable_eventfd(ring, &efd)`](src/rbipc_reactor.c) allocates a non-blocking descriptor (`EFD_NONBLOCK | EFD_CLOEXEC`) and increments `hdr->eventfd_waiters`.
 - When a producer commits a slot, [`rbipc_reactor_signal()`](src/rbipc_reactor.c) checks if `ring->event_fd >= 0` and `hdr->eventfd_waiters > 0`, issuing an 8-byte write (`val = 1`). When no reactor waiters are registered (`eventfd_waiters == 0`), no system calls are executed.
 - On [`rbipc_detach()`](src/rbipc_ring.c), [`rbipc_reactor_cleanup()`](src/rbipc_reactor.c) decrements waiter counts and closes owned descriptors.
@@ -444,6 +481,7 @@ For event-driven architectures integrating network sockets, timers, and shared m
 ### 7.2 Lock-Free 1-to-N Multicast Publish-Subscribe with Lag Clamping
 
 While [`rbipc_io.c`](src/rbipc_io.c) implements a competing-consumer ($1$-of-$N$) queue where each message is consumed by exactly one worker, [`src/rbipc_pubsub.c`](src/rbipc_pubsub.c) provides 1-to-$N$ multicast publish-subscribe over the same ring structure:
+
 - **Publishers ([`rbipc_publish()`](src/rbipc_pubsub.c)):** Increment `hdr->write_ticket` monotonically without waiting on `hdr->read_ticket`, write payloads using streaming stores for messages $\ge 256$ B, publish sequence turns, and wake waiting subscribers via futex broadcast.
 - **Subscribers ([`rbipc_sub_t`](include/rbipc_pubsub.h)):** Maintain private read cursors (`sub->cursor`), initialized either to the latest head (`from_oldest = false`) or the oldest retained slot in history (`from_oldest = true`).
 - **Subscriber Lag Clamping ([`rbipc_sub_clamp_cursor()`](src/rbipc_pubsub.c)):** If a slow subscriber lags by more than $C$ messages ($\text{cursor} < \text{head} - C$), [`rbipc_sub_poll()`](src/rbipc_pubsub.c) advances the cursor to $\text{head} - C$, skipping overwritten entries rather than stalling publishers.
@@ -451,6 +489,7 @@ While [`rbipc_io.c`](src/rbipc_io.c) implements a competing-consumer ($1$-of-$N$
 ### 7.3 Capability-Based Descriptor Passing via `AF_UNIX` `SCM_RIGHTS`
 
 To support containerized or sandboxed environments where `/dev/shm` is restricted or untrusted, [`src/rbipc_ipc.c`](src/rbipc_ipc.c) implements file descriptor transfer over UNIX domain sockets (`SOCK_STREAM` or `SOCK_SEQPACKET`):
+
 - A coordinator creates an anonymous, sealed `memfd_create` ring via `rbipc_create_ex(NULL, cap, slot_size, 0, 0600, role, &ring)` and transmits the backing descriptor using [`rbipc_send_fd()`](src/rbipc_ipc.c) (`SCM_RIGHTS`).
 - Receiving processes call [`rbipc_recv_fd_ex()`](src/rbipc_ipc.c), extract the descriptor from ancillary control buffers, and attach via [`rbipc_attach_fd_ex()`](src/rbipc_ring.c).
 
@@ -461,6 +500,7 @@ To support containerized or sandboxed environments where `/dev/shm` is restricte
 ### 8.1 Test Environment and Measurement Methodology
 
 All internal progression benchmarks were conducted on a dedicated reference desktop system:
+
 - **Processor:** Intel Core i5-10400F @ 2.90 GHz (Comet Lake, 6 physical cores, 12 logical threads, 65W TDP).
 - **Caches:** 32 KiB L1d per core, 256 KiB L2 per core, 12 MiB shared L3 cache.
 - **Operating System:** Linux `6.18.33.2-microsoft-standard-WSL2` x86_64, GCC 14.2 / Clang 19.1 (`-O3 -std=c23`).
@@ -476,7 +516,7 @@ Table 1 summarizes performance across major development iterations:
 | **Active-Spin Baseline** | `v1.0` | Active CPU polling (`pause` loop) + `kill(pid, 0)` | Per-slot sequence | Scalar single-slot I/O |
 | **Initial Zero-Spin** | `v1.5` | Process-shared `SYS_futex` (`FUTEX_WAIT`/`WAKE`) | Per-slot sequence | Scalar single-slot I/O |
 | **SIMD & Batching Optimized** | `v2.0-final` | Hybrid futex + Asymmetric `sys_membarrier` | Vyukov per-slot | B-Queue vector batching + AVX2 |
-| **Post-Roadmap Modernized**| `HEAD` | WAITPKG / WFET + `futex2` (`sys_futex_waitv`) | Vyukov + SCQ FAA | Non-temporal streaming + Leases |
+| **Post-Roadmap Modernized** | `HEAD` | WAITPKG / WFET + `futex2` (`sys_futex_waitv`) | Vyukov + SCQ FAA | Non-temporal streaming + Leases |
 
 *Table 1: Progression of synchronization and data-path architectures across releases.*
 
@@ -539,6 +579,7 @@ When using zero-copy reservation APIs ([`rbipc_reserve_write()`](src/rbipc_io.c)
 Measurements from [`benchmarks/results/deep_dive_features.json`](benchmarks/results/deep_dive_features.json):
 
 #### A. Adaptive Two-Phase Backoff vs. Pure Zero-Spin (20,000 Round-Trips)
+
 | Wait Policy | Ping-Pong Rate (msgs/sec) | $p50$ Latency (ns) | $p90$ Latency (ns) | $p99$ Latency (ns) | Max Latency (ns) |
 | :--- | ---: | ---: | ---: | ---: | ---: |
 | **`RBIPC_WAIT_ZERO_SPIN`** | 29,478.65 | 28,052 | 36,253 | 60,254 | 10,096,887 |
@@ -547,6 +588,7 @@ Measurements from [`benchmarks/results/deep_dive_features.json`](benchmarks/resu
 *Table 5: Ping-pong latency distribution comparing zero-spin and adaptive wait policies.*
 
 #### B. Streaming Stores vs. Standard `memcpy`
+
 | Payload Size | Standard `rbipc_write` (`memcpy`, MB/s) | Non-Temporal `rbipc_write_stream` (`_mm256_stream_si256`, MB/s) | Relative Speedup |
 | ---: | ---: | ---: | ---: |
 | **64 KiB** (65,536 B) | 14,452.33 *(8,091.86 cold)* | **19,867.19** | **+37.47%** *(+145.37% cold)* |
@@ -559,6 +601,7 @@ Measurements from [`benchmarks/results/deep_dive_features.json`](benchmarks/resu
 At 256 KiB and 1 MiB (where data exceeds the per-core L2 cache capacity and spills into L3 cache and DRAM), bypassing cache line allocation via non-temporal stores increases throughput by 99.68% to 104.97%.
 
 #### C. Multicast Pub-Sub, Reactor, and Consumer Leases
+
 | Subsystem Benchmark | Configuration | Metric (`deep_dive_features.json`) | Architectural Description |
 | :--- | :--- | :--- | :--- |
 | **Multicast Pub-Sub** (`rbipc_publish` / `rbipc_sub_poll`) | 1 Subscriber (8 B) | **7,083,830.62 msgs/s** *(13.53M peak)* | Single-publisher cursor increment and zero-copy poll. |
@@ -598,6 +641,7 @@ Measurements from [`benchmarks/results/competitors_benchmark.json`](benchmarks/r
 *Table 8: Comparative performance metrics across IPC implementations.*
 
 **Latency Analysis:**
+
 - **Minimum Ping-Pong Latency (200 ns):** When active threads complete handoffs in user space prior to suspension, half-RTT latency reaches 200 ns. This is within 50–150 ns of busy-spinning queues (`rte_ring` 50–150 ns) while remaining orders of magnitude faster than kernel transports (`POSIX mqueue` 5,450 ns min, `AF_UNIX` 16,151 ns min).
 - **Median Ping-Pong Latency (26.3 $\mu$s):** In strict single-message ping-pong workloads where the receiver enters `FUTEX_WAIT` while the sender prepares responses, latency reflects the kernel scheduler wakeup path ($\approx 26.3$ $\mu$s under virtualized Linux environments).
 
@@ -619,6 +663,7 @@ Measurements from [`benchmarks/results/competitors_benchmark.json`](benchmarks/r
 ### 9.4 Benchmark Methodology and Payload Copy Semantics
 
 An examination of [`benchmarks/bench_competitors.c`](benchmarks/bench_competitors.c) highlights an important measurement distinction between queue models:
+
 - **Pointer-Passing vs. Value-Passing Queues:** In `bench_competitors.c`, `rte_ring` and LMAX Disruptor allocate 64-byte slots (`uint8_t data[64]`) and clamp copy operations to $\min(\text{payload\_size}, 64)$. Consequently, for payloads from 4 KiB to 64 KiB, `rte_ring` and Disruptor copy only 64 bytes. In real DPDK applications, actual packet memory resides in an external buffer pool (`rte_mempool`), and only 8-byte pointers (`struct rte_mbuf *`) are transferred across cores.
 - **Full Payload Shared-Memory Transport:** In contrast, `librbipc` allocates a ring buffer sized dynamically to `slot_size = payload_size` and copies the full payload into and out of the shared-memory slot (sustaining 5.0–7.0 GB/s copy bandwidth, or up to 19.87 GB/s with non-temporal streaming stores, and zero-copy operation at higher rates). Meanwhile, `POSIX mqueue` rejects messages exceeding 8,192 bytes with `EMSGSIZE`.
 
@@ -635,17 +680,20 @@ Table 10 reports MPMC scaling across thread configurations on the 6-core Intel C
 *Table 10: Multi-producer multi-consumer throughput under varying thread contention and oversubscription.*
 
 **Analysis of Concurrency Collapse in Busy-Spinning Queues:**
+
 1. **Preemption Convoy in Head-Tail Queues:** In DPDK `rte_ring`, multiple producers claim tickets via compare-and-swap on `prod_head`, but the queue tail (`prod_tail`) must be updated in strict sequence order. If the OS scheduler preempts a producer that has claimed turn $t$ before it updates `prod_tail`, subsequent producers that claimed turns $t+1, t+2, \dots$ spin fruitlessly until the preempted thread is rescheduled.
 2. **Disruptor Cursor Starvation:** A similar bottleneck arises in Disruptor worker queues when a worker is preempted while holding the sequence cursor, blocking dependent processors.
 3. **Independent Slot Turning in `librbipc`:** In `librbipc`, ticket allocation is an atomic fetch-and-add on `write_ticket`. Each slot possesses an independent sequence turn ([`rbipc_slot_t`](include/rbipc.h)). Writers commit directly to their respective cache lines without waiting for preceding tail updates. Consequently, under 4P-4C oversubscription, `librbipc` maintains 1.42 Mops/s, surpassing `rte_ring` by 23.49× and Disruptor by 11.80×.
 
 **Pointer-Passing Microbenchmark:** When `librbipc` is evaluated exchanging 8-byte pointers rather than copying payload data ([`benchmarks/bench_librbipc_isolated.c`](benchmarks/bench_librbipc_isolated.c)):
+
 - Single-slot intra-process streaming achieves 17.01 Mops/s (58.79 ns/op).
 - Multi-process vector batching (batch size 32) achieves 21.29 Mops/s (46.98 ns/op).
 
 ### 9.6 Linux `perf` Hot-Spot Profiling and vDSO Optimization
 
 Profiling `librbipc` under Linux `perf record -F 999` revealed the following execution characteristics:
+
 1. **Initial Bottleneck:** `__vdso_clock_gettime` consumed 18.25% of total CPU cycles during read acquisitions because `rbipc_read_acquire` unconditionally queried `CLOCK_MONOTONIC` to record timestamps, even when consumer leases were disabled (`lease_timeout_ns == 0`).
 2. **Resolution:** Timestamp acquisition was conditioned on `RBIPC_UNLIKELY(lease_timeout_ns > 0)` in [`src/rbipc_io.c`](src/rbipc_io.c).
 3. **Impact:** Eliding redundant vDSO invocations eliminated `clock_gettime` overhead on the fast path, increasing single-slot pointer throughput from 5.76 Mops/s to 17.01 Mops/s (a 2.95× speedup) and reducing median half-RTT latency from 232 ns to 99 ns.
@@ -777,16 +825,16 @@ Executing `make coverage` compiles all 16 `src/` modules and test suites with `-
 
 ## 11. References
 
-1. D. Vyukov, "Bounded MPMC Queue," *1024cores: Concurrency Algorithms, Systems and Paradigms*, 2010. [Online]. Available: https://sites.google.com/site/1024cores/home/lock-free-algorithms/queues/bounded-mpmc-queue
+1. D. Vyukov, "Bounded MPMC Queue," *1024cores: Concurrency Algorithms, Systems and Paradigms*, 2010. [Online]. Available: <https://sites.google.com/site/1024cores/home/lock-free-algorithms/queues/bounded-mpmc-queue>
 2. J. Wang, K. Zhang, X. Tang, and B. Hua, "B-Queue: Efficient and Practical Queuing for Fast Core-to-Core Communication," *International Journal of Parallel Programming*, vol. 41, no. 1, pp. 137–159, 2013. DOI: 10.1007/s10766-012-0213-x.
-3. M. Thompson, D. Farley, M. Barker, P. Gee, and A. Stewart, "Disruptor: High Performance Alternative to Bounded Queues for Exchanging Data Between Concurrent Threads," LMAX Exchange White Paper, 2011. [Online]. Available: https://lmax-exchange.github.io/disruptor/files/Disruptor-1.0.pdf
+3. M. Thompson, D. Farley, M. Barker, P. Gee, and A. Stewart, "Disruptor: High Performance Alternative to Bounded Queues for Exchanging Data Between Concurrent Threads," LMAX Exchange White Paper, 2011. [Online]. Available: <https://lmax-exchange.github.io/disruptor/files/Disruptor-1.0.pdf>
 4. J. Giacomoni, T. Moseley, and M. Vachharajani, "FastForward for Efficient Pipeline Parallelism: A Cache-Optimized Concurrent Lock-Free Queue," in *Proc. 13th ACM SIGPLAN Symp. on Principles and Practice of Parallel Programming (PPoPP '08)*, 2008, pp. 43–52. DOI: 10.1145/1345206.1345215.
-5. U. Drepper, "What Every Programmer Should Know About Memory," Red Hat, Inc., Tech. Rep., 2007. [Online]. Available: https://akkadia.org/drepper/cpumemory.pdf
+5. U. Drepper, "What Every Programmer Should Know About Memory," Red Hat, Inc., Tech. Rep., 2007. [Online]. Available: <https://akkadia.org/drepper/cpumemory.pdf>
 6. H. Franke, R. Russell, and M. Kirkwood, "Fuss, Futexes and Furwocks: Fast Userlevel Locking in Linux," in *Proc. Ottawa Linux Symp. (OLS '02)*, 2002, pp. 479–495.
 7. R. Elz and R. Bush, "Serial Number Arithmetic," IETF RFC 1982, Aug. 1996. DOI: 10.17487/RFC1982.
-8. DPDK Project, "Ring Library (`rte_ring`) and Power Management (`rte_power_monitor`)," in *Data Plane Development Kit (DPDK) Programmer's Guide*, Linux Foundation, 2024. [Online]. Available: https://doc.dpdk.org/guides/prog_guide/
-9. Eclipse Foundation, "Eclipse iceoryx2: True Zero-Copy Inter-Process Communication in Rust," Eclipse Foundation, 2024–2026. [Online]. Available: https://iceoryx.io/
-10. A. Almeida, "Futex2: Bringing Multi-Wait and Variable Sizes to Linux Futexes," Linux Kernel Documentation, 2021. [Online]. Available: https://docs.kernel.org/userspace-api/futex2.html
+8. DPDK Project, "Ring Library (`rte_ring`) and Power Management (`rte_power_monitor`)," in *Data Plane Development Kit (DPDK) Programmer's Guide*, Linux Foundation, 2024. [Online]. Available: <https://doc.dpdk.org/guides/prog_guide/>
+9. Eclipse Foundation, "Eclipse iceoryx2: True Zero-Copy Inter-Process Communication in Rust," Eclipse Foundation, 2024–2026. [Online]. Available: <https://iceoryx.io/>
+10. A. Almeida, "Futex2: Bringing Multi-Wait and Variable Sizes to Linux Futexes," Linux Kernel Documentation, 2021. [Online]. Available: <https://docs.kernel.org/userspace-api/futex2.html>
 11. Intel Corporation, "User-Level Monitor and Wait (WAITPKG: `UMONITOR`, `UMWAIT`, `TPAUSE`)," in *Intel 64 and IA-32 Architectures Software Developer’s Manual*, vol. 2B, Order No. 325383-082US, 2024, pp. 4-463–4-467.
 12. Arm Limited, "Wait For Event with Timeout (`WFET`, `WFIT`): FEAT_WFxT Architecture Extension," in *Arm Architecture Reference Manual for A-profile Architecture*, Issue K.a, 2023, pp. C6-1782–C6-1784.
 13. M. Desnoyers, P. E. McKenney, A. S. Stern, M. R. Dagenais, and J. Walpole, "User-Level Implementations of Read-Copy Update," *IEEE Transactions on Parallel and Distributed Systems*, vol. 23, no. 2, pp. 375–382, Feb. 2012. DOI: 10.1109/TPDS.2011.159.

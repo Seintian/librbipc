@@ -80,6 +80,7 @@ librbipc/
 ## Public API Overview
 
 ### 1. Lifecycle, Attachment, & Wait Policies (`include/rbipc.h`)
+
 | Function | Description |
 | :--- | :--- |
 | `rbipc_create` / `rbipc_create_ex` | Create and initialize a named (`shm_open`) or anonymous (`memfd_create`) shared-memory ring buffer with explicit role flags (`RBIPC_ROLE_PRODUCER`, `RBIPC_ROLE_CONSUMER`, `RBIPC_ROLE_MONITOR`) and permissions. |
@@ -90,6 +91,7 @@ librbipc/
 | `rbipc_set_wait_policy` / `rbipc_get_wait_policy` | Configure `RBIPC_WAIT_ZERO_SPIN` (default passive `FUTEX_WAIT`) or `RBIPC_WAIT_ADAPTIVE` (bounded micro-spin pause budget before `FUTEX_WAIT`). |
 
 ### 2. Zero-Copy Single-Slot & Convenience Copy I/O (`include/rbipc.h`)
+
 | Function | Description |
 | :--- | :--- |
 | `rbipc_reserve_write` / `_nonblock` / `_timeout` | Claim a write ticket and obtain a direct zero-copy pointer (`void **out_buf`) to the cache-aligned slot buffer. |
@@ -100,6 +102,7 @@ librbipc/
 | `rbipc_read` / `_nonblock` / `_timeout` | Convenience wrapper: acquire → `memcpy` → release. |
 
 ### 3. B-Queue Vector Batching & Non-Temporal Streaming (`include/rbipc.h`)
+
 | Function | Description |
 | :--- | :--- |
 | `rbipc_reserve_write_batch` / `_nonblock` / `_timeout` | Reserve up to `count` contiguous slots in a single atomic step, populating an array of `rbipc_iovec_t` zero-copy descriptors. |
@@ -110,6 +113,7 @@ librbipc/
 | `rbipc_write_stream` / `_nonblock` / `_timeout` | Reserve a slot, transfer payload via cache-bypassing non-temporal streaming stores, and commit. |
 
 ### 4. Reactor, Leases, Capability IPC, & Multicast Pub-Sub (`rbipc.h`, `rbipc_ipc.h`, `rbipc_pubsub.h`)
+
 | Function | Description |
 | :--- | :--- |
 | `rbipc_enable_eventfd` / `rbipc_set_eventfd` / `rbipc_get_eventfd` / `rbipc_eventfd_drain` | Manage `eventfd(2)` readiness notifications for `epoll(7)` / `io_uring` event loop integration. |

@@ -205,7 +205,6 @@ RBIPC_INLINE RBIPC_NODISCARD uint64_t rbipc_clock_monotonic_ns(void) {
  * ============================================================================
  */
 
-#include <endian.h>
 #include <stddef.h>
 
 /**

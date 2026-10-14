@@ -7,7 +7,6 @@
 #include "../src/rbipc_math.h"
 #include <stdio.h>
 #include <assert.h>
-#include <limits.h>
 
 static void test_round_up_pow2(void) {
     assert(rbipc_round_up_pow2_32(0) == 1);

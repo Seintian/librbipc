@@ -17,7 +17,6 @@
 
 #include "rbipc_simd.h"
 #include "rbipc_math.h"
-#include "rbipc_predicate.h"
 
 #if defined(__x86_64__) || defined(_M_X64)
 #include <immintrin.h>

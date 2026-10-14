@@ -18,9 +18,11 @@
 ## 2. Architectural Foundations and Codebase Audit
 
 ### 2.1 Core Architectural Invariants
+
 `librbipc` is an ISO C23 (`-std=c23`) lock-free inter-process communication (IPC) library targeting modern Linux environments. Its stated goal is to resolve the classic dichotomy between **CPU-burning busy-spin queues** (e.g., DPDK [`rte_ring`](https://doc.dpdk.org/guides/prog_guide/ring_lib.html), LMAX Disruptor `BusySpinWaitStrategy`) and **kernel-mediated transports** (e.g., POSIX `mqueue`, `AF_UNIX` domain sockets).
 
 The library currently operates on the following core primitives:
+
 1. **Shared-Memory Geometry ([`include/rbipc.h`](include/rbipc.h), [`src/rbipc_shm.c`](src/rbipc_shm.c)):**
    A single contiguous memory region backed either by POSIX shared memory (`/dev/shm`) or an anonymous memory file (`memfd_create`) sealed against truncation (`F_SEAL_SHRINK | F_SEAL_GROW`). It contains:
    - A 64-byte aligned control header ([`rbipc_shm_header_t`](include/rbipc.h#L351-L375)) containing geometry, CRC32C integrity checksums, monotonic ticket cursors, and synchronization counters.
@@ -43,7 +45,7 @@ The library currently operates on the following core primitives:
 
 While `librbipc` delivers **11.16 M msgs/s** streaming throughput and **19.87 GB/s** non-temporal throughput for large payloads, empirical evaluation on the reference test platform reveals distinct performance cliffs:
 
-```
+```text
 Workload Scenario                 Observed Performance       Theoretical Bottleneck
 ---------------------------------------------------------------------------------------------------------
 Sustained 1P-1C Streaming         11.16 Mops/s (89.58 ns)    Store buffer stalls from memory_order_seq_cst fence
@@ -55,6 +57,7 @@ Idle Wakeup Churn                 60 vol_cs / 500 ms         20 ms periodic fute
 ```
 
 ### 2.3 Microarchitectural Limitations of Classic Futex Synchronization
+
 The Linux `futex` subsystem was introduced in 2002 (Linux 2.5.70 by Franke, Russell, and Kirkwood). In a modern multi-core environment, it presents severe microarchitectural limitations:
 
 1. **The 32-Bit Word Width Bottleneck:**
@@ -63,12 +66,14 @@ The Linux `futex` subsystem was introduced in 2002 (Linux 2.5.70 by Franke, Russ
    Process-shared futexes (`FUTEX_WAIT` without `FUTEX_PRIVATE_FLAG`) resolve user-space addresses to physical page offsets and hash them into a global kernel hash table (`futex_queues[256]` or `512`). All processes on the entire OS waiting or waking on futexes serialize on the spinlocks guarding these buckets. Under multi-process contention, CPU cores spend significant time spinning in Ring 0 on `hb->lock`.
 3. **The Store-Buffer Flush Penalty (The Dekker Tax):**
    To avoid lost wakeups, `librbipc` must enforce Dekker synchronization:
+
    ```c
    // Producer Commit Fast Path (src/rbipc_io.c)
    rbipc_slot_commit(slot, ticket, written_len); // store slot->sequence (release)
    atomic_thread_fence(memory_order_seq_cst);   // EMITS MFENCE (30-50 cycles)
    if (rbipc_sync_has_waiters(&hdr->futex_waiters)) { ... }
    ```
+
    On modern out-of-order x86 processors, `atomic_thread_fence(memory_order_seq_cst)` emits an `MFENCE` or locked instruction (`lock orl [rsp], 0`). This stalls the CPU store buffer, draining all speculative memory instructions. At 11 to 25 million messages per second, **`MFENCE` is executed tens of millions of times per second on the uncontended fast path** where no peer is even sleeping!
 4. **Context Switch and C-State Latency Penalty:**
    When a thread enters `FUTEX_WAIT`, the kernel deschedules it and puts the core to sleep or context-switches to another task. Waking a thread requires an Inter-Processor Interrupt (IPI), scheduler rescheduling, and a transition out of CPU power-saving C-states (C6/C7 can take 10–30 μs just to power up clock domains). This explains why ping-pong latency degrades from **150 ns** (pure spin) to **28,500 ns** (futex).
@@ -113,18 +118,22 @@ flowchart TD
 
 #### 1. Intel WAITPKG: `UMONITOR`, `UMWAIT`, and `TPAUSE`
 
-##### Specification and Mechanics
+##### Intel WAITPKG Specification and Mechanics
+
 Intel WAITPKG (Wait Package) is an architectural extension available on Intel Tremont, Alder Lake, Raptor Lake, Meteor Lake, Emerald Rapids, Sapphire Rapids, Granite Rapids, and AMD Zen 5 architectures (enumerated via `CPUID.(EAX=7,ECX=0):ECX[bit 5]`). It introduces three user-space instructions:
+
 - **`UMONITOR` (`_umonitor(void *addr)`):** Arms processor hardware address-monitoring logic to watch an address range (a cache line).
 - **`UMWAIT` (`_umwait(uint32_t state, uint64_t tsc_deadline)`):** Suspends execution in an optimized low-power user-mode sub-state (`C0.1` for ultra-low latency or `C0.2` for deep power savings) until either the monitored cache line is written to or the Time-Stamp Counter (TSC) reaches `tsc_deadline`.
 - **`TPAUSE` (`_tpause(uint32_t state, uint64_t tsc_deadline)`):** Executes a timed pause in a low-power state without an address monitor.
 
-##### Microarchitectural Rationale
+##### Intel WAITPKG Microarchitectural Rationale
+
 1. **Kernel Bypass with True Power Savings:** Unlike active spinning or `_mm_pause()` which burns 100% CPU core power, `UMWAIT` places the execution core into a clock-gated low-power state. In `C0.2`, the core yields internal execution pipelines and ALUs to its simultaneous multithreading (SMT) sibling thread.
 2. **Sub-Microsecond Latency:** When a producer writes to the monitored slot sequence, the CPU cache coherency protocol (MESI/MOESI Invalidate) triggers a hardware wake event. Wakeup latency is **40–70 ns** in `C0.1` (compared to 1,500–25,000 ns for `sys_futex`). This operates between the latency regimes of active spinning (150 ns) and passive futex sleep (28,500 ns).
 3. **No Syscall Overhead:** Entering and exiting `UMWAIT` does not cross the Ring 3 ↔ Ring 0 boundary, eliminating kernel stack setup, register saves, and scheduler preemption.
 
-##### Integration in `librbipc`
+##### Intel WAITPKG Integration in `librbipc`
+
 In [`src/rbipc_sync.c`](src/rbipc_sync.c), we implement a hardware-monitored wait that replaces Phase 1 spinning:
 
 ```c
@@ -167,6 +176,7 @@ RBIPC_HOT static int rbipc_waitpkg_wait(const _Atomic uint64_t *uaddr,
 ```
 
 *CPUID Guard:* Guarded at initialization via:
+
 ```c
 bool has_waitpkg = false;
 uint32_t eax, ebx, ecx, edx;
@@ -179,18 +189,22 @@ if (__get_cpuid_count(7, 0, &eax, &ebx, &ecx, &edx)) {
 
 #### 2. ARM64 Architecture: Exclusive Monitors & `WFE` / `WFET` (FEAT_WFxT)
 
-##### Specification and Mechanics
+##### ARM64 Exclusive Monitors & WFET Specification and Mechanics
+
 In the ARMv8-A and ARMv9-A architectures, synchronization primitives rely on **Exclusive Monitors** and **Event Registers**:
+
 - **Exclusive Monitors (`LDXR`/`LDAXR`):** Tag a memory address range (the Exclusive Reservation Granule, ERG, typically 64 bytes) in the core's local and global monitor state machines.
 - **`WFE` (Wait For Event):** Puts the Processing Element (PE) into a low-power standby state until an event is signaled. Any store to the monitored ERG by another core automatically invalidates the reservation and signals an event, waking the PE.
 - **`WFET` (Wait For Event with Timeout):** Introduced in **FEAT_WFxT** (mandatory from Armv8.7-A and Armv9.2-A). It accepts a 64-bit register holding a deadline matched against the virtual counter `CNTVCT_EL0`, bounding low-power sleep without software timer loops.
 
-##### Microarchitectural Rationale
+##### ARM64 Exclusive Monitors & WFET Microarchitectural Rationale
+
 1. **Architectural Parity with WaitPKG:** While x86 requires the dedicated `WAITPKG` extension, ARM's exclusive monitor hardware is deeply built into every multi-core ARM CPU.
 2. **Elimination of `SEV` Broadcasting:** Because the global cache coherency fabric clears the exclusive monitor when a producer issues a store to the slot sequence, the consumer automatically wakes up **without the producer needing to execute an explicit `SEV` instruction**.
 3. **Sub-100 ns Resumption:** Core wakeup from `WFE` takes tens of nanoseconds, bypassing the kernel entirely while consuming near-zero core energy.
 
-##### Integration in `librbipc`
+##### ARM64 Exclusive Monitors & WFET Integration in `librbipc`
+
 In [`src/rbipc_arch.h`](src/rbipc_arch.h):
 
 ```c
@@ -235,13 +249,16 @@ RBIPC_INLINE int rbipc_arm_wfet_wait(const _Atomic uint64_t *uaddr,
 
 #### 3. Intel User-Level Interrupts (UINTR / `SENDUIPI`)
 
-##### Specification and Mechanics
+##### Intel UINTR Specification and Mechanics
+
 Intel User Interrupts (**UINTR**), introduced in Xeon Sapphire Rapids (and subsequent Xeon architectures), allow user-space tasks (Ring 3) to deliver hardware interrupts directly to other user-space tasks across CPU cores via the **`SENDUIPI`** instruction, completely bypassing the operating system kernel.
 
-##### Microarchitectural Rationale
+##### Intel UINTR Microarchitectural Rationale
+
 Traditional inter-process notification (POSIX signals `kill`, `eventfd`, `sys_futex`) requires crossing the Ring 3 ↔ Ring 0 boundary, which incurs ~1.5–3.0 μs. `SENDUIPI` uses hardware User-Interrupt Target Tables (UITT) and User Posted-Interrupt Descriptors (UPID) configured by the kernel to dispatch an inter-processor interrupt (IPI) directly into the receiving thread's user-mode interrupt handler in **150–250 ns**.
 
 ##### Evaluation and Integration Perspective
+
 UINTR requires Linux kernel enablement for managing UITT tables across thread migrations (`CONFIG_X86_USER_INTERRUPTS`). In `librbipc`, UINTR can serve as an ultra-fast out-of-band notification primitive: when a writer encounters a sleeping consumer in the kernel, issuing `SENDUIPI` wakes the consumer thread without entering `SYS_futex(FUTEX_WAKE)`.
 
 ---
@@ -250,13 +267,17 @@ UINTR requires Linux kernel enablement for managing UITT tables across thread mi
 
 #### 1. Linux 5.16+ `futex2` and `sys_futex_waitv(2)`
 
-##### Specification and Mechanics
+##### futex_waitv Specification and Mechanics
+
 `futex2` was designed by Collabora (André Almeida et al.) and merged in **Linux 5.16** to replace the legacy `futex(2)` interface. Its primary system call is:
+
 ```c
 long syscall(SYS_futex_waitv, struct futex_waitv *waiters, unsigned int nr_futexes,
              unsigned int flags, struct timespec *timeout, clockid_t clockid);
 ```
+
 Where `struct futex_waitv` is defined as:
+
 ```c
 struct futex_waitv {
     __u64 val;        /* Expected value at uaddr */
@@ -266,9 +287,10 @@ struct futex_waitv {
 };
 ```
 
-##### Microarchitectural Rationale
+##### futex_waitv Microarchitectural Rationale
+
 1. **Direct 64-Bit Futex Words (`FUTEX_64`):**
-   `futex_waitv` supports native 64-bit futex words via `FUTEX_64 | FUTEX_SHARED_FLAG`. 
+   `futex_waitv` supports native 64-bit futex words via `FUTEX_64 | FUTEX_SHARED_FLAG`.
    **This completely eliminates the need for `librbipc`'s decoupled 32-bit `futex_seq` and `write_futex_seq` proxy words.**
    A consumer can now sleep directly on the 64-bit `slot->sequence` or on `hdr->write_ticket`, eliminating dual state machines, proxy cache-line bouncing, and 32-bit wrap-around aliasing!
 2. **Vectorized Multi-Wait (`nr_futexes > 1`):**
@@ -280,7 +302,8 @@ struct futex_waitv {
 3. **Optimized Kernel Wait-Queues:**
    `futex_waitv` redesigns the kernel's internal hash bucket architecture with better NUMA placement, reducing `hb->lock` contention by up to 40% under multi-threaded load.
 
-##### Integration in `librbipc`
+##### futex_waitv Integration in `librbipc`
+
 We define a modern `futex2` wrapper in [`src/rbipc_futex.c`](src/rbipc_futex.c):
 
 ```c
@@ -341,14 +364,18 @@ RBIPC_LEAF int rbipc_futex2_wait_slot_or_shutdown(const _Atomic uint64_t *slot_s
 
 #### 2. Linux 6.7+ `io_uring` Asynchronous Futexes
 
-##### Specification and Mechanics
+##### io_uring Futex Specification and Mechanics
+
 In **Linux 6.7**, Jens Axboe introduced native futex support to the `io_uring` subsystem via:
+
 - `IORING_OP_FUTEX_WAIT`
 - `IORING_OP_FUTEX_WAKE`
 - `IORING_OP_FUTEX_WAITV`
 
-##### Microarchitectural Rationale
+##### io_uring Futex Microarchitectural Rationale
+
 `librbipc` currently integrates with epoll reactors via an `eventfd` file descriptor ([`src/rbipc_reactor.c`](src/rbipc_reactor.c)). This introduces:
+
 - File descriptor table allocation in the kernel.
 - An extra 8-byte `write(2)` syscall on producer commit.
 - An 8-byte `read(2)` syscall on consumer drain.
@@ -359,16 +386,21 @@ Using `IORING_OP_FUTEX_WAIT`, an asynchronous event loop can register a futex wa
 
 #### 3. Atomic Multi-Futex Operations: `FUTEX_WAKE_OP`
 
-##### Specification and Mechanics
+##### FUTEX_WAKE_OP Specification and Mechanics
+
 The `FUTEX_WAKE_OP` operation in `sys_futex` allows user space to atomically modify a secondary futex word and wake waiters on two distinct futex words in a single system call:
+
 ```c
 syscall(SYS_futex, uaddr1, FUTEX_WAKE_OP, val1, val2, uaddr2, val3);
 ```
+
 Where `val3` encodes:
 $$\text{val3} = (\text{op} \ll 28) \mid (\text{cmp} \ll 24) \mid (\text{oparg} \ll 12) \mid \text{cmparg}$$
 
-##### Microarchitectural Rationale
+##### FUTEX_WAKE_OP Microarchitectural Rationale
+
 In `librbipc`, a consumer releasing a slot must:
+
 1. Advance `slot->sequence = ticket + capacity`
 2. Check `write_waiters`
 3. Issue `FUTEX_WAKE` on `write_futex_seq` if writers are sleeping.
@@ -380,23 +412,29 @@ With `FUTEX_WAKE_OP`, the kernel atomically increments the producer wakeup word 
 
 #### 1. Asymmetric Dekker Synchronization via `sys_membarrier(2)`
 
-##### Specification and Mechanics
+##### sys_membarrier Specification and Mechanics
+
 Asymmetric Dekker Synchronization (formalized by Mathieu Desnoyers et al., *User-Level Implementations of Read-Copy Update*, IEEE TPDS 2012) eliminates hardware memory barriers on high-frequency fast paths by shifting the memory ordering cost to infrequent slow paths.
 
 Linux implements this via the `membarrier(2)` system call (`MEMBARRIER_CMD_GLOBAL` / `MEMBARRIER_CMD_PRIVATE_EXPEDITED`). When invoked, the kernel forces a memory barrier on all active execution threads/cores across the system via inter-processor interrupts (IPI) or scheduler context switches.
 
-##### Microarchitectural Rationale
+##### sys_membarrier Microarchitectural Rationale
+
 Recall `librbipc`'s current commit and release path:
+
 ```c
 rbipc_slot_commit(slot, ticket, written_len); // Write slot sequence
 atomic_thread_fence(memory_order_seq_cst);   // MFENCE: 30-50 cycles!
 if (rbipc_sync_has_waiters(&hdr->futex_waiters)) { ... }
 ```
+
 The `memory_order_seq_cst` fence is required *only* to prevent the CPU's store buffer from reordering the store to `slot->sequence` past the load of `futex_waiters`.
 
 **Under Asymmetric Dekker:**
+
 1. **Producer Fast Path (Millions of ops/sec):**
    The producer performs **NO hardware fence** (`MFENCE`). It executes only a compiler memory barrier (`memory_order_release`):
+
    ```c
    rbipc_slot_commit(slot, ticket, written_len);
    // ZERO hardware fence! Free pipeline flow!
@@ -404,8 +442,10 @@ The `memory_order_seq_cst` fence is required *only* to prevent the CPU's store b
        rbipc_sync_wake_one(&hdr->futex_seq, &hdr->futex_waiters);
    }
    ```
+
 2. **Consumer Slow Path (Only when ring is empty and thread must sleep):**
    The consumer registers its intent to sleep, issues `sys_membarrier(MEMBARRIER_CMD_GLOBAL, 0)`, and re-checks `slot->sequence`:
+
    ```c
    atomic_fetch_add_explicit(&hdr->futex_waiters, 1, memory_order_relaxed);
    syscall(SYS_membarrier, MEMBARRIER_CMD_GLOBAL, 0, 0); // Forces barrier on all producer cores
@@ -417,6 +457,7 @@ The `memory_order_seq_cst` fence is required *only* to prevent the CPU's store b
    ```
 
 ##### Microarchitectural Evaluation
+
 - **Fast Path:** Eliminates 30–50 CPU cycles on *every single message*. For a 64-byte payload stream, this yields an immediate **20% to 35% boost in single-stream message throughput**.
 - **Amortized Slow Path:** While `sys_membarrier` costs ~3–8 μs, it is executed *only* when the ring is completely empty and the consumer is already about to pay the ~25 μs penalty of entering kernel sleep.
 
@@ -424,18 +465,23 @@ The `memory_order_seq_cst` fence is required *only* to prevent the CPU's store b
 
 #### 2. Scalable Circular Queue (SCQ) Principles: Fetch-And-Add (FAA) Ticket Claiming
 
-##### Specification and Mechanics
+##### SCQ Ticket Claiming Specification and Mechanics
+
 In DISC 2019, Ruslan Nikolaev published *"A Scalable, Portable, and Memory-Efficient Lock-Free FIFO Queue"* (SCQ), extended to wait-freedom (*wCQ*) in 2022. SCQ establishes that Compare-And-Swap (CAS) loops on queue head/tail pointers are the primary bottleneck of concurrent ring buffers, and proves how to construct bounded FIFO queues using pure **Fetch-And-Add (FAA)**.
 
-##### Microarchitectural Rationale
+##### SCQ Ticket Claiming Microarchitectural Rationale
+
 In `librbipc`, ticket reservations currently use a CAS loop:
+
 ```c
 bool rbipc_io_try_claim_write_ticket(rbipc_shm_header_t *hdr, uint64_t *t, uint32_t count) {
     return atomic_compare_exchange_weak_explicit(
         &hdr->write_ticket, t, *t + count, memory_order_acq_rel, memory_order_relaxed);
 }
 ```
+
 Under multi-producer contention (e.g., 4 producers in `test_e2e_multithread.c`):
+
 - Producer 1 succeeds in CAS.
 - Producers 2, 3, and 4 fail. Their cache lines are invalidated. They reload `write_ticket` and retry.
 - This generates $O(P^2)$ cache-line bus invalidations, causing throughput to collapse from **6.20 Mops/s** (1P-1C) to **1.24 Mops/s** (4P-2C).
@@ -443,13 +489,17 @@ Under multi-producer contention (e.g., 4 producers in `test_e2e_multithread.c`):
 By contrast, **Fetch-And-Add (`atomic_fetch_add`)** is hardware-pipelined (`lock xadd` on x86, `LDADD` on ARM64 LSE). It is **wait-free** and completes in a single atomic bus transaction ($O(P)$ scalability).
 
 ##### Integration in `librbipc`: Bounded FAA Ticket Allocation
+
 In a naive FAA queue, if the ring buffer is full, producers blindly incrementing `write_ticket` will wrap around and overwrite slots. To preserve bounded safety with FAA:
+
 1. **Producer Credit Counter:**
    Maintain an atomic `available_credits` counter initialized to `capacity`.
    Producers claim tickets via FAA:
+
    ```c
    uint64_t t = atomic_fetch_add_explicit(&hdr->write_ticket, 1, memory_order_acq_rel);
    ```
+
 2. **Cycle-Tagged Slot Verification (Nikolaev SCQ Pattern):**
    Each slot stores a generation cycle: $\text{cycle} = t / \text{capacity}$.
    The producer checks if the slot's cycle matches the current generation:
@@ -460,11 +510,14 @@ In a naive FAA queue, if the ring buffer is full, producers blindly incrementing
 
 #### 3. Ticket Delegation & Combining Funnels (CC-Synch / Flat Combining)
 
-##### Specification and Mechanics
+##### Ticket Delegation & Combining Funnels Specification and Mechanics
+
 Flat Combining (Hendler, Incze, Shavit, Tzafrir, SPAA 2010) and CC-Synch (Fatourou & Kallimanis, PPoPP 2012) address concurrent queue contention by electing a single thread (the *combiner*) from a pool of contending threads to perform ticket reservations in batch on behalf of all waiting peers.
 
-##### Microarchitectural Rationale
+##### Ticket Delegation & Combining Funnels Microarchitectural Rationale
+
 When 8 or 16 threads attempt to reserve tickets simultaneously, they create a cache-coherence storm on the shared `write_ticket` cache line. With Flat Combining:
+
 1. Threads publish their requested batch size (e.g. 1 message) into a process-shared contention array.
 2. The first arriving thread acquires an uncontended lock bit and becomes the **Combiner**.
 3. The Combiner performs a **single `atomic_fetch_add`** for the aggregate count ($\sum \text{batch}$), assigns the assigned ticket slices to each waiting thread's publication slot, and releases the combiner bit.
@@ -476,7 +529,8 @@ When 8 or 16 threads attempt to reserve tickets simultaneously, they create a ca
 
 #### 1. Multi-Lane / Sharded Ring Buffers (Sub-Ring Partitioning)
 
-##### Specification and Mechanics
+##### Multi-Lane Buffers Specification and Mechanics
+
 Rather than routing all producers and consumers through a single monolithic `write_ticket` and `read_ticket`, the ring buffer is partitioned internally into $K$ parallel power-of-2 independent sub-rings (lanes), where $K$ matches the core count (e.g., $K = 4$ or $8$).
 
 ```mermaid
@@ -492,8 +546,10 @@ graph LR
     L3 --> C2
 ```
 
-##### Microarchitectural Rationale
+##### Multi-Lane Buffers Microarchitectural Rationale
+
 In a single-ring MPMC queue, the single `write_ticket` cache line is a physical bottleneck on multi-socket NUMA systems. In a partitioned multi-lane queue:
+
 - Each producer writes to its assigned lane (`pid % K`), eliminating cross-core cache invalidations on `write_ticket`.
 - Consumers poll lanes using AVX2 SIMD scanning ([`src/rbipc_simd.c`](src/rbipc_simd.c)), stealing from adjacent lanes when their primary lane is empty.
 - Throughput scales linearly with the number of hardware execution lanes.
@@ -502,8 +558,10 @@ In a single-ring MPMC queue, the single `write_ticket` cache line is a physical 
 
 #### 2. 64-Bit Packed Slot Descriptors (Compressed State Words)
 
-##### Specification and Mechanics
+##### Packed Slot Descriptors Specification and Mechanics
+
 `librbipc` currently defines [`rbipc_slot_t`](include/rbipc.h#L330-L345) with separate fields:
+
 ```c
 typedef struct {
   _Alignas(64) _Atomic uint64_t sequence; // 8 bytes
@@ -514,11 +572,14 @@ typedef struct {
   _Atomic uint64_t acquire_timestamp_ns;  // 8 bytes
 } rbipc_slot_t;
 ```
+
 During a commit, two separate atomic writes are executed:
+
 1. `atomic_store_explicit(&slot->state, COMMITTED, relaxed)`
 2. `atomic_store_explicit(&slot->sequence, ticket + 1, release)`
 
 ##### Rationale and Structural Formulation
+
 By packing `sequence` (48 bits, sufficient for $2^{48}$ messages $\approx 281$ trillion messages without wrap-around), `state` (4 bits), and `len` (12 bits, supporting payloads up to 4 KiB) into a **single 64-bit atomic word**:
 
 $$\text{Packed Word} = (\text{sequence}_{48} \ll 16) \mid (\text{len}_{12} \ll 4) \mid \text{state}_4$$

@@ -9,7 +9,6 @@
 #include <stdio.h>
 #include <string.h>
 #include <assert.h>
-#include <unistd.h>
 
 static void test_vmem_ctrl_map(void) {
     void *map = NULL;

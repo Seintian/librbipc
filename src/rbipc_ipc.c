@@ -8,7 +8,6 @@
 #endif
 
 #include "rbipc_ipc.h"
-#include "rbipc_internal.h"
 #include "rbipc_predicate.h"
 
 #include <sys/socket.h>

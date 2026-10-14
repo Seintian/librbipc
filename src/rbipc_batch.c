@@ -16,6 +16,7 @@
 #endif
 
 #include "rbipc_batch.h"
+#include "rbipc_attr.h"
 #include "rbipc_audit.h"
 #include "rbipc_internal.h"
 #include "rbipc_predicate.h"

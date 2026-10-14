@@ -7,7 +7,6 @@
 #include <stdio.h>
 #include <string.h>
 #include <assert.h>
-#include <unistd.h>
 
 static void test_pubsub_basic_multicast(void) {
     rbipc_ring_t *ring = NULL;

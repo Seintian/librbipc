@@ -15,8 +15,6 @@
 #endif
 
 #include "rbipc_stream.h"
-#include "rbipc_io.h"
-#include "rbipc_predicate.h"
 
 #include <string.h>
 

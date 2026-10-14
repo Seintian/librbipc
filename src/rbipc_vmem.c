@@ -16,8 +16,6 @@
 #include "rbipc_predicate.h"
 
 #include <sys/mman.h>
-#include <unistd.h>
-#include <errno.h>
 
 /**
  * @brief Maps the control header and slot descriptor metadata region.
