@@ -20,7 +20,12 @@ benchmarks/results/
 │   ├── idle_strategies_benchmark.json # Idle wait strategy evaluation on laptop
 │   ├── zero_spin_optimized.json       # Streaming, ping-pong, batch, and MPMC on laptop
 │   └── competitors_benchmark.json     # 5-system comparative benchmarks on laptop
-└── laptop_powersave/                  # Datasets measured on Mobile Profile in Power-Save Mode (Unplugged on Battery)
+├── laptop_powersave/                  # Datasets measured on Mobile Profile in Power-Save Mode (Unplugged on Battery)
+│   ├── deep_dive_features.json        # Micro-architectural feature evaluation under power-save throttling
+│   ├── idle_strategies_benchmark.json # Idle wait strategy evaluation under power-save throttling
+│   ├── zero_spin_optimized.json       # Streaming, ping-pong, batch, and MPMC under power-save throttling
+│   └── competitors_benchmark.json     # 5-system comparative benchmarks under power-save throttling
+└── (5 Benchmark Suites)               # bench_suite, bench_competitors, bench_deep_dive, bench_idle_strategies, bench_librbipc_isolated
 ```
 
 *Note:* Backward-compatibility symbolic links are maintained at `benchmarks/results/*.json` pointing to the canonical `home_pc/` reference datasets.

@@ -12,6 +12,8 @@
 | **Stage 3.1: Asymmetric Dekker (`sys_membarrier`) Registration** | **DONE** | Hardened `rbipc_ring_alloc_handle` to register `MEMBARRIER_CMD_REGISTER_GLOBAL_EXPEDITED` upon creation; elided redundant store-release fence on `slot->state`. | Zero lost wakeup vulnerability for non-sleeping producers; clean kernel IPI delivery. |
 | **Stage 3.2: Nikolaev SCQ Bounded FAA Ticket Leasing** | **DONE** | Implemented bounded `atomic_fetch_add` fast path for unbounded writes (`timeout_ns == UINT64_MAX`) + exponential pause backoff on CAS contention. | Adaptive throughput: **+241.0%** (258.5k -> 881.6k msgs/s); 4P-4C contention: **0.73 Mops/s (73× faster than Disruptor)**. |
 | **Battery Power-Save Auto-Detection & Isolated Results** | **DONE** | Implemented `/sys/class/power_supply/AC/online` sensing routing to `benchmarks/results/laptop_powersave/` without clobbering plugged-in baseline. | Preserves isolated, reproducible telemetry across all 3 power/hardware profiles. |
+| **Convenience Copy I/O & Lifecycle Aliases** | **DONE** | Implemented `rbipc_write*`, `rbipc_read*`, and `rbipc_shutdown(ring)` convenience wrappers in `src/rbipc_io.c` and `include/rbipc.h`. Full test coverage in `tests/test_io_basic.c`. | Resolves API documentation mismatch; provides zero-friction buffer copy I/O. |
+| **Doxygen LaTeX Math Parsing & Link Integrity Verification** | **DONE** | Implemented input filter `scripts/doxygen_md_filter.py` and recursive auxiliary asset mirroring in `scripts/postprocess_docs.py`. | **0 Doxygen warnings** and **0 broken links** across 98 generated HTML pages. |
 
 ---
 

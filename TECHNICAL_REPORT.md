@@ -279,7 +279,7 @@ Let $P$ denote a producer thread and $C$ denote a consumer thread interacting vi
    $$\text{ReleaseStore}(s\to\text{sequence}, t_w + 1) \xrightarrow{sw} \text{AcquireLoad}(s\to\text{sequence}, t_r + 1)$$
 3. **Happens-Before Relation:** By transitivity of program order and synchronizes-with:
    $$\text{Write}(M[i]) \xrightarrow{hb} \text{AcquireLoad}(s\to\text{sequence}, t_r + 1) \xrightarrow{po} \text{Read}(M[i])$$
-4. **Visibility:** Under ISO C23 $\S$7.17.3, all payload writes executed by $P$ are globally visible to $C$ prior to $C$'s read operations. Full hardware memory fences (`mfence`, `dmb ish`) are unnecessary on the commit and release paths.
+4. **Visibility:** Under ISO C23 § 7.17.3, all payload writes executed by $P$ are globally visible to $C$ prior to $C$'s read operations. Full hardware memory fences (`mfence`, `dmb ish`) are unnecessary on the commit and release paths.
 
 ---
 
@@ -800,22 +800,22 @@ Executing `make coverage` compiles all 16 `src/` modules and test suites with `-
 | [`src/rbipc_simd.c`](src/rbipc_simd.c) | 56 | 55 | **98.21%** |
 | [`src/rbipc_predicate.h`](src/rbipc_predicate.h) | 39 | 38 | **97.44%** |
 | [`src/rbipc_math.h`](src/rbipc_math.h) | 13 | 12 | **92.31%** |
-| [`src/rbipc_sync.c`](src/rbipc_sync.c) | 72 | 66 | **91.67%** |
-| [`src/rbipc_audit.c`](src/rbipc_audit.c) | 118 | 108 | **91.53%** |
-| [`src/rbipc_batch.c`](src/rbipc_batch.c) | 180 | 164 | **91.11%** |
+| [`src/rbipc_audit.c`](src/rbipc_audit.c) | 120 | 110 | **91.67%** |
+| [`src/rbipc_batch.c`](src/rbipc_batch.c) | 181 | 165 | **91.16%** |
 | [`src/rbipc_slot.c`](src/rbipc_slot.c) | 91 | 82 | **90.11%** |
-| [`src/rbipc_ring.c`](src/rbipc_ring.c) | 283 | 249 | **87.99%** |
+| [`src/rbipc_ring.c`](src/rbipc_ring.c) | 286 | 252 | **88.11%** |
 | [`src/rbipc_vmem.c`](src/rbipc_vmem.c) | 53 | 46 | **86.79%** |
 | [`src/rbipc_ipc.c`](src/rbipc_ipc.c) | 73 | 63 | **86.30%** |
-| [`src/rbipc_io.c`](src/rbipc_io.c) | 179 | 148 | **82.68%** |
-| [`src/rbipc_pubsub.c`](src/rbipc_pubsub.c) | 148 | 119 | **80.41%** |
-| [`src/rbipc_futex.c`](src/rbipc_futex.c) | 19 | 15 | **78.95%** |
-| [`src/rbipc_shm.c`](src/rbipc_shm.c) | 128 | 100 | **78.12%** |
+| [`src/rbipc_pubsub.c`](src/rbipc_pubsub.c) | 149 | 119 | **79.87%** |
+| [`src/rbipc_shm.c`](src/rbipc_shm.c) | 130 | 102 | **78.46%** |
+| [`src/rbipc_io.c`](src/rbipc_io.c) | 282 | 219 | **77.66%** |
+| [`src/rbipc_futex.c`](src/rbipc_futex.c) | 181 | 140 | **77.35%** |
 | [`src/rbipc_stream.c`](src/rbipc_stream.c) | 54 | 40 | **74.07%** |
 | [`src/rbipc_internal.h`](src/rbipc_internal.h) | 10 | 7 | **70.00%** |
 | [`src/rbipc_reactor.c`](src/rbipc_reactor.c) | 70 | 49 | **70.00%** |
-| [`src/rbipc_arch.h`](src/rbipc_arch.h) | 26 | 18 | **69.23%** |
-| **TOTAL (`librbipc` v2.0.0)** | **1,685** | **1,452** | **86.17%** |
+| [`src/rbipc_sync.c`](src/rbipc_sync.c) | 182 | 126 | **69.23%** |
+| [`src/rbipc_arch.h`](src/rbipc_arch.h) | 44 | 27 | **61.36%** |
+| **TOTAL (`librbipc` v2.0.0)** | **2,087** | **1,725** | **82.65%** |
 
 *Table 15: Module-by-module gcov statement coverage.*
 

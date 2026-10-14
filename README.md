@@ -2,7 +2,7 @@
 
 [![Standard: ISO C23](https://img.shields.io/badge/C-C23-blue.svg)](https://en.cppreference.com/w/c/23)
 [![Platform: Linux](https://img.shields.io/badge/Platform-Linux-FCC624.svg)](https://www.kernel.org/)
-[![Coverage: 86.17%](https://img.shields.io/badge/Coverage-86.17%25-brightgreen.svg)](#test-coverage)
+[![Coverage: 82.65%](https://img.shields.io/badge/Coverage-82.65%25-brightgreen.svg)](#test-coverage)
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 
 `librbipc` is a zero-dependency, production-grade Inter-Process Communication (IPC) library written in ISO C23 for Linux. It implements a lock-free Multi-Producer / Multi-Consumer (MPMC) shared-memory ring buffer engineered for **sub-microsecond user-space fast paths**, **zero idle CPU consumption (0.13%)** via Dekker-synchronized Linux `sys_futex` suspension, **deterministic crash recovery** (`pidfd_open(2)`), **B-Queue scatter-gather vector batching** (**50.68M msgs/s**), **non-temporal cache-bypassing streaming stores** (**19.87 GB/s**), **asynchronous `eventfd`/`epoll` reactor signaling**, and **1-to-N lock-free multicast publish-subscribe**.
@@ -35,7 +35,7 @@ For the complete formal concurrency model, memory layout geometry, crash-recover
 ```text
 librbipc/
 ├── include/
-│   ├── rbipc.h              # Public C23/C++ ABI: core ring, zero-copy I/O, batching, streaming, reactor, leases
+│   ├── rbipc.h              # Public C23/C++ ABI: core ring, zero-copy I/O, convenience copy I/O, batching, streaming, reactor, leases
 │   ├── rbipc_ipc.h          # Public ABI: UNIX domain socket SCM_RIGHTS descriptor passing
 │   └── rbipc_pubsub.h       # Public ABI: 1-to-N lock-free multicast publish-subscribe engine
 ├── src/
@@ -60,17 +60,20 @@ librbipc/
 │   ├── rbipc_ipc.c          # Ancillary SCM_RIGHTS file descriptor transmission and attachment
 │   └── rbipc_pubsub.c       # 1-to-N multicast topic publishing and independent subscriber cursor polling
 ├── tests/                   # 25 automated verification suites (16 unit, 3 I/O, 6 E2E & chaos fault-injection)
-├── benchmarks/              # 4 benchmark suites + partitioned datasets (benchmarks/results/{home_pc,laptop}/*.json)
+├── benchmarks/              # 5 benchmark suites + partitioned datasets (benchmarks/results/{home_pc,laptop,laptop_powersave}/*.json)
 │   ├── bench_common.h       # Shared hardware telemetry, path routing, and adaptive spin backoff
 │   ├── bench_suite.c        # Core latency, 1P-1C streaming, B-Queue batching, zero-copy payloads, MPMC
 │   ├── bench_deep_dive.c    # Adaptive spin, non-temporal streaming stores, pub-sub, reactor, SIMD, leases
 │   ├── bench_competitors.c  # Cross-system: librbipc vs. DPDK rte_ring, LMAX Disruptor, mqueue, AF_UNIX
-│   └── bench_idle_strategies.c # 10-strategy evaluation across DPDK, LMAX Disruptor, and librbipc wait policies
+│   ├── bench_idle_strategies.c # 10-strategy evaluation across DPDK, LMAX Disruptor, and librbipc wait policies
+│   └── bench_librbipc_isolated.c # Isolated microbenchmarks (pointer exchange, payload copies, B-Queue batches)
 ├── scripts/
 │   ├── coverage_summary.py  # Automated gcov line coverage parser and tabular reporter
+│   ├── doxygen_md_filter.py # Doxygen Markdown input filter for clean MathJax LaTeX parsing
 │   ├── gen_compile_commands.py # Clang-Tidy compilation database generator
 │   └── postprocess_docs.py  # Doxygen HTML asset bundler and navigation post-processor
 ├── TECHNICAL_REPORT.md      # Unified architectural monograph, formal proofs, and empirical evaluation
+├── TODO.md                  # Next-generation synchronization hierarchy specification and roadmap
 ├── Doxyfile                 # Doxygen API and architectural documentation configuration
 └── Makefile                 # Build, test, sanitizer, static analysis, coverage, and documentation targets
 ```
@@ -87,8 +90,9 @@ librbipc/
 | `rbipc_attach` / `rbipc_attach_ex` | Attach to an existing named shared-memory ring buffer and verify header magic, endianness, CRC32C, and layout geometry. |
 | `rbipc_attach_fd` / `rbipc_attach_fd_ex` | Attach directly to an open shared-memory file descriptor (e.g., received via `SCM_RIGHTS`). |
 | `rbipc_detach` / `rbipc_destroy` | Unmap virtual memory regions, decrement active role counters, close descriptors, or unlink a named POSIX shared memory segment. |
-| `rbipc_shutdown` | Set the atomic shutdown flag and broadcast a wakeup (`FUTEX_WAKE_ALL`) to all blocked producers and consumers. |
-| `rbipc_set_wait_policy` / `rbipc_get_wait_policy` | Configure `RBIPC_WAIT_ZERO_SPIN` (default passive `FUTEX_WAIT`) or `RBIPC_WAIT_ADAPTIVE` (bounded micro-spin pause budget before `FUTEX_WAIT`). |
+| `rbipc_signal_shutdown` / `rbipc_shutdown` | Set the atomic shutdown flag and broadcast a wakeup (`FUTEX_WAKE_ALL`) to all blocked producers and consumers. |
+| `rbipc_set_wait_policy` / `rbipc_get_wait_policy` | Configure `RBIPC_WAIT_ZERO_SPIN` (default passive `FUTEX_WAIT`), `RBIPC_WAIT_ADAPTIVE` (bounded micro-spin pause budget before `FUTEX_WAIT`), or `RBIPC_WAIT_HW_MONITOR` (WAITPKG `UMWAIT` C0.2 / ARM64 `WFET` clock-gated hardware wait). |
+| `rbipc_get_fd` / `rbipc_get_stats` | Retrieve underlying shared-memory descriptor or query live telemetry statistics (tickets, capacity, active roles). |
 
 ### 2. Zero-Copy Single-Slot & Convenience Copy I/O (`include/rbipc.h`)
 
@@ -156,34 +160,34 @@ Verified across all 25 test suites via `make coverage` (`gcov` with `-O0 -g --co
 
 | Source File | Executable Lines | Covered Lines | Coverage % |
 | :--- | ---: | ---: | ---: |
-| [`src/rbipc_arch.h`](src/rbipc_arch.h) | 26 | 18 | 69.23% |
-| [`src/rbipc_audit.c`](src/rbipc_audit.c) | 118 | 108 | 91.53% |
-| [`src/rbipc_batch.c`](src/rbipc_batch.c) | 180 | 164 | 91.11% |
 | [`src/rbipc_error.c`](src/rbipc_error.c) | 56 | 56 | **100.00%** |
-| [`src/rbipc_futex.c`](src/rbipc_futex.c) | 19 | 15 | 78.95% |
-| [`src/rbipc_internal.h`](src/rbipc_internal.h) | 10 | 7 | 70.00% |
-| [`src/rbipc_io.c`](src/rbipc_io.c) | 179 | 148 | 82.68% |
 | [`src/rbipc_io.h`](src/rbipc_io.h) | 13 | 13 | **100.00%** |
-| [`src/rbipc_ipc.c`](src/rbipc_ipc.c) | 73 | 63 | 86.30% |
-| [`src/rbipc_math.h`](src/rbipc_math.h) | 13 | 12 | 92.31% |
-| [`src/rbipc_predicate.h`](src/rbipc_predicate.h) | 39 | 38 | 97.44% |
-| [`src/rbipc_pubsub.c`](src/rbipc_pubsub.c) | 148 | 119 | 80.41% |
-| [`src/rbipc_reactor.c`](src/rbipc_reactor.c) | 70 | 49 | 70.00% |
-| [`src/rbipc_ring.c`](src/rbipc_ring.c) | 283 | 249 | 87.99% |
-| [`src/rbipc_shm.c`](src/rbipc_shm.c) | 128 | 100 | 78.12% |
-| [`src/rbipc_simd.c`](src/rbipc_simd.c) | 56 | 55 | 98.21% |
-| [`src/rbipc_slot.c`](src/rbipc_slot.c) | 91 | 82 | 90.11% |
-| [`src/rbipc_stream.c`](src/rbipc_stream.c) | 54 | 40 | 74.07% |
 | [`src/rbipc_stream.h`](src/rbipc_stream.h) | 4 | 4 | **100.00%** |
-| [`src/rbipc_sync.c`](src/rbipc_sync.c) | 72 | 66 | 91.67% |
+| [`src/rbipc_simd.c`](src/rbipc_simd.c) | 56 | 55 | **98.21%** |
+| [`src/rbipc_predicate.h`](src/rbipc_predicate.h) | 39 | 38 | 97.44% |
+| [`src/rbipc_math.h`](src/rbipc_math.h) | 13 | 12 | 92.31% |
+| [`src/rbipc_audit.c`](src/rbipc_audit.c) | 120 | 110 | 91.67% |
+| [`src/rbipc_batch.c`](src/rbipc_batch.c) | 181 | 165 | 91.16% |
+| [`src/rbipc_slot.c`](src/rbipc_slot.c) | 91 | 82 | 90.11% |
+| [`src/rbipc_ring.c`](src/rbipc_ring.c) | 286 | 252 | 88.11% |
 | [`src/rbipc_vmem.c`](src/rbipc_vmem.c) | 53 | 46 | 86.79% |
-| **TOTAL LINE COVERAGE** | **1,685** | **1,452** | **86.17%** |
+| [`src/rbipc_ipc.c`](src/rbipc_ipc.c) | 73 | 63 | 86.30% |
+| [`src/rbipc_pubsub.c`](src/rbipc_pubsub.c) | 149 | 119 | 79.87% |
+| [`src/rbipc_shm.c`](src/rbipc_shm.c) | 130 | 102 | 78.46% |
+| [`src/rbipc_io.c`](src/rbipc_io.c) | 282 | 219 | 77.66% |
+| [`src/rbipc_futex.c`](src/rbipc_futex.c) | 181 | 140 | 77.35% |
+| [`src/rbipc_stream.c`](src/rbipc_stream.c) | 54 | 40 | 74.07% |
+| [`src/rbipc_internal.h`](src/rbipc_internal.h) | 10 | 7 | 70.00% |
+| [`src/rbipc_reactor.c`](src/rbipc_reactor.c) | 70 | 49 | 70.00% |
+| [`src/rbipc_sync.c`](src/rbipc_sync.c) | 182 | 126 | 69.23% |
+| [`src/rbipc_arch.h`](src/rbipc_arch.h) | 44 | 27 | 61.36% |
+| **TOTAL LINE COVERAGE** | **2,087** | **1,725** | **82.65%** |
 
 ---
 
 ## Performance Benchmarks Summary
 
-Measured on **Intel Core i5-10400F @ 2.90 GHz** (6C/12T desktop) and **Intel Core i5-6300U @ 2.40 GHz** (2C/4T mobile laptop; raw JSON datasets in `benchmarks/results/{home_pc,laptop}/`):
+Measured on **Intel Core i5-10400F @ 2.90 GHz** (6C/12T desktop) and **Intel Core i5-6300U @ 2.40 GHz** (2C/4T mobile laptop in plugged-in and battery power-save modes; raw JSON datasets in `benchmarks/results/{home_pc,laptop,laptop_powersave}/`):
 
 | Benchmark Workload | Measured Performance | Key Architectural Takeaway |
 | :--- | :--- | :--- |
