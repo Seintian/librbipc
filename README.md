@@ -115,7 +115,7 @@ librbipc/
 | `rbipc_attach_fd` / `rbipc_attach_fd_ex` | Attach directly to an open shared-memory file descriptor (e.g., received via `SCM_RIGHTS`). |
 | `rbipc_detach` / `rbipc_destroy` | Unmap virtual memory regions, decrement active role counters, close descriptors, or unlink a named POSIX shared memory segment. |
 | `rbipc_signal_shutdown` / `rbipc_shutdown` | Set the atomic shutdown flag and broadcast a wakeup (`FUTEX_WAKE_ALL`) to all blocked producers and consumers. |
-| `rbipc_set_wait_policy` / `rbipc_get_wait_policy` | Configure `RBIPC_WAIT_ZERO_SPIN` (default passive `FUTEX_WAIT`), `RBIPC_WAIT_ADAPTIVE` (bounded micro-spin pause budget before `FUTEX_WAIT`), or `RBIPC_WAIT_HW_MONITOR` (WAITPKG `UMWAIT` C0.2 / ARM64 `WFET` clock-gated hardware wait). |
+| `rbipc_set_wait_policy` / `rbipc_get_wait_policy` | Configure `RBIPC_WAIT_ADAPTIVE` (default two-phase bounded micro-spin + 5 µs C0.1 hardware wait before futex sleep), `RBIPC_WAIT_ZERO_SPIN` (immediate passive futex wait), or `RBIPC_WAIT_HW_MONITOR` (WAITPKG `UMWAIT` C0.2 / ARM64 `WFET` clock-gated hardware wait). |
 | `rbipc_get_fd` / `rbipc_get_stats` | Retrieve underlying shared-memory descriptor or query live telemetry statistics (tickets, capacity, active roles). |
 
 ### 2. Zero-Copy Single-Slot & Convenience Copy I/O (`include/rbipc.h`)
@@ -150,6 +150,26 @@ librbipc/
 | `rbipc_publish` / `rbipc_publish_batch` | Publish single or batched topic messages in 1-to-N multicast mode with automatic non-temporal streaming for payloads ≥ 256 B. |
 | `rbipc_sub_create` / `rbipc_sub_create_ex` / `rbipc_sub_destroy` | Create or destroy an independent subscriber handle (`rbipc_sub_t`) starting at the latest head or oldest retained slot. |
 | `rbipc_sub_poll` / `rbipc_sub_poll_batch` / `rbipc_sub_read` / `rbipc_sub_get_lag` | Non-destructively poll or block on published topic messages with automatic cursor lag clamping. |
+
+### 5. User-Selectable Execution Modes & Function Parameters
+
+Every major architectural behavior in `librbipc` is directly selectable through public function call arguments:
+
+| Feature & Parameter | Target API Functions | Available Options & Values | Operational Impact |
+| :--- | :--- | :--- | :--- |
+| **Wait Policy** (`policy`) | `rbipc_set_wait_policy()` | `RBIPC_WAIT_ADAPTIVE` (**Default**)<br>`RBIPC_WAIT_ZERO_SPIN`<br>`RBIPC_WAIT_HW_MONITOR`<br>Composite (`ADAPTIVE \| HW_MONITOR`) | Sets synchronization backoff ladder: 48-iteration micro-pause + 5 µs C0.1 hardware wait (Adaptive: 191–261 ns latency), immediate passive futex sleep (Zero-Spin: 0.13% idle CPU), or direct C0.2 deep power save. |
+| **Creation Flags** (`flags`) | `rbipc_create_ex()` | `0`, `RBIPC_CREATE_EXCL`,<br>`RBIPC_CREATE_OVERWRITE` | Enforces atomic POSIX file exclusivity (`EXCL`) or unlinks stale shared memory segments (`OVERWRITE`). |
+| **Role Isolation** (`role_flags`) | `rbipc_create_ex()`, `rbipc_attach_ex()`,<br>`rbipc_attach_fd_ex()`, `rbipc_recv_fd_ex()` | `RBIPC_ROLE_PRODUCER`,<br>`RBIPC_ROLE_CONSUMER`,<br>`RBIPC_ROLE_MONITOR` | Enforces process capabilities. `RBIPC_ROLE_MONITOR` allows zero-overhead read-only telemetry sampling without altering active participant counters. |
+| **Buffer Geometry** (`capacity`, `slot_size`) | `rbipc_create()`, `rbipc_create_ex()` | `capacity`: $2 \le C \le 2^{30}$ (Power of 2)<br>`slot_size`: $16 \le S \le 16\text{ MiB}$ (8-B aligned) | Configures circular slot count (auto-rounded to power-of-two for bitwise masking) and per-slot byte capacity (padded to 64-byte cache line alignment). |
+| **Permissions** (`mode`) | `rbipc_create_ex()` | Standard POSIX mode bits (e.g. `0660`, `0600`) | Enforces filesystem permissions on `/dev/shm` shared memory objects. |
+| **Blocking Mode** (Function Variant) | `rbipc_*()`, `*_nonblock()`,<br>`*_timeout()` | Blocking, Immediate Non-Blocking,<br>Monotonic Deadline Timeout | Chooses whether threads suspend until ready, return immediately (`RBIPC_ERR_FULL` / `RBIPC_ERR_EMPTY`), or sleep up to a deadline. |
+| **Timeout Budget** (`timeout_ns`) | All `*_timeout()` functions,<br>`rbipc_sub_read()` | `0` (instant) to `UINT64_MAX - 1` (ns),<br>`UINT64_MAX` (infinite) | Sets nanosecond execution deadline checked against `CLOCK_MONOTONIC`. |
+| **Vector Batch Size** (`count`, `max_count`) | `rbipc_*_batch*()`, `rbipc_publish_batch()`,<br>`rbipc_sub_poll_batch()` | $1 \le \text{count} \le \text{capacity}$ | Claims or releases up to `count` slots in a single atomic step, amortizing fences and scaling to 50.68M msgs/s. |
+| **Non-Temporal Store** (`len`) | `rbipc_stream_copy()`, `rbipc_write_stream*()` | Payload byte length ($0 < \text{len} \le \text{slot\_size}$) | Automatically uses AVX2/SSE2 streaming write-combining stores for payloads $\ge 256$ B, achieving up to 19.8 GB/s bandwidth. |
+| **Reactor Hook** (`init_val`, `event_fd`) | `rbipc_enable_eventfd()`, `rbipc_set_eventfd()` | `init_val` (counter), `event_fd` (descriptor) | Binds custom or library-allocated `eventfd` handles to ring for seamless integration into `epoll`/`io_uring` loops. |
+| **Consumer Lease** (`lease_timeout_ns`) | `rbipc_set_lease_timeout()` | `0` (disabled) or nanosecond timeout | Sets maximum consumer lease duration, allowing `rbipc_revoke_expired_leases()` to reclaim stalled slots. |
+| **PubSub Replay Mode** (`from_oldest`) | `rbipc_sub_create_ex()` | `true` (oldest retained), `false` (live head) | Toggles between historical ring buffer replay mode and zero-latency real-time publication streaming. |
+| **Capability Passing** (`socket_fd`, `role_flags`) | `rbipc_send_fd()`, `rbipc_recv_fd_ex()` | UNIX domain socket fd, role mask | Passes anonymous `memfd` rings across processes via `SCM_RIGHTS` with granular capabilities and no `/dev/shm` footprint. |
 
 ---
 
