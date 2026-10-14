@@ -13,6 +13,9 @@
 #include <assert.h>
 #include <unistd.h>
 #include <sys/epoll.h>
+#include <sys/eventfd.h>
+#include <fcntl.h>
+#include <errno.h>
 
 #define REACTOR_RING_NAME "/test_reactor_ring"
 #define REACTOR_CAPACITY 64
@@ -165,10 +168,85 @@ static void test_reactor_epoll_integration(void) {
     rbipc_destroy(REACTOR_RING_NAME);
 }
 
+static void test_reactor_external_eventfd_and_negative_paths(void) {
+    rbipc_destroy(REACTOR_RING_NAME);
+    rbipc_ring_t *ring = NULL;
+    int rc = rbipc_create(REACTOR_RING_NAME, REACTOR_CAPACITY, REACTOR_SLOT_SIZE, &ring);
+    assert(rc == RBIPC_OK);
+
+    int fd = -1;
+    /* Parameter validations */
+    assert(rbipc_enable_eventfd(NULL, &fd) == RBIPC_ERR_INVAL);
+    assert(rbipc_enable_eventfd(ring, NULL) == RBIPC_ERR_INVAL);
+    assert(rbipc_set_eventfd(NULL, 3) == RBIPC_ERR_INVAL);
+    assert(rbipc_set_eventfd(ring, -1) == RBIPC_ERR_INVAL);
+    assert(rbipc_get_eventfd(NULL, &fd) == RBIPC_ERR_INVAL);
+    assert(rbipc_get_eventfd(ring, NULL) == RBIPC_ERR_INVAL);
+    assert(rbipc_eventfd_drain(NULL) == RBIPC_ERR_INVAL);
+    assert(rbipc_eventfd_drain(ring) == RBIPC_ERR_NOTSUP);
+
+    /* External eventfd binding */
+    int ext_fd = eventfd(0, EFD_NONBLOCK | EFD_CLOEXEC);
+    assert(ext_fd >= 0);
+
+    assert(rbipc_set_eventfd(ring, ext_fd) == RBIPC_OK);
+    int check_fd = -1;
+    assert(rbipc_get_eventfd(ring, &check_fd) == RBIPC_OK && check_fd == ext_fd);
+
+    rbipc_stats_t stats;
+    assert(rbipc_get_stats(ring, &stats) == RBIPC_OK);
+    assert(stats.eventfd_waiters == 1);
+
+    /* Signal via commit_write */
+    void *wbuf = NULL;
+    uint64_t ticket = 0;
+    assert(rbipc_reserve_write(ring, 8, &wbuf, &ticket) == RBIPC_OK);
+    memcpy(wbuf, "12345678", 8);
+    assert(rbipc_commit_write(ring, ticket, 8) == RBIPC_OK);
+
+    /* Verify notification on external fd */
+    uint64_t counter = 0;
+    ssize_t n = read(ext_fd, &counter, sizeof(counter));
+    assert(n == sizeof(counter) && counter >= 1);
+
+    /* Drain via API */
+    assert(rbipc_eventfd_drain(ring) == RBIPC_OK);
+
+    /* Replace external eventfd with internally owned eventfd */
+    int owned_fd = -1;
+    assert(rbipc_enable_eventfd(ring, &owned_fd) == RBIPC_OK);
+    /* Note: when already has eventfd (external), enable returns existing fd */
+    assert(owned_fd == ext_fd);
+
+    /* Detach ring; external fd must NOT be closed */
+    rbipc_detach(ring);
+    assert(fcntl(ext_fd, F_GETFD) != -1);
+    close(ext_fd);
+
+    /* Now test replacing owned eventfd with external eventfd */
+    assert(rbipc_attach(REACTOR_RING_NAME, &ring) == RBIPC_OK);
+    assert(rbipc_enable_eventfd(ring, &owned_fd) == RBIPC_OK);
+    assert(owned_fd >= 0);
+
+    int ext_fd2 = eventfd(0, EFD_NONBLOCK | EFD_CLOEXEC);
+    assert(ext_fd2 >= 0);
+    assert(rbipc_set_eventfd(ring, ext_fd2) == RBIPC_OK);
+    /* Previous owned fd should have been closed */
+    assert(fcntl(owned_fd, F_GETFD) == -1 && errno == EBADF);
+
+    rbipc_detach(ring);
+    /* ext_fd2 must remain open after detach */
+    assert(fcntl(ext_fd2, F_GETFD) != -1);
+    close(ext_fd2);
+
+    rbipc_destroy(REACTOR_RING_NAME);
+}
+
 int main(void) {
     printf("[test_unit_reactor] Running asynchronous eventfd reactor tests...\n");
     test_reactor_eventfd_lifecycle();
     test_reactor_epoll_integration();
+    test_reactor_external_eventfd_and_negative_paths();
     printf("[test_unit_reactor] All tests passed!\n");
     return 0;
 }

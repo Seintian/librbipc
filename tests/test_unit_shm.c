@@ -109,6 +109,15 @@ static void test_shm_lifecycle(void) {
     assert(rbipc_shm_create_ex(test_name, 16384, RBIPC_CREATE_EXCL, 0, &fd_coll) == RBIPC_ERR_EXISTS);
     assert(rbipc_shm_create_ex(test_name, 16384, 0x8000, 0, &fd_coll) == RBIPC_ERR_INVAL);
 
+    /* Test overwrite flag replaces existing object */
+    int fd_over = -1;
+    assert(rbipc_shm_create_ex(test_name, 16384, RBIPC_CREATE_OVERWRITE, 0660, &fd_over) == RBIPC_OK);
+    assert(fd_over >= 0);
+    rbipc_shm_close(fd_over);
+
+    /* Negative fd close should safely no-op */
+    rbipc_shm_close(-1);
+
     /* Open existing */
     int fd_opened = -1;
     rc = rbipc_shm_open(test_name, &fd_opened);

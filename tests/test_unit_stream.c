@@ -15,6 +15,8 @@
 #include <stdlib.h>
 #include <string.h>
 
+static void test_stream_ring_integration(void);
+
 int main(void) {
     printf("[test_unit_stream] Running streaming copy tests...\n");
 
@@ -58,6 +60,58 @@ int main(void) {
         free(dst);
     }
 
+    test_stream_ring_integration();
+
     printf("[test_unit_stream] All tests passed!\n");
     return 0;
+}
+
+static void test_stream_ring_integration(void) {
+    rbipc_ring_t *ring = NULL;
+    assert(rbipc_create(NULL, 4, 256, &ring) == RBIPC_OK);
+
+    uint64_t ticket = 0;
+    char payload[256];
+    memset(payload, 0x42, sizeof(payload));
+
+    /* Negative parameter validation */
+    assert(rbipc_write_stream_timeout(NULL, payload, 32, 0, &ticket) == RBIPC_ERR_INVAL);
+    assert(rbipc_write_stream_timeout(ring, NULL, 32, 0, &ticket) == RBIPC_ERR_INVAL);
+    assert(rbipc_write_stream_timeout(ring, payload, 32, 0, NULL) == RBIPC_ERR_INVAL);
+    assert(rbipc_write_stream_nonblock(NULL, payload, 32, &ticket) == RBIPC_ERR_INVAL);
+    assert(rbipc_write_stream(NULL, payload, 32, &ticket) == RBIPC_ERR_INVAL);
+    assert(rbipc_write_stream(ring, payload, 300, &ticket) == RBIPC_ERR_INVAL);
+
+    /* Fill ring using stream writes */
+    for (int i = 0; i < 4; ++i) {
+        payload[0] = (char)i;
+        assert(rbipc_write_stream(ring, payload, sizeof(payload), &ticket) == RBIPC_OK);
+        assert(ticket == (uint64_t)i);
+    }
+
+    /* Ring is now full */
+    assert(rbipc_write_stream_nonblock(ring, payload, 64, &ticket) == RBIPC_ERR_FULL);
+    assert(rbipc_write_stream_timeout(ring, payload, 64, 5000000ULL /* 5ms */, &ticket) == RBIPC_ERR_TIMEOUT);
+
+    /* Consume slots and verify payload */
+    for (int i = 0; i < 4; ++i) {
+        const void *rbuf = NULL;
+        uint32_t rlen = 0;
+        uint64_t rticket = 0;
+        assert(rbipc_read_acquire(ring, &rbuf, &rlen, &rticket) == RBIPC_OK);
+        assert(rlen == sizeof(payload));
+        assert(rticket == (uint64_t)i);
+        const uint8_t *bytes = (const uint8_t *)rbuf;
+        assert(bytes[0] == (uint8_t)i);
+        for (size_t b = 1; b < sizeof(payload); ++b) {
+            assert(bytes[b] == 0x42);
+        }
+        assert(rbipc_read_release(ring, rticket) == RBIPC_OK);
+    }
+
+    /* Now write again with nonblock, should succeed */
+    assert(rbipc_write_stream_nonblock(ring, payload, 64, &ticket) == RBIPC_OK);
+    assert(ticket == 4);
+
+    rbipc_detach(ring);
 }

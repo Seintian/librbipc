@@ -413,6 +413,76 @@ static void test_futex_wake_op(void) {
 #endif
 }
 
+static void test_futex2_slot_waiting(void) {
+    _Atomic uint64_t slot_seq = 500;
+    _Atomic uint32_t proxy_seq = 10;
+    _Atomic uint32_t shutdown_flag = 0;
+    _Atomic uint32_t waiters = 0;
+
+    /* 1. Parameter validation for rbipc_sync_wait_slot_registered */
+    rbipc_sync_state_t state;
+    rbipc_sync_state_init(&state, 1000);
+    rbipc_sync_register_waiter(&waiters);
+    assert(rbipc_sync_wait_slot_registered(NULL, &slot_seq, 500, &proxy_seq, &waiters, &shutdown_flag) == RBIPC_ERR_INVAL);
+    assert(atomic_load(&waiters) == 0);
+
+    rbipc_sync_register_waiter(&waiters);
+    assert(rbipc_sync_wait_slot_registered(&state, NULL, 500, &proxy_seq, &waiters, &shutdown_flag) == RBIPC_ERR_INVAL);
+    assert(atomic_load(&waiters) == 0);
+
+    /* 2. Parameter validation for rbipc_futex2_wait_slot_or_proxy_or_shutdown */
+    assert(rbipc_futex2_wait_slot_or_proxy_or_shutdown(NULL, 500, &proxy_seq, &shutdown_flag, 1000) == RBIPC_ERR_INVAL);
+
+    /* 3. Immediate return on sequence mismatch (FUTEX_WAIT returns -EAGAIN/EWOULDBLOCK) */
+    int rc = rbipc_futex2_wait_slot_or_proxy_or_shutdown(&slot_seq, 499, &proxy_seq, &shutdown_flag, 1000000);
+    assert(rc == RBIPC_OK);
+
+    /* 4. Immediate return when shutdown flag is non-zero */
+    atomic_store(&shutdown_flag, 1);
+    rc = rbipc_futex2_wait_slot_or_proxy_or_shutdown(&slot_seq, 500, &proxy_seq, &shutdown_flag, 1000000);
+    assert(rc == RBIPC_OK);
+    atomic_store(&shutdown_flag, 0);
+
+    /* 5. Direct timeout in rbipc_futex2_wait_slot_or_proxy_or_shutdown */
+    rc = rbipc_futex2_wait_slot_or_proxy_or_shutdown(&slot_seq, 500, &proxy_seq, &shutdown_flag, 50000);
+    assert(rc == RBIPC_ERR_TIMEOUT);
+
+    /* Test fallback when proxy_seq is NULL */
+    rc = rbipc_futex2_wait_slot_or_proxy_or_shutdown(&slot_seq, 499, NULL, &shutdown_flag, 50000);
+    assert(rc == RBIPC_OK);
+    rc = rbipc_futex2_wait_slot_or_proxy_or_shutdown(&slot_seq, 500, NULL, NULL, 50000);
+    assert(rc == RBIPC_ERR_TIMEOUT);
+
+    /* 6. rbipc_sync_wait_slot_registered with pre-expired deadline */
+    rbipc_sync_state_init(&state, 1); /* 1ns */
+    rbipc_sync_register_waiter(&waiters);
+    assert(atomic_load(&waiters) == 1);
+    rc = rbipc_sync_wait_slot_registered(&state, &slot_seq, 500, &proxy_seq, &waiters, &shutdown_flag);
+    while (rc == 0) {
+        rbipc_sync_register_waiter(&waiters);
+        rc = rbipc_sync_wait_slot_registered(&state, &slot_seq, 500, &proxy_seq, &waiters, &shutdown_flag);
+    }
+    assert(rc == RBIPC_ERR_TIMEOUT);
+    assert(atomic_load(&waiters) == 0);
+
+    /* Once expired, should return TIMEOUT immediately */
+    rbipc_sync_register_waiter(&waiters);
+    assert(rbipc_sync_wait_slot_registered(&state, &slot_seq, 500, &proxy_seq, &waiters, &shutdown_flag) == RBIPC_ERR_TIMEOUT);
+    assert(atomic_load(&waiters) == 0);
+
+    /* 7. Shutdown flag active in rbipc_sync_wait_slot_registered */
+    atomic_store(&shutdown_flag, 1);
+    rbipc_sync_state_init(&state, UINT64_MAX);
+    rbipc_sync_register_waiter(&waiters);
+    assert(rbipc_sync_wait_slot_registered(&state, &slot_seq, 500, &proxy_seq, &waiters, &shutdown_flag) == RBIPC_OK);
+    assert(atomic_load(&waiters) == 0);
+    atomic_store(&shutdown_flag, 0);
+
+    /* 8. Idempotency test of rbipc_sync_init_process */
+    rbipc_sync_init_process();
+    rbipc_sync_init_process();
+}
+
 int main(void) {
     printf("[test_unit_sync] Running tests...\n");
     test_sync_state();
@@ -423,6 +493,7 @@ int main(void) {
     test_hardware_wait();
     test_futex2_waitv();
     test_futex_wake_op();
+    test_futex2_slot_waiting();
     printf("[test_unit_sync] All tests passed!\n");
     return 0;
 }
