@@ -47,7 +47,7 @@ benchmarks/results/
 - **CPU Model:** Intel Core i5-6300U @ 2.40 GHz (Skylake Mobile)
 - **Topology:** 2 Physical Cores / 4 Logical Hardware Threads
 - **Caches:** 32 KiB L1d / Core, 256 KiB L2 / Core, 3 MiB Shared L3 Cache
-- **OS & Kernel:** Linux `7.2.9-1-cachyos` x86_64 (Preempt Dynamic)
+- **OS & Kernel:** Linux `7.2.9-2-cachyos` x86_64 (Preempt Dynamic)
 - **Characteristics:** Plugged into AC power, dynamic turbo boost enabled, thread oversubscription (2x) when running 8 concurrent worker threads (`4P-4C`).
 
 ### Profile: `laptop_powersave` (Mobile Architecture - Battery Power-Save Mode)
