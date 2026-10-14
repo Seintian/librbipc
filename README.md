@@ -2,7 +2,7 @@
 
 [![Standard: ISO C23](https://img.shields.io/badge/C-C23-blue.svg)](https://en.cppreference.com/w/c/23)
 [![Platform: Linux](https://img.shields.io/badge/Platform-Linux-FCC624.svg)](https://www.kernel.org/)
-[![Coverage: 82.65%](https://img.shields.io/badge/Coverage-82.65%25-brightgreen.svg)](#test-coverage)
+<a href="#test-coverage"><img src="https://img.shields.io/badge/Coverage-82.65%25-brightgreen.svg" alt="Coverage: 82.65%"/></a>
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 
 `librbipc` is a zero-dependency, production-grade Inter-Process Communication (IPC) library written in ISO C23 for Linux. It implements a lock-free Multi-Producer / Multi-Consumer (MPMC) shared-memory ring buffer engineered for **sub-microsecond user-space fast paths**, **zero idle CPU consumption (0.13%)** via Dekker-synchronized Linux `sys_futex` suspension, **deterministic crash recovery** (`pidfd_open(2)`), **B-Queue scatter-gather vector batching** (**50.68M msgs/s**), **non-temporal cache-bypassing streaming stores** (**19.87 GB/s**), **asynchronous `eventfd`/`epoll` reactor signaling**, and **1-to-N lock-free multicast publish-subscribe**.

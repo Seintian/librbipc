@@ -71,6 +71,68 @@ def fix_missing_single_letter_anchors():
                     fp.write(content)
 
 
+def fix_unparsed_markdown_badges():
+    """Convert unparsed markdown image syntax inside link tags into <img> elements.
+
+    Doxygen's markdown parser has a known limitation: when a markdown link targets
+    an on-page anchor (e.g., [![alt](url)](#anchor)), Doxygen parses it as an internal
+    section reference (@ref) and emits the inner content literally as raw text inside
+    an <a class="el" ...> element without invoking the nested markdown image parser.
+    This function detects any such unparsed ![alt](url) within <a>...</a> tags and
+    expands them to standard HTML <img> tags.
+    """
+    if not os.path.exists(DOCS_HTML_DIR):
+        return
+
+    badge_pattern = re.compile(
+        r'(<a\s+[^>]*>)\s*!\[([^\]]*)\]\((https?://[^)]+)\)\s*(</a>)'
+    )
+
+    for root, _, files in os.walk(DOCS_HTML_DIR):
+        for f in files:
+            if not f.endswith(".html"):
+                continue
+            fpath = os.path.join(root, f)
+            with open(fpath, "r", encoding="utf-8", errors="ignore") as fp:
+                content = fp.read()
+
+            if "![" not in content:
+                continue
+
+            new_content = badge_pattern.sub(
+                r'\1<img src="\3" alt="\2" style="pointer-events: none;" class="inline"/>\4',
+                content
+            )
+
+            if new_content != content:
+                with open(fpath, "w", encoding="utf-8") as fp:
+                    fp.write(new_content)
+
+
+def verify_no_unparsed_markdown_badges():
+    """Ensure no unparsed markdown image syntax remains inside anchor tags."""
+    unparsed_pattern = re.compile(r'<a\s+[^>]*>\s*!\[([^\]]*)\]\((https?://[^)]+)\)\s*</a>')
+    errors = []
+    for root, _, files in os.walk(DOCS_HTML_DIR):
+        for f in files:
+            if not f.endswith(".html"):
+                continue
+            fpath = os.path.join(root, f)
+            with open(fpath, "r", encoding="utf-8", errors="ignore") as fp:
+                content = fp.read()
+            matches = unparsed_pattern.findall(content)
+            if matches:
+                rel = os.path.relpath(fpath, DOCS_HTML_DIR)
+                errors.append((rel, matches))
+
+    if errors:
+        print(f"[FAIL] Found unparsed markdown image badges in {len(errors)} file(s):")
+        for rel, matches in errors:
+            print(f"  - [{rel}] {matches}")
+        return False
+    return True
+
+
 class AnchorCollector(HTMLParser):
     def __init__(self):
         super().__init__()
@@ -158,6 +220,9 @@ def main():
 
     copy_auxiliary_assets()
     fix_missing_single_letter_anchors()
+    fix_unparsed_markdown_badges()
+    if not verify_no_unparsed_markdown_badges():
+        sys.exit(1)
     if not validate_all_links():
         sys.exit(1)
 
