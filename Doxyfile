@@ -12,6 +12,7 @@ USE_MDFILE_AS_MAINPAGE = README.md
 RECURSIVE              = YES
 FILE_PATTERNS          = *.h *.c *.md
 EXCLUDE_PATTERNS       = */build/* */bin/* */.git/* docs/*
+FILTER_PATTERNS        = *.md="python3 scripts/doxygen_md_filter.py"
 
 # Extraction options
 EXTRACT_ALL            = YES
