@@ -282,7 +282,7 @@ static void test_futex2_waitv(void) {
 
     /* Parameter validation */
     assert(rbipc_futex_waitv(NULL, 1, 1000) == -EINVAL);
-    struct futex_waitv w_dummy;
+    struct futex_waitv w_dummy = {0};
     assert(rbipc_futex_waitv(&w_dummy, 0, 1000) == -EINVAL);
     assert(rbipc_futex_waitv(&w_dummy, 129, 1000) == -EINVAL);
 
@@ -397,7 +397,7 @@ static void test_futex_wake_op(void) {
     /* Test FUTEX_OP_OR */
     rc = rbipc_futex_wake_op(&u1, 0, &u2, 1, FUTEX_OP_OR, 0x10, FUTEX_OP_CMP_NE, 0);
     assert(rc >= 0);
-    assert(atomic_load(&u2) == (42 | 0x10));
+    assert(atomic_load(&u2) == (42U | 0x10U));
 
     /* Test FUTEX_OP_ANDN */
     rc = rbipc_futex_wake_op(&u1, 0, &u2, 1, FUTEX_OP_ANDN, 0x10, FUTEX_OP_CMP_GE, 0);
@@ -407,7 +407,7 @@ static void test_futex_wake_op(void) {
     /* Test FUTEX_OP_XOR */
     rc = rbipc_futex_wake_op(&u1, 0, &u2, 1, FUTEX_OP_XOR, 2, FUTEX_OP_CMP_LE, 100);
     assert(rc >= 0);
-    assert(atomic_load(&u2) == (42 ^ 2));
+    assert(atomic_load(&u2) == (42U ^ 2U));
 #else
     assert(rc == -ENOSYS);
 #endif
