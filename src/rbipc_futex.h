@@ -226,7 +226,9 @@ int rbipc_futex2_wait_slot_or_shutdown(const _Atomic uint64_t *slot_seq,
                                        uint64_t timeout_ns);
 
 /**
- * @brief Wait on direct low-word slot sequence, proxy sequence, or shutdown flag via sys_futex_waitv.
+ * @brief Adaptive futex wait: monitors 64-bit slot sequence directly (using FUTEX2_SIZE_U64
+ *        or FUTEX2_SIZE_U32), proxy sequence, and shutdown flag via Linux 5.16+ sys_futex_waitv,
+ *        or seamlessly falls back to classical 32-bit SYS_futex proxy waiting on older kernels.
  *
  * @param[in] slot_seq      Pointer to 64-bit atomic sequence word.
  * @param[in] expected_seq  Expected 64-bit sequence value.

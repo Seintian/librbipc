@@ -359,16 +359,19 @@ typedef struct {
                     */
   _Alignas(RBIPC_CACHE_LINE) _Atomic uint32_t
       futex_seq; /**< Futex word sequence counter for consumer wakeups (data
-                    ready). */
+                    ready). Used as 32-bit proxy word in classical SYS_futex
+                    mode and as auxiliary wake target in vectorized futex2 mode. */
   _Alignas(RBIPC_CACHE_LINE) _Atomic uint32_t
       futex_waiters; /**< Count of consumer threads actively sleeping on @c
-                        futex_seq. */
+                        futex_seq or slot sequence futexes. */
   _Alignas(RBIPC_CACHE_LINE) _Atomic uint32_t
       write_futex_seq; /**< Futex word sequence counter for producer wakeups
-                          (space ready). */
+                          (space ready). Used as 32-bit proxy word in classical
+                          SYS_futex mode and as auxiliary wake target in vectorized
+                          futex2 mode. */
   _Alignas(RBIPC_CACHE_LINE) _Atomic uint32_t
       write_waiters; /**< Count of producer threads actively sleeping on @c
-                        write_futex_seq. */
+                        write_futex_seq or slot sequence futexes. */
   _Alignas(RBIPC_CACHE_LINE) _Atomic uint32_t
       active_producers; /**< Number of currently attached producer handles. */
   _Alignas(RBIPC_CACHE_LINE) _Atomic uint32_t
@@ -669,8 +672,8 @@ int rbipc_destroy(const char *name);
  * handle.
  *
  * @param[in,out] ring   Ring buffer handle.
- * @param[in]     policy Wait policy flags (@ref RBIPC_WAIT_ZERO_SPIN or @ref
- * RBIPC_WAIT_ADAPTIVE).
+ * @param[in]     policy Wait policy flags (@ref RBIPC_WAIT_ZERO_SPIN, @ref
+ * RBIPC_WAIT_ADAPTIVE, or @ref RBIPC_WAIT_HW_MONITOR).
  *
  * @return @ref RBIPC_OK on success.
  * @retval RBIPC_ERR_INVAL if @p ring is NULL or @p policy is unsupported.
