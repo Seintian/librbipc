@@ -30,6 +30,8 @@
 #include "rbipc_sync.h"
 #include "rbipc_futex.h"
 
+#include <string.h>
+
 /* ============================================================================
  * Internal Fast-Path Ticket and Reservation Helpers
  * ============================================================================
@@ -546,4 +548,88 @@ int rbipc_read_release(rbipc_ring_t *RBIPC_RESTRICT ring, uint64_t ticket) {
   rbipc_reactor_signal(ring);
 
   return released ? RBIPC_OK : RBIPC_ERR_TIMEOUT;
+}
+
+/* ============================================================================
+ * Convenience Single-Slot Copy I/O Routines
+ * ============================================================================
+ */
+
+RBIPC_LEAF
+int rbipc_write_timeout(rbipc_ring_t *RBIPC_RESTRICT ring,
+                        const void *RBIPC_RESTRICT buf, uint32_t len,
+                        uint64_t timeout_ns) {
+  if (RBIPC_UNLIKELY(!ring || !buf)) {
+    return RBIPC_ERR_INVAL;
+  }
+
+  void *slot_buf = NULL;
+  uint64_t ticket = 0;
+  int rc = rbipc_reserve_write_timeout(ring, len, timeout_ns, &slot_buf, &ticket);
+  if (RBIPC_UNLIKELY(rc != RBIPC_OK)) {
+    return rc;
+  }
+
+  if (len > 0) {
+    memcpy(slot_buf, buf, len);
+  }
+  return rbipc_commit_write(ring, ticket, len);
+}
+
+RBIPC_LEAF
+int rbipc_write(rbipc_ring_t *RBIPC_RESTRICT ring,
+                const void *RBIPC_RESTRICT buf, uint32_t len) {
+  return rbipc_write_timeout(ring, buf, len, UINT64_MAX);
+}
+
+RBIPC_LEAF
+int rbipc_write_nonblock(rbipc_ring_t *RBIPC_RESTRICT ring,
+                         const void *RBIPC_RESTRICT buf, uint32_t len) {
+  return rbipc_write_timeout(ring, buf, len, 0);
+}
+
+RBIPC_LEAF
+int rbipc_read_timeout(rbipc_ring_t *RBIPC_RESTRICT ring,
+                       void *RBIPC_RESTRICT buf, uint32_t max_len,
+                       uint32_t *RBIPC_RESTRICT out_len,
+                       uint64_t timeout_ns) {
+  if (RBIPC_UNLIKELY(!ring || !buf)) {
+    return RBIPC_ERR_INVAL;
+  }
+
+  const void *slot_buf = NULL;
+  uint32_t actual_len = 0;
+  uint64_t ticket = 0;
+  int rc = rbipc_read_acquire_timeout(ring, timeout_ns, &slot_buf, &actual_len, &ticket);
+  if (RBIPC_UNLIKELY(rc != RBIPC_OK)) {
+    return rc;
+  }
+
+  uint32_t copy_len = (actual_len < max_len) ? actual_len : max_len;
+  if (copy_len > 0) {
+    memcpy(buf, slot_buf, copy_len);
+  }
+  if (out_len) {
+    *out_len = actual_len;
+  }
+
+  int rel_rc = rbipc_read_release(ring, ticket);
+  if (RBIPC_UNLIKELY(rel_rc != RBIPC_OK)) {
+    return rel_rc;
+  }
+  return RBIPC_OK;
+}
+
+RBIPC_LEAF
+int rbipc_read(rbipc_ring_t *RBIPC_RESTRICT ring,
+               void *RBIPC_RESTRICT buf, uint32_t max_len,
+               uint32_t *RBIPC_RESTRICT out_len) {
+  return rbipc_read_timeout(ring, buf, max_len, out_len, UINT64_MAX);
+}
+
+RBIPC_LEAF
+int rbipc_read_nonblock(rbipc_ring_t *RBIPC_RESTRICT ring,
+                        void *RBIPC_RESTRICT buf, uint32_t max_len,
+                        uint32_t *RBIPC_RESTRICT out_len) {
+  return rbipc_read_timeout(ring, buf, max_len, out_len, 0);
 }

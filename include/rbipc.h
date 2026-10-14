@@ -920,6 +920,145 @@ RBIPC_NODISCARD RBIPC_HOT RBIPC_LEAF int rbipc_read_acquire_nonblock(
 RBIPC_HOT RBIPC_LEAF int rbipc_read_release(rbipc_ring_t *RBIPC_RESTRICT ring,
                                             uint64_t ticket);
 
+/* ============================================================================
+ * Convenience Single-Slot Copy I/O Interface
+ * ============================================================================
+ */
+
+/**
+ * @brief Write a message into the ring buffer with timeout (Convenience Copy I/O).
+ *
+ * @details Atomically reserves a slot, copies the payload from @p buf into the
+ * shared-memory slot buffer, and commits the slot to waiting consumers.
+ *
+ * @param[in,out] ring       Ring buffer handle.
+ * @param[in]     buf        Pointer to source payload data buffer.
+ * @param[in]     len        Length of payload data in bytes (must be <= slot size).
+ * @param[in]     timeout_ns Timeout deadline in nanoseconds (or UINT64_MAX for blocking).
+ *
+ * @return @ref RBIPC_OK on success.
+ * @retval RBIPC_ERR_INVAL    if @p ring or @p buf is NULL, or @p len exceeds slot size.
+ * @retval RBIPC_ERR_TIMEOUT  if deadline expired before a slot became vacant.
+ * @retval RBIPC_ERR_SHUTDOWN if ring buffer has shut down.
+ *
+ * @see rbipc_write
+ * @see rbipc_write_nonblock
+ * @see rbipc_reserve_write
+ */
+RBIPC_NODISCARD RBIPC_LEAF int rbipc_write_timeout(rbipc_ring_t *RBIPC_RESTRICT ring,
+                                                   const void *RBIPC_RESTRICT buf,
+                                                   uint32_t len,
+                                                   uint64_t timeout_ns);
+
+/**
+ * @brief Write a message into the ring buffer blocking indefinitely (Convenience Copy I/O).
+ *
+ * @param[in,out] ring Ring buffer handle.
+ * @param[in]     buf  Pointer to source payload data buffer.
+ * @param[in]     len  Length of payload data in bytes.
+ *
+ * @return @ref RBIPC_OK on success.
+ * @retval RBIPC_ERR_INVAL    if arguments are invalid.
+ * @retval RBIPC_ERR_SHUTDOWN if ring buffer has shut down.
+ *
+ * @see rbipc_write_timeout
+ * @see rbipc_write_nonblock
+ */
+RBIPC_NODISCARD RBIPC_LEAF int rbipc_write(rbipc_ring_t *RBIPC_RESTRICT ring,
+                                           const void *RBIPC_RESTRICT buf,
+                                           uint32_t len);
+
+/**
+ * @brief Write a message into the ring buffer without blocking (Convenience Copy I/O).
+ *
+ * @param[in,out] ring Ring buffer handle.
+ * @param[in]     buf  Pointer to source payload data buffer.
+ * @param[in]     len  Length of payload data in bytes.
+ *
+ * @return @ref RBIPC_OK on success.
+ * @retval RBIPC_ERR_FULL     if the ring buffer is currently full.
+ * @retval RBIPC_ERR_INVAL    if arguments are invalid.
+ * @retval RBIPC_ERR_SHUTDOWN if ring buffer has shut down.
+ *
+ * @see rbipc_write
+ * @see rbipc_write_timeout
+ */
+RBIPC_NODISCARD RBIPC_LEAF int rbipc_write_nonblock(rbipc_ring_t *RBIPC_RESTRICT ring,
+                                                    const void *RBIPC_RESTRICT buf,
+                                                    uint32_t len);
+
+/**
+ * @brief Read a message from the ring buffer with timeout (Convenience Copy I/O).
+ *
+ * @details Atomically acquires the next committed slot, copies up to @p max_len
+ * bytes into caller buffer @p buf, optionally returns actual message length in
+ * @p out_len, and releases the slot turn back to producers.
+ *
+ * @param[in,out] ring       Ring buffer handle.
+ * @param[out]    buf        Caller-provided destination buffer.
+ * @param[in]     max_len    Maximum capacity of destination buffer in bytes.
+ * @param[out]    out_len    Optional pointer receiving actual payload length (may be NULL).
+ * @param[in]     timeout_ns Timeout deadline in nanoseconds (or UINT64_MAX for blocking).
+ *
+ * @return @ref RBIPC_OK on success.
+ * @retval RBIPC_ERR_INVAL    if @p ring or @p buf is NULL.
+ * @retval RBIPC_ERR_TIMEOUT  if deadline expired before a slot became ready.
+ * @retval RBIPC_ERR_SHUTDOWN if ring buffer has shut down.
+ * @retval RBIPC_ERR_POISONED if the slot was poisoned due to crashed producer.
+ *
+ * @see rbipc_read
+ * @see rbipc_read_nonblock
+ * @see rbipc_read_acquire
+ */
+RBIPC_NODISCARD RBIPC_LEAF int rbipc_read_timeout(rbipc_ring_t *RBIPC_RESTRICT ring,
+                                                  void *RBIPC_RESTRICT buf,
+                                                  uint32_t max_len,
+                                                  uint32_t *RBIPC_RESTRICT out_len,
+                                                  uint64_t timeout_ns);
+
+/**
+ * @brief Read a message from the ring buffer blocking indefinitely (Convenience Copy I/O).
+ *
+ * @param[in,out] ring    Ring buffer handle.
+ * @param[out]    buf     Caller-provided destination buffer.
+ * @param[in]     max_len Maximum capacity of destination buffer in bytes.
+ * @param[out]    out_len Optional pointer receiving actual payload length (may be NULL).
+ *
+ * @return @ref RBIPC_OK on success.
+ * @retval RBIPC_ERR_INVAL    if arguments are invalid.
+ * @retval RBIPC_ERR_SHUTDOWN if ring buffer has shut down.
+ * @retval RBIPC_ERR_POISONED if the slot was poisoned due to crashed producer.
+ *
+ * @see rbipc_read_timeout
+ * @see rbipc_read_nonblock
+ */
+RBIPC_NODISCARD RBIPC_LEAF int rbipc_read(rbipc_ring_t *RBIPC_RESTRICT ring,
+                                          void *RBIPC_RESTRICT buf,
+                                          uint32_t max_len,
+                                          uint32_t *RBIPC_RESTRICT out_len);
+
+/**
+ * @brief Read a message from the ring buffer without blocking (Convenience Copy I/O).
+ *
+ * @param[in,out] ring    Ring buffer handle.
+ * @param[out]    buf     Caller-provided destination buffer.
+ * @param[in]     max_len Maximum capacity of destination buffer in bytes.
+ * @param[out]    out_len Optional pointer receiving actual payload length (may be NULL).
+ *
+ * @return @ref RBIPC_OK on success.
+ * @retval RBIPC_ERR_EMPTY    if the ring buffer is currently empty.
+ * @retval RBIPC_ERR_INVAL    if arguments are invalid.
+ * @retval RBIPC_ERR_SHUTDOWN if ring buffer has shut down.
+ * @retval RBIPC_ERR_POISONED if the slot was poisoned due to crashed producer.
+ *
+ * @see rbipc_read
+ * @see rbipc_read_timeout
+ */
+RBIPC_NODISCARD RBIPC_LEAF int rbipc_read_nonblock(rbipc_ring_t *RBIPC_RESTRICT ring,
+                                                   void *RBIPC_RESTRICT buf,
+                                                   uint32_t max_len,
+                                                   uint32_t *RBIPC_RESTRICT out_len);
+
 /**
  * @brief Reserve a batch of contiguous slots for writing (Zero-Copy, B-Queue
  * Batching).
@@ -1192,6 +1331,20 @@ RBIPC_NODISCARD RBIPC_LEAF int rbipc_write_stream_timeout(
  */
 RBIPC_LEAF
 int rbipc_signal_shutdown(rbipc_ring_t *ring);
+
+/**
+ * @brief Convenience alias for @ref rbipc_signal_shutdown.
+ *
+ * @param[in,out] ring Ring buffer handle.
+ *
+ * @return @ref RBIPC_OK on success.
+ * @retval RBIPC_ERR_INVAL if @p ring is NULL.
+ *
+ * @see rbipc_signal_shutdown
+ */
+static inline int rbipc_shutdown(rbipc_ring_t *ring) {
+  return rbipc_signal_shutdown(ring);
+}
 
 /**
  * @brief Enable asynchronous eventfd signaling on the ring buffer handle.
