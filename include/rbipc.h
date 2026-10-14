@@ -232,7 +232,7 @@ extern "C" {
   0x0000U /**< Pure passive futex wait (zero CPU spin, lowest CPU usage). */
 #define RBIPC_WAIT_ADAPTIVE                                                    \
   0x0001U /**< Two-phase adaptive spin-then-wait (bounded CPU pause before     \
-             futex). */
+             futex; default policy). */
 #define RBIPC_WAIT_HW_MONITOR                                                  \
   0x0002U /**< Hardware-monitored sleep (WAITPKG UMWAIT C0.2 / ARM64 WFET)    \
              without active micro-spinning. */
@@ -686,7 +686,7 @@ int rbipc_set_wait_policy(rbipc_ring_t *ring, uint32_t policy);
  *
  * @param[in] ring Ring buffer handle.
  *
- * @return Active policy flag mask, or @ref RBIPC_WAIT_ZERO_SPIN if @p ring is
+ * @return Active policy flag mask, or @ref RBIPC_WAIT_ADAPTIVE if @p ring is
  * NULL.
  */
 RBIPC_NODISCARD RBIPC_LEAF uint32_t

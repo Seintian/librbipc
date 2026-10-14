@@ -180,12 +180,12 @@ static void test_wait_policy_api(void) {
     assert(rc == RBIPC_OK);
     assert(ring != NULL);
 
-    /* Default must be ZERO_SPIN */
-    assert(rbipc_get_wait_policy(ring) == RBIPC_WAIT_ZERO_SPIN);
-
-    /* Change to ADAPTIVE */
-    assert(rbipc_set_wait_policy(ring, RBIPC_WAIT_ADAPTIVE) == RBIPC_OK);
+    /* Default must be ADAPTIVE */
     assert(rbipc_get_wait_policy(ring) == RBIPC_WAIT_ADAPTIVE);
+
+    /* Change to ZERO_SPIN */
+    assert(rbipc_set_wait_policy(ring, RBIPC_WAIT_ZERO_SPIN) == RBIPC_OK);
+    assert(rbipc_get_wait_policy(ring) == RBIPC_WAIT_ZERO_SPIN);
 
     /* Change to HW_MONITOR */
     assert(rbipc_set_wait_policy(ring, RBIPC_WAIT_HW_MONITOR) == RBIPC_OK);
@@ -205,7 +205,7 @@ static void test_wait_policy_api(void) {
 
     /* NULL safety */
     assert(rbipc_set_wait_policy(NULL, RBIPC_WAIT_ADAPTIVE) == RBIPC_ERR_INVAL);
-    assert(rbipc_get_wait_policy(NULL) == RBIPC_WAIT_ZERO_SPIN);
+    assert(rbipc_get_wait_policy(NULL) == RBIPC_WAIT_ADAPTIVE);
 
     /* Test write and read with HW_MONITOR policy */
     assert(rbipc_set_wait_policy(ring, RBIPC_WAIT_HW_MONITOR) == RBIPC_OK);

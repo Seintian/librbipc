@@ -60,7 +60,8 @@ struct rbipc_ring {
   pid_t cached_pid; /**< Cached process PID to avoid redundant getpid() system
                        calls during reservations. */
   uint32_t wait_policy; /**< Wait and backoff synchronization policy
-                           (RBIPC_WAIT_ZERO_SPIN or RBIPC_WAIT_ADAPTIVE). */
+                           (RBIPC_WAIT_ADAPTIVE (default), RBIPC_WAIT_ZERO_SPIN,
+                            or RBIPC_WAIT_HW_MONITOR). */
   int event_fd; /**< Bound eventfd descriptor for epoll reactor integration (-1
                    if disabled). */
   bool owns_eventfd; /**< True if this ring handle created the eventfd and

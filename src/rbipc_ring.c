@@ -178,6 +178,7 @@ rbipc_ring_t *rbipc_ring_alloc_handle(int fd, const char *RBIPC_RESTRICT name,
   ring->cached_pid = getpid();
   ring->event_fd = -1;
   ring->owns_eventfd = false;
+  ring->wait_policy = RBIPC_WAIT_ADAPTIVE;
 
   rbipc_sync_init_process();
 
@@ -506,7 +507,7 @@ int rbipc_set_wait_policy(rbipc_ring_t *ring, uint32_t policy) {
 RBIPC_LEAF
 uint32_t rbipc_get_wait_policy(const rbipc_ring_t *ring) {
   if (RBIPC_UNLIKELY(!ring)) {
-    return RBIPC_WAIT_ZERO_SPIN;
+    return RBIPC_WAIT_ADAPTIVE;
   }
   return ring->wait_policy;
 }
