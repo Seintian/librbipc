@@ -103,8 +103,8 @@ int main(void) {
     /* Enable consumer lease timeouts (30ms) to trigger head-of-line unblocking */
     assert(rbipc_set_lease_timeout(ring, 30000000ULL) == RBIPC_OK);
 
-    pid_t producers[CHAOS_PRODUCERS] = {0};
-    pid_t consumers[CHAOS_CONSUMERS] = {0};
+    pid_t producers[CHAOS_PRODUCERS] = {};
+    pid_t consumers[CHAOS_CONSUMERS] = {};
 
     for (int i = 0; i < CHAOS_PRODUCERS; ++i) {
         pid_t p = fork();

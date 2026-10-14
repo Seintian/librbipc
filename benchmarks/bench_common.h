@@ -46,7 +46,7 @@ static inline bool bench_is_on_battery(void) {
     }
     f = fopen("/sys/class/power_supply/BAT0/status", "r");
     if (f) {
-        char status[32] = {0};
+        char status[32] = {};
         if (fgets(status, sizeof(status), f)) {
             fclose(f);
             if (strstr(status, "Discharging")) {
@@ -69,7 +69,7 @@ static inline const char *bench_detect_profile(void) {
     }
 
     bool is_laptop_hw = false;
-    char host[64] = {0};
+    char host[64] = {};
     if (gethostname(host, sizeof(host) - 1) == 0) {
         if (strstr(host, "LAPTOP") || strstr(host, "laptop")) {
             is_laptop_hw = true;

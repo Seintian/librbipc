@@ -24,7 +24,7 @@ int rbipc_ipc_send_fd(int socket_fd, int fd_to_send) {
         return RBIPC_ERR_INVAL;
     }
 
-    struct msghdr msg = {0};
+    struct msghdr msg = {};
     char dummy = 'R';
     struct iovec iov = {
         .iov_base = &dummy,
@@ -33,7 +33,7 @@ int rbipc_ipc_send_fd(int socket_fd, int fd_to_send) {
     msg.msg_iov = &iov;
     msg.msg_iovlen = 1;
 
-    char cmsg_buf[CMSG_SPACE(sizeof(int))] = {0};
+    char cmsg_buf[CMSG_SPACE(sizeof(int))] = {};
     msg.msg_control = cmsg_buf;
     msg.msg_controllen = sizeof(cmsg_buf);
 
@@ -64,7 +64,7 @@ int rbipc_ipc_recv_fd(int socket_fd, int *out_received_fd) {
     }
     *out_received_fd = -1;
 
-    struct msghdr msg = {0};
+    struct msghdr msg = {};
     char dummy = 0;
     struct iovec iov = {
         .iov_base = &dummy,
@@ -73,7 +73,7 @@ int rbipc_ipc_recv_fd(int socket_fd, int *out_received_fd) {
     msg.msg_iov = &iov;
     msg.msg_iovlen = 1;
 
-    char cmsg_buf[CMSG_SPACE(sizeof(int))] = {0};
+    char cmsg_buf[CMSG_SPACE(sizeof(int))] = {};
     msg.msg_control = cmsg_buf;
     msg.msg_controllen = sizeof(cmsg_buf);
 

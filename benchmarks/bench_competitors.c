@@ -350,7 +350,7 @@ static void print_table(result_t *arr, int n, const char *kind) {
  * ====================================================================== */
 
 static result_t bench_rbipc_tput(size_t msgsz, uint64_t iters) {
-    result_t r = {0};
+    result_t r = {};
     snprintf(r.name, sizeof(r.name), "librbipc");
     r.msgsz = msgsz; r.iters = iters;
 
@@ -415,7 +415,7 @@ static result_t bench_rbipc_tput(size_t msgsz, uint64_t iters) {
 }
 
 static result_t bench_rte_tput(size_t msgsz, uint64_t iters) {
-    result_t r = {0};
+    result_t r = {};
     snprintf(r.name, sizeof(r.name), "rte_ring (DPDK alg)");
     r.msgsz = msgsz; r.iters = iters;
 
@@ -462,7 +462,7 @@ static result_t bench_rte_tput(size_t msgsz, uint64_t iters) {
 }
 
 static result_t bench_disruptor_tput(size_t msgsz, uint64_t iters) {
-    result_t r = {0};
+    result_t r = {};
     snprintf(r.name, sizeof(r.name), "LMAX Disruptor");
     r.msgsz = msgsz; r.iters = iters;
 
@@ -512,7 +512,7 @@ static result_t bench_disruptor_tput(size_t msgsz, uint64_t iters) {
 }
 
 static result_t bench_mq_tput(size_t msgsz, uint64_t iters) {
-    result_t r = {0};
+    result_t r = {};
     snprintf(r.name, sizeof(r.name), "POSIX mqueue");
     if (msgsz > 8192) msgsz = 8192;
     r.msgsz = msgsz; r.iters = iters;
@@ -565,7 +565,7 @@ static result_t bench_mq_tput(size_t msgsz, uint64_t iters) {
 }
 
 static result_t bench_uds_tput(size_t msgsz, uint64_t iters) {
-    result_t r = {0};
+    result_t r = {};
     snprintf(r.name, sizeof(r.name), "AF_UNIX DGRAM");
     if (msgsz > 65536) msgsz = 65536;
     r.msgsz = msgsz; r.iters = iters;
@@ -625,7 +625,7 @@ static result_t bench_uds_tput(size_t msgsz, uint64_t iters) {
  * ====================================================================== */
 
 static result_t bench_rbipc_lat(uint64_t iters) {
-    result_t r = {0};
+    result_t r = {};
     snprintf(r.name, sizeof(r.name), "librbipc");
     r.msgsz = 8; r.iters = iters;
     const char *sa = "/rbench_lat_a", *sb = "/rbench_lat_b";
@@ -692,7 +692,7 @@ static result_t bench_rbipc_lat(uint64_t iters) {
 }
 
 static result_t bench_rte_lat(uint64_t iters) {
-    result_t r = {0};
+    result_t r = {};
     snprintf(r.name, sizeof(r.name), "rte_ring (DPDK alg)");
     r.msgsz = 8; r.iters = iters;
     rte_ring_t *ra = rte_ring_alloc(256), *rb = rte_ring_alloc(256);
@@ -728,7 +728,7 @@ static result_t bench_rte_lat(uint64_t iters) {
 }
 
 static result_t bench_disruptor_lat(uint64_t iters) {
-    result_t r = {0};
+    result_t r = {};
     snprintf(r.name, sizeof(r.name), "LMAX Disruptor");
     r.msgsz = 8; r.iters = iters;
     disruptor_ring_t *da = disruptor_alloc(256), *db = disruptor_alloc(256);
@@ -770,7 +770,7 @@ static result_t bench_disruptor_lat(uint64_t iters) {
 }
 
 static result_t bench_mq_lat(uint64_t iters) {
-    result_t r = {0};
+    result_t r = {};
     snprintf(r.name, sizeof(r.name), "POSIX mqueue");
     r.msgsz = 8; r.iters = iters;
     mqd_t mab = mq_make(MQ_NAME_AB, 8, 10);
@@ -788,7 +788,7 @@ static result_t bench_mq_lat(uint64_t iters) {
         }
         mq_close(mab); mq_close(mba); _exit(0);
     } else {
-        char ping[8] = {0};
+        char ping[8] = {};
         for (uint64_t i = 0; i < iters; i++) {
             uint64_t t0 = get_ns();
             mq_send(mab, ping, 8, MQ_PRIO);
@@ -811,13 +811,13 @@ static result_t bench_mq_lat(uint64_t iters) {
 }
 
 static result_t bench_uds_lat(uint64_t iters) {
-    result_t r = {0};
+    result_t r = {};
     snprintf(r.name, sizeof(r.name), "AF_UNIX DGRAM");
     r.msgsz = 8; r.iters = iters;
     int sv[2];
     assert(socketpair(AF_UNIX, SOCK_DGRAM, 0, sv) == 0);
     uint64_t *samp = malloc(iters * sizeof(uint64_t));
-    char buf[16]; char ping[8] = {0};
+    char buf[16]; char ping[8] = {};
 
     pid_t pid = fork();
     if (pid == 0) {

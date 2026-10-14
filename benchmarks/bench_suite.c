@@ -734,7 +734,7 @@ int main(int argc, char **argv) {
     latency_dist_t lat;
     run_bench_ping_pong(ping_pong_iters, &lat);
 
-    latency_sla_result_t sla_res = {0};
+    latency_sla_result_t sla_res = {};
     bool sla_ok = verify_latency_regression(&lat, strict_regression, custom_p99_9_us, custom_max_us, &sla_res);
     if (!sla_ok && strict_regression) {
         fprintf(stderr, "\nFATAL: Aborting benchmark suite due to latency regression failure in strict mode.\n");

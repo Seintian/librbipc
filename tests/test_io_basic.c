@@ -136,7 +136,7 @@ static void test_circular_wrap(void) {
 
 static void test_stream_operations(void) {
     /* 1. NULL parameter checks */
-    char buf[128] = {0};
+    char buf[128] = {};
     assert(rbipc_stream_copy(NULL, buf, 64) == RBIPC_ERR_INVAL);
     assert(rbipc_stream_copy(buf, NULL, 64) == RBIPC_ERR_INVAL);
 
@@ -235,7 +235,7 @@ static void test_convenience_copy_io(void) {
     /* 4. Truncated read and NULL out_len */
     rc = rbipc_write_nonblock(ring, "1234567890", 10);
     assert(rc == RBIPC_OK);
-    char small_buf[5] = {0};
+    char small_buf[5] = {};
     rc = rbipc_read(ring, small_buf, 4, &out_len);
     assert(rc == RBIPC_OK);
     assert(out_len == 10);

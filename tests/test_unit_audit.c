@@ -25,7 +25,7 @@ int main(void) {
     assert(rbipc_audit_is_peer_alive(9999999) == false);
 
     /* 2. Dead producer recovery */
-    rbipc_shm_header_t hdr = {0};
+    rbipc_shm_header_t hdr = {};
     atomic_init(&hdr.futex_seq, 0);
     atomic_init(&hdr.futex_waiters, 0);
     atomic_init(&hdr.write_ticket, 10);

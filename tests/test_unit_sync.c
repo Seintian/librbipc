@@ -282,7 +282,7 @@ static void test_futex2_waitv(void) {
 
     /* Parameter validation */
     assert(rbipc_futex_waitv(NULL, 1, 1000) == -EINVAL);
-    struct futex_waitv w_dummy = {0};
+    struct futex_waitv w_dummy = {};
     assert(rbipc_futex_waitv(&w_dummy, 0, 1000) == -EINVAL);
     assert(rbipc_futex_waitv(&w_dummy, 129, 1000) == -EINVAL);
 
