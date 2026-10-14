@@ -90,7 +90,7 @@ rbipc_sync_calc_timeout_spec(const rbipc_sync_state_t *RBIPC_RESTRICT state,
   return 0;
 }
 
-static int s_membarrier_cmd = -1;
+static _Atomic int s_membarrier_cmd = -1;
 
 /**
  * @brief Initialize process-level synchronization capabilities (e.g. sys_membarrier registration).
@@ -98,26 +98,25 @@ static int s_membarrier_cmd = -1;
 RBIPC_LEAF
 void rbipc_sync_init_process(void) {
 #if defined(__linux__) && defined(SYS_membarrier)
-  if (RBIPC_UNLIKELY(s_membarrier_cmd == -1)) {
+  int cmd = atomic_load_explicit(&s_membarrier_cmd, memory_order_acquire);
+  if (RBIPC_UNLIKELY(cmd == -1)) {
+    int new_cmd = 0;
     long sup_ret = syscall(SYS_membarrier, MEMBARRIER_CMD_QUERY, 0, 0);
     if (sup_ret > 0) {
       uint32_t sup = (uint32_t)sup_ret;
       if ((sup & (uint32_t)MEMBARRIER_CMD_GLOBAL_EXPEDITED) != 0U) {
         if (syscall(SYS_membarrier, MEMBARRIER_CMD_REGISTER_GLOBAL_EXPEDITED, 0,
                     0) == 0) {
-          s_membarrier_cmd = MEMBARRIER_CMD_GLOBAL_EXPEDITED;
+          new_cmd = MEMBARRIER_CMD_GLOBAL_EXPEDITED;
         }
       }
-      if (s_membarrier_cmd == -1) {
+      if (new_cmd == 0) {
         if ((sup & (uint32_t)MEMBARRIER_CMD_GLOBAL) != 0U) {
-          s_membarrier_cmd = MEMBARRIER_CMD_GLOBAL;
-        } else {
-          s_membarrier_cmd = 0;
+          new_cmd = MEMBARRIER_CMD_GLOBAL;
         }
       }
-    } else {
-      s_membarrier_cmd = 0;
     }
+    atomic_store_explicit(&s_membarrier_cmd, new_cmd, memory_order_release);
   }
 #endif
 }
@@ -128,12 +127,14 @@ void rbipc_sync_init_process(void) {
 RBIPC_LEAF
 void rbipc_sync_asymmetric_barrier(void) {
 #if defined(__linux__) && defined(SYS_membarrier)
-  if (RBIPC_UNLIKELY(s_membarrier_cmd == -1)) {
+  int cmd = atomic_load_explicit(&s_membarrier_cmd, memory_order_acquire);
+  if (RBIPC_UNLIKELY(cmd == -1)) {
     rbipc_sync_init_process();
+    cmd = atomic_load_explicit(&s_membarrier_cmd, memory_order_acquire);
   }
 
-  if (RBIPC_LIKELY(s_membarrier_cmd > 0)) {
-    if (syscall(SYS_membarrier, s_membarrier_cmd, 0, 0) == 0) {
+  if (RBIPC_LIKELY(cmd > 0)) {
+    if (syscall(SYS_membarrier, cmd, 0, 0) == 0) {
       return;
     }
   }
@@ -275,10 +276,12 @@ int rbipc_sync_backoff(rbipc_sync_state_t *RBIPC_RESTRICT state,
 #if defined(__x86_64__) || defined(_M_X64) || defined(__i386__) ||             \
     defined(_M_IX86)
 static uint64_t rbipc_get_tsc_ticks_per_ns(void) {
-  static uint64_t s_ticks_per_ns = 0;
-  if (RBIPC_LIKELY(s_ticks_per_ns != 0)) {
-    return s_ticks_per_ns;
+  static _Atomic uint64_t s_ticks_per_ns = 0;
+  uint64_t val = atomic_load_explicit(&s_ticks_per_ns, memory_order_acquire);
+  if (RBIPC_LIKELY(val != 0)) {
+    return val;
   }
+  uint64_t computed = 0;
   FILE *f = fopen("/sys/devices/system/cpu/cpu0/tsc_freq_khz", "r");
   if (f) {
     char buf[64];
@@ -286,15 +289,15 @@ static uint64_t rbipc_get_tsc_ticks_per_ns(void) {
       char *endptr = NULL;
       uint64_t khz = strtoull(buf, &endptr, 10);
       if (khz > 0) {
-        s_ticks_per_ns = (khz + 500000ULL) / 1000000ULL;
-        if (s_ticks_per_ns == 0) {
-          s_ticks_per_ns = 1;
+        computed = (khz + 500000ULL) / 1000000ULL;
+        if (computed == 0) {
+          computed = 1;
         }
       }
     }
     fclose(f);
   }
-  if (s_ticks_per_ns == 0) {
+  if (computed == 0) {
     struct timespec ts1, ts2;
     clock_gettime(CLOCK_MONOTONIC, &ts1);
     uint64_t tsc1 = rbipc_rdtsc();
@@ -307,13 +310,14 @@ static uint64_t rbipc_get_tsc_ticks_per_ns(void) {
         (uint64_t)(ts2.tv_sec - ts1.tv_sec) * 1000000000ULL +
         (uint64_t)(ts2.tv_nsec - ts1.tv_nsec);
     if (elapsed_ns > 0 && tsc2 > tsc1) {
-      s_ticks_per_ns = (tsc2 - tsc1) / elapsed_ns;
+      computed = (tsc2 - tsc1) / elapsed_ns;
     }
-    if (s_ticks_per_ns == 0) {
-      s_ticks_per_ns = 3;
+    if (computed == 0) {
+      computed = 3;
     }
   }
-  return s_ticks_per_ns;
+  atomic_store_explicit(&s_ticks_per_ns, computed, memory_order_release);
+  return computed;
 }
 #endif
 

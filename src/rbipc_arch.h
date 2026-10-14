@@ -41,17 +41,18 @@ RBIPC_INLINE RBIPC_NODISCARD uint64_t rbipc_rdtsc(void) {
  * @return True if host CPU supports WAITPKG (Intel Tremont, Alder Lake+, AMD Zen 5+).
  */
 RBIPC_INLINE RBIPC_NODISCARD bool rbipc_cpu_has_waitpkg(void) {
-  static int cached = -1;
-  if (RBIPC_LIKELY(cached != -1)) {
-    return cached == 1;
+  static _Atomic int cached = -1;
+  int c = atomic_load_explicit(&cached, memory_order_acquire);
+  if (RBIPC_LIKELY(c != -1)) {
+    return c == 1;
   }
   unsigned int eax = 0, ebx = 0, ecx = 0, edx = 0;
+  int res = 0;
   if (__get_cpuid_count(7, 0, &eax, &ebx, &ecx, &edx)) {
-    cached = ((ecx & (1U << 5U)) != 0U) ? 1 : 0;
-  } else {
-    cached = 0;
+    res = ((ecx & (1U << 5U)) != 0U) ? 1 : 0;
   }
-  return cached == 1;
+  atomic_store_explicit(&cached, res, memory_order_release);
+  return res == 1;
 }
 
 /**
@@ -117,13 +118,15 @@ RBIPC_INLINE RBIPC_NODISCARD bool rbipc_cpu_has_waitpkg(void) {
  * @return True if host CPU supports WFET (ARMv8.7-A / ARMv9.2-A+).
  */
 RBIPC_INLINE RBIPC_NODISCARD bool rbipc_cpu_has_wfxt(void) {
-  static int cached = -1;
-  if (RBIPC_LIKELY(cached != -1)) {
-    return cached == 1;
+  static _Atomic int cached = -1;
+  int c = atomic_load_explicit(&cached, memory_order_acquire);
+  if (RBIPC_LIKELY(c != -1)) {
+    return c == 1;
   }
   unsigned long hwcap2 = getauxval(AT_HWCAP2);
-  cached = ((hwcap2 & HWCAP2_WFXT) != 0) ? 1 : 0;
-  return cached == 1;
+  int res = ((hwcap2 & HWCAP2_WFXT) != 0) ? 1 : 0;
+  atomic_store_explicit(&cached, res, memory_order_release);
+  return res == 1;
 }
 
 /**

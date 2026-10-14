@@ -65,17 +65,15 @@ int rbipc_futex_wake(_Atomic uint32_t *uaddr, int count) {
 RBIPC_LEAF
 bool rbipc_futex_has_waitv(void) {
 #if defined(__linux__) && defined(SYS_futex_waitv)
-  static int s_has_waitv = -1;
-  if (RBIPC_LIKELY(s_has_waitv != -1)) {
-    return s_has_waitv == 1;
+  static _Atomic int s_has_waitv = -1;
+  int cached = atomic_load_explicit(&s_has_waitv, memory_order_acquire);
+  if (RBIPC_LIKELY(cached != -1)) {
+    return cached == 1;
   }
   long ret = syscall(SYS_futex_waitv, NULL, 0, 0, NULL, 0);
-  if (ret < 0 && errno == ENOSYS) {
-    s_has_waitv = 0;
-  } else {
-    s_has_waitv = 1;
-  }
-  return s_has_waitv == 1;
+  int res = (ret < 0 && errno == ENOSYS) ? 0 : 1;
+  atomic_store_explicit(&s_has_waitv, res, memory_order_release);
+  return res == 1;
 #else
   return false;
 #endif
@@ -83,12 +81,13 @@ bool rbipc_futex_has_waitv(void) {
 
 static bool rbipc_futex2_has_u64(void) {
 #if defined(__linux__) && defined(SYS_futex_waitv)
-  static int s_has_u64 = -1;
-  if (RBIPC_LIKELY(s_has_u64 != -1)) {
-    return s_has_u64 == 1;
+  static _Atomic int s_has_u64 = -1;
+  int cached = atomic_load_explicit(&s_has_u64, memory_order_acquire);
+  if (RBIPC_LIKELY(cached != -1)) {
+    return cached == 1;
   }
   if (!rbipc_futex_has_waitv()) {
-    s_has_u64 = 0;
+    atomic_store_explicit(&s_has_u64, 0, memory_order_release);
     return false;
   }
   uint64_t dummy = 0;
@@ -99,12 +98,9 @@ static bool rbipc_futex2_has_u64(void) {
       .__reserved = 0,
   };
   long ret = syscall(SYS_futex_waitv, &w, 1, 0, NULL, CLOCK_MONOTONIC);
-  if (ret < 0 && errno == EINVAL) {
-    s_has_u64 = 0;
-  } else {
-    s_has_u64 = 1;
-  }
-  return s_has_u64 == 1;
+  int res = (ret < 0 && errno == EINVAL) ? 0 : 1;
+  atomic_store_explicit(&s_has_u64, res, memory_order_release);
+  return res == 1;
 #else
   return false;
 #endif
