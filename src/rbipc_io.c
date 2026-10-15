@@ -462,13 +462,62 @@ int rbipc_read_acquire_timeout(rbipc_ring_t *RBIPC_RESTRICT ring,
 
   rbipc_shm_header_t *hdr = ring->hdr;
   const uint32_t mask = hdr->capacity_mask;
-  uint64_t t = atomic_load_explicit(&hdr->read_ticket, memory_order_relaxed);
   rbipc_slot_t *slots =
       (rbipc_slot_t *)RBIPC_ASSUME_ALIGNED(ring->slots, RBIPC_CACHE_LINE);
-
   rbipc_sync_state_t sync_state;
   rbipc_sync_state_init(&sync_state, timeout_ns);
 
+  /* Bounded FAA Fast Path for Unbounded Blocking Reads (Nikolaev SCQ Pattern) */
+  if (timeout_ns == UINT64_MAX) {
+    for (;;) {
+      uint64_t rt = atomic_load_explicit(&hdr->read_ticket, memory_order_relaxed);
+      if (RBIPC_UNLIKELY(rbipc_ring_is_drained_on_shutdown(hdr, rt))) {
+        return RBIPC_ERR_SHUTDOWN;
+      }
+
+      uint64_t wt = atomic_load_explicit(&hdr->write_ticket, memory_order_relaxed);
+
+      if (RBIPC_LIKELY(rt < wt)) {
+        uint64_t t = atomic_fetch_add_explicit(&hdr->read_ticket, 1,
+                                               memory_order_acq_rel);
+        rbipc_slot_t *slot = &slots[t & mask];
+        uint64_t seq = atomic_load_explicit(&slot->sequence, memory_order_acquire);
+
+        if (RBIPC_LIKELY(rbipc_slot_is_ready(seq, t))) {
+          return rbipc_io_complete_read_acquisition(ring, slot, t, out_buf,
+                                                    out_len, ticket);
+        }
+
+        /* Slot is behind: wait specifically on slot t until producer commits it */
+        uint64_t dummy_t = t;
+        while (!rbipc_slot_is_ready(seq, t)) {
+          if (RBIPC_UNLIKELY(rbipc_ring_is_drained_on_shutdown(hdr, t))) {
+            return RBIPC_ERR_SHUTDOWN;
+          }
+          int rc = rbipc_io_handle_read_backoff(ring, &sync_state, hdr, slot, t,
+                                                timeout_ns, &dummy_t);
+          if (RBIPC_UNLIKELY(rc != RBIPC_OK)) {
+            return rc;
+          }
+          seq = atomic_load_explicit(&slot->sequence, memory_order_acquire);
+        }
+        return rbipc_io_complete_read_acquisition(ring, slot, t, out_buf,
+                                                  out_len, ticket);
+      }
+
+      /* Ring is empty: wait on current read slot */
+      rbipc_slot_t *empty_slot = &slots[rt & mask];
+      uint64_t dummy_rt = rt;
+      int rc = rbipc_io_handle_read_backoff(ring, &sync_state, hdr, empty_slot, rt,
+                                            timeout_ns, &dummy_rt);
+      if (RBIPC_UNLIKELY(rc != RBIPC_OK)) {
+        return rc;
+      }
+    }
+  }
+
+  /* Standard Bounded CAS Path for Finite-Timeout and Nonblocking Reads */
+  uint64_t t = atomic_load_explicit(&hdr->read_ticket, memory_order_relaxed);
   for (;;) {
     rbipc_slot_t *slot = &slots[t & mask];
     uint64_t seq = atomic_load_explicit(&slot->sequence, memory_order_acquire);
