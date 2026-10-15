@@ -1,7 +1,7 @@
 CompileFlags:
+  CompilationDatabase: .
   Add:
     - -Iinclude
-    - -Isrc
     - -D_GNU_SOURCE
     - -Wall
     - -Wextra

@@ -29,7 +29,7 @@ int main(void) {
     atomic_init(&hdr.futex_seq, 0);
     atomic_init(&hdr.futex_waiters, 0);
     atomic_init(&hdr.write_ticket, 10);
-    atomic_init(&hdr.capacity_mask, 3);
+    hdr.capacity_mask = 3;
     atomic_init(&hdr.active_producers, 1);
 
     rbipc_slot_t slot;

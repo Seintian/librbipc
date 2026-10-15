@@ -1,0 +1,6 @@
+-Iinclude
+-D_GNU_SOURCE
+-Wall
+-Wextra
+-Wpedantic
+-std=c23

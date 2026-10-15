@@ -4,6 +4,7 @@
  */
 
 #include "rbipc.h"
+#include <stddef.h>
 #include <stdio.h>
 #include <string.h>
 #include <assert.h>
@@ -28,7 +29,7 @@ static void test_lease_getter_setter(void) {
     assert(rbipc_get_lease_timeout(ring) == 0);
 
     /* Set lease timeout to 50ms */
-    uint64_t timeout_ns = 50 * 1000 * 1000ULL;
+    uint64_t timeout_ns = (long long)50 * 1000 * 1000ULL;
     rc = rbipc_set_lease_timeout(ring, timeout_ns);
     assert(rc == RBIPC_OK);
     assert(rbipc_get_lease_timeout(ring) == timeout_ns);
@@ -47,7 +48,7 @@ static void test_lease_revocation_proactive(void) {
     assert(rc == RBIPC_OK);
 
     /* Set short lease timeout of 20 ms */
-    uint64_t lease_ns = 20 * 1000 * 1000ULL;
+    uint64_t lease_ns = (long long)20 * 1000 * 1000ULL;
     assert(rbipc_set_lease_timeout(ring, lease_ns) == RBIPC_OK);
 
     /* Write 1 message */
@@ -112,7 +113,7 @@ static void test_lease_auto_recovery_on_write(void) {
     assert(rc == RBIPC_OK);
 
     /* Configure lease timeout of 20 ms */
-    uint64_t lease_ns = 20 * 1000 * 1000ULL;
+    uint64_t lease_ns = (long long)20 * 1000 * 1000ULL;
     assert(rbipc_set_lease_timeout(ring, lease_ns) == RBIPC_OK);
 
     /* Fill ring: write slot 0 and slot 1 */

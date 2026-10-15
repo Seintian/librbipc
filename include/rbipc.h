@@ -234,7 +234,7 @@ extern "C" {
   0x0001U /**< Two-phase adaptive spin-then-wait (bounded CPU pause before     \
              futex; default policy). */
 #define RBIPC_WAIT_HW_MONITOR                                                  \
-  0x0002U /**< Hardware-monitored sleep (WAITPKG UMWAIT C0.2 / ARM64 WFET)    \
+  0x0002U /**< Hardware-monitored sleep (WAITPKG UMWAIT C0.2 / ARM64 WFET)     \
              without active micro-spinning. */
 /** @} */
 
@@ -1491,7 +1491,12 @@ rbipc_strerror(int err);
 }
 #endif
 
+#ifndef RBIPC_IPC_H
 #include "rbipc_ipc.h"
+#endif
+
+#ifndef RBIPC_PUBSUB_H
 #include "rbipc_pubsub.h"
+#endif
 
 #endif /* RBIPC_H */

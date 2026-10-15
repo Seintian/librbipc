@@ -140,7 +140,7 @@ static void run_producer_batch(int iterations, uint32_t batch_size) {
 
         for (uint32_t i = 0; i < reserved; ++i) {
             bench_msg_t *msg = (bench_msg_t *)iovecs[i].buf;
-            msg->seq_id = (uint64_t)(sent + i);
+            msg->seq_id = (uint64_t)sent + i;
             msg->timestamp_ns = 0;
             tickets[i] = iovecs[i].ticket;
             lens[i] = sizeof(bench_msg_t);

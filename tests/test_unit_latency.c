@@ -55,11 +55,11 @@ static void compute_latency_distribution(uint32_t *samples, size_t n, test_laten
 
     out->min_ns    = samples[0];
     out->mean_ns   = mean;
-    out->p50_ns    = samples[(size_t)(n * 0.50)];
-    out->p90_ns    = samples[(size_t)(n * 0.90)];
-    out->p99_ns    = samples[(size_t)(n * 0.99)];
-    out->p99_9_ns  = samples[(size_t)(n * 0.999)];
-    out->p99_99_ns = samples[(size_t)(n * 0.9999)];
+    out->p50_ns    = samples[(n * 50) / 100];
+    out->p90_ns    = samples[(n * 90) / 100];
+    out->p99_ns    = samples[(n * 99) / 100];
+    out->p99_9_ns  = samples[(n * 999) / 1000];
+    out->p99_99_ns = samples[(n * 9999) / 10000];
     out->max_ns    = samples[n - 1];
     out->stddev_ns = sqrt(var_sum / (double)n);
 }
