@@ -108,14 +108,8 @@ static uint32_t rbipc_simd_scan_avx2(const rbipc_slot_t *slots, uint32_t mask,
     }
   }
 
-  while (avail < count) {
-    const rbipc_slot_t *slot = &slots[(t + avail) & mask];
-    uint64_t seq = atomic_load_explicit(&slot->sequence, memory_order_acquire);
-    if (rbipc_seq_diff(seq, t + avail + offset) == 0) {
-      avail++;
-    } else {
-      break;
-    }
+  if (avail < count) {
+    avail += rbipc_simd_scan_scalar(slots, mask, t + avail, count - avail, offset);
   }
   return avail;
 }
@@ -152,50 +146,42 @@ static uint32_t rbipc_simd_scan_neon(const rbipc_slot_t *slots, uint32_t mask,
   }
 
   if (avail < count) {
-    const rbipc_slot_t *slot = &slots[(t + avail) & mask];
-    uint64_t seq = atomic_load_explicit(&slot->sequence, memory_order_acquire);
-    if (rbipc_seq_diff(seq, t + avail + offset) == 0) {
-      avail++;
-    }
+    avail += rbipc_simd_scan_scalar(slots, mask, t + avail, count - avail, offset);
   }
   return avail;
 }
 #endif
 
-RBIPC_LEAF
-uint32_t rbipc_simd_scan_vacant_slots(const rbipc_slot_t *slots, uint32_t mask,
-                                      uint64_t t, uint32_t count) {
+/**
+ * @brief Unified slot scanner with hardware acceleration and scalar fallback.
+ */
+RBIPC_INLINE uint32_t rbipc_simd_scan_slots(const rbipc_slot_t *slots,
+                                            uint32_t mask, uint64_t t,
+                                            uint32_t count, uint64_t offset) {
   if (RBIPC_UNLIKELY(!slots || count == 0))
     return 0;
 #if defined(__x86_64__) || defined(_M_X64)
 #if defined(__GNUC__) || defined(__clang__)
   if (__builtin_cpu_supports("avx2") && count >= 4) {
-    return rbipc_simd_scan_avx2(slots, mask, t, count, 0);
+    return rbipc_simd_scan_avx2(slots, mask, t, count, offset);
   }
 #endif
 #elif defined(__aarch64__)
   if (count >= 2) {
-    return rbipc_simd_scan_neon(slots, mask, t, count, 0);
+    return rbipc_simd_scan_neon(slots, mask, t, count, offset);
   }
 #endif
-  return rbipc_simd_scan_scalar(slots, mask, t, count, 0);
+  return rbipc_simd_scan_scalar(slots, mask, t, count, offset);
+}
+
+RBIPC_LEAF
+uint32_t rbipc_simd_scan_vacant_slots(const rbipc_slot_t *slots, uint32_t mask,
+                                      uint64_t t, uint32_t count) {
+  return rbipc_simd_scan_slots(slots, mask, t, count, 0);
 }
 
 RBIPC_LEAF
 uint32_t rbipc_simd_scan_ready_slots(const rbipc_slot_t *slots, uint32_t mask,
                                      uint64_t t, uint32_t count) {
-  if (RBIPC_UNLIKELY(!slots || count == 0))
-    return 0;
-#if defined(__x86_64__) || defined(_M_X64)
-#if defined(__GNUC__) || defined(__clang__)
-  if (__builtin_cpu_supports("avx2") && count >= 4) {
-    return rbipc_simd_scan_avx2(slots, mask, t, count, 1);
-  }
-#endif
-#elif defined(__aarch64__)
-  if (count >= 2) {
-    return rbipc_simd_scan_neon(slots, mask, t, count, 1);
-  }
-#endif
-  return rbipc_simd_scan_scalar(slots, mask, t, count, 1);
+  return rbipc_simd_scan_slots(slots, mask, t, count, 1);
 }
