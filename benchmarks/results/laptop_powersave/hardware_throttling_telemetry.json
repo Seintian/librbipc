@@ -1,0 +1,62 @@
+[
+  {
+    "benchmark": "bench_suite",
+    "binary": "bin/bench_suite",
+    "elapsed_sec": 2.58,
+    "min_freq_mhz": 2899.2,
+    "max_freq_mhz": 2931.8,
+    "mean_freq_mhz": 2912.6,
+    "initial_temp_c": 66,
+    "peak_temp_c": 66,
+    "final_temp_c": 66,
+    "core_throttle_delta": 0,
+    "pkg_throttle_delta": 0,
+    "battery_capacity_start": 76,
+    "battery_capacity_end": 76
+  },
+  {
+    "benchmark": "bench_deep_dive",
+    "binary": "bin/bench_deep_dive",
+    "elapsed_sec": 2.53,
+    "min_freq_mhz": 2899.0,
+    "max_freq_mhz": 2940.0,
+    "mean_freq_mhz": 2902.9,
+    "initial_temp_c": 66,
+    "peak_temp_c": 69,
+    "final_temp_c": 60,
+    "core_throttle_delta": 0,
+    "pkg_throttle_delta": 0,
+    "battery_capacity_start": 76,
+    "battery_capacity_end": 76
+  },
+  {
+    "benchmark": "bench_idle_strategies",
+    "binary": "bin/bench_idle_strategies",
+    "elapsed_sec": 4.06,
+    "min_freq_mhz": 2702.0,
+    "max_freq_mhz": 2953.0,
+    "mean_freq_mhz": 2899.0,
+    "initial_temp_c": 60,
+    "peak_temp_c": 67,
+    "final_temp_c": 66,
+    "core_throttle_delta": 0,
+    "pkg_throttle_delta": 0,
+    "battery_capacity_start": 76,
+    "battery_capacity_end": 75
+  },
+  {
+    "benchmark": "bench_competitors",
+    "binary": "bin/bench_competitors",
+    "elapsed_sec": 6.38,
+    "min_freq_mhz": 2899.2,
+    "max_freq_mhz": 2934.5,
+    "mean_freq_mhz": 2904.7,
+    "initial_temp_c": 66,
+    "peak_temp_c": 72,
+    "final_temp_c": 63,
+    "core_throttle_delta": 0,
+    "pkg_throttle_delta": 0,
+    "battery_capacity_start": 75,
+    "battery_capacity_end": 75
+  }
+]
