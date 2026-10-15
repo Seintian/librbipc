@@ -114,7 +114,11 @@ bool rbipc_slot_recover_dead_consumer(rbipc_slot_t *slot, uint64_t ticket) {
   uint32_t cpid =
       atomic_load_explicit(&slot->consumer_pid, memory_order_relaxed);
   if (cpid > 0 && !rbipc_audit_is_peer_alive((pid_t)cpid)) {
-    atomic_store_explicit(&slot->consumer_pid, 0, memory_order_relaxed);
+    if (!atomic_compare_exchange_strong_explicit(
+            &slot->consumer_pid, &cpid, 0, memory_order_acq_rel,
+            memory_order_relaxed)) {
+      return false;
+    }
     atomic_store_explicit(&slot->producer_pid, 0, memory_order_relaxed);
     atomic_store_explicit(&slot->acquire_timestamp_ns, 0, memory_order_relaxed);
     atomic_store_explicit(&slot->len, 0, memory_order_relaxed);
@@ -139,7 +143,11 @@ bool rbipc_slot_recover_expired_lease(rbipc_slot_t *slot,
         atomic_load_explicit(&slot->acquire_timestamp_ns, memory_order_relaxed);
     if (acquired_ts > 0 && now_ns > acquired_ts &&
         (now_ns - acquired_ts) >= lease_timeout_ns) {
-      atomic_store_explicit(&slot->consumer_pid, 0, memory_order_relaxed);
+      if (!atomic_compare_exchange_strong_explicit(
+              &slot->consumer_pid, &cpid, 0, memory_order_acq_rel,
+              memory_order_relaxed)) {
+        return false;
+      }
       atomic_store_explicit(&slot->producer_pid, 0, memory_order_relaxed);
       atomic_store_explicit(&slot->acquire_timestamp_ns, 0,
                             memory_order_relaxed);
