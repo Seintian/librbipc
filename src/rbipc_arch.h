@@ -21,6 +21,44 @@
 
 #include <stdint.h>
 #include <time.h>
+#include <unistd.h>
+
+/**
+ * @brief Query current high-resolution monotonic clock timestamp in
+ * nanoseconds.
+ *
+ * @details Reads Linux POSIX CLOCK_MONOTONIC clock source. Monotonic timestamps
+ * are strictly immune to wall-clock time adjustments, NTP skews, and
+ * leap-second discontinuities, making them ideal for deadline calculations and
+ * performance latency profiling.
+ *
+ * @return 64-bit integer timestamp in nanoseconds.
+ */
+RBIPC_INLINE RBIPC_NODISCARD uint64_t rbipc_clock_monotonic_ns(void) {
+  struct timespec ts;
+  clock_gettime(CLOCK_MONOTONIC, &ts);
+  return ((uint64_t)ts.tv_sec * RBIPC_NSEC_PER_SEC) + (uint64_t)ts.tv_nsec;
+}
+
+/**
+ * @brief Query system virtual memory page size with atomic process-local caching.
+ *
+ * @details Queries sysconf(_SC_PAGESIZE) on first invocation and caches the result
+ * atomically to eliminate subsequent system calls. Falls back to 4096 bytes if sysconf fails.
+ *
+ * @return System virtual memory page size in bytes.
+ */
+RBIPC_INLINE RBIPC_NODISCARD size_t rbipc_page_size(void) {
+  static _Atomic size_t s_page_size = 0;
+  size_t ps = atomic_load_explicit(&s_page_size, memory_order_acquire);
+  if (RBIPC_LIKELY(ps != 0)) {
+    return ps;
+  }
+  long raw = sysconf(_SC_PAGESIZE);
+  ps = (raw > 0) ? (size_t)raw : 4096U;
+  atomic_store_explicit(&s_page_size, ps, memory_order_release);
+  return ps;
+}
 
 #if defined(__x86_64__) || defined(_M_X64) || defined(__i386__) ||             \
     defined(_M_IX86)
@@ -184,23 +222,6 @@ RBIPC_INLINE void rbipc_cpu_pause(void) {
 #else
   __asm__ __volatile__("" ::: "memory");
 #endif
-}
-
-/**
- * @brief Query current high-resolution monotonic clock timestamp in
- * nanoseconds.
- *
- * @details Reads Linux POSIX CLOCK_MONOTONIC clock source. Monotonic timestamps
- * are strictly immune to wall-clock time adjustments, NTP skews, and
- * leap-second discontinuities, making them ideal for deadline calculations and
- * performance latency profiling.
- *
- * @return 64-bit integer timestamp in nanoseconds.
- */
-RBIPC_INLINE RBIPC_NODISCARD uint64_t rbipc_clock_monotonic_ns(void) {
-  struct timespec ts;
-  clock_gettime(CLOCK_MONOTONIC, &ts);
-  return ((uint64_t)ts.tv_sec * RBIPC_NSEC_PER_SEC) + (uint64_t)ts.tv_nsec;
 }
 
 /* ============================================================================

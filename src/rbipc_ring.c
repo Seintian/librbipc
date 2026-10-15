@@ -19,6 +19,7 @@
 
 #include "rbipc_ring.h"
 #include "rbipc.h"
+#include "rbipc_arch.h"
 #include "rbipc_attr.h"
 #include "rbipc_audit.h"
 #include "rbipc_internal.h"
@@ -51,10 +52,8 @@ rbipc_ring_validate_create_params(size_t capacity, uint32_t slot_size,
     return RBIPC_ERR_INVAL;
   }
 
-  long page_size_raw = sysconf(_SC_PAGESIZE);
-  if (page_size_raw <= 0)
-    return RBIPC_ERR_SYS;
-  *out_page_size = (size_t)page_size_raw;
+  size_t page_size = rbipc_page_size();
+  *out_page_size = page_size;
 
   uint32_t cap = rbipc_round_up_pow2_32((uint32_t)capacity);
   if (cap == 0 || cap > RBIPC_MAX_CAPACITY) {
@@ -329,10 +328,7 @@ int rbipc_attach_fd_ex(int fd, uint32_t role_flags,
     return RBIPC_ERR_INVAL;
   }
 
-  long page_size_raw = sysconf(_SC_PAGESIZE);
-  if (page_size_raw <= 0)
-    return RBIPC_ERR_SYS;
-  size_t page_size = (size_t)page_size_raw;
+  size_t page_size = rbipc_page_size();
 
   rbipc_layout_t layout;
   int rc = rbipc_ring_probe_and_validate_header(fd, page_size, &layout);
