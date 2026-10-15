@@ -143,6 +143,19 @@ int rbipc_futex_waitv(const struct futex_waitv *waiters, unsigned int nr_waiters
 #endif
 }
 
+/**
+ * @brief Normalizes futex wait status codes to standard rbipc status codes.
+ */
+RBIPC_INLINE int rbipc_futex_normalize_wait_status(int rc) {
+  if (rc >= 0 || rc == -EAGAIN || rc == -EWOULDBLOCK) {
+    return RBIPC_OK;
+  }
+  if (rc == -ETIMEDOUT) {
+    return RBIPC_ERR_TIMEOUT;
+  }
+  return rc;
+}
+
 RBIPC_LEAF
 int rbipc_futex_wait_or_shutdown(_Atomic uint32_t *uaddr, uint32_t val,
                                  const _Atomic uint32_t *shutdown_flag,
@@ -164,17 +177,9 @@ int rbipc_futex_wait_or_shutdown(_Atomic uint32_t *uaddr, uint32_t val,
     waiters[1].__reserved = 0;
 
     int rc = rbipc_futex_waitv(waiters, 2, timeout_ns);
-    if (rc >= 0) {
-      return RBIPC_OK;
-    }
-    if (rc == -EAGAIN || rc == -EWOULDBLOCK) {
-      return RBIPC_OK;
-    }
-    if (rc == -ETIMEDOUT) {
-      return RBIPC_ERR_TIMEOUT;
-    }
+    int status = rbipc_futex_normalize_wait_status(rc);
     if (rc != -ENOSYS) {
-      return rc;
+      return status;
     }
   }
 
@@ -185,72 +190,7 @@ int rbipc_futex_wait_or_shutdown(_Atomic uint32_t *uaddr, uint32_t val,
     pts = &ts;
   }
   int rc = rbipc_futex_wait(uaddr, val, pts);
-  if (rc == 0 || rc == -EAGAIN || rc == -EWOULDBLOCK) {
-    return RBIPC_OK;
-  }
-  if (rc == -ETIMEDOUT) {
-    return RBIPC_ERR_TIMEOUT;
-  }
-  return rc;
-}
-
-RBIPC_LEAF
-int rbipc_futex2_wait_slot_or_shutdown(const _Atomic uint64_t *slot_seq,
-                                       uint64_t expected_seq,
-                                       const _Atomic uint32_t *shutdown_flag,
-                                       uint64_t timeout_ns) {
-  if (RBIPC_UNLIKELY(rbipc_is_null(slot_seq))) {
-    return RBIPC_ERR_INVAL;
-  }
-
-  if (rbipc_futex_has_waitv()) {
-    struct futex_waitv waiters[2];
-    bool use_u64 = rbipc_futex2_has_u64();
-
-    waiters[0].val = use_u64 ? expected_seq : (uint32_t)expected_seq;
-    waiters[0].uaddr = (uintptr_t)slot_seq;
-    waiters[0].flags = use_u64 ? FUTEX2_SIZE_U64 : FUTEX2_SIZE_U32;
-    waiters[0].__reserved = 0;
-
-    unsigned int nr = 1;
-    if (shutdown_flag) {
-      waiters[1].val = 0;
-      waiters[1].uaddr = (uintptr_t)shutdown_flag;
-      waiters[1].flags = FUTEX2_SIZE_U32;
-      waiters[1].__reserved = 0;
-      nr = 2;
-    }
-
-    int rc = rbipc_futex_waitv(waiters, nr, timeout_ns);
-    if (rc >= 0) {
-      return RBIPC_OK;
-    }
-    if (rc == -EAGAIN || rc == -EWOULDBLOCK) {
-      return RBIPC_OK;
-    }
-    if (rc == -ETIMEDOUT) {
-      return RBIPC_ERR_TIMEOUT;
-    }
-    if (rc != -ENOSYS) {
-      return rc;
-    }
-  }
-
-  struct timespec ts;
-  struct timespec *pts = NULL;
-  if (timeout_ns != UINT64_MAX) {
-    rbipc_ns_to_timespec(timeout_ns, &ts);
-    pts = &ts;
-  }
-  _Atomic uint32_t *low_uaddr = (_Atomic uint32_t *)(void *)slot_seq;
-  int rc = rbipc_futex_wait(low_uaddr, (uint32_t)expected_seq, pts);
-  if (rc == 0 || rc == -EAGAIN || rc == -EWOULDBLOCK) {
-    return RBIPC_OK;
-  }
-  if (rc == -ETIMEDOUT) {
-    return RBIPC_ERR_TIMEOUT;
-  }
-  return rc;
+  return rbipc_futex_normalize_wait_status(rc);
 }
 
 RBIPC_LEAF
@@ -290,17 +230,9 @@ int rbipc_futex2_wait_slot_or_proxy_or_shutdown(
     }
 
     int rc = rbipc_futex_waitv(waiters, nr, timeout_ns);
-    if (rc >= 0) {
-      return RBIPC_OK;
-    }
-    if (rc == -EAGAIN || rc == -EWOULDBLOCK) {
-      return RBIPC_OK;
-    }
-    if (rc == -ETIMEDOUT) {
-      return RBIPC_ERR_TIMEOUT;
-    }
+    int status = rbipc_futex_normalize_wait_status(rc);
     if (rc != -ENOSYS) {
-      return rc;
+      return status;
     }
   }
 
@@ -319,13 +251,16 @@ int rbipc_futex2_wait_slot_or_proxy_or_shutdown(
   }
   _Atomic uint32_t *low_uaddr = (_Atomic uint32_t *)(void *)slot_seq;
   int rc = rbipc_futex_wait(low_uaddr, (uint32_t)expected_seq, pts);
-  if (rc == 0 || rc == -EAGAIN || rc == -EWOULDBLOCK) {
-    return RBIPC_OK;
-  }
-  if (rc == -ETIMEDOUT) {
-    return RBIPC_ERR_TIMEOUT;
-  }
-  return rc;
+  return rbipc_futex_normalize_wait_status(rc);
+}
+
+RBIPC_LEAF
+int rbipc_futex2_wait_slot_or_shutdown(const _Atomic uint64_t *slot_seq,
+                                       uint64_t expected_seq,
+                                       const _Atomic uint32_t *shutdown_flag,
+                                       uint64_t timeout_ns) {
+  return rbipc_futex2_wait_slot_or_proxy_or_shutdown(
+      slot_seq, expected_seq, NULL, shutdown_flag, timeout_ns);
 }
 
 RBIPC_LEAF
