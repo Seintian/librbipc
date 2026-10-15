@@ -124,6 +124,36 @@ static bool rbipc_io_pred_slot_ready(void *arg) {
 }
 
 /**
+ * @brief Executes adaptive user-space spin-wait loop.
+ */
+RBIPC_INLINE bool rbipc_io_spin_wait(rbipc_spin_pred_t pred, void *ctx) {
+  for (uint32_t spin = 0; spin < RBIPC_SPIN_COUNT_DEFAULT; ++spin) {
+    rbipc_cpu_pause();
+    if (pred(ctx)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+/**
+ * @brief Executes hardware-assisted monitor wait (UMONITOR/UMWAIT or WFET).
+ */
+RBIPC_INLINE bool rbipc_io_hardware_wait(const rbipc_ring_t *ring,
+                                         const _Atomic uint64_t *addr,
+                                         rbipc_spin_pred_t pred, void *ctx) {
+  if (ring && ((ring->wait_policy & RBIPC_WAIT_ADAPTIVE) ||
+               (ring->wait_policy & RBIPC_WAIT_HW_MONITOR))) {
+    if (rbipc_cpu_has_waitpkg() || rbipc_cpu_has_wfxt()) {
+      uint32_t substate = (ring->wait_policy & RBIPC_WAIT_ADAPTIVE) ? 1 : 0;
+      return rbipc_sync_hardware_wait_substate(addr, 5000ULL, pred, ctx,
+                                               substate) == RBIPC_OK;
+    }
+  }
+  return false;
+}
+
+/**
  * @brief Handle backoff progression and futex suspension when writer encounters
  * full ring.
  */
@@ -144,37 +174,24 @@ static int rbipc_io_handle_write_backoff(
     return RBIPC_ERR_FULL;
   }
 
+  rbipc_io_slot_pred_ctx_t ctx = {
+      .hdr = hdr,
+      .slot = slot,
+      .ticket = t_ticket,
+  };
+
   /* Phase 1: Micro-spin if adaptive wait policy is configured */
   if (ring && (ring->wait_policy & RBIPC_WAIT_ADAPTIVE)) {
-    for (uint32_t spin = 0; spin < RBIPC_SPIN_COUNT_DEFAULT; ++spin) {
-      rbipc_cpu_pause();
-      uint64_t spin_seq =
-          atomic_load_explicit(&slot->sequence, memory_order_acquire);
-      if (RBIPC_LIKELY(rbipc_slot_is_vacant(spin_seq, t_ticket)) ||
-          RBIPC_UNLIKELY(rbipc_ring_is_shutdown(hdr))) {
-        *t = atomic_load_explicit(&hdr->write_ticket, memory_order_relaxed);
-        return RBIPC_OK;
-      }
+    if (rbipc_io_spin_wait(rbipc_io_pred_slot_vacant, &ctx)) {
+      *t = atomic_load_explicit(&hdr->write_ticket, memory_order_relaxed);
+      return RBIPC_OK;
     }
   }
 
   /* Tier 1: Hardware-assisted monitor-wait (WAITPKG / WFET) */
-  if (ring && ((ring->wait_policy & RBIPC_WAIT_ADAPTIVE) ||
-               (ring->wait_policy & RBIPC_WAIT_HW_MONITOR))) {
-    if (rbipc_cpu_has_waitpkg() || rbipc_cpu_has_wfxt()) {
-      rbipc_io_slot_pred_ctx_t ctx = {
-          .hdr = hdr,
-          .slot = slot,
-          .ticket = t_ticket,
-      };
-      uint32_t substate = (ring->wait_policy & RBIPC_WAIT_ADAPTIVE) ? 1 : 0;
-      if (rbipc_sync_hardware_wait_substate(&slot->sequence, 5000ULL,
-                                            rbipc_io_pred_slot_vacant,
-                                            &ctx, substate) == RBIPC_OK) {
-        *t = atomic_load_explicit(&hdr->write_ticket, memory_order_relaxed);
-        return RBIPC_OK;
-      }
-    }
+  if (rbipc_io_hardware_wait(ring, &slot->sequence, rbipc_io_pred_slot_vacant, &ctx)) {
+    *t = atomic_load_explicit(&hdr->write_ticket, memory_order_relaxed);
+    return RBIPC_OK;
   }
 
   /* Phase 2: Passive Futex Sleep with Dekker-style double-check */
@@ -216,39 +233,26 @@ static int rbipc_io_handle_read_backoff(
     return RBIPC_ERR_EMPTY;
   }
 
+  rbipc_io_slot_pred_ctx_t ctx = {
+      .hdr = hdr,
+      .slot = slot,
+      .ticket = t,
+  };
+
   /* Phase 1: Micro-spin if adaptive wait policy is configured */
   if (ring && (ring->wait_policy & RBIPC_WAIT_ADAPTIVE)) {
-    for (uint32_t spin = 0; spin < RBIPC_SPIN_COUNT_DEFAULT; ++spin) {
-      rbipc_cpu_pause();
-      uint64_t spin_seq =
-          atomic_load_explicit(&slot->sequence, memory_order_acquire);
-      if (RBIPC_LIKELY(rbipc_slot_is_ready(spin_seq, t)) ||
-          RBIPC_UNLIKELY(rbipc_ring_is_shutdown(hdr))) {
-        *out_next_t =
-            atomic_load_explicit(&hdr->read_ticket, memory_order_relaxed);
-        return RBIPC_OK;
-      }
+    if (rbipc_io_spin_wait(rbipc_io_pred_slot_ready, &ctx)) {
+      *out_next_t =
+          atomic_load_explicit(&hdr->read_ticket, memory_order_relaxed);
+      return RBIPC_OK;
     }
   }
 
   /* Tier 1: Hardware-assisted monitor-wait (WAITPKG / WFET) */
-  if (ring && ((ring->wait_policy & RBIPC_WAIT_ADAPTIVE) ||
-               (ring->wait_policy & RBIPC_WAIT_HW_MONITOR))) {
-    if (rbipc_cpu_has_waitpkg() || rbipc_cpu_has_wfxt()) {
-      rbipc_io_slot_pred_ctx_t ctx = {
-          .hdr = hdr,
-          .slot = slot,
-          .ticket = t,
-      };
-      uint32_t substate = (ring->wait_policy & RBIPC_WAIT_ADAPTIVE) ? 1 : 0;
-      if (rbipc_sync_hardware_wait_substate(&slot->sequence, 5000ULL,
-                                            rbipc_io_pred_slot_ready,
-                                            &ctx, substate) == RBIPC_OK) {
-        *out_next_t =
-            atomic_load_explicit(&hdr->read_ticket, memory_order_relaxed);
-        return RBIPC_OK;
-      }
-    }
+  if (rbipc_io_hardware_wait(ring, &slot->sequence, rbipc_io_pred_slot_ready, &ctx)) {
+    *out_next_t =
+        atomic_load_explicit(&hdr->read_ticket, memory_order_relaxed);
+    return RBIPC_OK;
   }
 
   /* Phase 2: Passive Futex Sleep with Dekker-style double-check */
