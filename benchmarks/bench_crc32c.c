@@ -35,18 +35,12 @@ static inline void bench_do_not_optimize(uint32_t val) {
 
 /* Platform detection helpers */
 static inline bool bench_has_hw_crc32c(void) {
-#if defined(__x86_64__) || defined(__i386__)
-    return __builtin_cpu_supports("sse4.2") != 0;
-#elif defined(__aarch64__) && defined(__ARM_FEATURE_CRC32)
-    return true;
-#else
-    return false;
-#endif
+    return rbipc_cpu_has_crc32c();
 }
 
 static inline const char *bench_hw_engine_name(void) {
 #if defined(__x86_64__) || defined(__i386__)
-    if (__builtin_cpu_supports("sse4.2")) {
+    if (rbipc_cpu_has_crc32c()) {
         return "x86 SSE4.2 (crc32q / crc32b)";
     }
     return "None (CPU lacks SSE4.2)";
@@ -138,7 +132,7 @@ int main(void) {
     printf("  HW Acceleration  : %s\n", hw_supported ? "SUPPORTED (Active)" : "UNSUPPORTED (Fallback only)");
     printf("----------------------------------------------------------------------------------------\n\n");
 
-    /* Allocate 2MB 64-byte aligned memory buffer for testing */
+    /* Allocate 1 MiB (+ 64-byte padding for unaligned offsets) 64-byte aligned buffer */
     size_t max_buf_size = 1024 * 1024 + 64;
     uint8_t *raw_buf = NULL;
     int ret = posix_memalign((void **)&raw_buf, 64, max_buf_size);

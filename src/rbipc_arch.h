@@ -269,13 +269,22 @@ static const uint32_t rbipc_crc32c_table[256] = {
     0xAD7D5351U,
 };
 
+/**
+ * @brief Unaligned 64-bit integer type for safe byte-aligned memory dereferencing.
+ */
+typedef uint64_t __attribute__((aligned(1))) rbipc_unaligned_u64;
+
 #if defined(__x86_64__) || defined(__i386__)
 /**
  * @brief Hardware-accelerated CRC32C using x86 SSE4.2 CRC32 instructions.
+ *
+ * @param[in] crc  Initial or running CRC32C accumulator value.
+ * @param[in] data Buffer pointer.
+ * @param[in] len  Buffer size in bytes.
+ * @return Updated 32-bit CRC32C accumulator.
  */
 __attribute__((target("sse4.2"))) static inline uint32_t
 rbipc_crc32c_sse42(uint32_t crc, const void *data, size_t len) {
-  typedef uint64_t __attribute__((aligned(1))) rbipc_unaligned_u64;
   const uint8_t *p = (const uint8_t *)data;
   while (len >= 8) {
     uint64_t val = *(const rbipc_unaligned_u64 *)p;
@@ -292,8 +301,39 @@ rbipc_crc32c_sse42(uint32_t crc, const void *data, size_t len) {
 }
 #endif
 
+#if defined(__aarch64__) && defined(__ARM_FEATURE_CRC32)
+/**
+ * @brief Hardware-accelerated CRC32C using ARMv8-A CRC32 instructions.
+ *
+ * @param[in] crc  Initial or running CRC32C accumulator value.
+ * @param[in] data Buffer pointer.
+ * @param[in] len  Buffer size in bytes.
+ * @return Updated 32-bit CRC32C accumulator.
+ */
+static inline uint32_t rbipc_crc32c_arm(uint32_t crc, const void *data,
+                                        size_t len) {
+  const uint8_t *p = (const uint8_t *)data;
+  while (len >= 8) {
+    uint64_t val = *(const rbipc_unaligned_u64 *)p;
+    crc = __builtin_arm_crc32cd(crc, val);
+    p += 8;
+    len -= 8;
+  }
+  while (len > 0) {
+    crc = __builtin_arm_crc32cb(crc, *p++);
+    len--;
+  }
+  return crc;
+}
+#endif
+
 /**
  * @brief Table-based fallback CRC32C implementation.
+ *
+ * @param[in] crc  Initial or running CRC32C accumulator value.
+ * @param[in] data Buffer pointer.
+ * @param[in] len  Buffer size in bytes.
+ * @return Updated 32-bit CRC32C accumulator.
  */
 static inline uint32_t rbipc_crc32c_sw(uint32_t crc, const void *data,
                                        size_t len) {
@@ -307,33 +347,63 @@ static inline uint32_t rbipc_crc32c_sw(uint32_t crc, const void *data,
 }
 
 /**
+ * @brief Query whether hardware-accelerated CRC32C is supported on the host CPU.
+ *
+ * @return True if hardware CRC32C instructions are available; false otherwise.
+ */
+RBIPC_INLINE RBIPC_NODISCARD bool rbipc_cpu_has_crc32c(void) {
+#if defined(__x86_64__) || defined(__i386__)
+  return __builtin_cpu_supports("sse4.2") != 0;
+#elif defined(__aarch64__) && defined(__ARM_FEATURE_CRC32)
+  return true;
+#else
+  return false;
+#endif
+}
+
+/**
+ * @brief Incremental/streaming Castagnoli CRC32C update over a memory buffer.
+ *
+ * @details Computes or updates the CRC32C accumulator using the fastest available
+ * hardware instruction set on the host platform, falling back to the precomputed
+ * 256-entry table implementation if hardware acceleration is unavailable.
+ *
+ * @note This function operates directly on the uncomplemented CRC accumulator.
+ * To compute standard RFC 3720 CRC32C, initialize @p crc to 0xFFFFFFFFU and
+ * invert the final result with `~`, or call @ref rbipc_crc32c directly.
+ *
+ * @param[in] crc  Running CRC32C accumulator value.
+ * @param[in] data Buffer pointer.
+ * @param[in] len  Buffer size in bytes.
+ * @return Updated 32-bit CRC32C accumulator.
+ */
+RBIPC_INLINE RBIPC_PURE uint32_t rbipc_crc32c_update(uint32_t crc,
+                                                     const void *data,
+                                                     size_t len) {
+#if defined(__x86_64__) || defined(__i386__)
+  if (RBIPC_LIKELY(rbipc_cpu_has_crc32c())) {
+    return rbipc_crc32c_sse42(crc, data, len);
+  }
+#elif defined(__aarch64__) && defined(__ARM_FEATURE_CRC32)
+  return rbipc_crc32c_arm(crc, data, len);
+#endif
+  return rbipc_crc32c_sw(crc, data, len);
+}
+
+/**
  * @brief Compute standard Castagnoli CRC32C over a memory region with hardware
  * acceleration.
+ *
+ * @details Conforms to RFC 3720 (iSCSI) standard Castagnoli CRC32C checksum
+ * specifications (polynomial 0x1EDC6F41, reflected 0x82F63B78, initial value
+ * 0xFFFFFFFF, final XOR 0xFFFFFFFF).
  *
  * @param[in] data Buffer pointer.
  * @param[in] len  Buffer size in bytes.
  * @return 32-bit CRC32C checksum.
  */
 RBIPC_INLINE RBIPC_PURE uint32_t rbipc_crc32c(const void *data, size_t len) {
-  uint32_t crc = 0xFFFFFFFFU;
-#if defined(__x86_64__) || defined(__i386__)
-  if (__builtin_cpu_supports("sse4.2")) {
-    return ~rbipc_crc32c_sse42(crc, data, len);
-  }
-#elif defined(__aarch64__) && defined(__ARM_FEATURE_CRC32)
-  const uint8_t *p = (const uint8_t *)data;
-  while (len >= 8) {
-    crc = __builtin_arm_crc32cd(crc, *(const uint64_t *)(const void *)p);
-    p += 8;
-    len -= 8;
-  }
-  while (len > 0) {
-    crc = __builtin_arm_crc32cb(crc, *p++);
-    len--;
-  }
-  return ~crc;
-#endif
-  return ~rbipc_crc32c_sw(crc, data, len);
+  return ~rbipc_crc32c_update(0xFFFFFFFFU, data, len);
 }
 
 #endif /* RBIPC_ARCH_H */

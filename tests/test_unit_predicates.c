@@ -209,7 +209,19 @@ static void test_crc32c_and_endianness(void) {
         uint32_t hw_or_fast = rbipc_crc32c(buffer, len);
         uint32_t sw = ~rbipc_crc32c_sw(0xFFFFFFFFU, buffer, len);
         assert(hw_or_fast == sw);
+
+        /* Incremental update equivalence across split chunks */
+        size_t mid = len / 2;
+        uint32_t acc = 0xFFFFFFFFU;
+        acc = rbipc_crc32c_update(acc, buffer, mid);
+        acc = rbipc_crc32c_update(acc, buffer + mid, len - mid);
+        assert(~acc == hw_or_fast);
     }
+
+    /* CPU capability predicate verification */
+#if defined(__x86_64__) || defined(__i386__)
+    assert(rbipc_cpu_has_crc32c() == (__builtin_cpu_supports("sse4.2") != 0));
+#endif
 
     /* Endianness round-trip validation */
     uint64_t magic = RBIPC_MAGIC;
