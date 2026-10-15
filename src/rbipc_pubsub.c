@@ -16,6 +16,8 @@
 #endif
 
 #include "rbipc_pubsub.h"
+#include "rbipc_io.h"
+#include "rbipc_slot.h"
 #include "rbipc_internal.h"
 #include "rbipc_predicate.h"
 #include "rbipc_reactor.h"
@@ -45,24 +47,16 @@ static void rbipc_pubsub_commit_slot_payload(rbipc_ring_t *ring,
   const uint32_t mask = hdr->capacity_mask;
   rbipc_slot_t *slots =
       (rbipc_slot_t *)RBIPC_ASSUME_ALIGNED(ring->slots, RBIPC_CACHE_LINE);
-  char *data_base =
-      (char *)RBIPC_ASSUME_ALIGNED(ring->data_map, RBIPC_CACHE_LINE);
 
   rbipc_slot_t *slot = &slots[ticket & mask];
-  atomic_store_explicit(&slot->producer_pid, (uint32_t)ring->cached_pid,
-                        memory_order_relaxed);
   atomic_store_explicit(&slot->consumer_pid, 0, memory_order_relaxed);
   atomic_store_explicit(&slot->acquire_timestamp_ns, 0, memory_order_relaxed);
-  atomic_store_explicit(&slot->state, RBIPC_SLOT_RESERVED,
-                        memory_order_relaxed);
+  rbipc_slot_mark_reserved(slot, ring->cached_pid);
 
-  char *slot_ptr = data_base + ((size_t)(ticket & mask) * hdr->slot_size);
+  void *slot_ptr = rbipc_io_calc_slot_ptr(ring, ticket);
   rbipc_stream_copy_auto(slot_ptr, buf, len);
 
-  atomic_store_explicit(&slot->len, len, memory_order_relaxed);
-  atomic_store_explicit(&slot->state, RBIPC_SLOT_COMMITTED,
-                        memory_order_release);
-  atomic_store_explicit(&slot->sequence, ticket + 1, memory_order_release);
+  rbipc_slot_commit(slot, ticket, len);
 }
 
 /**
@@ -202,9 +196,7 @@ int rbipc_sub_poll(rbipc_sub_t *sub, const void **out_buf, uint32_t *out_len,
   uint64_t seq = atomic_load_explicit(&slot->sequence, memory_order_acquire);
 
   if (rbipc_slot_is_ready(seq, sub->cursor)) {
-    const char *data_base =
-        (const char *)RBIPC_ASSUME_ALIGNED(ring->data_map, RBIPC_CACHE_LINE);
-    *out_buf = data_base + ((size_t)(sub->cursor & mask) * hdr->slot_size);
+    *out_buf = rbipc_io_calc_slot_ptr(ring, sub->cursor);
     *out_len = atomic_load_explicit(&slot->len, memory_order_acquire);
     *out_seq = sub->cursor;
     sub->cursor++;
@@ -238,9 +230,6 @@ int rbipc_sub_poll_batch(rbipc_sub_t *sub, uint32_t max_count,
   uint32_t mask = hdr->capacity_mask;
   const rbipc_slot_t *slots =
       (const rbipc_slot_t *)RBIPC_ASSUME_ALIGNED(ring->slots, RBIPC_CACHE_LINE);
-  const char *data_base =
-      (const char *)RBIPC_ASSUME_ALIGNED(ring->data_map, RBIPC_CACHE_LINE);
-  uint32_t slot_size = hdr->slot_size;
   uint32_t count = 0;
 
   while (count < max_count && sub->cursor < head) {
@@ -251,7 +240,7 @@ int rbipc_sub_poll_batch(rbipc_sub_t *sub, uint32_t max_count,
       break;
     }
 
-    out_bufs[count] = data_base + ((size_t)(cur & mask) * slot_size);
+    out_bufs[count] = rbipc_io_calc_slot_ptr(ring, cur);
     out_lens[count] = atomic_load_explicit(&slot->len, memory_order_acquire);
     out_seqs[count] = cur;
     sub->cursor++;
