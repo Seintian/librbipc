@@ -48,10 +48,6 @@ void rbipc_slot_init_table(rbipc_slot_t *RBIPC_RESTRICT slots,
   }
 }
 
-RBIPC_LEAF
-bool rbipc_slot_is_peer_alive(pid_t pid) {
-  return rbipc_audit_is_peer_alive(pid);
-}
 
 RBIPC_LEAF
 void rbipc_slot_mark_reserving(rbipc_slot_t *slot, pid_t pid) {

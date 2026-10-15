@@ -17,6 +17,7 @@
 
 #include "rbipc.h"
 #include "rbipc_attr.h"
+#include "rbipc_audit.h"
 
 #include <stdbool.h>
 #include <sys/types.h>
@@ -39,7 +40,7 @@ void rbipc_slot_init_table(rbipc_slot_t *RBIPC_RESTRICT slots,
  * @brief Audit whether a peer process with the specified PID is currently
  * alive.
  *
- * @details Probes process existence via `kill(pid, 0)`.
+ * @details Delegates to rbipc_audit_is_peer_alive.
  *
  * @param[in] pid Process identifier to probe.
  *
@@ -47,7 +48,9 @@ void rbipc_slot_init_table(rbipc_slot_t *RBIPC_RESTRICT slots,
  * process is alive); false if ESRCH is returned (confirming process is
  * dead/terminated).
  */
-RBIPC_NODISCARD RBIPC_LEAF bool rbipc_slot_is_peer_alive(pid_t pid);
+RBIPC_INLINE RBIPC_NODISCARD bool rbipc_slot_is_peer_alive(pid_t pid) {
+  return rbipc_audit_is_peer_alive(pid);
+}
 
 /**
  * @brief Atomically transition a slot descriptor to RESERVING state.
