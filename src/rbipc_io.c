@@ -37,27 +37,6 @@
  * ============================================================================
  */
 
-/**
- * @brief Attempt to atomically advance write ticket.
- */
-RBIPC_INLINE bool
-rbipc_io_try_claim_write_ticket(rbipc_shm_header_t *RBIPC_RESTRICT hdr,
-                                uint64_t *RBIPC_RESTRICT t, uint32_t count) {
-  return atomic_compare_exchange_weak_explicit(
-      &hdr->write_ticket, t, *t + (uint64_t)count, memory_order_acq_rel,
-      memory_order_relaxed);
-}
-
-/**
- * @brief Attempt to atomically advance read ticket.
- */
-RBIPC_INLINE bool
-rbipc_io_try_claim_read_ticket(rbipc_shm_header_t *RBIPC_RESTRICT hdr,
-                               uint64_t *RBIPC_RESTRICT t, uint32_t count) {
-  return atomic_compare_exchange_weak_explicit(
-      &hdr->read_ticket, t, *t + (uint64_t)count, memory_order_acq_rel,
-      memory_order_relaxed);
-}
 
 /**
  * @brief Finalize single-slot write reservation and populate return pointers.

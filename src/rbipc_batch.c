@@ -16,6 +16,7 @@
 #endif
 
 #include "rbipc_batch.h"
+#include "rbipc_io.h"
 #include "rbipc_attr.h"
 #include "rbipc_audit.h"
 #include "rbipc_internal.h"
@@ -24,28 +25,6 @@
 #include "rbipc_simd.h"
 #include "rbipc_slot.h"
 #include "rbipc_sync.h"
-
-/**
- * @brief Attempt to atomically advance write ticket by @p count.
- */
-RBIPC_INLINE bool
-rbipc_batch_try_claim_write_ticket(rbipc_shm_header_t *RBIPC_RESTRICT hdr,
-                                   uint64_t *RBIPC_RESTRICT t, uint32_t count) {
-  return atomic_compare_exchange_weak_explicit(
-      &hdr->write_ticket, t, *t + (uint64_t)count, memory_order_acq_rel,
-      memory_order_relaxed);
-}
-
-/**
- * @brief Attempt to atomically advance read ticket by @p count.
- */
-RBIPC_INLINE bool
-rbipc_batch_try_claim_read_ticket(rbipc_shm_header_t *RBIPC_RESTRICT hdr,
-                                  uint64_t *RBIPC_RESTRICT t, uint32_t count) {
-  return atomic_compare_exchange_weak_explicit(
-      &hdr->read_ticket, t, *t + (uint64_t)count, memory_order_acq_rel,
-      memory_order_relaxed);
-}
 
 /**
  * @brief Populate reserved iovec descriptors and initialize slot ownership.
@@ -59,8 +38,6 @@ rbipc_batch_populate_reserved(rbipc_ring_t *RBIPC_RESTRICT ring, uint64_t t,
   const uint32_t slot_size = hdr->slot_size;
   rbipc_slot_t *slots =
       (rbipc_slot_t *)RBIPC_ASSUME_ALIGNED(ring->slots, RBIPC_CACHE_LINE);
-  char *data_base =
-      (char *)RBIPC_ASSUME_ALIGNED(ring->data_map, RBIPC_CACHE_LINE);
   pid_t my_pid = ring->cached_pid;
 
   for (uint32_t i = 0; i < count; ++i) {
@@ -70,7 +47,7 @@ rbipc_batch_populate_reserved(rbipc_ring_t *RBIPC_RESTRICT ring, uint64_t t,
 
     rbipc_slot_mark_reserved(slot, my_pid);
 
-    iovecs[i].buf = data_base + ((size_t)idx * slot_size);
+    iovecs[i].buf = rbipc_io_calc_slot_ptr(ring, ticket_i);
     iovecs[i].ticket = ticket_i;
     iovecs[i].max_len = slot_size;
 
@@ -90,11 +67,8 @@ rbipc_batch_populate_acquired(const rbipc_ring_t *RBIPC_RESTRICT ring,
                               rbipc_rovec_t *RBIPC_RESTRICT rovecs) {
   const rbipc_shm_header_t *hdr = ring->hdr;
   const uint32_t mask = hdr->capacity_mask;
-  const uint32_t slot_size = hdr->slot_size;
   rbipc_slot_t *slots =
       (rbipc_slot_t *)RBIPC_ASSUME_ALIGNED(ring->slots, RBIPC_CACHE_LINE);
-  const char *data_base =
-      (const char *)RBIPC_ASSUME_ALIGNED(ring->data_map, RBIPC_CACHE_LINE);
   pid_t my_pid = ring->cached_pid;
   uint64_t now_ts = rbipc_clock_monotonic_ns();
 
@@ -107,7 +81,7 @@ rbipc_batch_populate_acquired(const rbipc_ring_t *RBIPC_RESTRICT ring,
     rovecs[i].ticket = ticket_i;
     if (rbipc_slot_state_is_committed(state)) {
       rbipc_slot_mark_acquired(slot, my_pid, now_ts);
-      rovecs[i].buf = data_base + ((size_t)idx * slot_size);
+      rovecs[i].buf = rbipc_io_calc_slot_ptr(ring, ticket_i);
       rovecs[i].len = atomic_load_explicit(&slot->len, memory_order_acquire);
       RBIPC_PREFETCH(rovecs[i].buf, RBIPC_PREFETCH_READ,
                      RBIPC_PREFETCH_LOCALITY_HIGH);
@@ -209,7 +183,7 @@ int rbipc_reserve_write_batch_timeout(rbipc_ring_t *RBIPC_RESTRICT ring,
     uint32_t avail =
         rbipc_simd_scan_vacant_slots(slots, hdr->capacity_mask, t, count);
     if (avail > 0) {
-      if (rbipc_batch_try_claim_write_ticket(hdr, &t, avail)) {
+      if (rbipc_io_try_claim_write_ticket(hdr, &t, avail)) {
         rbipc_batch_populate_reserved(ring, t, avail, iovecs);
         *out_reserved = avail;
         return RBIPC_OK;
@@ -320,7 +294,7 @@ int rbipc_read_acquire_batch_timeout(rbipc_ring_t *RBIPC_RESTRICT ring,
     uint32_t avail =
         rbipc_simd_scan_ready_slots(slots, hdr->capacity_mask, t, count);
     if (avail > 0) {
-      if (rbipc_batch_try_claim_read_ticket(hdr, &t, avail)) {
+      if (rbipc_io_try_claim_read_ticket(hdr, &t, avail)) {
         rbipc_batch_populate_acquired(ring, t, avail, rovecs);
         *out_acquired = avail;
         return RBIPC_OK;

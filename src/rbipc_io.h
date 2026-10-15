@@ -31,6 +31,38 @@ RBIPC_INLINE RBIPC_PURE void *rbipc_io_calc_slot_ptr(const rbipc_ring_t *ring, u
 }
 
 /**
+ * @brief Attempt to atomically advance write ticket by @p count.
+ *
+ * @param[in,out] hdr   Pointer to shared memory header.
+ * @param[in,out] t     Pointer to expected ticket value, updated on failure.
+ * @param[in]     count Number of tickets to advance.
+ * @return true if CAS succeeded; false otherwise.
+ */
+RBIPC_INLINE bool
+rbipc_io_try_claim_write_ticket(rbipc_shm_header_t *RBIPC_RESTRICT hdr,
+                                uint64_t *RBIPC_RESTRICT t, uint32_t count) {
+  return atomic_compare_exchange_weak_explicit(
+      &hdr->write_ticket, t, *t + (uint64_t)count, memory_order_acq_rel,
+      memory_order_relaxed);
+}
+
+/**
+ * @brief Attempt to atomically advance read ticket by @p count.
+ *
+ * @param[in,out] hdr   Pointer to shared memory header.
+ * @param[in,out] t     Pointer to expected ticket value, updated on failure.
+ * @param[in]     count Number of tickets to advance.
+ * @return true if CAS succeeded; false otherwise.
+ */
+RBIPC_INLINE bool
+rbipc_io_try_claim_read_ticket(rbipc_shm_header_t *RBIPC_RESTRICT hdr,
+                               uint64_t *RBIPC_RESTRICT t, uint32_t count) {
+  return atomic_compare_exchange_weak_explicit(
+      &hdr->read_ticket, t, *t + (uint64_t)count, memory_order_acq_rel,
+      memory_order_relaxed);
+}
+
+/**
  * @brief Prefetches future slot metadata and payload memory lines into CPU cache for writing.
  * @details Issues @c __builtin_prefetch for the slot descriptor with write intent (@c rw=1)
  *          and high temporal locality (@c locality=3), and for the payload buffer with
