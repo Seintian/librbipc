@@ -116,7 +116,34 @@ librbipc/
 | `rbipc_detach` / `rbipc_destroy` | Unmap virtual memory regions, decrement active role counters, close descriptors, or unlink a named POSIX shared memory segment. |
 | `rbipc_signal_shutdown` / `rbipc_shutdown` | Set the atomic shutdown flag and broadcast a wakeup (`FUTEX_WAKE_ALL`) to all blocked producers and consumers. |
 | `rbipc_set_wait_policy` / `rbipc_get_wait_policy` | Configure `RBIPC_WAIT_ADAPTIVE` (default two-phase bounded micro-spin + 5 µs C0.1 hardware wait before futex sleep), `RBIPC_WAIT_ZERO_SPIN` (immediate passive futex wait), or `RBIPC_WAIT_HW_MONITOR` (WAITPKG `UMWAIT` C0.2 / ARM64 `WFET` clock-gated hardware wait). |
-| `rbipc_get_fd` / `rbipc_get_stats` | Retrieve underlying shared-memory descriptor or query live telemetry statistics (tickets, capacity, active roles). |
+| `rbipc_get_fd` / `rbipc_get_stats` / `rbipc_get_slot_stats` | Retrieve underlying shared-memory descriptor, query live telemetry statistics (tickets, capacity, active roles, disaggregated waiters, backlog, cumulative error/recovery counters), or inspect slot state histogram. |
+
+### 6. Zero-Cost Telemetry Monitor (`bin/rbipc_stat`)
+
+`librbipc` includes a dedicated non-intrusive CLI telemetry tool that attaches as `RBIPC_ROLE_MONITOR` to any active shared memory ring buffer without altering participant counts or slowing down the fast path:
+
+```bash
+# Automated high-contention live telemetry demonstration
+make monitor
+
+# Live continuous terminal dashboard (auto-spawns workload if ring does not exist)
+make monitor-live RING=/my_ring
+
+# Direct CLI usage: terminal dashboard mode
+./bin/rbipc_stat /my_ring
+
+# Live continuous monitor (e.g. 0.5s refresh)
+./bin/rbipc_stat /my_ring --watch 0.5
+
+# JSON snapshot output
+./bin/rbipc_stat /my_ring --json
+
+# Prometheus / OpenMetrics scraping format
+./bin/rbipc_stat /my_ring --prometheus
+
+# Proactively audit and revoke expired consumer leases
+./bin/rbipc_stat /my_ring --audit
+```
 
 ### 2. Zero-Copy Single-Slot & Convenience Copy I/O (`include/rbipc.h`)
 

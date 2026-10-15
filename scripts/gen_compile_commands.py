@@ -37,6 +37,16 @@ def main():
             "file": os.path.abspath(b_src)
         })
 
+    # Tool executables
+    for t_src in sorted(glob.glob("tools/*.c")):
+        b = f"bin/{os.path.basename(t_src)[:-2]}"
+        cmd = f"gcc -std=c23 -Wall -Wextra -Wpedantic -Werror -O3 -fPIC -Iinclude -pthread -D_GNU_SOURCE {t_src} -Llib -lrbipc -pthread -lrt -lm -o {b}"
+        entries.append({
+            "directory": cwd,
+            "command": cmd,
+            "file": os.path.abspath(t_src)
+        })
+
     with open("compile_commands.json", "w") as f:
         json.dump(entries, f, indent=2)
 

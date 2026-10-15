@@ -14,6 +14,7 @@
 | **Battery Power-Save Auto-Detection & Isolated Results** | **DONE** | Implemented `/sys/class/power_supply/AC/online` sensing routing to `benchmarks/results/laptop_powersave/` without clobbering plugged-in baseline. | Preserves isolated, reproducible telemetry across all 3 power/hardware profiles. |
 | **Convenience Copy I/O & Lifecycle Aliases** | **DONE** | Implemented `rbipc_write*`, `rbipc_read*`, and `rbipc_shutdown(ring)` convenience wrappers in `src/rbipc_io.c` and `include/rbipc.h`. Full test coverage in `tests/test_io_basic.c`. | Resolves API documentation mismatch; provides zero-friction buffer copy I/O. |
 | **Doxygen LaTeX Math Parsing & Link Integrity Verification** | **DONE** | Implemented input filter `scripts/doxygen_md_filter.py` and recursive auxiliary asset mirroring in `scripts/postprocess_docs.py`. | **0 Doxygen warnings** and **0 broken links** across 98 generated HTML pages. |
+| **Zero-Cost Telemetry Enhancements & CLI Monitor** | **DONE** | Disaggregated producer/consumer waiters, cumulative error/recovery counters, instantaneous slot state histogram (`rbipc_get_slot_stats`), `rbipc_stat` CLI tool, high-contention stress workload (`rbipc_telemetry_stress`), and `make monitor` rule. | 100% test coverage; zero fast-path latency/throughput impact. |
 
 ---
 

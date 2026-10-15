@@ -22,9 +22,13 @@ TEST_BINS = $(patsubst $(TESTDIR)/%.c, $(BINDIR)/%, $(TEST_SRCS))
 BENCH_SRCS = $(wildcard $(BENCHDIR)/*.c)
 BENCH_BINS = $(patsubst $(BENCHDIR)/%.c, $(BINDIR)/%, $(BENCH_SRCS))
 
-.PHONY: all clean test bench bench-laptop bench-laptop-powersave bench-home-pc coverage valgrind clang-tidy compile_commands docs tsan asan
+TOOLDIR = tools
+TOOL_SRCS = $(wildcard $(TOOLDIR)/*.c)
+TOOL_BINS = $(patsubst $(TOOLDIR)/%.c, $(BINDIR)/%, $(TOOL_SRCS))
 
-all: $(STATIC_LIB) $(SHARED_LIB) $(TEST_BINS) compile_commands.json
+.PHONY: all clean test bench bench-laptop bench-laptop-powersave bench-home-pc monitor monitor-live coverage valgrind clang-tidy compile_commands docs tsan asan
+
+all: $(STATIC_LIB) $(SHARED_LIB) $(TEST_BINS) $(TOOL_BINS) compile_commands.json
 
 $(BUILDDIR) $(BINDIR) $(LIBDIR):
 	mkdir -p $@
@@ -42,6 +46,9 @@ $(BINDIR)/%: $(TESTDIR)/%.c $(STATIC_LIB) | $(BINDIR)
 	$(CC) $(CFLAGS) $< $(STATIC_LIB) $(LDFLAGS) -o $@
 
 $(BINDIR)/%: $(BENCHDIR)/%.c $(BENCHDIR)/bench_common.h $(STATIC_LIB) | $(BINDIR)
+	$(CC) $(CFLAGS) $< $(STATIC_LIB) $(LDFLAGS) -o $@
+
+$(BINDIR)/%: $(TOOLDIR)/%.c $(STATIC_LIB) | $(BINDIR)
 	$(CC) $(CFLAGS) $< $(STATIC_LIB) $(LDFLAGS) -o $@
 
 test: $(STATIC_LIB) $(TEST_BINS)
@@ -96,6 +103,36 @@ bench-home-pc: $(STATIC_LIB) $(BENCH_BINS)
 		RBIPC_BENCH_PROFILE=home_pc $$b || exit 1; \
 		echo ""; \
 	done
+
+RING ?= /rbipc_telemetry_demo
+WATCH ?= 0
+
+monitor: $(STATIC_LIB) $(TOOL_BINS)
+	@SHM_FILE="/dev/shm/$$(echo '$(RING)' | sed 's|^/||')"; \
+	if [ -e "$$SHM_FILE" ]; then \
+		echo "Attaching telemetry monitor to active ring $(RING)..."; \
+		if [ "$$(echo '$(WATCH) > 0' | bc -l 2>/dev/null || echo 0)" = "1" ]; then \
+			$(BINDIR)/rbipc_stat $(RING) --watch $(WATCH) --slots; \
+		else \
+			$(BINDIR)/rbipc_stat $(RING) --slots; \
+		fi; \
+	else \
+		echo "No active ring $(RING) detected. Launching realistic high-contention MPMC workload..."; \
+		$(BINDIR)/rbipc_telemetry_stress $(RING) 2.5 > /dev/null 2>&1 & \
+		STRESS_PID=$$!; \
+		sleep 0.6; \
+		$(BINDIR)/rbipc_stat $(RING) --slots; \
+		wait $$STRESS_PID 2>/dev/null || true; \
+	fi
+
+monitor-live: $(STATIC_LIB) $(TOOL_BINS)
+	@SHM_FILE="/dev/shm/$$(echo '$(RING)' | sed 's|^/||')"; \
+	if [ ! -e "$$SHM_FILE" ]; then \
+		echo "No active ring $(RING) detected. Launching 10s background stress workload..."; \
+		$(BINDIR)/rbipc_telemetry_stress $(RING) 10.0 > /dev/null 2>&1 & \
+		sleep 0.5; \
+	fi; \
+	$(BINDIR)/rbipc_stat $(RING) --watch 0.5 --slots
 
 
 coverage: CFLAGS = -std=c23 -Wall -Wextra -Wpedantic -Werror -O0 -g --coverage -fPIC -Iinclude -pthread -D_GNU_SOURCE

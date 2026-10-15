@@ -165,6 +165,7 @@ In cache-coherent multi-core systems, false sharing occurs when distinct threads
 | **`rbipc_shm_header_t` Zone 2** | `0x40 .. 0x7F` | `write_ticket` (`_Atomic uint64_t`), `futex_seq` (`_Atomic uint32_t`), `futex_waiters` (`_Atomic uint32_t`), `pad1[48]` | Mutated on producer reservation (`write_ticket`) and consumer data-wait wakeup (`futex_seq`, `futex_waiters`). |
 | **`rbipc_shm_header_t` Zone 3** | `0x80 .. 0xBF` | `read_ticket` (`_Atomic uint64_t`), `write_futex_seq` (`_Atomic uint32_t`), `write_waiters` (`_Atomic uint32_t`), `pad2[48]` | Mutated on consumer acquisition (`read_ticket`) and producer space-wait wakeup (`write_futex_seq`, `write_waiters`). |
 | **`rbipc_shm_header_t` Zone 4** | `0xC0 .. 0xFF` | `shutdown_flag`, `active_producers`, `active_consumers`, `eventfd_waiters`, `lease_timeout_ns`, `pad3[36]` | Lifecycle counters, reactor waiter tracking, and lease configuration. |
+| **`rbipc_shm_header_t` Zone 5** | Telemetry Line | `poisoned_slots_count`, `dead_producers_recovered`, `dead_consumers_recovered`, `leases_revoked_count`, `ticket_holes_healed` | Cumulative operational and fault recovery counters (isolated from fast-path ticket synchronization). |
 | **`rbipc_slot_t[i]`** | `0x100 + 64i` | `sequence` (`_Atomic uint64_t`), `state`, `producer_pid`, `len`, `consumer_pid`, `acquire_timestamp_ns`, `pad[32]` | Isolated 64-byte cache line per slot $i \in [0, C-1]$, eliminating cross-slot false sharing. |
 
 ### 2.5 Linear Slot Mapping vs. Double-Mapped Continuous Virtual Ring Mirror
@@ -819,6 +820,7 @@ The `tests/` directory contains 25 test suites categorized into unit, I/O, and m
 | **Unit** | [`test_unit_ipc.c`](tests/test_unit_ipc.c) | `rbipc_ipc_send_fd`/`recv_fd` and `rbipc_send_fd`/`rbipc_recv_fd_ex` over `socketpair(AF_UNIX, SOCK_STREAM)`. |
 | **Unit** | [`test_unit_pubsub.c`](tests/test_unit_pubsub.c) | `rbipc_publish`, `rbipc_publish_batch`, `rbipc_sub_poll`, `rbipc_sub_poll_batch`, `rbipc_sub_read`, and lag clamping. |
 | **Unit** | [`test_unit_lifecycle.c`](tests/test_unit_lifecycle.c) | `rbipc_create_ex`, `rbipc_attach_ex`, CRC32C corruption rejection, role counters, and telemetry getters. |
+| **Unit** | [`test_unit_telemetry.c`](tests/test_unit_telemetry.c) | Disaggregated waiter telemetry, backlog tracking, cumulative error counters, and slot histogram inspection. |
 | **Unit** | [`test_unit_latency.c`](tests/test_unit_latency.c) | Ping-pong latency percentile distribution and SLA verification. |
 | **I/O** | [`test_io_basic.c`](tests/test_io_basic.c) | Blocking, non-blocking, and timeout single-slot zero-copy and copy convenience I/O paths. |
 | **I/O** | [`test_io_abort.c`](tests/test_io_abort.c) | `rbipc_abort_write` explicit slot poisoning and consumer `RBIPC_ERR_POISONED` recovery. |

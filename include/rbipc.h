@@ -385,6 +385,18 @@ typedef struct {
   _Alignas(RBIPC_CACHE_LINE) _Atomic uint64_t
       lease_timeout_ns; /**< Configurable consumer lease duration in nanoseconds
                            (0 = disabled). */
+
+  /* Cache-line isolated telemetry & operational error counters */
+  _Alignas(RBIPC_CACHE_LINE) _Atomic uint64_t
+      poisoned_slots_count; /**< Cumulative count of slots poisoned (aborts / dead peers / holes). */
+  _Atomic uint64_t
+      dead_producers_recovered; /**< Cumulative count of dead producer crash recoveries. */
+  _Atomic uint64_t
+      dead_consumers_recovered; /**< Cumulative count of dead consumer process recoveries. */
+  _Atomic uint64_t
+      leases_revoked_count; /**< Cumulative count of expired consumer leases revoked. */
+  _Atomic uint64_t
+      ticket_holes_healed; /**< Cumulative count of orphaned ticket holes healed. */
 } rbipc_shm_header_t;
 
 /**
@@ -406,13 +418,37 @@ typedef struct {
                                 processes. */
   uint32_t active_consumers; /**< Total count of attached active consumer
                                 processes. */
-  uint32_t futex_waiters;    /**< Total count of consumer threads currently
-                                suspended in futex sleep. */
+  uint32_t futex_waiters;    /**< Count of consumer threads currently
+                                suspended waiting for data (futex_seq). */
+  uint32_t write_waiters;    /**< Count of producer threads currently
+                                suspended waiting for space (write_futex_seq). */
   uint32_t eventfd_waiters;  /**< Count of registered eventfd/epoll reactor
                                 waiters. */
+  uint64_t lease_timeout_ns; /**< Configured consumer holding lease duration in nanoseconds. */
+  uint64_t backlog;          /**< Instantaneous unconsumed message count clamped to [0, capacity]. */
+  uint64_t poisoned_slots_count;     /**< Cumulative count of slots marked POISONED (aborts / dead peers / holes). */
+  uint64_t dead_producers_recovered; /**< Cumulative count of dead producer crash recoveries. */
+  uint64_t dead_consumers_recovered; /**< Cumulative count of dead consumer process recoveries. */
+  uint64_t leases_revoked_count;     /**< Cumulative count of expired consumer leases revoked. */
+  uint64_t ticket_holes_healed;      /**< Cumulative count of orphaned ticket holes healed. */
   bool is_shutdown; /**< Boolean indicator confirming if ring shutdown has been
                        signaled. */
 } rbipc_stats_t;
+
+/**
+ * @struct rbipc_slot_stats_t
+ * @brief Point-in-time instantaneous histogram of slot states across the ring.
+ */
+typedef struct {
+  uint32_t capacity;               /**< Total capacity of the slot table. */
+  uint32_t empty_count;            /**< Number of slots currently in EMPTY state. */
+  uint32_t reserving_count;        /**< Number of slots currently in RESERVING state. */
+  uint32_t reserved_count;         /**< Number of slots currently in RESERVED state (being populated). */
+  uint32_t committed_count;        /**< Number of slots currently in COMMITTED state (ready to read). */
+  uint32_t poisoned_count;         /**< Number of slots currently in POISONED state. */
+  uint32_t active_leased_slots;    /**< Number of slots currently held under consumer lease. */
+  uint64_t max_lease_elapsed_ns;   /**< Maximum elapsed holding duration in ns among currently leased slots. */
+} rbipc_slot_stats_t;
 
 /**
  * @struct rbipc_iovec_t
@@ -1436,6 +1472,24 @@ rbipc_get_fd(const rbipc_ring_t *ring);
 RBIPC_NODISCARD RBIPC_LEAF int
 rbipc_get_stats(const rbipc_ring_t *RBIPC_RESTRICT ring,
                 rbipc_stats_t *RBIPC_RESTRICT out_stats);
+
+/**
+ * @brief Collect an instantaneous histogram of slot states across the ring buffer.
+ *
+ * @details Iterates over all capacity slot descriptors using relaxed atomic loads,
+ * categorizing slots into lifecycle states and computing the maximum elapsed lease age.
+ * Because this function only performs read-only inspection on demand, it incurs
+ * zero overhead during normal producer/consumer operation.
+ *
+ * @param[in]  ring            Ring buffer handle.
+ * @param[out] out_slot_stats  Destination structure to receive the slot histogram.
+ *
+ * @return @ref RBIPC_OK on success.
+ * @retval RBIPC_ERR_INVAL if @p ring or @p out_slot_stats is NULL.
+ */
+RBIPC_NODISCARD RBIPC_LEAF int
+rbipc_get_slot_stats(const rbipc_ring_t *RBIPC_RESTRICT ring,
+                     rbipc_slot_stats_t *RBIPC_RESTRICT out_slot_stats);
 
 /**
  * @defgroup rbipc_lease Consumer Lease Timeouts & Head-of-Line Defense

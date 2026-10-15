@@ -161,11 +161,13 @@ static int rbipc_io_handle_write_backoff(
     const rbipc_ring_t *ring, rbipc_sync_state_t *RBIPC_RESTRICT sync_state,
     rbipc_shm_header_t *hdr, rbipc_slot_t *slot, uint64_t t_ticket,
     uint64_t timeout_ns, uint64_t *RBIPC_RESTRICT t) {
+  if (RBIPC_UNLIKELY(rbipc_ring_is_shutdown(hdr))) {
+    return RBIPC_ERR_SHUTDOWN;
+  }
   rbipc_audit_recover_dead_consumer(hdr, slot, t_ticket);
   uint64_t initial_seq =
       atomic_load_explicit(&slot->sequence, memory_order_acquire);
-  if (RBIPC_LIKELY(rbipc_slot_is_vacant(initial_seq, t_ticket)) ||
-      RBIPC_UNLIKELY(rbipc_ring_is_shutdown(hdr))) {
+  if (RBIPC_LIKELY(rbipc_slot_is_vacant(initial_seq, t_ticket))) {
     *t = atomic_load_explicit(&hdr->write_ticket, memory_order_relaxed);
     return RBIPC_OK;
   }
@@ -198,11 +200,14 @@ static int rbipc_io_handle_write_backoff(
   rbipc_sync_register_waiter(&hdr->write_waiters);
 
   uint64_t seq = atomic_load_explicit(&slot->sequence, memory_order_acquire);
-  if (RBIPC_LIKELY(rbipc_slot_is_vacant(seq, t_ticket)) ||
-      RBIPC_UNLIKELY(rbipc_ring_is_shutdown(hdr))) {
+  if (RBIPC_LIKELY(rbipc_slot_is_vacant(seq, t_ticket))) {
     rbipc_sync_deregister_waiter(&hdr->write_waiters);
     *t = atomic_load_explicit(&hdr->write_ticket, memory_order_relaxed);
     return RBIPC_OK;
+  }
+  if (RBIPC_UNLIKELY(rbipc_ring_is_shutdown(hdr))) {
+    rbipc_sync_deregister_waiter(&hdr->write_waiters);
+    return RBIPC_ERR_SHUTDOWN;
   }
 
   int rc = rbipc_sync_wait_slot_registered(
@@ -259,11 +264,14 @@ static int rbipc_io_handle_read_backoff(
   rbipc_sync_register_waiter(&hdr->futex_waiters);
 
   uint64_t seq = atomic_load_explicit(&slot->sequence, memory_order_acquire);
-  if (RBIPC_LIKELY(rbipc_slot_is_ready(seq, t)) ||
-      RBIPC_UNLIKELY(rbipc_ring_is_shutdown(hdr))) {
+  if (RBIPC_LIKELY(rbipc_slot_is_ready(seq, t))) {
     rbipc_sync_deregister_waiter(&hdr->futex_waiters);
     *out_next_t = atomic_load_explicit(&hdr->read_ticket, memory_order_relaxed);
     return RBIPC_OK;
+  }
+  if (RBIPC_UNLIKELY(rbipc_ring_is_drained_on_shutdown(hdr, t))) {
+    rbipc_sync_deregister_waiter(&hdr->futex_waiters);
+    return RBIPC_ERR_SHUTDOWN;
   }
 
   int rc = rbipc_sync_wait_slot_registered(
@@ -434,6 +442,8 @@ int rbipc_abort_write(rbipc_ring_t *RBIPC_RESTRICT ring, uint64_t ticket) {
       (rbipc_slot_t *)RBIPC_ASSUME_ALIGNED(&ring->slots[idx], RBIPC_CACHE_LINE);
 
   if (rbipc_slot_poison(slot, ticket)) {
+    atomic_fetch_add_explicit(&hdr->poisoned_slots_count, 1,
+                              memory_order_relaxed);
     atomic_signal_fence(memory_order_seq_cst);
     if (RBIPC_UNLIKELY(rbipc_sync_has_waiters(&hdr->futex_waiters))) {
       rbipc_sync_wake_all(&hdr->futex_seq, &hdr->futex_waiters);
@@ -519,6 +529,10 @@ int rbipc_read_acquire_timeout(rbipc_ring_t *RBIPC_RESTRICT ring,
   /* Standard Bounded CAS Path for Finite-Timeout and Nonblocking Reads */
   uint64_t t = atomic_load_explicit(&hdr->read_ticket, memory_order_relaxed);
   for (;;) {
+    if (RBIPC_UNLIKELY(rbipc_ring_is_drained_on_shutdown(hdr, t))) {
+      return RBIPC_ERR_SHUTDOWN;
+    }
+
     rbipc_slot_t *slot = &slots[t & mask];
     uint64_t seq = atomic_load_explicit(&slot->sequence, memory_order_acquire);
 
@@ -535,6 +549,10 @@ int rbipc_read_acquire_timeout(rbipc_ring_t *RBIPC_RESTRICT ring,
         return rc;
       }
     } else {
+      if (sync_state.has_deadline &&
+          RBIPC_UNLIKELY(rbipc_clock_monotonic_ns() >= sync_state.deadline_ns)) {
+        return (timeout_ns == 0) ? RBIPC_ERR_EMPTY : RBIPC_ERR_TIMEOUT;
+      }
       t = atomic_load_explicit(&hdr->read_ticket, memory_order_relaxed);
       rbipc_cpu_pause();
     }

@@ -83,6 +83,10 @@ bool rbipc_audit_recover_dead_producer(rbipc_shm_header_t *hdr,
         (pid_t)atomic_load_explicit(&slot->producer_pid, memory_order_relaxed);
     if (ppid > 0 && !rbipc_audit_is_peer_alive(ppid)) {
       if (rbipc_slot_poison(slot, ticket)) {
+        atomic_fetch_add_explicit(&hdr->poisoned_slots_count, 1,
+                                  memory_order_relaxed);
+        atomic_fetch_add_explicit(&hdr->dead_producers_recovered, 1,
+                                  memory_order_relaxed);
         atomic_thread_fence(memory_order_seq_cst);
         rbipc_sync_wake_all(&hdr->futex_seq, &hdr->futex_waiters);
         return true;
@@ -121,12 +125,16 @@ bool rbipc_audit_recover_dead_consumer(rbipc_shm_header_t *hdr,
   if (lease_ns > 0) {
     uint64_t now_ns = rbipc_clock_monotonic_ns();
     if (rbipc_slot_recover_expired_lease(slot, ticket, lease_ns, now_ns)) {
+      atomic_fetch_add_explicit(&hdr->leases_revoked_count, 1,
+                                memory_order_relaxed);
       atomic_thread_fence(memory_order_seq_cst);
       rbipc_sync_wake_all(&hdr->write_futex_seq, &hdr->write_waiters);
       return true;
     }
   }
   if (rbipc_slot_recover_dead_consumer(slot, ticket)) {
+    atomic_fetch_add_explicit(&hdr->dead_consumers_recovered, 1,
+                              memory_order_relaxed);
     atomic_thread_fence(memory_order_seq_cst);
     rbipc_sync_wake_all(&hdr->write_futex_seq, &hdr->write_waiters);
     return true;
@@ -172,6 +180,10 @@ bool rbipc_audit_check_and_heal_ticket_hole(rbipc_shm_header_t *hdr,
            now_ts - sync_state->hole_first_seen_ns >=
                RBIPC_TICKET_HOLE_GRACE_NS)) {
         if (rbipc_slot_poison(slot, ticket)) {
+          atomic_fetch_add_explicit(&hdr->poisoned_slots_count, 1,
+                                    memory_order_relaxed);
+          atomic_fetch_add_explicit(&hdr->ticket_holes_healed, 1,
+                                    memory_order_relaxed);
           atomic_thread_fence(memory_order_seq_cst);
           rbipc_sync_wake_all(&hdr->futex_seq, &hdr->futex_waiters);
           return true;
@@ -221,6 +233,8 @@ int rbipc_audit_revoke_expired_leases(rbipc_shm_header_t *hdr,
   }
 
   if (revoked_count > 0) {
+    atomic_fetch_add_explicit(&hdr->leases_revoked_count,
+                              (uint64_t)revoked_count, memory_order_relaxed);
     atomic_thread_fence(memory_order_seq_cst);
     rbipc_sync_wake_all(&hdr->write_futex_seq, &hdr->write_waiters);
   }

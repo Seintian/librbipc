@@ -33,6 +33,7 @@
 #include "rbipc_vmem.h"
 
 #include <stdlib.h>
+#include <string.h>
 #include <unistd.h>
 
 /* ============================================================================
@@ -96,6 +97,11 @@ rbipc_ring_init_header_fields(rbipc_shm_header_t *RBIPC_RESTRICT hdr,
   atomic_init(&hdr->shutdown_flag, 0);
   atomic_init(&hdr->eventfd_waiters, 0);
   atomic_init(&hdr->lease_timeout_ns, 0);
+  atomic_init(&hdr->poisoned_slots_count, 0);
+  atomic_init(&hdr->dead_producers_recovered, 0);
+  atomic_init(&hdr->dead_consumers_recovered, 0);
+  atomic_init(&hdr->leases_revoked_count, 0);
+  atomic_init(&hdr->ticket_holes_healed, 0);
 }
 
 /**
@@ -467,21 +473,95 @@ int rbipc_get_stats(const rbipc_ring_t *RBIPC_RESTRICT ring,
   out_stats->data_size = hdr->data_size;
   out_stats->capacity = hdr->capacity;
   out_stats->slot_size = hdr->slot_size;
-  out_stats->write_ticket =
+  uint64_t wt =
       atomic_load_explicit(&hdr->write_ticket, memory_order_relaxed);
-  out_stats->read_ticket =
+  uint64_t rt =
       atomic_load_explicit(&hdr->read_ticket, memory_order_relaxed);
+  out_stats->write_ticket = wt;
+  out_stats->read_ticket = rt;
   out_stats->active_producers =
       atomic_load_explicit(&hdr->active_producers, memory_order_relaxed);
   out_stats->active_consumers =
       atomic_load_explicit(&hdr->active_consumers, memory_order_relaxed);
   out_stats->futex_waiters =
-      atomic_load_explicit(&hdr->futex_waiters, memory_order_relaxed) +
+      atomic_load_explicit(&hdr->futex_waiters, memory_order_relaxed);
+  out_stats->write_waiters =
       atomic_load_explicit(&hdr->write_waiters, memory_order_relaxed);
   out_stats->eventfd_waiters =
       atomic_load_explicit(&hdr->eventfd_waiters, memory_order_relaxed);
+  out_stats->lease_timeout_ns =
+      atomic_load_explicit(&hdr->lease_timeout_ns, memory_order_relaxed);
+  out_stats->poisoned_slots_count =
+      atomic_load_explicit(&hdr->poisoned_slots_count, memory_order_relaxed);
+  out_stats->dead_producers_recovered =
+      atomic_load_explicit(&hdr->dead_producers_recovered, memory_order_relaxed);
+  out_stats->dead_consumers_recovered =
+      atomic_load_explicit(&hdr->dead_consumers_recovered, memory_order_relaxed);
+  out_stats->leases_revoked_count =
+      atomic_load_explicit(&hdr->leases_revoked_count, memory_order_relaxed);
+  out_stats->ticket_holes_healed =
+      atomic_load_explicit(&hdr->ticket_holes_healed, memory_order_relaxed);
   out_stats->is_shutdown =
       (atomic_load_explicit(&hdr->shutdown_flag, memory_order_relaxed) != 0);
+
+  uint64_t raw_backlog = (wt > rt) ? (wt - rt) : 0;
+  out_stats->backlog = (raw_backlog > (uint64_t)hdr->capacity)
+                           ? (uint64_t)hdr->capacity
+                           : raw_backlog;
+
+  return RBIPC_OK;
+}
+
+RBIPC_LEAF
+int rbipc_get_slot_stats(const rbipc_ring_t *RBIPC_RESTRICT ring,
+                         rbipc_slot_stats_t *RBIPC_RESTRICT out_slot_stats) {
+  if (RBIPC_UNLIKELY(!ring || !ring->hdr || !ring->slots || !out_slot_stats)) {
+    return RBIPC_ERR_INVAL;
+  }
+
+  uint32_t cap = ring->hdr->capacity;
+  memset(out_slot_stats, 0, sizeof(*out_slot_stats));
+  out_slot_stats->capacity = cap;
+
+  uint64_t now_ns = rbipc_clock_monotonic_ns();
+
+  for (uint32_t i = 0; i < cap; ++i) {
+    rbipc_slot_t *slot = &ring->slots[i];
+    uint32_t state = atomic_load_explicit(&slot->state, memory_order_relaxed);
+    switch (state) {
+    case RBIPC_SLOT_EMPTY:
+      out_slot_stats->empty_count++;
+      break;
+    case RBIPC_SLOT_RESERVING:
+      out_slot_stats->reserving_count++;
+      break;
+    case RBIPC_SLOT_RESERVED:
+      out_slot_stats->reserved_count++;
+      break;
+    case RBIPC_SLOT_COMMITTED:
+      out_slot_stats->committed_count++;
+      break;
+    case RBIPC_SLOT_POISONED:
+      out_slot_stats->poisoned_count++;
+      break;
+    default:
+      break;
+    }
+
+    uint32_t cpid = atomic_load_explicit(&slot->consumer_pid, memory_order_relaxed);
+    if (cpid > 0) {
+      uint64_t acq_ts = atomic_load_explicit(&slot->acquire_timestamp_ns, memory_order_relaxed);
+      if (acq_ts > 0) {
+        out_slot_stats->active_leased_slots++;
+        if (now_ns > acq_ts) {
+          uint64_t elapsed = now_ns - acq_ts;
+          if (elapsed > out_slot_stats->max_lease_elapsed_ns) {
+            out_slot_stats->max_lease_elapsed_ns = elapsed;
+          }
+        }
+      }
+    }
+  }
 
   return RBIPC_OK;
 }
