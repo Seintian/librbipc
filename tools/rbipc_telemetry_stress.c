@@ -17,6 +17,7 @@
 
 #include "rbipc.h"
 
+#include <stddef.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -34,7 +35,7 @@
 #define DEFAULT_SLOT_SIZE 128U
 #define NUM_PRODUCERS     4
 #define NUM_CONSUMERS     4
-#define LEASE_TIMEOUT_NS  (50 * 1000 * 1000ULL) /* 50 ms */
+#define LEASE_TIMEOUT_NS  (50ULL * 1000ULL * 1000ULL) /* 50 ms */
 
 static volatile sig_atomic_t g_stop = 0;
 static _Atomic uint64_t g_msgs_produced = 0;
@@ -95,7 +96,7 @@ static void *consumer_worker(void *arg) {
         const void *rbuf = NULL;
         uint32_t rlen = 0;
         uint64_t ticket = 0;
-        int rc = rbipc_read_acquire_timeout(ring, 10 * 1000 * 1000ULL, &rbuf, &rlen, &ticket);
+        int rc = rbipc_read_acquire_timeout(ring, 10ULL * 1000ULL * 1000ULL, &rbuf, &rlen, &ticket);
         if (rc == RBIPC_ERR_SHUTDOWN || (g_stop && rc == RBIPC_ERR_TIMEOUT)) break;
         if (rc == RBIPC_ERR_TIMEOUT) continue;
 
@@ -109,7 +110,7 @@ static void *consumer_worker(void *arg) {
             consumed++;
             /* Occasionally simulate consumer stall on worker 0 exceeding lease duration */
             if (tid == 0 && (consumed % 400) == 0) {
-                struct timespec ts = { .tv_sec = 0, .tv_nsec = 70 * 1000 * 1000L }; /* 70 ms > 50 ms lease */
+                struct timespec ts = { .tv_sec = 0, .tv_nsec = 70L * 1000L * 1000L }; /* 70 ms > 50 ms lease */
                 nanosleep(&ts, NULL);
             }
 
@@ -124,7 +125,7 @@ static void *consumer_worker(void *arg) {
 static void *auditor_worker(void *arg) {
     rbipc_ring_t *ring = (rbipc_ring_t *)arg;
     while (!g_stop) {
-        struct timespec ts = { .tv_sec = 0, .tv_nsec = 25 * 1000 * 1000L }; /* Audit every 25 ms */
+        struct timespec ts = { .tv_sec = 0, .tv_nsec = 25L * 1000L * 1000L }; /* Audit every 25 ms */
         nanosleep(&ts, NULL);
         if (g_stop) break;
         int revoked = rbipc_revoke_expired_leases(ring);
