@@ -4,8 +4,8 @@
  */
 
 #include "rbipc.h"
-#include "../src/rbipc_internal.h"
-#include "../src/rbipc_slot.h"
+#include "rbipc_internal.h"
+#include "rbipc_slot.h"
 #include <stdio.h>
 #include <assert.h>
 #include <unistd.h>

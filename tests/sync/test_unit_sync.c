@@ -4,8 +4,8 @@
  */
 
 #include "rbipc.h"
-#include "../src/rbipc_sync.h"
-#include "../src/rbipc_futex.h"
+#include "rbipc_sync.h"
+#include "rbipc_futex.h"
 #include <stdio.h>
 #include <assert.h>
 #include <errno.h>

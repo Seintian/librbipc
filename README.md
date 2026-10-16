@@ -231,27 +231,27 @@ Verified across all 25 test suites via `make coverage` (`gcov` with `-O0 -g --co
 
 | Source File | Executable Lines | Covered Lines | Coverage % |
 | :--- | ---: | ---: | ---: |
-| [`src/rbipc_error.c`](src/rbipc_error.c) | 56 | 56 | **100.00%** |
-| [`src/rbipc_io.h`](src/rbipc_io.h) | 13 | 13 | **100.00%** |
-| [`src/rbipc_stream.h`](src/rbipc_stream.h) | 4 | 4 | **100.00%** |
-| [`src/rbipc_simd.c`](src/rbipc_simd.c) | 56 | 55 | **98.21%** |
-| [`src/rbipc_predicate.h`](src/rbipc_predicate.h) | 39 | 38 | 97.44% |
-| [`src/rbipc_math.h`](src/rbipc_math.h) | 13 | 12 | 92.31% |
-| [`src/rbipc_audit.c`](src/rbipc_audit.c) | 120 | 110 | 91.67% |
-| [`src/rbipc_batch.c`](src/rbipc_batch.c) | 181 | 165 | 91.16% |
-| [`src/rbipc_slot.c`](src/rbipc_slot.c) | 91 | 82 | 90.11% |
-| [`src/rbipc_ring.c`](src/rbipc_ring.c) | 286 | 252 | 88.11% |
-| [`src/rbipc_vmem.c`](src/rbipc_vmem.c) | 53 | 46 | 86.79% |
-| [`src/rbipc_ipc.c`](src/rbipc_ipc.c) | 73 | 63 | 86.30% |
-| [`src/rbipc_pubsub.c`](src/rbipc_pubsub.c) | 149 | 119 | 79.87% |
-| [`src/rbipc_shm.c`](src/rbipc_shm.c) | 130 | 102 | 78.46% |
-| [`src/rbipc_io.c`](src/rbipc_io.c) | 282 | 219 | 77.66% |
-| [`src/rbipc_futex.c`](src/rbipc_futex.c) | 181 | 140 | 77.35% |
-| [`src/rbipc_stream.c`](src/rbipc_stream.c) | 54 | 40 | 74.07% |
-| [`src/rbipc_internal.h`](src/rbipc_internal.h) | 10 | 7 | 70.00% |
-| [`src/rbipc_reactor.c`](src/rbipc_reactor.c) | 70 | 49 | 70.00% |
-| [`src/rbipc_sync.c`](src/rbipc_sync.c) | 182 | 126 | 69.23% |
-| [`src/rbipc_arch.h`](src/rbipc_arch.h) | 44 | 27 | 61.36% |
+| [`src/audit/rbipc_error.c`](src/audit/rbipc_error.c) | 56 | 56 | **100.00%** |
+| [`src/io/rbipc_io.h`](src/io/rbipc_io.h) | 13 | 13 | **100.00%** |
+| [`src/memory/rbipc_stream.h`](src/memory/rbipc_stream.h) | 4 | 4 | **100.00%** |
+| [`src/io/rbipc_simd.c`](src/io/rbipc_simd.c) | 56 | 55 | **98.21%** |
+| [`src/core/rbipc_predicate.h`](src/core/rbipc_predicate.h) | 39 | 38 | 97.44% |
+| [`src/platform/rbipc_math.h`](src/platform/rbipc_math.h) | 13 | 12 | 92.31% |
+| [`src/audit/rbipc_audit.c`](src/audit/rbipc_audit.c) | 120 | 110 | 91.67% |
+| [`src/io/rbipc_batch.c`](src/io/rbipc_batch.c) | 181 | 165 | 91.16% |
+| [`src/core/rbipc_slot.c`](src/core/rbipc_slot.c) | 91 | 82 | 90.11% |
+| [`src/core/rbipc_ring.c`](src/core/rbipc_ring.c) | 286 | 252 | 88.11% |
+| [`src/memory/rbipc_vmem.c`](src/memory/rbipc_vmem.c) | 53 | 46 | 86.79% |
+| [`src/ipc/rbipc_ipc.c`](src/ipc/rbipc_ipc.c) | 73 | 63 | 86.30% |
+| [`src/ipc/rbipc_pubsub.c`](src/ipc/rbipc_pubsub.c) | 149 | 119 | 79.87% |
+| [`src/memory/rbipc_shm.c`](src/memory/rbipc_shm.c) | 130 | 102 | 78.46% |
+| [`src/io/rbipc_io.c`](src/io/rbipc_io.c) | 282 | 219 | 77.66% |
+| [`src/sync/rbipc_futex.c`](src/sync/rbipc_futex.c) | 181 | 140 | 77.35% |
+| [`src/memory/rbipc_stream.c`](src/memory/rbipc_stream.c) | 54 | 40 | 74.07% |
+| [`src/core/rbipc_internal.h`](src/core/rbipc_internal.h) | 10 | 7 | 70.00% |
+| [`src/io/rbipc_reactor.c`](src/io/rbipc_reactor.c) | 70 | 49 | 70.00% |
+| [`src/sync/rbipc_sync.c`](src/sync/rbipc_sync.c) | 182 | 126 | 69.23% |
+| [`src/platform/rbipc_arch.h`](src/platform/rbipc_arch.h) | 44 | 27 | 61.36% |
 | **TOTAL LINE COVERAGE** | **2,087** | **1,725** | **82.65%** |
 
 ---

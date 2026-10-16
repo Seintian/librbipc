@@ -4,7 +4,7 @@
  */
 
 #include "rbipc.h"
-#include "../src/rbipc_math.h"
+#include "rbipc_math.h"
 #include <stdio.h>
 #include <assert.h>
 

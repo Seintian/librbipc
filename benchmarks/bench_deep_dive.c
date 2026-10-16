@@ -14,7 +14,7 @@
 #endif
 
 #include "rbipc.h"
-#include "../src/rbipc_internal.h"
+#include "rbipc_internal.h"
 #include "bench_common.h"
 #include <stdio.h>
 #include <stdlib.h>

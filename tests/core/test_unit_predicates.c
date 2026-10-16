@@ -4,8 +4,8 @@
  */
 
 #include "rbipc.h"
-#include "../src/rbipc_predicate.h"
-#include "../src/rbipc_sync.h"
+#include "rbipc_predicate.h"
+#include "rbipc_sync.h"
 
 #include <stdio.h>
 #include <string.h>

@@ -10,9 +10,11 @@ def main():
     total_lines = 0
     total_exec = 0
 
-    gcov_files = sorted(glob.glob("*.gcov"))
+    gcov_files = sorted(set(glob.glob("*.gcov") + glob.glob("**/*.gcov", recursive=True)))
     for g in gcov_files:
         basename = os.path.basename(g).replace(".gcov", "")
+        if "#" in basename:
+            basename = basename.split("#")[-1]
         # Filter to only librbipc source and internal files
         if not ("rbipc" in basename and not basename.startswith("test_")):
             continue

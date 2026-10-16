@@ -16,7 +16,7 @@
 #endif
 
 #include "rbipc.h"
-#include "../src/rbipc_arch.h"
+#include "rbipc_arch.h"
 #include "bench_common.h"
 
 #include <stdio.h>

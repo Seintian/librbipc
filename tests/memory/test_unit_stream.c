@@ -8,7 +8,7 @@
 #endif
 
 #include "rbipc.h"
-#include "../src/rbipc_stream.h"
+#include "rbipc_stream.h"
 
 #include <assert.h>
 #include <stdio.h>

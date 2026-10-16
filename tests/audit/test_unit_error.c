@@ -4,7 +4,7 @@
  */
 
 #include "rbipc.h"
-#include "../src/rbipc_error.h"
+#include "rbipc_error.h"
 #include <errno.h>
 #include <stdio.h>
 #include <string.h>

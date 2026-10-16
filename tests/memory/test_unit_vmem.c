@@ -4,8 +4,8 @@
  */
 
 #include "rbipc.h"
-#include "../src/rbipc_vmem.h"
-#include "../src/rbipc_shm.h"
+#include "rbipc_vmem.h"
+#include "rbipc_shm.h"
 #include <stdio.h>
 #include <string.h>
 #include <assert.h>

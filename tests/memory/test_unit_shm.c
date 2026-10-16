@@ -4,7 +4,7 @@
  */
 
 #include "rbipc.h"
-#include "../src/rbipc_shm.h"
+#include "rbipc_shm.h"
 #include <stdio.h>
 #include <assert.h>
 #include <unistd.h>

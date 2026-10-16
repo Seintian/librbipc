@@ -1,5 +1,5 @@
 CC ?= gcc
-CFLAGS ?= -std=c23 -Wall -Wextra -Wpedantic -Werror -O3 -fPIC -Iinclude -pthread -D_GNU_SOURCE
+CFLAGS ?= -std=c23 -Wall -Wextra -Wpedantic -Werror -O3 -fPIC -Iinclude -Isrc -Isrc/core -Isrc/memory -Isrc/sync -Isrc/io -Isrc/ipc -Isrc/audit -Isrc/platform -pthread -D_GNU_SOURCE
 LDFLAGS ?= -pthread -lrt -lm
 
 SRCDIR = src
@@ -10,13 +10,13 @@ BUILDDIR = build
 BINDIR = bin
 LIBDIR = lib
 
-SRCS = $(wildcard $(SRCDIR)/*.c)
+SRCS = $(wildcard $(SRCDIR)/*/*.c)
 OBJS = $(patsubst $(SRCDIR)/%.c, $(BUILDDIR)/%.o, $(SRCS))
 
 STATIC_LIB = $(LIBDIR)/librbipc.a
 SHARED_LIB = $(LIBDIR)/librbipc.so
 
-TEST_SRCS = $(wildcard $(TESTDIR)/*.c)
+TEST_SRCS = $(wildcard $(TESTDIR)/*/*.c)
 TEST_BINS = $(patsubst $(TESTDIR)/%.c, $(BINDIR)/%, $(TEST_SRCS))
 
 BENCH_SRCS = $(wildcard $(BENCHDIR)/*.c)
@@ -34,6 +34,7 @@ $(BUILDDIR) $(BINDIR) $(LIBDIR):
 	mkdir -p $@
 
 $(BUILDDIR)/%.o: $(SRCDIR)/%.c $(INCDIR)/rbipc.h | $(BUILDDIR)
+	@mkdir -p $(dir $@)
 	$(CC) $(CFLAGS) -c $< -o $@
 
 $(STATIC_LIB): $(OBJS) | $(LIBDIR)
@@ -43,6 +44,7 @@ $(SHARED_LIB): $(OBJS) | $(LIBDIR)
 	$(CC) -shared $(CFLAGS) -o $@ $^ $(LDFLAGS)
 
 $(BINDIR)/%: $(TESTDIR)/%.c $(STATIC_LIB) | $(BINDIR)
+	@mkdir -p $(dir $@)
 	$(CC) $(CFLAGS) $< $(STATIC_LIB) $(LDFLAGS) -o $@
 
 $(BINDIR)/%: $(BENCHDIR)/%.c $(BENCHDIR)/bench_common.h $(STATIC_LIB) | $(BINDIR)
@@ -134,30 +136,31 @@ monitor-live: $(STATIC_LIB) $(TOOL_BINS)
 	fi; \
 	$(BINDIR)/rbipc_stat $(RING) --watch 0.5 --slots
 
-
-coverage: CFLAGS = -std=c23 -Wall -Wextra -Wpedantic -Werror -O0 -g --coverage -fPIC -Iinclude -pthread -D_GNU_SOURCE
+coverage: CFLAGS = -std=c23 -Wall -Wextra -Wpedantic -Werror -O0 -g --coverage -fPIC -Iinclude -Isrc -Isrc/core -Isrc/memory -Isrc/sync -Isrc/io -Isrc/ipc -Isrc/audit -Isrc/platform -pthread -D_GNU_SOURCE
 coverage: LDFLAGS += --coverage
 coverage: clean test
 	@echo "=================================================="
 	@echo "           Generating Code Coverage Report        "
 	@echo "=================================================="
-	@gcov -b -o $(BUILDDIR) $(SRCS) > /dev/null
+	@for s in $(SRCS); do \
+		gcov -b -o $$(dirname build/$${s#src/}) $$s > /dev/null; \
+	done
 	@python3 scripts/coverage_summary.py
 
-valgrind: $(STATIC_LIB) $(BINDIR)/test_unit_lifecycle $(BINDIR)/test_io_basic $(BINDIR)/test_io_abort
+valgrind: $(STATIC_LIB) $(BINDIR)/core/test_unit_lifecycle $(BINDIR)/io/test_io_basic $(BINDIR)/io/test_io_abort
 	@echo "=================================================="
 	@echo "           Running Valgrind Memory Checks         "
 	@echo "=================================================="
-	valgrind --leak-check=full --show-leak-kinds=all --error-exitcode=1 $(BINDIR)/test_unit_lifecycle
-	valgrind --leak-check=full --show-leak-kinds=all --error-exitcode=1 $(BINDIR)/test_io_basic
-	valgrind --leak-check=full --show-leak-kinds=all --error-exitcode=1 $(BINDIR)/test_io_abort
+	valgrind --leak-check=full --show-leak-kinds=all --error-exitcode=1 $(BINDIR)/core/test_unit_lifecycle
+	valgrind --leak-check=full --show-leak-kinds=all --error-exitcode=1 $(BINDIR)/io/test_io_basic
+	valgrind --leak-check=full --show-leak-kinds=all --error-exitcode=1 $(BINDIR)/io/test_io_abort
 	@echo "Valgrind checks passed with 0 errors!"
 
 clang-tidy:
 	@echo "=================================================="
 	@echo "           Running Clang-Tidy Static Analysis     "
 	@echo "=================================================="
-	clang-tidy -checks='bugprone-*,clang-analyzer-*,performance-*,-clang-analyzer-optin.performance.Padding,-bugprone-easily-swappable-parameters,-clang-analyzer-security.insecureAPI.DeprecatedOrUnsafeBufferHandling' $(SRCS) -- -std=c23 -Iinclude -D_GNU_SOURCE
+	clang-tidy -checks='bugprone-*,clang-analyzer-*,performance-*,-clang-analyzer-optin.performance.Padding,-bugprone-easily-swappable-parameters,-clang-analyzer-security.insecureAPI.DeprecatedOrUnsafeBufferHandling' $(SRCS) -- -std=c23 -Iinclude -Isrc -Isrc/core -Isrc/memory -Isrc/sync -Isrc/io -Isrc/ipc -Isrc/audit -Isrc/platform -D_GNU_SOURCE
 	@echo "Clang-Tidy analysis passed with 0 errors!"
 
 compile_commands.json: Makefile $(SRCS) $(TEST_SRCS) $(BENCH_SRCS)
@@ -168,13 +171,12 @@ compile_commands: compile_commands.json
 docs:
 	@which doxygen > /dev/null 2>&1 && doxygen Doxyfile && python3 scripts/postprocess_docs.py || echo "doxygen is not installed in the environment; install doxygen to generate HTML documentation."
 
-
-tsan: CFLAGS = -std=c23 -Wall -Wextra -Wpedantic -Werror -Wno-error=tsan -O1 -g -fsanitize=thread -fPIC -Iinclude -pthread -D_GNU_SOURCE
+tsan: CFLAGS = -std=c23 -Wall -Wextra -Wpedantic -Werror -Wno-error=tsan -O1 -g -fsanitize=thread -fPIC -Iinclude -Isrc -Isrc/core -Isrc/memory -Isrc/sync -Isrc/io -Isrc/ipc -Isrc/audit -Isrc/platform -pthread -D_GNU_SOURCE
 tsan: LDFLAGS += -fsanitize=thread
 tsan: clean
 	make test RUN_TEST="setarch $$(uname -m) -R" CFLAGS="$(CFLAGS)" LDFLAGS="$(LDFLAGS)"
 
-asan: CFLAGS = -std=c23 -Wall -Wextra -Wpedantic -Werror -O1 -g -fsanitize=address,undefined -fPIC -Iinclude -pthread -D_GNU_SOURCE
+asan: CFLAGS = -std=c23 -Wall -Wextra -Wpedantic -Werror -O1 -g -fsanitize=address,undefined -fPIC -Iinclude -Isrc -Isrc/core -Isrc/memory -Isrc/sync -Isrc/io -Isrc/ipc -Isrc/audit -Isrc/platform -pthread -D_GNU_SOURCE
 asan: LDFLAGS += -fsanitize=address,undefined
 asan: clean test
 

@@ -8,8 +8,8 @@
 #endif
 
 #include "rbipc.h"
-#include "../src/rbipc_simd.h"
-#include "../src/rbipc_slot.h"
+#include "rbipc_simd.h"
+#include "rbipc_slot.h"
 
 #include <assert.h>
 #include <stdio.h>
