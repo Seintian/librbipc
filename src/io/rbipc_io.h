@@ -25,9 +25,9 @@
  * @return Direct pointer in virtual memory to the beginning of the slot's data buffer.
  */
 RBIPC_INLINE RBIPC_PURE void *rbipc_io_calc_slot_ptr(const rbipc_ring_t *ring, uint64_t ticket) {
-    uint32_t idx = (uint32_t)(ticket & (uint64_t)ring->hdr->capacity_mask);
+    uint32_t idx = (uint32_t)(ticket & (uint64_t)ring->cached_capacity_mask);
     void *data_map = RBIPC_ASSUME_ALIGNED(ring->data_map, RBIPC_CACHE_LINE);
-    return (char *)data_map + ((size_t)idx * ring->hdr->slot_size);
+    return (char *)data_map + ((size_t)idx * ring->cached_slot_size);
 }
 
 /**
@@ -72,10 +72,10 @@ rbipc_io_try_claim_read_ticket(rbipc_shm_header_t *RBIPC_RESTRICT hdr,
  * @param[in] next_ticket The upcoming write ticket scheduled for subsequent reservation.
  */
 RBIPC_INLINE void rbipc_io_prefetch_write_next(const rbipc_ring_t *ring, uint64_t next_ticket) {
-    uint32_t idx = (uint32_t)(next_ticket & (uint64_t)ring->hdr->capacity_mask);
+    uint32_t idx = (uint32_t)(next_ticket & (uint64_t)ring->cached_capacity_mask);
     RBIPC_PREFETCH(&ring->slots[idx], RBIPC_PREFETCH_WRITE, RBIPC_PREFETCH_LOCALITY_HIGH);
     void *data_map = RBIPC_ASSUME_ALIGNED(ring->data_map, RBIPC_CACHE_LINE);
-    RBIPC_PREFETCH((char *)data_map + ((size_t)idx * ring->hdr->slot_size), RBIPC_PREFETCH_WRITE, RBIPC_PREFETCH_LOCALITY_LOW);
+    RBIPC_PREFETCH((char *)data_map + ((size_t)idx * ring->cached_slot_size), RBIPC_PREFETCH_WRITE, RBIPC_PREFETCH_LOCALITY_LOW);
 }
 
 /**
@@ -88,10 +88,10 @@ RBIPC_INLINE void rbipc_io_prefetch_write_next(const rbipc_ring_t *ring, uint64_
  * @param[in] next_ticket The upcoming read ticket scheduled for subsequent acquisition.
  */
 RBIPC_INLINE void rbipc_io_prefetch_read_next(const rbipc_ring_t *ring, uint64_t next_ticket) {
-    uint32_t idx = (uint32_t)(next_ticket & (uint64_t)ring->hdr->capacity_mask);
+    uint32_t idx = (uint32_t)(next_ticket & (uint64_t)ring->cached_capacity_mask);
     RBIPC_PREFETCH(&ring->slots[idx], RBIPC_PREFETCH_READ, RBIPC_PREFETCH_LOCALITY_HIGH);
     const void *data_map = RBIPC_ASSUME_ALIGNED(ring->data_map, RBIPC_CACHE_LINE);
-    RBIPC_PREFETCH((const char *)data_map + ((size_t)idx * ring->hdr->slot_size), RBIPC_PREFETCH_READ, RBIPC_PREFETCH_LOCALITY_LOW);
+    RBIPC_PREFETCH((const char *)data_map + ((size_t)idx * ring->cached_slot_size), RBIPC_PREFETCH_READ, RBIPC_PREFETCH_LOCALITY_LOW);
 }
 
 #endif /* RBIPC_IO_H */

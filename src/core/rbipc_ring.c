@@ -181,6 +181,11 @@ rbipc_ring_t *rbipc_ring_alloc_handle(int fd, const char *RBIPC_RESTRICT name,
   ring->roles = roles;
   ring->is_creator = is_creator;
   ring->cached_pid = getpid();
+  if (hdr) {
+    ring->cached_capacity_mask = hdr->capacity_mask;
+    ring->cached_capacity = hdr->capacity;
+    ring->cached_slot_size = hdr->slot_size;
+  }
   ring->event_fd = -1;
   ring->owns_eventfd = false;
   ring->wait_policy = RBIPC_WAIT_ADAPTIVE;

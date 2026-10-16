@@ -59,6 +59,9 @@ struct rbipc_ring {
                        attached. */
   pid_t cached_pid; /**< Cached process PID to avoid redundant getpid() system
                        calls during reservations. */
+  uint32_t cached_capacity_mask; /**< Cached immutable capacity mask (capacity - 1) for fast modulo indexing. */
+  uint32_t cached_capacity;      /**< Cached immutable ring slot capacity. */
+  uint32_t cached_slot_size;     /**< Cached immutable maximum slot payload size in bytes. */
   uint32_t wait_policy; /**< Wait and backoff synchronization policy
                            (RBIPC_WAIT_ADAPTIVE (default), RBIPC_WAIT_ZERO_SPIN,
                             or RBIPC_WAIT_HW_MONITOR). */

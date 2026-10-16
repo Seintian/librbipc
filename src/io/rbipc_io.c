@@ -304,7 +304,7 @@ int rbipc_reserve_write_timeout(rbipc_ring_t *RBIPC_RESTRICT ring, uint32_t len,
   }
 
   rbipc_shm_header_t *hdr = ring->hdr;
-  const uint32_t mask = hdr->capacity_mask;
+  const uint32_t mask = ring->cached_capacity_mask;
   const uint32_t cap = hdr->capacity;
   rbipc_slot_t *slots =
       (rbipc_slot_t *)RBIPC_ASSUME_ALIGNED(ring->slots, RBIPC_CACHE_LINE);
@@ -412,12 +412,12 @@ RBIPC_LEAF
 int rbipc_commit_write(rbipc_ring_t *RBIPC_RESTRICT ring, uint64_t ticket,
                        uint32_t written_len) {
   if (RBIPC_UNLIKELY(!ring || !ring->hdr ||
-                     written_len > ring->hdr->slot_size)) {
+                     written_len > ring->cached_slot_size)) {
     return RBIPC_ERR_INVAL;
   }
 
   rbipc_shm_header_t *hdr = ring->hdr;
-  uint32_t idx = (uint32_t)(ticket & (uint64_t)hdr->capacity_mask);
+  uint32_t idx = (uint32_t)(ticket & (uint64_t)ring->cached_capacity_mask);
   rbipc_slot_t *slot =
       (rbipc_slot_t *)RBIPC_ASSUME_ALIGNED(&ring->slots[idx], RBIPC_CACHE_LINE);
 
@@ -440,7 +440,7 @@ int rbipc_abort_write(rbipc_ring_t *RBIPC_RESTRICT ring, uint64_t ticket) {
   }
 
   rbipc_shm_header_t *hdr = ring->hdr;
-  uint32_t idx = (uint32_t)(ticket & (uint64_t)hdr->capacity_mask);
+  uint32_t idx = (uint32_t)(ticket & (uint64_t)ring->cached_capacity_mask);
   rbipc_slot_t *slot =
       (rbipc_slot_t *)RBIPC_ASSUME_ALIGNED(&ring->slots[idx], RBIPC_CACHE_LINE);
 
@@ -474,7 +474,7 @@ int rbipc_read_acquire_timeout(rbipc_ring_t *RBIPC_RESTRICT ring,
   }
 
   rbipc_shm_header_t *hdr = ring->hdr;
-  const uint32_t mask = hdr->capacity_mask;
+  const uint32_t mask = ring->cached_capacity_mask;
   rbipc_slot_t *slots =
       (rbipc_slot_t *)RBIPC_ASSUME_ALIGNED(ring->slots, RBIPC_CACHE_LINE);
   rbipc_sync_state_t sync_state;
@@ -585,7 +585,7 @@ int rbipc_read_release(rbipc_ring_t *RBIPC_RESTRICT ring, uint64_t ticket) {
   }
 
   rbipc_shm_header_t *hdr = ring->hdr;
-  const uint32_t mask = hdr->capacity_mask;
+  const uint32_t mask = ring->cached_capacity_mask;
   const uint32_t cap = hdr->capacity;
   rbipc_slot_t *slot = (rbipc_slot_t *)RBIPC_ASSUME_ALIGNED(
       &ring->slots[ticket & mask], RBIPC_CACHE_LINE);
