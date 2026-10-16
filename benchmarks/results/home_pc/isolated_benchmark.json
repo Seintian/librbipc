@@ -9,9 +9,9 @@
     "iterations": 1000000
   },
   "result": {
-    "elapsed_seconds": 0.076607,
-    "latency_ns_per_op": 76.61,
-    "throughput_mops": 13.05,
-    "throughput_ops_sec": 13053705.38
+    "elapsed_seconds": 0.068845,
+    "latency_ns_per_op": 68.84,
+    "throughput_mops": 14.53,
+    "throughput_ops_sec": 14525485.01
   }
 }
