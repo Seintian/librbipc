@@ -55,3 +55,5 @@ Doxyfile text eol=lf
 *.tar binary
 *.gz binary
 *.zip binary
+# Benchmark backward-compatibility symlinks (disable text filter on symlinks)
+benchmarks/results/*.json -text
