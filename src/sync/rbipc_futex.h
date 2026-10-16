@@ -159,6 +159,22 @@ RBIPC_LEAF
 int rbipc_futex_wake(_Atomic uint32_t *uaddr, int count);
 
 /**
+ * @brief Awaken waiting threads currently suspended on a 64-bit slot sequence word.
+ *
+ * @details Dispatches  with  targeting the appropriate 32-bit word
+ * boundary of the 64-bit slot sequence based on target machine endianness.
+ *
+ * @param[in] slot_seq Direct pointer to 64-bit atomic sequence word in shared memory.
+ * @param[in] count    Maximum number of waiters to awaken.
+ *
+ * @return Non-negative count of successfully awakened waiters on success.
+ * @retval -EINVAL if @p slot_seq is null.
+ * @retval -errno  if underlying futex syscall returns failure.
+ */
+RBIPC_LEAF
+int rbipc_futex_wake_slot(const _Atomic uint64_t *slot_seq, int count);
+
+/**
  * @brief Checks if Linux 5.16+ sys_futex_waitv is supported by the host kernel.
  *
  * @return true if sys_futex_waitv is available, false otherwise.

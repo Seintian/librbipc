@@ -421,8 +421,7 @@ int rbipc_commit_write(rbipc_ring_t *RBIPC_RESTRICT ring, uint64_t ticket,
 
   atomic_signal_fence(memory_order_seq_cst);
   if (RBIPC_UNLIKELY(rbipc_sync_has_waiters(&hdr->futex_waiters))) {
-    _Atomic uint32_t *low_seq = (_Atomic uint32_t *)(void *)&slot->sequence;
-    rbipc_futex_wake(low_seq, 1);
+    rbipc_futex_wake_slot(&slot->sequence, 1);
     rbipc_sync_wake_one(&hdr->futex_seq, &hdr->futex_waiters);
   }
   rbipc_reactor_signal(ring);
@@ -591,8 +590,7 @@ int rbipc_read_release(rbipc_ring_t *RBIPC_RESTRICT ring, uint64_t ticket) {
 
   atomic_signal_fence(memory_order_seq_cst);
   if (RBIPC_UNLIKELY(rbipc_sync_has_waiters(&hdr->write_waiters))) {
-    _Atomic uint32_t *low_seq = (_Atomic uint32_t *)(void *)&slot->sequence;
-    rbipc_futex_wake(low_seq, 1);
+    rbipc_futex_wake_slot(&slot->sequence, 1);
     rbipc_sync_wake_one(&hdr->write_futex_seq, &hdr->write_waiters);
   }
   rbipc_reactor_signal(ring);

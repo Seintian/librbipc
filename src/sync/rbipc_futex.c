@@ -62,6 +62,28 @@ int rbipc_futex_wake(_Atomic uint32_t *uaddr, int count) {
     return (int)ret;
 }
 
+static inline const uint32_t *rbipc_futex_low32_addr(const _Atomic uint64_t *slot_seq) {
+    const char *base = (const char *)slot_seq;
+#if defined(__BYTE_ORDER__) && (__BYTE_ORDER__ == __ORDER_BIG_ENDIAN__)
+    return (const uint32_t *)(base + 4U);
+#else
+    return (const uint32_t *)base;
+#endif
+}
+
+RBIPC_LEAF
+int rbipc_futex_wake_slot(const _Atomic uint64_t *slot_seq, int count) {
+    if (RBIPC_UNLIKELY(rbipc_is_null(slot_seq))) {
+        return -EINVAL;
+    }
+    const uint32_t *low_uaddr = rbipc_futex_low32_addr(slot_seq);
+    long ret = syscall(SYS_futex, (const uint32_t *)low_uaddr, FUTEX_WAKE, count, NULL, NULL, 0);
+    if (ret < 0) {
+        return -errno;
+    }
+    return (int)ret;
+}
+
 RBIPC_LEAF
 bool rbipc_futex_has_waitv(void) {
 #if defined(__linux__) && defined(SYS_futex_waitv)
@@ -208,7 +230,7 @@ int rbipc_futex2_wait_slot_or_proxy_or_shutdown(
     bool use_u64 = rbipc_futex2_has_u64();
 
     waiters[nr].val = use_u64 ? expected_seq : (uint32_t)expected_seq;
-    waiters[nr].uaddr = (uintptr_t)slot_seq;
+    waiters[nr].uaddr = use_u64 ? (uintptr_t)slot_seq : (uintptr_t)rbipc_futex_low32_addr(slot_seq);
     waiters[nr].flags = use_u64 ? FUTEX2_SIZE_U64 : FUTEX2_SIZE_U32;
     waiters[nr].__reserved = 0;
     nr++;
@@ -249,8 +271,9 @@ int rbipc_futex2_wait_slot_or_proxy_or_shutdown(
     rbipc_ns_to_timespec(timeout_ns, &ts);
     pts = &ts;
   }
-  _Atomic uint32_t *low_uaddr = (_Atomic uint32_t *)(void *)slot_seq;
-  int rc = rbipc_futex_wait(low_uaddr, (uint32_t)expected_seq, pts);
+  const uint32_t *low_uaddr = rbipc_futex_low32_addr(slot_seq);
+  long ret = syscall(SYS_futex, (const uint32_t *)low_uaddr, FUTEX_WAIT, (uint32_t)expected_seq, pts, NULL, 0);
+  int rc = (ret != 0) ? -errno : 0;
   return rbipc_futex_normalize_wait_status(rc);
 }
 
