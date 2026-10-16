@@ -291,9 +291,11 @@ static const uint32_t rbipc_crc32c_table[256] = {
 };
 
 /**
- * @brief Unaligned 64-bit integer type for safe byte-aligned memory dereferencing.
+ * @brief Unaligned integer types for safe byte-aligned memory dereferencing.
  */
 typedef uint64_t __attribute__((aligned(1))) rbipc_unaligned_u64;
+typedef uint32_t __attribute__((aligned(1))) rbipc_unaligned_u32;
+typedef uint16_t __attribute__((aligned(1))) rbipc_unaligned_u16;
 
 #if defined(__x86_64__) || defined(__i386__)
 /**
@@ -313,10 +315,20 @@ rbipc_crc32c_sse42(uint32_t crc, const void *data, size_t len) {
     p += 8;
     len -= 8;
   }
-  while (len > 0) {
+  if (len >= 4) {
+    uint32_t val = *(const rbipc_unaligned_u32 *)p;
+    crc = __builtin_ia32_crc32si(crc, val);
+    p += 4;
+    len -= 4;
+  }
+  if (len >= 2) {
+    uint16_t val = *(const rbipc_unaligned_u16 *)p;
+    crc = __builtin_ia32_crc32hi(crc, val);
+    p += 2;
+    len -= 2;
+  }
+  if (len > 0) {
     crc = __builtin_ia32_crc32qi(crc, *p);
-    p++;
-    len--;
   }
   return crc;
 }
@@ -340,9 +352,20 @@ static inline uint32_t rbipc_crc32c_arm(uint32_t crc, const void *data,
     p += 8;
     len -= 8;
   }
-  while (len > 0) {
-    crc = __builtin_arm_crc32cb(crc, *p++);
-    len--;
+  if (len >= 4) {
+    uint32_t val = *(const rbipc_unaligned_u32 *)p;
+    crc = __builtin_arm_crc32cw(crc, val);
+    p += 4;
+    len -= 4;
+  }
+  if (len >= 2) {
+    uint16_t val = *(const rbipc_unaligned_u16 *)p;
+    crc = __builtin_arm_crc32ch(crc, val);
+    p += 2;
+    len -= 2;
+  }
+  if (len > 0) {
+    crc = __builtin_arm_crc32cb(crc, *p);
   }
   return crc;
 }
