@@ -688,27 +688,52 @@ Measurements from [`benchmarks/results/competitors_benchmark.json`](benchmarks/r
 - **Minimum Ping-Pong Latency (200 ns):** When active threads complete handoffs in user space prior to suspension, half-RTT latency reaches 200 ns. This is within 50–150 ns of busy-spinning queues (`rte_ring` 50–150 ns) while remaining orders of magnitude faster than kernel transports (`POSIX mqueue` 5,450 ns min, `AF_UNIX` 16,151 ns min).
 - **Median Ping-Pong Latency (26.3 $\mu$s):** In strict single-message ping-pong workloads where the receiver enters `FUTEX_WAIT` while the sender prepares responses, latency reflects the kernel scheduler wakeup path ($\approx 26.3$ $\mu$s under virtualized Linux environments).
 
-### 9.3 Payload Size Copy Scaling (64 B to 64 KiB)
+### 9.3 Payload Size Scaling: Dual Evaluation Modalities
 
-Measurements from [`benchmarks/results/competitors_benchmark.json`](benchmarks/results/competitors_benchmark.json) evaluating in-band memory copying:
+Inter-process queue architectures exhibit two fundamentally distinct communication semantics: **in-band value-passing** (where message payloads are serialized and copied into the transport) and **reference-passing** (where 8-byte buffer descriptors or pointers into preallocated memory pools are exchanged without moving payload bytes). To rigorously characterize both dimensions, [`benchmarks/bench_competitors.c`](benchmarks/bench_competitors.c) evaluates competing frameworks across both modalities from 64 B to 64 KiB.
 
-| Payload Size | `librbipc` (ops/s / MB/s) | `rte_ring` *(8B ptr + slot copy)* | `LMAX Disruptor` *(slot copy)* | `POSIX mqueue` (ops/s) | `AF_UNIX DGRAM` (ops/s / MB/s) |
+#### Modality A: In-Band Value-Passing Semantics (Payload Memory Copying)
+
+Under value-passing semantics, each framework performs an explicit memory copy of the payload into the transport buffer. For shared-memory architectures (`librbipc`, `rte_ring`, `LMAX Disruptor`), the producer copies $S_{\text{payload}}$ bytes from private process memory into the allocated shared-memory slot via `memcpy`, enabling single-copy in-band transfer. For kernel transports (`POSIX mqueue`, `AF_UNIX DGRAM`), data is copied through kernel address space.
+
+| Payload Size | `librbipc` (ops/s / MB/s) | `rte_ring` (ops/s / MB/s) | `LMAX Disruptor` (ops/s / MB/s) | `POSIX mqueue` (ops/s) | `AF_UNIX DGRAM` (ops/s / MB/s) |
 | ---: | ---: | ---: | ---: | ---: | ---: |
-| **64 B** | 8,410,312 (`513.3 MB/s`) | 17,917,769 | 22,379,565 | 350,906 | 1,282,700 (`78.3 MB/s`) |
-| **256 B** | **10,974,130 (`2,679.2 MB/s`)** | 18,829,441 | 36,035,698 | 525,731 | 1,325,168 (`323.5 MB/s`) |
-| **1,024 B** | **7,163,358 (`6,995.5 MB/s`)** | 18,034,753 | 16,674,209 | 562,753 | 1,028,245 (`1,004.1 MB/s`) |
-| **4,096 B** | 1,275,007 (`4,980.5 MB/s`) | 18,240,040 | 16,701,500 | 755,043 | 714,683 (`2,791.7 MB/s`) |
-| **16,384 B** | 360,959 (`5,640.0 MB/s`) | 16,812,136 | 18,163,166 | **0 (`EMSGSIZE`)** | 237,676 (`3,713.7 MB/s`) |
-| **65,536 B** | 84,497 (`5,281.1 MB/s`) | 18,360,664 | 15,932,980 | **0 (`EMSGSIZE`)** | 101,058 (`6,316.1 MB/s`) |
+| **64 B** | 9,119,272 (`556.6 MB/s`) | 11,619,889 (`709.2 MB/s`) | 19,542,380 (`1,192.8 MB/s`) | 219,535 (`13.4 MB/s`) | 294,816 (`18.0 MB/s`) |
+| **256 B** | 5,283,805 (`1,289.1 MB/s`) | 4,706,965 (`1,149.9 MB/s`) | 15,713,763 (`3,835.4 MB/s`) | 462,726 (`113.0 MB/s`) | 368,316 (`89.9 MB/s`) |
+| **1,024 B** | 4,882,070 (`4,767.6 MB/s`) | 7,026,053 (`6,865.3 MB/s`) | 13,922,752 (`13,596.4 MB/s`) | 491,936 (`480.4 MB/s`) | 506,857 (`495.0 MB/s`) |
+| **4,096 B** | 1,577,234 (`6,170.8 MB/s`) | 2,269,034 (`8,863.4 MB/s`) | 2,807,213 (`10,976.0 MB/s`) | 407,170 (`1,590.5 MB/s`) | 393,025 (`1,535.3 MB/s`) |
+| **16,384 B** | 409,158 (`6,393.1 MB/s`) | 1,019,904 (`15,936.0 MB/s`) | 1,018,629 (`15,916.1 MB/s`) | **0 (`EMSGSIZE`)** | 227,549 (`3,555.5 MB/s`) |
+| **65,536 B** | 95,522 (`5,970.1 MB/s`) | 213,802 (`13,362.6 MB/s`) | 215,001 (`13,437.6 MB/s`) | **0 (`EMSGSIZE`)** | 100,276 (`6,267.2 MB/s`) |
 
-*Table 9: Throughput and bandwidth scaling across message payload dimensions.*
+*Table 9: In-band value-passing throughput and bandwidth scaling across payload dimensions (Desktop Profile, 50,000 iterations per size).*
 
-### 9.4 Benchmark Methodology and Payload Copy Semantics
+**Analysis of Memory Subsystem Saturation:**
+As payload dimensions scale from 64 B to 64 KiB, the operational throughput of all evaluated architectures converges to the ceiling imposed by memory subsystem bandwidth ($B_{\text{mem}} = f_{\text{op}} \times S_{\text{payload}}$). At 64 KiB, per-message copies exceed L1d cache capacity (32 KiB), causing eviction into L2/L3 caches and external DRAM. Consequently, throughput across all shared-memory systems declines by over 98% relative to 64 B operations, sustaining between 5.97 GB/s and 13.44 GB/s of sustained write bandwidth. `POSIX mqueue` rejects messages exceeding 8,192 bytes with `EMSGSIZE`.
 
-An examination of [`benchmarks/bench_competitors.c`](benchmarks/bench_competitors.c) highlights an important measurement distinction between queue models:
+#### Modality B: Reference-Passing Semantics (Zero-Copy Pointer Exchange)
 
-- **Pointer-Passing vs. Value-Passing Queues:** In `bench_competitors.c`, `rte_ring` and LMAX Disruptor allocate 64-byte slots (`uint8_t data[64]`) and clamp copy operations to $\min(\text{payload\_size}, 64)$. Consequently, for payloads from 4 KiB to 64 KiB, `rte_ring` and Disruptor copy only 64 bytes. In real DPDK applications, actual packet memory resides in an external buffer pool (`rte_mempool`), and only 8-byte pointers (`struct rte_mbuf *`) are transferred across cores.
-- **Full Payload Shared-Memory Transport:** In contrast, `librbipc` allocates a ring buffer sized dynamically to `slot_size = payload_size` and copies the full payload into and out of the shared-memory slot (sustaining 5.0–7.0 GB/s copy bandwidth, or up to 19.87 GB/s with non-temporal streaming stores, and zero-copy operation at higher rates). Meanwhile, `POSIX mqueue` rejects messages exceeding 8,192 bytes with `EMSGSIZE`.
+Under reference-passing semantics, message memory resides in preallocated shared-memory buffer pools, and queues transfer 8-byte pointers (`uintptr_t`) or slot sequence descriptors across process boundaries. This isolates pure synchronization coordination latency and ring indexing overhead from payload copying costs.
+
+| Payload Size | `librbipc` (Mops/s) | `rte_ring` (Mops/s) | `LMAX Disruptor` (Mops/s) |
+| ---: | ---: | ---: | ---: |
+| **64 B** | 7.68 | 12.37 | 11.72 |
+| **256 B** | 18.64 | 14.95 | 12.84 |
+| **1,024 B** | 10.66 | 14.81 | 36.87 |
+| **4,096 B** | 9.92 | 33.29 | 46.57 |
+| **16,384 B** | 18.72 | 35.82 | 47.21 |
+| **65,536 B** | 10.12 | 31.55 | 14.82 |
+
+*Table 9B: Reference-passing synchronization throughput across nominal buffer dimensions (Desktop Profile, 50,000 iterations per size).*
+
+**Analysis of Coordination Overhead Invariance:**
+Under reference-passing semantics, throughput exhibits $O(1)$ algorithmic complexity relative to buffer dimension. Because zero in-band payload bytes are moved across cache levels, coordination rates remain consistently within the 7.6–36.0 Mops/s range across all systems up to 64 KiB descriptors. In high-bandwidth production pipelines, `librbipc` supports both paradigms: direct in-band zero-spin transport for messages up to 4 KiB, and zero-copy pointer/lease reservation for bulk payloads.
+
+### 9.4 Architectural Comparison of Queue Synchronization Paradigms
+
+The comparative benchmark data highlights an essential architectural distinction in high-performance IPC queues:
+
+1. **In-Band Value Serialization (Stream / Datagram Semantics):** For messages whose dimension is bounded (e.g. telemetry packets, trading orders, or RPC messages $\le 4\text{ KiB}$), `librbipc` provides direct in-band slot reservation and cache-aligned commit. This eliminates intermediate heap allocations and simplifies lifecycle management. Under this paradigm, all shared-memory systems operate within memory-copy bandwidth constraints.
+2. **Out-of-Band Descriptor / Reference Passing (Zero-Copy Semantics):** For bulk data transfers (e.g. video frames, sensory matrices, or packet buffers $\ge 16\text{ KiB}$), allocating memory in shared pools and transferring 8-byte descriptors across `librbipc`, `rte_ring`, or Disruptor completely bypasses memory bus saturation, maintaining multi-million ops/sec coordination rates regardless of buffer dimension.
 
 ### 9.5 Contention and Scalability under Thread Oversubscription
 

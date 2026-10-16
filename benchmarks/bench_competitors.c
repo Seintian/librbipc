@@ -189,10 +189,10 @@ static void rte_dequeue_wait(rte_ring_t *r, uintptr_t *v) {
  * ====================================================================== */
 
 typedef struct {
-    alignas(CACHE_LINE_SIZE) atomic_llong prod_cursor;
-    alignas(CACHE_LINE_SIZE) atomic_llong prod_claim;
-    alignas(CACHE_LINE_SIZE) atomic_llong work_sequence;
-    alignas(CACHE_LINE_SIZE) atomic_llong cons_gating;
+    alignas(CACHE_LINE_SIZE) _Atomic int64_t prod_cursor;
+    alignas(CACHE_LINE_SIZE) _Atomic int64_t prod_claim;
+    alignas(CACHE_LINE_SIZE) _Atomic int64_t work_sequence;
+    alignas(CACHE_LINE_SIZE) _Atomic int64_t cons_gating;
     uint32_t capacity;
     uint32_t mask;
 } disruptor_ring_t;
@@ -349,14 +349,20 @@ static void print_table(result_t *arr, int n, const char *kind) {
  * SECTION 5: 1P-1C Throughput Benchmarks (Fork Model)
  * ====================================================================== */
 
-static result_t bench_rbipc_tput(size_t msgsz, uint64_t iters) {
+typedef enum {
+    TRANSFER_VALUE_COPY,
+    TRANSFER_REFERENCE_PASSING
+} transfer_semantic_t;
+
+static result_t bench_rbipc_tput(size_t msgsz, uint64_t iters, transfer_semantic_t mode) {
     result_t r = {};
     snprintf(r.name, sizeof(r.name), "librbipc");
     r.msgsz = msgsz; r.iters = iters;
 
     const char *shm = "/rbench_rbipc_tput";
     rbipc_ring_t *rp = NULL, *rc = NULL;
-    uint32_t slot = (uint32_t)(msgsz + 64);
+    uint32_t slot = (mode == TRANSFER_VALUE_COPY) ? (uint32_t)(msgsz + 64) : 64;
+    uint32_t req_sz = (mode == TRANSFER_VALUE_COPY) ? (uint32_t)msgsz : (uint32_t)sizeof(uintptr_t);
     rbipc_destroy(shm);
     if (rbipc_create(shm, RING_CAPACITY, slot, &rp) != RBIPC_OK ||
         rbipc_attach(shm, &rc) != RBIPC_OK) return r;
@@ -390,11 +396,15 @@ static result_t bench_rbipc_tput(size_t msgsz, uint64_t iters) {
         t0 = get_ns();
         for (uint64_t i = 0; i < iters; i++) {
             void *buf; uint64_t tk;
-            while (rbipc_reserve_write(rp, (uint32_t)msgsz, &buf, &tk) != RBIPC_OK) {
+            while (rbipc_reserve_write(rp, req_sz, &buf, &tk) != RBIPC_OK) {
                 __asm__ volatile("pause" ::: "memory");
             }
-            memcpy(buf, pay, msgsz);
-            rbipc_commit_write(rp, tk, (uint32_t)msgsz);
+            if (mode == TRANSFER_VALUE_COPY) {
+                memcpy(buf, pay, msgsz);
+            } else {
+                *(uintptr_t *)buf = (uintptr_t)(pay + (i % RING_CAPACITY));
+            }
+            rbipc_commit_write(rp, tk, req_sz);
         }
         char sig[4];
         ssize_t s = read(sync_pipe[0], sig, sizeof(sig));
@@ -414,7 +424,7 @@ static result_t bench_rbipc_tput(size_t msgsz, uint64_t iters) {
     return r;
 }
 
-static result_t bench_rte_tput(size_t msgsz, uint64_t iters) {
+static result_t bench_rte_tput(size_t msgsz, uint64_t iters, transfer_semantic_t mode) {
     result_t r = {};
     snprintf(r.name, sizeof(r.name), "rte_ring (DPDK alg)");
     r.msgsz = msgsz; r.iters = iters;
@@ -423,6 +433,8 @@ static result_t bench_rte_tput(size_t msgsz, uint64_t iters) {
     char *pool = mmap(NULL, pool_sz, PROT_READ|PROT_WRITE,
                       MAP_SHARED|MAP_ANONYMOUS, -1, 0);
     memset(pool, 0xBC, pool_sz);
+    char *pay = aligned_alloc(64, msgsz > 64 ? msgsz : 64);
+    memset(pay, 0xBC, msgsz);
     rte_ring_t *ring = rte_ring_alloc(RING_CAPACITY);
     int sync_pipe[2];
     assert(pipe(sync_pipe) == 0);
@@ -443,7 +455,11 @@ static result_t bench_rte_tput(size_t msgsz, uint64_t iters) {
         close(sync_pipe[1]);
         t0 = get_ns();
         for (uint64_t i = 0; i < iters; i++) {
-            rte_enqueue_wait(ring, (uintptr_t)(pool + (i % RING_CAPACITY) * msgsz));
+            char *slot = pool + (i % RING_CAPACITY) * msgsz;
+            if (mode == TRANSFER_VALUE_COPY) {
+                memcpy(slot, pay, msgsz);
+            }
+            rte_enqueue_wait(ring, (uintptr_t)slot);
         }
         char sig[4];
         ssize_t s = read(sync_pipe[0], sig, sizeof(sig));
@@ -455,13 +471,14 @@ static result_t bench_rte_tput(size_t msgsz, uint64_t iters) {
 
     rte_ring_free(ring);
     munmap(pool, pool_sz);
+    free(pay);
     r.elapsed_ns = t1 - t0;
     r.tput_ops   = (double)iters / ((double)r.elapsed_ns / 1e9);
     r.tput_mbs   = r.tput_ops * (double)msgsz / (1024.0 * 1024.0);
     return r;
 }
 
-static result_t bench_disruptor_tput(size_t msgsz, uint64_t iters) {
+static result_t bench_disruptor_tput(size_t msgsz, uint64_t iters, transfer_semantic_t mode) {
     result_t r = {};
     snprintf(r.name, sizeof(r.name), "LMAX Disruptor");
     r.msgsz = msgsz; r.iters = iters;
@@ -470,6 +487,8 @@ static result_t bench_disruptor_tput(size_t msgsz, uint64_t iters) {
     char *pool = mmap(NULL, pool_sz, PROT_READ|PROT_WRITE,
                       MAP_SHARED|MAP_ANONYMOUS, -1, 0);
     memset(pool, 0xAA, pool_sz);
+    char *pay = aligned_alloc(64, msgsz > 64 ? msgsz : 64);
+    memset(pay, 0xAA, msgsz);
     disruptor_ring_t *ring = disruptor_alloc(RING_CAPACITY);
     int sync_pipe[2];
     assert(pipe(sync_pipe) == 0);
@@ -492,8 +511,11 @@ static result_t bench_disruptor_tput(size_t msgsz, uint64_t iters) {
         close(sync_pipe[1]);
         t0 = get_ns();
         for (uint64_t i = 0; i < iters; i++) {
-            uintptr_t ptr = (uintptr_t)(pool + (i % RING_CAPACITY) * msgsz);
-            disruptor_publish_sp(ring, (int64_t)i, ptr);
+            char *slot = pool + (i % RING_CAPACITY) * msgsz;
+            if (mode == TRANSFER_VALUE_COPY) {
+                memcpy(slot, pay, msgsz);
+            }
+            disruptor_publish_sp(ring, (int64_t)i, (uintptr_t)slot);
         }
         char sig[4];
         ssize_t s = read(sync_pipe[0], sig, sizeof(sig));
@@ -505,6 +527,7 @@ static result_t bench_disruptor_tput(size_t msgsz, uint64_t iters) {
 
     disruptor_free(ring);
     munmap(pool, pool_sz);
+    free(pay);
     r.elapsed_ns = t1 - t0;
     r.tput_ops   = (double)iters / ((double)r.elapsed_ns / 1e9);
     r.tput_mbs   = r.tput_ops * (double)msgsz / (1024.0 * 1024.0);
@@ -1076,11 +1099,11 @@ int main(void) {
 
     result_t tput[5];
     printf("  [1/5] librbipc ...\n");
-    tput[0] = bench_rbipc_tput(64, bench_iters);
+    tput[0] = bench_rbipc_tput(64, bench_iters, TRANSFER_VALUE_COPY);
     printf("  [2/5] rte_ring (DPDK algorithm) ...\n");
-    tput[1] = bench_rte_tput(64, bench_iters);
+    tput[1] = bench_rte_tput(64, bench_iters, TRANSFER_VALUE_COPY);
     printf("  [3/5] LMAX Disruptor (WorkProcessor) ...\n");
-    tput[2] = bench_disruptor_tput(64, bench_iters);
+    tput[2] = bench_disruptor_tput(64, bench_iters, TRANSFER_VALUE_COPY);
     printf("  [4/5] POSIX mqueue ...\n");
     tput[3] = bench_mq_tput(64, bench_iters);
     printf("  [5/5] AF_UNIX SOCK_DGRAM ...\n");
@@ -1132,9 +1155,9 @@ int main(void) {
     }
 
     /* -----------------------------------------------------------------
-     * BENCH 3: Payload-Size Scaling
+     * BENCH 3A: Payload-Size Scaling (Value-Passing Semantics: In-Band Copy)
      * ----------------------------------------------------------------- */
-    snprintf(hdr_buf, sizeof(hdr_buf), "BENCH 3: Payload-Size Scaling -- %lu Iterations per Size", (unsigned long)payload_iters);
+    snprintf(hdr_buf, sizeof(hdr_buf), "BENCH 3A: Payload-Size Scaling (Value-Passing Semantics) -- %lu Iterations per Size", (unsigned long)payload_iters);
     print_hdr(hdr_buf);
 
     printf("\n  %-8s  %s%16s%s  %16s  %16s  %16s  %16s\n",
@@ -1144,28 +1167,72 @@ int main(void) {
            "--------", "----------------", "----------------", "----------------",
            "----------------", "----------------");
 
-    if (json_fp) fprintf(json_fp, "  \"payload_scaling\": [\n");
+    result_t val_rb[NPSIZES], val_rt[NPSIZES], val_ds[NPSIZES], val_mq[NPSIZES], val_ud[NPSIZES];
 
     for (int s = 0; s < NPSIZES; s++) {
         size_t sz = psizes[s].sz;
-        result_t rb = bench_rbipc_tput(sz, payload_iters);
-        result_t rt = bench_rte_tput(sz, payload_iters);
-        result_t ds = bench_disruptor_tput(sz, payload_iters);
-        result_t mq = (sz <= 8192) ? bench_mq_tput(sz, payload_iters) : (result_t){.name="POSIX mqueue", .tput_ops=0};
-        result_t ud = bench_uds_tput(sz, payload_iters);
+        val_rb[s] = bench_rbipc_tput(sz, payload_iters, TRANSFER_VALUE_COPY);
+        val_rt[s] = bench_rte_tput(sz, payload_iters, TRANSFER_VALUE_COPY);
+        val_ds[s] = bench_disruptor_tput(sz, payload_iters, TRANSFER_VALUE_COPY);
+        val_mq[s] = (sz <= 8192) ? bench_mq_tput(sz, payload_iters) : (result_t){.name="POSIX mqueue", .tput_ops=0};
+        val_ud[s] = bench_uds_tput(sz, payload_iters);
 
         printf("  %-8s  %15.2fM  %15.2fM  %15.2fM  %15.2fM  %15.2fM\n",
                psizes[s].label,
-               rb.tput_ops / 1e6, rt.tput_ops / 1e6, ds.tput_ops / 1e6,
-               mq.tput_ops / 1e6, ud.tput_ops / 1e6);
+               val_rb[s].tput_ops / 1e6, val_rt[s].tput_ops / 1e6, val_ds[s].tput_ops / 1e6,
+               val_mq[s].tput_ops / 1e6, val_ud[s].tput_ops / 1e6);
+    }
 
-        if (json_fp) {
+    /* -----------------------------------------------------------------
+     * BENCH 3B: Payload-Size Scaling (Reference-Passing Semantics: Zero-Copy)
+     * ----------------------------------------------------------------- */
+    snprintf(hdr_buf, sizeof(hdr_buf), "BENCH 3B: Payload-Size Scaling (Reference-Passing Semantics) -- %lu Iterations per Size", (unsigned long)payload_iters);
+    print_hdr(hdr_buf);
+
+    printf("\n  %-8s  %s%16s%s  %16s  %16s\n",
+           "Size", COL_BOLD, "librbipc", COL_RESET,
+           "rte_ring", "Disruptor");
+    printf("  %-8s  %16s  %16s  %16s\n",
+           "--------", "----------------", "----------------", "----------------");
+
+    result_t ref_rb[NPSIZES], ref_rt[NPSIZES], ref_ds[NPSIZES];
+
+    for (int s = 0; s < NPSIZES; s++) {
+        size_t sz = psizes[s].sz;
+        ref_rb[s] = bench_rbipc_tput(sz, payload_iters, TRANSFER_REFERENCE_PASSING);
+        ref_rt[s] = bench_rte_tput(sz, payload_iters, TRANSFER_REFERENCE_PASSING);
+        ref_ds[s] = bench_disruptor_tput(sz, payload_iters, TRANSFER_REFERENCE_PASSING);
+
+        printf("  %-8s  %15.2fM  %15.2fM  %15.2fM\n",
+               psizes[s].label,
+               ref_rb[s].tput_ops / 1e6, ref_rt[s].tput_ops / 1e6, ref_ds[s].tput_ops / 1e6);
+    }
+
+    if (json_fp) {
+        fprintf(json_fp, "  \"payload_scaling_value\": [\n");
+        for (int s = 0; s < NPSIZES; s++) {
             fprintf(json_fp, "    {\"size\": %zu, \"librbipc\": %.2f, \"rte_ring\": %.2f, \"disruptor\": %.2f, \"mqueue\": %.2f, \"af_unix\": %.2f}%s\n",
-                    sz, rb.tput_ops, rt.tput_ops, ds.tput_ops, mq.tput_ops, ud.tput_ops,
+                    psizes[s].sz, val_rb[s].tput_ops, val_rt[s].tput_ops, val_ds[s].tput_ops, val_mq[s].tput_ops, val_ud[s].tput_ops,
                     (s == NPSIZES - 1 ? "" : ","));
         }
+        fprintf(json_fp, "  ],\n");
+
+        fprintf(json_fp, "  \"payload_scaling_reference\": [\n");
+        for (int s = 0; s < NPSIZES; s++) {
+            fprintf(json_fp, "    {\"size\": %zu, \"librbipc\": %.2f, \"rte_ring\": %.2f, \"disruptor\": %.2f}%s\n",
+                    psizes[s].sz, ref_rb[s].tput_ops, ref_rt[s].tput_ops, ref_ds[s].tput_ops,
+                    (s == NPSIZES - 1 ? "" : ","));
+        }
+        fprintf(json_fp, "  ],\n");
+
+        fprintf(json_fp, "  \"payload_scaling\": [\n");
+        for (int s = 0; s < NPSIZES; s++) {
+            fprintf(json_fp, "    {\"size\": %zu, \"librbipc\": %.2f, \"rte_ring\": %.2f, \"disruptor\": %.2f, \"mqueue\": %.2f, \"af_unix\": %.2f}%s\n",
+                    psizes[s].sz, val_rb[s].tput_ops, val_rt[s].tput_ops, val_ds[s].tput_ops, val_mq[s].tput_ops, val_ud[s].tput_ops,
+                    (s == NPSIZES - 1 ? "" : ","));
+        }
+        fprintf(json_fp, "  ],\n");
     }
-    if (json_fp) fprintf(json_fp, "  ],\n");
 
     /* -----------------------------------------------------------------
      * BENCH 4: Idle CPU Consumption (400ms sampling window)
