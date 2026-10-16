@@ -2,6 +2,15 @@ CompileFlags:
   CompilationDatabase: .
   Add:
     - -Iinclude
+    - -Isrc
+    - -Isrc/core
+    - -Isrc/memory
+    - -Isrc/sync
+    - -Isrc/io
+    - -Isrc/ipc
+    - -Isrc/audit
+    - -Isrc/platform
+    - -Ibenchmarks
     - -D_GNU_SOURCE
     - -Wall
     - -Wextra
@@ -28,4 +37,3 @@ CompileFlags:
   Add:
     - -xc
     - -std=c23
-

@@ -232,6 +232,33 @@ int main(int argc, char **argv) {
     printf("    Elapsed Time : %.4f seconds (%.2f ns/op)\n", (double)elapsed_ns / 1e9, ns_per_op);
     printf("    Throughput   : %.2f Mops/s (%.2f ops/sec)\n", ops / 1e6, ops);
     printf("======================================================================\n");
+    /* Export JSON Telemetry */
+    bench_hardware_info_t hw_info;
+    bench_get_hardware_info(&hw_info);
+    char json_path[256];
+    bench_get_result_path(json_path, sizeof(json_path), "isolated_benchmark.json");
+    FILE *fp = fopen(json_path, "w");
+    if (fp) {
+        fprintf(fp, "{\n");
+        fprintf(fp, "  \"metadata\": {\n");
+        fprintf(fp, "    \"cpu_model\": \"%s\",\n", hw_info.cpu_model);
+        fprintf(fp, "    \"kernel\": \"%s\",\n", hw_info.kernel);
+        fprintf(fp, "    \"profile\": \"%s\",\n", hw_info.profile_name);
+        fprintf(fp, "    \"mode\": \"%s\",\n", mode_str);
+        fprintf(fp, "    \"policy\": \"%s\",\n", pol_str);
+        fprintf(fp, "    \"model\": \"%s\",\n", use_fork ? "Multi-Process (fork)" : "Multi-Thread (pthread)");
+        fprintf(fp, "    \"iterations\": %lu\n", (unsigned long)iters);
+        fprintf(fp, "  },\n");
+        fprintf(fp, "  \"result\": {\n");
+        fprintf(fp, "    \"elapsed_seconds\": %.6f,\n", (double)elapsed_ns / 1e9);
+        fprintf(fp, "    \"latency_ns_per_op\": %.2f,\n", ns_per_op);
+        fprintf(fp, "    \"throughput_mops\": %.2f,\n", ops / 1e6);
+        fprintf(fp, "    \"throughput_ops_sec\": %.2f\n", ops);
+        fprintf(fp, "  }\n");
+        fprintf(fp, "}\n");
+        fclose(fp);
+        printf("[INFO] JSON output saved to %s\n", json_path);
+    }
 
     rbipc_detach(rc);
     rbipc_detach(rp);

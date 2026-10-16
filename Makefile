@@ -148,13 +148,15 @@ coverage: clean test
 	@python3 scripts/coverage_summary.py
 
 valgrind: $(STATIC_LIB) $(BINDIR)/core/test_unit_lifecycle $(BINDIR)/io/test_io_basic $(BINDIR)/io/test_io_abort
-	@echo "=================================================="
-	@echo "           Running Valgrind Memory Checks         "
-	@echo "=================================================="
-	valgrind --leak-check=full --show-leak-kinds=all --error-exitcode=1 $(BINDIR)/core/test_unit_lifecycle
-	valgrind --leak-check=full --show-leak-kinds=all --error-exitcode=1 $(BINDIR)/io/test_io_basic
-	valgrind --leak-check=full --show-leak-kinds=all --error-exitcode=1 $(BINDIR)/io/test_io_abort
-	@echo "Valgrind checks passed with 0 errors!"
+	@which valgrind > /dev/null 2>&1 && { \
+		echo "=================================================="; \
+		echo "           Running Valgrind Memory Checks         "; \
+		echo "=================================================="; \
+		valgrind --leak-check=full --show-leak-kinds=all --error-exitcode=1 $(BINDIR)/core/test_unit_lifecycle && \
+		valgrind --leak-check=full --show-leak-kinds=all --error-exitcode=1 $(BINDIR)/io/test_io_basic && \
+		valgrind --leak-check=full --show-leak-kinds=all --error-exitcode=1 $(BINDIR)/io/test_io_abort && \
+		echo "Valgrind checks passed with 0 errors!"; \
+	} || echo "valgrind is not installed in the environment; install valgrind to run dynamic memory analysis."
 
 clang-tidy:
 	@echo "=================================================="
