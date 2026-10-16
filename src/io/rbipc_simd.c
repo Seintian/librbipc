@@ -2,7 +2,7 @@
  * @file rbipc_simd.c
  * @brief Implementation of SIMD-accelerated slot sequence scanning.
  *
- * @details Implements AVX2 and NEON vector comparison pipelines for scanning
+ * @details Implements AVX-512, AVX2, and NEON vector comparison pipelines for scanning
  * contiguous sequences of slot descriptors to detect vacancy and read
  * readiness, with portable scalar fallback.
  *
@@ -52,6 +52,51 @@ static uint32_t rbipc_simd_scan_scalar(const rbipc_slot_t *slots, uint32_t mask,
 
 #if defined(__x86_64__) || defined(_M_X64)
 #if defined(__GNUC__) || defined(__clang__)
+__attribute__((target("avx512f")))
+static uint32_t rbipc_simd_scan_avx512(const rbipc_slot_t *slots, uint32_t mask,
+                                       uint64_t t, uint32_t count,
+                                       uint64_t offset) {
+  uint32_t avail = 0;
+  long long start_t = (long long)t + (long long)offset;
+  __m512i vtgt = _mm512_set_epi64(start_t + 7, start_t + 6, start_t + 5, start_t + 4,
+                                  start_t + 3, start_t + 2, start_t + 1, start_t);
+  const __m512i vstep = _mm512_set1_epi64(8);
+
+  while (avail + 8 <= count) {
+    uint64_t base_t = t + avail;
+    uint32_t idx = (uint32_t)(base_t & mask);
+    uint64_t s[8];
+    if (idx + 8 <= mask + 1) {
+      for (int k = 0; k < 8; ++k) {
+        s[k] = atomic_load_explicit(&slots[idx + k].sequence, memory_order_acquire);
+      }
+    } else {
+      for (int k = 0; k < 8; ++k) {
+        s[k] = atomic_load_explicit(&slots[(base_t + (uint64_t)k) & mask].sequence,
+                                    memory_order_acquire);
+      }
+    }
+
+    __m512i vseq = _mm512_set_epi64((long long)s[7], (long long)s[6], (long long)s[5],
+                                    (long long)s[4], (long long)s[3], (long long)s[2],
+                                    (long long)s[1], (long long)s[0]);
+    __mmask8 match_mask = _mm512_cmpeq_epi64_mask(vseq, vtgt);
+
+    if (match_mask == 0xFFU) {
+      avail += 8;
+      vtgt = _mm512_add_epi64(vtgt, vstep);
+    } else {
+      uint32_t mismatch_bits = ((uint32_t)(~match_mask)) & 0xFFU;
+      return avail + (uint32_t)__builtin_ctz(mismatch_bits);
+    }
+  }
+
+  if (avail < count) {
+    avail += rbipc_simd_scan_scalar(slots, mask, t + avail, count - avail, offset);
+  }
+  return avail;
+}
+
 __attribute__((target("avx2")))
 #endif
 /**
@@ -68,6 +113,10 @@ static uint32_t rbipc_simd_scan_avx2(const rbipc_slot_t *slots, uint32_t mask,
                                      uint64_t t, uint32_t count,
                                      uint64_t offset) {
   uint32_t avail = 0;
+  long long start_t = (long long)t + (long long)offset;
+  __m256i vtgt = _mm256_set_epi64x(start_t + 3, start_t + 2, start_t + 1, start_t);
+  const __m256i vstep = _mm256_set1_epi64x(4);
+
   while (avail + 4 <= count) {
     uint64_t base_t = t + avail;
     uint32_t idx = (uint32_t)(base_t & mask);
@@ -90,21 +139,15 @@ static uint32_t rbipc_simd_scan_avx2(const rbipc_slot_t *slots, uint32_t mask,
 
     __m256i vseq = _mm256_set_epi64x((long long)s3, (long long)s2,
                                      (long long)s1, (long long)s0);
-    long long t0 = (long long)base_t + (long long)offset;
-    __m256i vtgt = _mm256_set_epi64x(t0 + 3, t0 + 2, t0 + 1, t0);
     __m256i cmp = _mm256_cmpeq_epi64(vseq, vtgt);
     uint32_t match_mask = (uint32_t)_mm256_movemask_pd((__m256d)cmp);
 
     if (match_mask == 0x0FU) {
       avail += 4;
+      vtgt = _mm256_add_epi64(vtgt, vstep);
     } else {
-      if ((match_mask & 0x01U) == 0U)
-        return avail;
-      if ((match_mask & 0x02U) == 0U)
-        return avail + 1;
-      if ((match_mask & 0x04U) == 0U)
-        return avail + 2;
-      return avail + 3;
+      uint32_t mismatch_bits = (~match_mask) & 0x0FU;
+      return avail + (uint32_t)__builtin_ctz(mismatch_bits);
     }
   }
 
@@ -162,6 +205,9 @@ RBIPC_INLINE uint32_t rbipc_simd_scan_slots(const rbipc_slot_t *slots,
     return 0;
 #if defined(__x86_64__) || defined(_M_X64)
 #if defined(__GNUC__) || defined(__clang__)
+  if (__builtin_cpu_supports("avx512f") && count >= 8) {
+    return rbipc_simd_scan_avx512(slots, mask, t, count, offset);
+  }
   if (__builtin_cpu_supports("avx2") && count >= 4) {
     return rbipc_simd_scan_avx2(slots, mask, t, count, offset);
   }

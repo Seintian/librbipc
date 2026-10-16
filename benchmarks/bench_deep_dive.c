@@ -15,6 +15,7 @@
 
 #include "rbipc.h"
 #include "rbipc_internal.h"
+#include "rbipc_simd.h"
 #include "bench_common.h"
 #include <stdio.h>
 #include <stdlib.h>
@@ -380,45 +381,12 @@ static void run_simd_scan_bench(int iterations, simd_scan_bench_t *out) {
     }
     uint64_t t1 = get_time_ns();
 
-    /* 2. Vectorized AVX2 scan measurement */
+    /* 2. Vectorized SIMD scan measurement */
     uint64_t t2 = get_time_ns();
     uint64_t simd_total = 0;
     for (int it = 0; it < iterations; ++it) {
         uint64_t t = (uint64_t)(it % 512);
-        uint32_t avail = 0;
-#if defined(__AVX2__)
-        while (avail + 4 <= batch_size) {
-            uint64_t base_t = t + avail;
-            uint32_t idx = (uint32_t)(base_t & mask);
-            uint64_t s0 = atomic_load_explicit(&slots[(idx + 0) & mask].sequence, memory_order_acquire);
-            uint64_t s1 = atomic_load_explicit(&slots[(idx + 1) & mask].sequence, memory_order_acquire);
-            uint64_t s2 = atomic_load_explicit(&slots[(idx + 2) & mask].sequence, memory_order_acquire);
-            uint64_t s3 = atomic_load_explicit(&slots[(idx + 3) & mask].sequence, memory_order_acquire);
-
-            __m256i vseq = _mm256_set_epi64x((long long)s3, (long long)s2, (long long)s1, (long long)s0);
-            __m256i vtgt = _mm256_set_epi64x((long long)(base_t + 4), (long long)(base_t + 3),
-                                             (long long)(base_t + 2), (long long)(base_t + 1));
-            __m256i cmp = _mm256_cmpeq_epi64(vseq, vtgt);
-            int match = _mm256_movemask_pd((__m256d)cmp);
-            if (match == 0x0F) {
-                avail += 4;
-            } else {
-                if ((match & 0x01) == 0) break;
-                if ((match & 0x02) == 0) { avail += 1; break; }
-                if ((match & 0x04) == 0) { avail += 2; break; }
-                avail += 3;
-                break;
-            }
-        }
-#endif
-        while (avail < batch_size) {
-            uint64_t seq = atomic_load_explicit(&slots[(t + avail) & mask].sequence, memory_order_acquire);
-            if (seq == t + avail + 1) {
-                avail++;
-            } else {
-                break;
-            }
-        }
+        uint32_t avail = rbipc_simd_scan_ready_slots(slots, mask, t, batch_size);
         simd_total += avail;
     }
     uint64_t t3 = get_time_ns();
