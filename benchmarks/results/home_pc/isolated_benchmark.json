@@ -1,0 +1,17 @@
+{
+  "metadata": {
+    "cpu_model": "Intel(R) Core(TM) i5-10400F CPU @ 2.90GHz",
+    "kernel": "Linux 6.18.33.2-microsoft-standard-WSL2 x86_64",
+    "profile": "home_pc",
+    "mode": "8-Byte Pointer / Scalar Exchange",
+    "policy": "ADAPTIVE",
+    "model": "Multi-Thread (pthread)",
+    "iterations": 1000000
+  },
+  "result": {
+    "elapsed_seconds": 0.076607,
+    "latency_ns_per_op": 76.61,
+    "throughput_mops": 13.05,
+    "throughput_ops_sec": 13053705.38
+  }
+}

@@ -118,33 +118,6 @@ librbipc/
 | `rbipc_set_wait_policy` / `rbipc_get_wait_policy` | Configure `RBIPC_WAIT_ADAPTIVE` (default two-phase bounded micro-spin + 5 µs C0.1 hardware wait before futex sleep), `RBIPC_WAIT_ZERO_SPIN` (immediate passive futex wait), or `RBIPC_WAIT_HW_MONITOR` (WAITPKG `UMWAIT` C0.2 / ARM64 `WFET` clock-gated hardware wait). |
 | `rbipc_get_fd` / `rbipc_get_stats` / `rbipc_get_slot_stats` | Retrieve underlying shared-memory descriptor, query live telemetry statistics (tickets, capacity, active roles, disaggregated waiters, backlog, cumulative error/recovery counters), or inspect slot state histogram. |
 
-### 6. Zero-Cost Telemetry Monitor (`bin/rbipc_stat`)
-
-`librbipc` includes a dedicated non-intrusive CLI telemetry tool that attaches as `RBIPC_ROLE_MONITOR` to any active shared memory ring buffer without altering participant counts or slowing down the fast path:
-
-```bash
-# Automated high-contention live telemetry demonstration
-make monitor
-
-# Live continuous terminal dashboard (auto-spawns workload if ring does not exist)
-make monitor-live RING=/my_ring
-
-# Direct CLI usage: terminal dashboard mode
-./bin/rbipc_stat /my_ring
-
-# Live continuous monitor (e.g. 0.5s refresh)
-./bin/rbipc_stat /my_ring --watch 0.5
-
-# JSON snapshot output
-./bin/rbipc_stat /my_ring --json
-
-# Prometheus / OpenMetrics scraping format
-./bin/rbipc_stat /my_ring --prometheus
-
-# Proactively audit and revoke expired consumer leases
-./bin/rbipc_stat /my_ring --audit
-```
-
 ### 2. Zero-Copy Single-Slot & Convenience Copy I/O (`include/rbipc.h`)
 
 | Function | Description |
@@ -197,6 +170,33 @@ Every major architectural behavior in `librbipc` is directly selectable through 
 | **Consumer Lease** (`lease_timeout_ns`) | `rbipc_set_lease_timeout()` | `0` (disabled) or nanosecond timeout | Sets maximum consumer lease duration, allowing `rbipc_revoke_expired_leases()` to reclaim stalled slots. |
 | **PubSub Replay Mode** (`from_oldest`) | `rbipc_sub_create_ex()` | `true` (oldest retained), `false` (live head) | Toggles between historical ring buffer replay mode and zero-latency real-time publication streaming. |
 | **Capability Passing** (`socket_fd`, `role_flags`) | `rbipc_send_fd()`, `rbipc_recv_fd_ex()` | UNIX domain socket fd, role mask | Passes anonymous `memfd` rings across processes via `SCM_RIGHTS` with granular capabilities and no `/dev/shm` footprint. |
+
+### 6. Zero-Cost Telemetry Monitor (`bin/rbipc_stat`)
+
+`librbipc` includes a dedicated non-intrusive CLI telemetry tool that attaches as `RBIPC_ROLE_MONITOR` to any active shared memory ring buffer without altering participant counts or slowing down the fast path:
+
+```bash
+# Automated high-contention live telemetry demonstration
+make monitor
+
+# Live continuous terminal dashboard (auto-spawns workload if ring does not exist)
+make monitor-live RING=/my_ring
+
+# Direct CLI usage: terminal dashboard mode
+./bin/rbipc_stat /my_ring
+
+# Live continuous monitor (e.g. 0.5s refresh)
+./bin/rbipc_stat /my_ring --watch 0.5
+
+# JSON snapshot output
+./bin/rbipc_stat /my_ring --json
+
+# Prometheus / OpenMetrics scraping format
+./bin/rbipc_stat /my_ring --prometheus
+
+# Proactively audit and revoke expired consumer leases
+./bin/rbipc_stat /my_ring --audit
+```
 
 ---
 

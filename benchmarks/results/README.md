@@ -14,7 +14,9 @@ benchmarks/results/
 │   ├── zero_spin_optimized.json       # v2.0-final SIMD & batching optimized
 │   ├── deep_dive_features.json        # Evaluation of adaptive wait, streaming stores, pubsub, reactor
 │   ├── idle_strategies_benchmark.json # 10 DPDK, Disruptor, and librbipc wait strategies
-│   └── competitors_benchmark.json     # Comparative benchmarks vs DPDK, Disruptor, mqueue, AF_UNIX
+│   ├── competitors_benchmark.json     # Comparative benchmarks vs DPDK, Disruptor, mqueue, AF_UNIX
+│   ├── bench_crc32c.json              # Hardware SSE4.2 vs Table Castagnoli CRC32C micro-benchmark
+│   └── isolated_benchmark.json        # Standalone isolated pointer/copy/batch profiling harness
 ├── laptop/                            # Datasets measured on Mobile/Laptop Hardware Profile (Plugged in / Performance)
 │   ├── deep_dive_features.json        # Micro-architectural feature evaluation on laptop
 │   ├── idle_strategies_benchmark.json # Idle wait strategy evaluation on laptop
@@ -25,7 +27,7 @@ benchmarks/results/
 │   ├── idle_strategies_benchmark.json # Idle wait strategy evaluation under power-save throttling
 │   ├── zero_spin_optimized.json       # Streaming, ping-pong, batch, and MPMC under power-save throttling
 │   └── competitors_benchmark.json     # 5-system comparative benchmarks under power-save throttling
-└── (5 Benchmark Suites)               # bench_suite, bench_competitors, bench_deep_dive, bench_idle_strategies, bench_librbipc_isolated
+└── (6 Benchmark Suites)               # bench_suite, bench_competitors, bench_deep_dive, bench_idle_strategies, bench_librbipc_isolated, bench_crc32c
 ```
 
 *Note:* Backward-compatibility symbolic links are maintained at `benchmarks/results/*.json` pointing to the canonical `home_pc/` reference datasets.
