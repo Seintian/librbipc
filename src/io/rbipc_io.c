@@ -384,6 +384,10 @@ int rbipc_reserve_write_timeout(rbipc_ring_t *RBIPC_RESTRICT ring, uint32_t len,
         return rc;
       }
     } else {
+      if (sync_state.has_deadline &&
+          RBIPC_UNLIKELY(rbipc_clock_monotonic_ns() >= sync_state.deadline_ns)) {
+        return (timeout_ns == 0) ? RBIPC_ERR_FULL : RBIPC_ERR_TIMEOUT;
+      }
       t = atomic_load_explicit(&hdr->write_ticket, memory_order_relaxed);
       rbipc_cpu_pause();
     }
@@ -650,6 +654,9 @@ int rbipc_read_timeout(rbipc_ring_t *RBIPC_RESTRICT ring,
   uint64_t ticket = 0;
   int rc = rbipc_read_acquire_timeout(ring, timeout_ns, &slot_buf, &actual_len, &ticket);
   if (RBIPC_UNLIKELY(rc != RBIPC_OK)) {
+    if (rc == RBIPC_ERR_POISONED) {
+      (void)rbipc_read_release(ring, ticket);
+    }
     return rc;
   }
 

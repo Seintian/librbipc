@@ -188,6 +188,11 @@ int rbipc_reserve_write_batch_timeout(rbipc_ring_t *RBIPC_RESTRICT ring,
         *out_reserved = avail;
         return RBIPC_OK;
       }
+      if (sync_state.has_deadline &&
+          RBIPC_UNLIKELY(rbipc_clock_monotonic_ns() >= sync_state.deadline_ns)) {
+        return (timeout_ns == 0) ? RBIPC_ERR_FULL : RBIPC_ERR_TIMEOUT;
+      }
+      rbipc_cpu_pause();
     } else {
       if (timeout_ns == 0) {
         return RBIPC_ERR_FULL;
@@ -299,6 +304,11 @@ int rbipc_read_acquire_batch_timeout(rbipc_ring_t *RBIPC_RESTRICT ring,
         *out_acquired = avail;
         return RBIPC_OK;
       }
+      if (sync_state.has_deadline &&
+          RBIPC_UNLIKELY(rbipc_clock_monotonic_ns() >= sync_state.deadline_ns)) {
+        return (timeout_ns == 0) ? RBIPC_ERR_EMPTY : RBIPC_ERR_TIMEOUT;
+      }
+      rbipc_cpu_pause();
     } else {
       if (RBIPC_UNLIKELY(rbipc_ring_is_drained_on_shutdown(hdr, t))) {
         return RBIPC_ERR_SHUTDOWN;

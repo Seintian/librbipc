@@ -111,6 +111,49 @@ int main(void) {
     assert(waiter.ticket == ticket3);
     rbipc_read_release(ring, waiter.ticket);
 
+    /* 5. Convenience read (rbipc_read) encountering aborted write & wrap-around recycling */
+    rbipc_ring_t *wrap_ring = NULL;
+    assert(rbipc_create(NULL, 4, 64, &wrap_ring) == RBIPC_OK);
+
+    /* Write slot 0 */
+    assert(rbipc_write(wrap_ring, "M0", 3) == RBIPC_OK);
+    /* Write slot 1 then abort */
+    uint64_t abort_t = 0;
+    void *abort_buf = NULL;
+    assert(rbipc_reserve_write(wrap_ring, 32, &abort_buf, &abort_t) == RBIPC_OK);
+    assert(rbipc_abort_write(wrap_ring, abort_t) == RBIPC_OK);
+    /* Write slot 2 */
+    assert(rbipc_write(wrap_ring, "M2", 3) == RBIPC_OK);
+
+    /* Read slot 0 via rbipc_read */
+    char r_msg[64];
+    uint32_t r_len2 = 0;
+    assert(rbipc_read(wrap_ring, r_msg, sizeof(r_msg), &r_len2) == RBIPC_OK);
+    assert(strcmp(r_msg, "M0") == 0);
+
+    /* Read slot 1 via rbipc_read: must return RBIPC_ERR_POISONED and auto-release */
+    assert(rbipc_read(wrap_ring, r_msg, sizeof(r_msg), &r_len2) == RBIPC_ERR_POISONED);
+
+    /* Read slot 2 via rbipc_read */
+    assert(rbipc_read(wrap_ring, r_msg, sizeof(r_msg), &r_len2) == RBIPC_OK);
+    assert(strcmp(r_msg, "M2") == 0);
+
+    /* Now wrap around full capacity (cap=4): write slots 3, 4, 5.
+     * Slot 5 maps to slot index 1 (the aborted slot).
+     * If rbipc_read did NOT release the poisoned slot, writing slot 5 would deadlock! */
+    assert(rbipc_write(wrap_ring, "M3", 3) == RBIPC_OK);
+    assert(rbipc_write(wrap_ring, "M4", 3) == RBIPC_OK);
+    assert(rbipc_write(wrap_ring, "M5_RECYCLED", 12) == RBIPC_OK);
+
+    assert(rbipc_read(wrap_ring, r_msg, sizeof(r_msg), &r_len2) == RBIPC_OK);
+    assert(strcmp(r_msg, "M3") == 0);
+    assert(rbipc_read(wrap_ring, r_msg, sizeof(r_msg), &r_len2) == RBIPC_OK);
+    assert(strcmp(r_msg, "M4") == 0);
+    assert(rbipc_read(wrap_ring, r_msg, sizeof(r_msg), &r_len2) == RBIPC_OK);
+    assert(strcmp(r_msg, "M5_RECYCLED") == 0);
+
+    rbipc_detach(wrap_ring);
+
     rbipc_detach(ring);
     printf("[test_io_abort] All tests passed!\n");
     return 0;
