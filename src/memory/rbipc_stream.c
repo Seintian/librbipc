@@ -27,7 +27,19 @@ __attribute__((target("avx2")))
 static void rbipc_stream_copy_avx2_blocks(uint8_t *RBIPC_RESTRICT d,
                                           const uint8_t *RBIPC_RESTRICT s,
                                           size_t blocks) {
-  for (size_t i = 0; i < blocks; ++i) {
+  size_t i = 0;
+  /* Unroll by 4 (128 bytes = 2 full 64-byte write-combining cache lines) */
+  for (; i + 4 <= blocks; i += 4) {
+    __m256i v0 = _mm256_loadu_si256((const __m256i *)(s + i * 32));
+    __m256i v1 = _mm256_loadu_si256((const __m256i *)(s + i * 32 + 32));
+    __m256i v2 = _mm256_loadu_si256((const __m256i *)(s + i * 32 + 64));
+    __m256i v3 = _mm256_loadu_si256((const __m256i *)(s + i * 32 + 96));
+    _mm256_stream_si256((__m256i *)(d + i * 32), v0);
+    _mm256_stream_si256((__m256i *)(d + i * 32 + 32), v1);
+    _mm256_stream_si256((__m256i *)(d + i * 32 + 64), v2);
+    _mm256_stream_si256((__m256i *)(d + i * 32 + 96), v3);
+  }
+  for (; i < blocks; ++i) {
     __m256i val = _mm256_loadu_si256((const __m256i *)(s + i * 32));
     _mm256_stream_si256((__m256i *)(d + i * 32), val);
   }
@@ -36,9 +48,37 @@ static void rbipc_stream_copy_avx2_blocks(uint8_t *RBIPC_RESTRICT d,
 static void rbipc_stream_copy_sse2_blocks(uint8_t *RBIPC_RESTRICT d,
                                           const uint8_t *RBIPC_RESTRICT s,
                                           size_t blocks) {
-  for (size_t i = 0; i < blocks; ++i) {
+  size_t i = 0;
+  /* Unroll by 4 (64 bytes = 1 full 64-byte write-combining cache line) */
+  for (; i + 4 <= blocks; i += 4) {
+    __m128i v0 = _mm_loadu_si128((const __m128i *)(s + i * 16));
+    __m128i v1 = _mm_loadu_si128((const __m128i *)(s + i * 16 + 16));
+    __m128i v2 = _mm_loadu_si128((const __m128i *)(s + i * 16 + 32));
+    __m128i v3 = _mm_loadu_si128((const __m128i *)(s + i * 16 + 48));
+    _mm_stream_si128((__m128i *)(d + i * 16), v0);
+    _mm_stream_si128((__m128i *)(d + i * 16 + 16), v1);
+    _mm_stream_si128((__m128i *)(d + i * 16 + 32), v2);
+    _mm_stream_si128((__m128i *)(d + i * 16 + 48), v3);
+  }
+  for (; i < blocks; ++i) {
     __m128i val = _mm_loadu_si128((const __m128i *)(s + i * 16));
     _mm_stream_si128((__m128i *)(d + i * 16), val);
+  }
+}
+#elif defined(__aarch64__)
+
+static void rbipc_stream_copy_arm64_blocks(uint8_t *RBIPC_RESTRICT d,
+                                           const uint8_t *RBIPC_RESTRICT s,
+                                           size_t blocks) {
+  for (size_t i = 0; i < blocks; ++i) {
+    __asm__ __volatile__(
+        "ldp q0, q1, [%[src]]\n"
+        "ldp q2, q3, [%[src], #32]\n"
+        "stnp q0, q1, [%[dst]]\n"
+        "stnp q2, q3, [%[dst], #32]\n"
+        :
+        : [dst] "r"(d + i * 64), [src] "r"(s + i * 64)
+        : "q0", "q1", "q2", "q3", "memory");
   }
 }
 #endif
@@ -80,6 +120,25 @@ int rbipc_stream_copy(void *RBIPC_RESTRICT dst, const void *RBIPC_RESTRICT src,
       s += blocks * 16;
       size %= 16;
       _mm_sfence();
+    }
+  }
+#elif defined(__aarch64__)
+  if (size >= RBIPC_STREAM_THRESHOLD) {
+    uintptr_t d_addr = (uintptr_t)d;
+    size_t align_offset = (16U - (d_addr & 15U)) & 15U;
+    if (align_offset > 0 && align_offset <= size) {
+      memcpy(d, s, align_offset);
+      d += align_offset;
+      s += align_offset;
+      size -= align_offset;
+    }
+    if (size >= 64) {
+      size_t blocks = size / 64;
+      rbipc_stream_copy_arm64_blocks(d, s, blocks);
+      d += blocks * 64;
+      s += blocks * 64;
+      size %= 64;
+      __asm__ __volatile__("dmb ishst" ::: "memory");
     }
   }
 #endif

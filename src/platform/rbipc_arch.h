@@ -202,8 +202,8 @@ RBIPC_INLINE RBIPC_NODISCARD bool rbipc_cpu_has_wfxt(void) {
  * @details
  * - On x86/x86_64: Emits `_mm_pause()` (PAUSE instruction), de-pipelining
  * memory order violations.
- * - On AArch64/ARM: Emits `isb` (Instruction Synchronization Barrier) to flush
- * speculative fetch stages.
+ * - On AArch64/ARM: Emits `yield` (HINT #1) to signal a spin-wait state without
+ * pipeline-flushing overhead (unlike ISB).
  * - On RISC-V: Emits `pause` instruction.
  * - Fallback: Emits a compiler memory clobber barrier without hardware
  * instruction.
@@ -216,7 +216,7 @@ RBIPC_INLINE void rbipc_cpu_pause(void) {
     defined(_M_IX86)
   _mm_pause();
 #elif defined(__aarch64__) || defined(__arm__)
-  __asm__ __volatile__("isb\n" ::: "memory");
+  __asm__ __volatile__("yield\n" ::: "memory");
 #elif defined(__riscv)
   __asm__ __volatile__("pause\n" ::: "memory");
 #else

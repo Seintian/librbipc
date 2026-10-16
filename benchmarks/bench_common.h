@@ -185,7 +185,7 @@ static inline void bench_spin_pause(uint32_t *spin_count) {
 #if defined(__x86_64__) || defined(_M_X64)
         __asm__ volatile("pause" ::: "memory");
 #elif defined(__aarch64__)
-        __asm__ volatile("isb" ::: "memory");
+        __asm__ volatile("yield" ::: "memory");
 #else
         __asm__ volatile("" ::: "memory");
 #endif
