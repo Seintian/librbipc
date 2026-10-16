@@ -27,6 +27,23 @@ static void test_round_up_pow2(void) {
     /* Overflow cases */
     assert(rbipc_round_up_pow2_32(0x80000001U) == 0);
     assert(rbipc_round_up_pow2_32(UINT32_MAX) == 0);
+
+    /* 64-bit power of two tests */
+    assert(rbipc_round_up_pow2_64(0) == 1);
+    assert(rbipc_round_up_pow2_64(1) == 1);
+    assert(rbipc_round_up_pow2_64(2) == 2);
+    assert(rbipc_round_up_pow2_64(3) == 4);
+    assert(rbipc_round_up_pow2_64(4) == 4);
+    assert(rbipc_round_up_pow2_64(5) == 8);
+    assert(rbipc_round_up_pow2_64(0x80000001ULL) == 0x100000000ULL);
+    assert(rbipc_round_up_pow2_64(0x100000000ULL) == 0x100000000ULL);
+    assert(rbipc_round_up_pow2_64(0x100000001ULL) == 0x200000000ULL);
+    assert(rbipc_round_up_pow2_64(0x4000000000000000ULL) == 0x4000000000000000ULL);
+    assert(rbipc_round_up_pow2_64(0x7FFFFFFFFFFFFFFFULL) == 0x8000000000000000ULL);
+    assert(rbipc_round_up_pow2_64(0x8000000000000000ULL) == 0x8000000000000000ULL);
+    /* 64-bit overflow cases */
+    assert(rbipc_round_up_pow2_64(0x8000000000000001ULL) == 0);
+    assert(rbipc_round_up_pow2_64(UINT64_MAX) == 0);
 }
 
 static void test_align_up(void) {

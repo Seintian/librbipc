@@ -44,13 +44,22 @@
  * @retval 1 if @p v is 0.
  * @retval 0 if @p v exceeds @ref RBIPC_MAX_POW2_32 (overflow).
  */
+/**
+ * @def RBIPC_MAX_POW2_64
+ * @brief Maximum 64-bit power-of-two integer ceiling (2^63).
+ */
+#define RBIPC_MAX_POW2_64 0x8000000000000000ULL
+
 RBIPC_INLINE RBIPC_CONST RBIPC_NODISCARD uint32_t
 rbipc_round_up_pow2_32(uint32_t v) {
-  if (v == 0)
-    return 1;
+  if (v <= 1U)
+    return 1U;
   if (v > RBIPC_MAX_POW2_32)
     return 0; /* Overflow */
 
+#if defined(__GNUC__) || defined(__clang__)
+  return 1U << (32U - (uint32_t)__builtin_clz(v - 1U));
+#else
   v--;
   v |= v >> 1U;
   v |= v >> 2U;
@@ -58,6 +67,42 @@ rbipc_round_up_pow2_32(uint32_t v) {
   v |= v >> 8U;
   v |= v >> 16U;
   return v + 1;
+#endif
+}
+
+/**
+ * @brief Round an unsigned 64-bit integer up to the nearest power of two.
+ *
+ * @details Emits 64-bit hardware-accelerated count-leading-zeros instruction
+ * (LZCNT/BSR on x86-64, CLZ on ARM64) for single-cycle execution:
+ * result = 1 << (64 - clzll(v - 1)).
+ * Safely guards against integer overflow when @p v exceeds 2^63 (@ref RBIPC_MAX_POW2_64).
+ *
+ * @param[in] v Unsigned 64-bit integer input.
+ *
+ * @return Nearest power of two greater than or equal to @p v.
+ * @retval 1 if @p v is 0 or 1.
+ * @retval 0 if @p v exceeds @ref RBIPC_MAX_POW2_64 (overflow).
+ */
+RBIPC_INLINE RBIPC_CONST RBIPC_NODISCARD uint64_t
+rbipc_round_up_pow2_64(uint64_t v) {
+  if (v <= 1ULL)
+    return 1ULL;
+  if (v > RBIPC_MAX_POW2_64)
+    return 0; /* Overflow */
+
+#if defined(__GNUC__) || defined(__clang__)
+  return 1ULL << (64U - (uint32_t)__builtin_clzll(v - 1ULL));
+#else
+  v--;
+  v |= v >> 1ULL;
+  v |= v >> 2ULL;
+  v |= v >> 4ULL;
+  v |= v >> 8ULL;
+  v |= v >> 16ULL;
+  v |= v >> 32ULL;
+  return v + 1;
+#endif
 }
 
 /**
