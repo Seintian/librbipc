@@ -1416,9 +1416,7 @@ int rbipc_signal_shutdown(rbipc_ring_t *ring);
  *
  * @see rbipc_signal_shutdown
  */
-static inline int rbipc_shutdown(rbipc_ring_t *ring) {
-  return rbipc_signal_shutdown(ring);
-}
+RBIPC_API RBIPC_LEAF int rbipc_shutdown(rbipc_ring_t *ring);
 
 /**
  * @brief Enable asynchronous eventfd signaling on the ring buffer handle.

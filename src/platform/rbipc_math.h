@@ -28,6 +28,12 @@
 #define RBIPC_MAX_POW2_32 0x80000000U
 
 /**
+ * @def RBIPC_MAX_POW2_64
+ * @brief Maximum 64-bit power-of-two integer ceiling (2^63).
+ */
+#define RBIPC_MAX_POW2_64 0x8000000000000000ULL
+
+/**
  * @brief Round an unsigned 32-bit integer up to the nearest power of two.
  *
  * @details Emits branch-free bit-smearing operations:
@@ -44,12 +50,6 @@
  * @retval 1 if @p v is 0.
  * @retval 0 if @p v exceeds @ref RBIPC_MAX_POW2_32 (overflow).
  */
-/**
- * @def RBIPC_MAX_POW2_64
- * @brief Maximum 64-bit power-of-two integer ceiling (2^63).
- */
-#define RBIPC_MAX_POW2_64 0x8000000000000000ULL
-
 RBIPC_INLINE RBIPC_CONST RBIPC_NODISCARD uint32_t
 rbipc_round_up_pow2_32(uint32_t v) {
   if (v <= 1U)
@@ -229,4 +229,3 @@ RBIPC_INLINE RBIPC_CONST RBIPC_NODISCARD uint32_t rbipc_ctz_64(uint64_t v) {
 }
 
 #endif /* RBIPC_MATH_H */
-

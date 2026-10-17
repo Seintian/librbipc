@@ -467,6 +467,11 @@ int rbipc_signal_shutdown(rbipc_ring_t *ring) {
 }
 
 RBIPC_LEAF
+int rbipc_shutdown(rbipc_ring_t *ring) {
+  return rbipc_signal_shutdown(ring);
+}
+
+RBIPC_LEAF
 int rbipc_get_fd(const rbipc_ring_t *ring) { return ring ? ring->fd : -1; }
 
 RBIPC_LEAF
