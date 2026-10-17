@@ -65,6 +65,8 @@ static uint32_t rbipc_simd_scan_avx512(const rbipc_slot_t *slots, uint32_t mask,
   while (avail + 8 <= count) {
     uint64_t base_t = t + avail;
     uint32_t idx = (uint32_t)(base_t & mask);
+    RBIPC_PREFETCH(&slots[(base_t + 16) & mask].sequence, RBIPC_PREFETCH_READ,
+                   RBIPC_PREFETCH_LOCALITY_HIGH);
     uint64_t s[8];
     if (idx + 8 <= mask + 1) {
       for (int k = 0; k < 8; ++k) {
@@ -120,6 +122,8 @@ static uint32_t rbipc_simd_scan_avx2(const rbipc_slot_t *slots, uint32_t mask,
   while (avail + 4 <= count) {
     uint64_t base_t = t + avail;
     uint32_t idx = (uint32_t)(base_t & mask);
+    RBIPC_PREFETCH(&slots[(base_t + 8) & mask].sequence, RBIPC_PREFETCH_READ,
+                   RBIPC_PREFETCH_LOCALITY_HIGH);
     uint64_t s0, s1, s2, s3;
     if (idx + 4 <= mask + 1) {
       s0 = atomic_load_explicit(&slots[idx + 0].sequence, memory_order_acquire);
@@ -156,6 +160,59 @@ static uint32_t rbipc_simd_scan_avx2(const rbipc_slot_t *slots, uint32_t mask,
   }
   return avail;
 }
+
+#if defined(__GNUC__) || defined(__clang__)
+__attribute__((target("sse4.1")))
+#endif
+/**
+ * @brief 128-bit SSE4.1 accelerated slot sequence scanner (2 slots per vector).
+ */
+static uint32_t rbipc_simd_scan_sse41(const rbipc_slot_t *slots, uint32_t mask,
+                                      uint64_t t, uint32_t count,
+                                      uint64_t offset) {
+  uint32_t avail = 0;
+  long long start_t = (long long)t + (long long)offset;
+  __m128i vtgt = _mm_set_epi64x(start_t + 1, start_t);
+  const __m128i vstep = _mm_set1_epi64x(2);
+
+  while (avail + 2 <= count) {
+    uint64_t base_t = t + avail;
+    uint32_t idx = (uint32_t)(base_t & mask);
+    
+    /* Software prefetch lookahead for subsequent 2 slot cache lines */
+    RBIPC_PREFETCH(&slots[(base_t + 4) & mask].sequence, RBIPC_PREFETCH_READ,
+                   RBIPC_PREFETCH_LOCALITY_HIGH);
+
+    uint64_t s0, s1;
+    if (idx + 2 <= mask + 1) {
+      s0 = atomic_load_explicit(&slots[idx + 0].sequence, memory_order_acquire);
+      s1 = atomic_load_explicit(&slots[idx + 1].sequence, memory_order_acquire);
+    } else {
+      s0 = atomic_load_explicit(&slots[(base_t + 0) & mask].sequence,
+                                memory_order_acquire);
+      s1 = atomic_load_explicit(&slots[(base_t + 1) & mask].sequence,
+                                memory_order_acquire);
+    }
+
+    __m128i vseq = _mm_set_epi64x((long long)s1, (long long)s0);
+    __m128i cmp = _mm_cmpeq_epi64(vseq, vtgt);
+    uint32_t match_mask = (uint32_t)_mm_movemask_pd((__m128d)cmp);
+
+    if (match_mask == 0x03U) {
+      avail += 2;
+      vtgt = _mm_add_epi64(vtgt, vstep);
+    } else {
+      uint32_t mismatch_bits = (~match_mask) & 0x03U;
+      return avail + (uint32_t)__builtin_ctz(mismatch_bits);
+    }
+  }
+
+  if (avail < count) {
+    avail += rbipc_simd_scan_scalar(slots, mask, t + avail, count - avail, offset);
+  }
+  return avail;
+}
+
 #elif defined(__aarch64__)
 /**
  * @brief 128-bit ARM NEON accelerated slot sequence scanner.
@@ -210,6 +267,9 @@ RBIPC_INLINE uint32_t rbipc_simd_scan_slots(const rbipc_slot_t *slots,
   }
   if (__builtin_cpu_supports("avx2") && count >= 4) {
     return rbipc_simd_scan_avx2(slots, mask, t, count, offset);
+  }
+  if (__builtin_cpu_supports("sse4.1") && count >= 2) {
+    return rbipc_simd_scan_sse41(slots, mask, t, count, offset);
   }
 #endif
 #elif defined(__aarch64__)

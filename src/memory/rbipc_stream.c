@@ -22,6 +22,24 @@
 #include <immintrin.h>
 
 #if defined(__GNUC__) || defined(__clang__)
+__attribute__((target("avx512f")))
+static void rbipc_stream_copy_avx512_blocks(uint8_t *RBIPC_RESTRICT d,
+                                            const uint8_t *RBIPC_RESTRICT s,
+                                            size_t blocks) {
+  size_t i = 0;
+  /* Unroll by 2 (128 bytes = 2 full 64-byte write-combining cache lines) */
+  for (; i + 2 <= blocks; i += 2) {
+    __m512i v0 = _mm512_loadu_si512((const void *)(s + i * 64));
+    __m512i v1 = _mm512_loadu_si512((const void *)(s + i * 64 + 64));
+    _mm512_stream_si512((void *)(d + i * 64), v0);
+    _mm512_stream_si512((void *)(d + i * 64 + 64), v1);
+  }
+  for (; i < blocks; ++i) {
+    __m512i val = _mm512_loadu_si512((const void *)(s + i * 64));
+    _mm512_stream_si512((void *)(d + i * 64), val);
+  }
+}
+
 __attribute__((target("avx2")))
 #endif
 static void rbipc_stream_copy_avx2_blocks(uint8_t *RBIPC_RESTRICT d,
@@ -95,7 +113,7 @@ int rbipc_stream_copy(void *RBIPC_RESTRICT dst, const void *RBIPC_RESTRICT src,
 #if defined(__x86_64__) || defined(_M_X64)
   if (size >= RBIPC_STREAM_THRESHOLD) {
     uintptr_t d_addr = (uintptr_t)d;
-    size_t align_offset = (32U - (d_addr & 31U)) & 31U;
+    size_t align_offset = (64U - (d_addr & 63U)) & 63U;
     if (align_offset > 0 && align_offset <= size) {
       memcpy(d, s, align_offset);
       d += align_offset;
@@ -104,7 +122,14 @@ int rbipc_stream_copy(void *RBIPC_RESTRICT dst, const void *RBIPC_RESTRICT src,
     }
 
 #if defined(__GNUC__) || defined(__clang__)
-    if (__builtin_cpu_supports("avx2") && size >= 32) {
+    if (__builtin_cpu_supports("avx512f") && size >= 64) {
+      size_t blocks = size / 64;
+      rbipc_stream_copy_avx512_blocks(d, s, blocks);
+      d += blocks * 64;
+      s += blocks * 64;
+      size %= 64;
+      _mm_sfence();
+    } else if (__builtin_cpu_supports("avx2") && size >= 32) {
       size_t blocks = size / 32;
       rbipc_stream_copy_avx2_blocks(d, s, blocks);
       d += blocks * 32;

@@ -92,7 +92,7 @@ RBIPC_INLINE RBIPC_PURE bool rbipc_is_valid_shm_name(const char *name) {
  * @return true if @p val is a power of two, false otherwise.
  */
 RBIPC_INLINE RBIPC_CONST bool rbipc_is_power_of_two(uint32_t val) {
-    return (val > 0) && ((val & (val - 1)) == 0);
+    return rbipc_is_pow2_32(val);
 }
 
 /**

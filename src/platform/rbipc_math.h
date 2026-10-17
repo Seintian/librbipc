@@ -147,4 +147,86 @@ RBIPC_INLINE RBIPC_CONST RBIPC_NODISCARD int64_t rbipc_seq_diff(uint64_t a,
   return (int64_t)(a - b);
 }
 
+
+/**
+ * @brief Test if an unsigned 32-bit integer is strictly a non-zero power of two.
+ *
+ * @param[in] v Integer to test.
+ * @return True if @p v is a power of two, false otherwise.
+ */
+RBIPC_INLINE RBIPC_CONST RBIPC_NODISCARD bool rbipc_is_pow2_32(uint32_t v) {
+  return (v > 0) && ((v & (v - 1U)) == 0);
+}
+
+/**
+ * @brief Test if an unsigned 64-bit integer is strictly a non-zero power of two.
+ *
+ * @param[in] v Integer to test.
+ * @return True if @p v is a power of two, false otherwise.
+ */
+RBIPC_INLINE RBIPC_CONST RBIPC_NODISCARD bool rbipc_is_pow2_64(uint64_t v) {
+  return (v > 0) && ((v & (v - 1ULL)) == 0);
+}
+
+/**
+ * @brief Count number of set bits (population count) in a 32-bit integer.
+ *
+ * @param[in] v 32-bit integer.
+ * @return Count of 1 bits.
+ */
+RBIPC_INLINE RBIPC_CONST RBIPC_NODISCARD uint32_t rbipc_popcount_32(uint32_t v) {
+#if defined(__GNUC__) || defined(__clang__)
+  return (uint32_t)__builtin_popcount(v);
+#else
+  v = v - ((v >> 1U) & 0x55555555U);
+  v = (v & 0x33333333U) + ((v >> 2U) & 0x33333333U);
+  return (((v + (v >> 4U)) & 0x0F0F0F0FU) * 0x01010101U) >> 24U;
+#endif
+}
+
+/**
+ * @brief Count number of set bits (population count) in a 64-bit integer.
+ *
+ * @param[in] v 64-bit integer.
+ * @return Count of 1 bits.
+ */
+RBIPC_INLINE RBIPC_CONST RBIPC_NODISCARD uint32_t rbipc_popcount_64(uint64_t v) {
+#if defined(__GNUC__) || defined(__clang__)
+  return (uint32_t)__builtin_popcountll(v);
+#else
+  v = v - ((v >> 1ULL) & 0x5555555555555555ULL);
+  v = (v & 0x3333333333333333ULL) + ((v >> 2ULL) & 0x3333333333333333ULL);
+  return (uint32_t)((((v + (v >> 4ULL)) & 0x0F0F0F0F0F0F0F0FULL) * 0x0101010101010101ULL) >> 56ULL);
+#endif
+}
+
+/**
+ * @brief Count trailing zeros in a 32-bit integer (undefined if v is 0).
+ *
+ * @param[in] v Non-zero 32-bit integer.
+ * @return Number of trailing zero bits.
+ */
+RBIPC_INLINE RBIPC_CONST RBIPC_NODISCARD uint32_t rbipc_ctz_32(uint32_t v) {
+#if defined(__GNUC__) || defined(__clang__)
+  return (uint32_t)__builtin_ctz(v);
+#else
+  return rbipc_popcount_32((v & -v) - 1U);
+#endif
+}
+
+/**
+ * @brief Count trailing zeros in a 64-bit integer (undefined if v is 0).
+ *
+ * @param[in] v Non-zero 64-bit integer.
+ * @return Number of trailing zero bits.
+ */
+RBIPC_INLINE RBIPC_CONST RBIPC_NODISCARD uint32_t rbipc_ctz_64(uint64_t v) {
+#if defined(__GNUC__) || defined(__clang__)
+  return (uint32_t)__builtin_ctzll(v);
+#else
+  return rbipc_popcount_64((v & -v) - 1ULL);
+#endif
+}
+
 #endif /* RBIPC_MATH_H */
+
