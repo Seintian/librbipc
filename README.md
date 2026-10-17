@@ -46,7 +46,7 @@ For the complete formal concurrency model, memory layout geometry, crash-recover
 | **Nikolaev SCQ Bounded FAA Ticket Leasing** | Concurrency | Unbounded writes (`timeout_ns == UINT64_MAX`) | **Wait-Free FAA**: Fast path claims tickets via hardware-pipelined `atomic_fetch_add` with cycle validation. | **CAS Loop Backoff**: Compare-and-swap reservation with exponential pause backoff for bounded timeouts. | **+241.0%** throughput under contention; **73× faster than Disruptor** at 4P-4C (0.73 Mops/s). |
 | **SIMD Sequence Turn Scanning** | CPU ISA | x86-64 AVX-512 / AVX2 / SSE4.1 or ARM64 NEON (`__ARM_NEON`) | **AVX-512 (8 turns) / AVX2 (4 turns) / SSE4.1 (2 turns) / NEON (2 turns)**: Vectorized sequence turn scanner with software prefetch lookahead. | **Scalar Loop**: Portable 64-bit scalar sequence loop checking each slot turn serially. | **50.68M msgs/s** vector batch throughput (6.53× speedup over scalar batch-1). |
 | **Non-Temporal Streaming Stores** | CPU ISA | Payloads ≥ 256 B on AVX-512, AVX2, or SSE2 | **Streaming Stores (`_mm512_stream_si512` / `_mm256_stream_si256` / `_mm_stream_si128`)**: Writes directly to DRAM write-combining buffers with 64-byte alignment preamble. | **Standard `memcpy`**: Cache-coherent memory copy for smaller payloads or non-x86 architectures. | **19,867.2 MB/s** throughput (+104.97% bandwidth over standard `memcpy`). |
-| **Strict ABI Encapsulation & Versioning** | ABI / Build | GNU Linker / ELF Shared Library | **`scripts/librbipc.sym` (`LIBRBIPC_1.0`) + `-fvisibility=hidden`**: Whitelists only 63 public API symbols, strictly eliminating 66 leaked internal routines. | Standard shared library export table without version node. | Zero symbol namespace pollution; immutable backward ABI compatibility. |
+| **Strict ABI Encapsulation & Versioning** | ABI / Build | GNU Linker / ELF Shared Library | **`scripts/librbipc.sym` (`LIBRBIPC_1.0`) + `-fvisibility=hidden`**: Whitelists only 64 public API symbols, strictly eliminating 65 leaked internal routines. | Standard shared library export table without version node. | Zero symbol namespace pollution; immutable backward ABI compatibility. |
 | **C23 Compile-Time Structure Invariants** | C23 Core | Standard C23 `-std=c23` compiler | **`static_assert` Invariants**: Compile-time mathematical verification of 64-byte slot sizing and cache-line isolation for all synchronization counters. | Runtime `assert()` / documentation convention. | Zero runtime false-sharing hazards; guaranteed single-cache-line turn updates. |
 | **Double-Mapped Virtual Memory** | VMem | Contiguous $2 \times \text{buffer\_size}$ address space reservation via `mmap` | **2x Virtual Mirroring**: Dual consecutive virtual memory mappings of identical underlying physical ring buffer pages. | **Single Linear Mapping**: Standard single circular buffer with modulo boundary calculation. | Zero-copy contiguous buffer dereferencing across circular ring wrap-around. |
 | **Asynchronous Kernel Reactor** | Kernel | Linux `eventfd(2)` and `epoll(7)` | **Eventfd Reactor (`rbipc_reactor_t`)**: Non-blocking readiness notifications multiplexed into `epoll`, `poll`, or `io_uring`. | **Pure Shared Memory**: Ring operates purely through shared memory without kernel file descriptors. | Sub-microsecond event loop integration (874.8k events/s) for async event loops. |
@@ -96,29 +96,41 @@ librbipc/
 │   └── sync/                # Low-latency hybrid synchronization hierarchy
 │       ├── rbipc_futex.c/.h # Linux sys_futex (FUTEX_WAIT/WAKE) and Linux 5.16+ sys_futex_waitv
 │       └── rbipc_sync.c/.h  # Asymmetric Dekker barriers, bounded micro-pause, and adaptive backoff
-├── scripts/                 # Tooling, packaging, and symbol version scripts
-│   ├── coverage_summary.py  # Automated gcov summary generator
-│   ├── gen_compile_commands.py# Compilation database generator
-│   └── librbipc.sym         # GNU linker version script (LIBRBIPC_1.0 symbol export whitelist)
-├── tests/                   # 27 automated verification suites (18 unit, 3 I/O, 6 E2E & chaos fault-injection)
-├── Makefile                 # Modular build system with dependency tracking, sanitizers, and pkg-config
-└── librbipc.pc.in           # pkg-config package specification template
-├── benchmarks/              # 5 benchmark suites + partitioned datasets (benchmarks/results/{home_pc,laptop,laptop_powersave}/*.json)
+├── benchmarks/              # 6 benchmark suites + partitioned datasets (benchmarks/results/{home_pc,laptop,laptop_powersave}/*.json)
 │   ├── bench_common.h       # Shared hardware telemetry, path routing, and adaptive spin backoff
-│   ├── bench_suite.c        # Core latency, 1P-1C streaming, B-Queue batching, zero-copy payloads, MPMC
-│   ├── bench_deep_dive.c    # Adaptive spin, non-temporal streaming stores, pub-sub, reactor, SIMD, leases
 │   ├── bench_competitors.c  # Cross-system: librbipc vs. DPDK rte_ring, LMAX Disruptor, mqueue, AF_UNIX
+│   ├── bench_crc32c.c       # Hardware Castagnoli CRC32C vs software slice-by-8 throughput
+│   ├── bench_deep_dive.c    # Adaptive spin, non-temporal streaming stores, pub-sub, reactor, SIMD, leases
 │   ├── bench_idle_strategies.c # 10-strategy evaluation across DPDK, LMAX Disruptor, and librbipc wait policies
-│   └── bench_librbipc_isolated.c # Isolated microbenchmarks (pointer exchange, payload copies, B-Queue batches)
-├── scripts/
+│   ├── bench_librbipc_isolated.c # Isolated microbenchmarks (pointer exchange, payload copies, B-Queue batches)
+│   └── bench_suite.c        # Core latency, 1P-1C streaming, B-Queue batching, zero-copy payloads, MPMC
+├── tests/                   # 30 automated verification suites across 7 subsystems (20 unit, 3 I/O, 7 E2E & chaos)
+│   ├── audit/               # Chaos resilience, crash recovery, and lease revocation tests
+│   ├── core/                # Lifecycle, multithread MPMC, process stress, and boundary validation
+│   ├── io/                  # B-Queue batching, reactor, SIMD parity, and throughput benchmarks
+│   ├── ipc/                 # SCM_RIGHTS and PubSub multicast tests
+│   ├── memory/              # SHM allocation, virtual memory mirroring, and unaligned streaming
+│   ├── platform/            # Hardware math and bitwise intrinsics tests
+│   └── sync/                # Latency percentiles, futex2 waitv, and CPU monitor tests
+├── tools/                   # Diagnostic and monitoring utilities
+│   ├── rbipc_stat.c         # Real-time shared-memory ring buffer inspection and telemetry
+│   └── rbipc_telemetry_stress.c # High-load multi-producer stress injector with telemetry sampling
+├── scripts/                 # Tooling, packaging, and symbol version scripts
+│   ├── benchmark_runner_throttled.py # Thermal-governed throttled benchmark execution harness
+│   ├── compare_benchmark_results.py # Statistical comparison and JSON result diffing engine
 │   ├── coverage_summary.py  # Automated gcov line coverage parser and tabular reporter
 │   ├── doxygen_md_filter.py # Doxygen Markdown input filter for clean MathJax LaTeX parsing
 │   ├── gen_compile_commands.py # Clang-Tidy compilation database generator
+│   ├── inspect_codebase.py  # AST symbol visibility and export audit utility
+│   ├── librbipc.sym         # GNU linker version script (LIBRBIPC_1.0 symbol export whitelist)
 │   └── postprocess_docs.py  # Doxygen HTML asset bundler and navigation post-processor
+├── AUDIT_REPORT.md          # Comprehensive engineering audit report, modularity, and verification
 ├── TECHNICAL_REPORT.md      # Unified architectural monograph, formal proofs, and empirical evaluation
 ├── TODO.md                  # Next-generation synchronization hierarchy specification and roadmap
 ├── Doxyfile                 # Doxygen API and architectural documentation configuration
-└── Makefile                 # Build, test, sanitizer, static analysis, coverage, and documentation targets
+├── Makefile                 # Modular build system with dependency tracking, sanitizers, and pkg-config
+├── librbipc.pc.in           # pkg-config package specification template
+└── LICENSE                  # Apache 2.0 open-source software license
 ```
 
 ---

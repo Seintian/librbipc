@@ -12,7 +12,7 @@
 | **Stage 3.1: Asymmetric Dekker (`sys_membarrier`) Registration** | **DONE** | Hardened `rbipc_ring_alloc_handle` to register `MEMBARRIER_CMD_REGISTER_GLOBAL_EXPEDITED` upon creation; elided redundant store-release fence on `slot->state`. | Zero lost wakeup vulnerability for non-sleeping producers; clean kernel IPI delivery. |
 | **Stage 3.2: Nikolaev SCQ Bounded FAA Ticket Leasing** | **DONE** | Implemented bounded `atomic_fetch_add` fast path for unbounded writes (`timeout_ns == UINT64_MAX`) + exponential pause backoff on CAS contention. | Adaptive throughput: **+241.0%** (258.5k -> 881.6k msgs/s); 4P-4C contention: **0.73 Mops/s (73× faster than Disruptor)**. |
 | **Battery Power-Save Auto-Detection & Isolated Results** | **DONE** | Implemented `/sys/class/power_supply/AC/online` sensing routing to `benchmarks/results/laptop_powersave/` without clobbering plugged-in baseline. | Preserves isolated, reproducible telemetry across all 3 power/hardware profiles. |
-| **Convenience Copy I/O & Lifecycle Aliases** | **DONE** | Implemented `rbipc_write*`, `rbipc_read*`, and `rbipc_shutdown(ring)` convenience wrappers in `src/rbipc_io.c` and `include/rbipc.h`. Full test coverage in `tests/test_io_basic.c`. | Resolves API documentation mismatch; provides zero-friction buffer copy I/O. |
+| **Convenience Copy I/O & Lifecycle Aliases** | **DONE** | Implemented `rbipc_write*`, `rbipc_read*`, and `rbipc_shutdown(ring)` convenience wrappers in `src/io/rbipc_io.c` and `include/rbipc.h`. Full test coverage in `tests/io/test_io_basic.c`. | Resolves API documentation mismatch; provides zero-friction buffer copy I/O. |
 | **Doxygen LaTeX Math Parsing & Link Integrity Verification** | **DONE** | Implemented input filter `scripts/doxygen_md_filter.py` and recursive auxiliary asset mirroring in `scripts/postprocess_docs.py`. | **0 Doxygen warnings** and **0 broken links** across 98 generated HTML pages. |
 | **Zero-Cost Telemetry Enhancements & CLI Monitor** | **DONE** | Disaggregated producer/consumer waiters, cumulative error/recovery counters, instantaneous slot state histogram (`rbipc_get_slot_stats`), `rbipc_stat` CLI tool, high-contention stress workload (`rbipc_telemetry_stress`), and `make monitor` rule. | 100% test coverage; zero fast-path latency/throughput impact. |
 | **Stage 4.1: ABI Encapsulation, Symbol Versioning & Packaging** | **DONE** | Implemented `scripts/librbipc.sym` (`LIBRBIPC_1.0`), `-fvisibility=hidden`, `RBIPC_API`/`RBIPC_INTERNAL` annotations, `librbipc.pc` (pkg-config), `make install`/`uninstall`, `.clang-format`, and `.github/workflows/ci.yml`. | Dynamic symbol exports reduced from 129 to 64; 66 leaked internal symbols eliminated. |
@@ -30,20 +30,20 @@
 
 The library currently operates on the following core primitives:
 
-1. **Shared-Memory Geometry ([`include/rbipc.h`](include/rbipc.h), [`src/rbipc_shm.c`](src/rbipc_shm.c)):**
+1. **Shared-Memory Geometry ([`include/rbipc.h`](include/rbipc.h), [`src/memory/rbipc_shm.c`](src/memory/rbipc_shm.c)):**
    A single contiguous memory region backed either by POSIX shared memory (`/dev/shm`) or an anonymous memory file (`memfd_create`) sealed against truncation (`F_SEAL_SHRINK | F_SEAL_GROW`). It contains:
    - A 64-byte aligned control header ([`rbipc_shm_header_t`](include/rbipc.h#L351-L375)) containing geometry, CRC32C integrity checksums, monotonic ticket cursors, and synchronization counters.
    - A slot descriptor table composed of cache-line aligned ([`rbipc_slot_t`](include/rbipc.h#L330-L345)) structures, each containing a 64-bit sequence turn counter, lifecycle state, producer/consumer PIDs, payload length, and lease timestamp.
    - A contiguous circular payload buffer (optionally double-mapped in virtual memory for zero-copy streaming wrap-around).
-2. **Vyukov-Style Turn Scheduling ([`src/rbipc_io.c`](src/rbipc_io.c)):**
+2. **Vyukov-Style Turn Scheduling ([`src/io/rbipc_io.c`](src/io/rbipc_io.c)):**
    Slot turn scheduling is mediated by a 64-bit monotonically increasing sequence number:
    - Vacant for ticket $t$: $\text{sequence} == t$
    - Committed / Ready for reader $t$: $\text{sequence} == t + 1$
    - Recycled for next generation: $\text{sequence} == t + \text{capacity}$
-3. **Dekker-Synchronized Adaptive Wait Engine ([`src/rbipc_sync.c`](src/rbipc_sync.c)):**
+3. **Dekker-Synchronized Adaptive Wait Engine ([`src/sync/rbipc_sync.c`](src/sync/rbipc_sync.c)):**
    - **Phase 1 (Micro-Spin):** Executes bounded user-space pause iterations (default budget $B = 48$ instructions of `_mm_pause()` on x86-64 or `isb` on ARM64) to catch fast in-flight handoffs.
    - **Phase 2 (Passive Futex Sleep):** Enters the Linux kernel via `SYS_futex` with `FUTEX_WAIT`, mediated by a 32-bit sequence counter `hdr->futex_seq` and a waiter counter `hdr->futex_waiters`.
-4. **Deterministic Fault Tolerance ([`src/rbipc_audit.c`](src/rbipc_audit.c)):**
+4. **Deterministic Fault Tolerance ([`src/audit/rbipc_audit.c`](src/audit/rbipc_audit.c)):**
    Uses Linux 5.3+ `pidfd_open(2)` process file descriptors with non-blocking `poll(2)` to probe peer liveness without PID recycling races, coupled with atomic slot poisoning (`RBIPC_SLOT_POISONED`), 50 ms orphaned ticket-hole healing, and dead-consumer lease reclamation.
 
 ---
@@ -75,7 +75,7 @@ The Linux `futex` subsystem was introduced in 2002 (Linux 2.5.70 by Franke, Russ
    To avoid lost wakeups, `librbipc` must enforce Dekker synchronization:
 
    ```c
-   // Producer Commit Fast Path (src/rbipc_io.c)
+   // Producer Commit Fast Path (src/io/rbipc_io.c)
    rbipc_slot_commit(slot, ticket, written_len); // store slot->sequence (release)
    atomic_thread_fence(memory_order_seq_cst);   // EMITS MFENCE (30-50 cycles)
    if (rbipc_sync_has_waiters(&hdr->futex_waiters)) { ... }
@@ -141,7 +141,7 @@ Intel WAITPKG (Wait Package) is an architectural extension available on Intel Tr
 
 ##### Intel WAITPKG Integration in `librbipc`
 
-In [`src/rbipc_sync.c`](src/rbipc_sync.c), we implement a hardware-monitored wait that replaces Phase 1 spinning:
+In [`src/sync/rbipc_sync.c`](src/sync/rbipc_sync.c), we implement a hardware-monitored wait that replaces Phase 1 spinning:
 
 ```c
 #include <immintrin.h>
@@ -212,7 +212,7 @@ In the ARMv8-A and ARMv9-A architectures, synchronization primitives rely on **E
 
 ##### ARM64 Exclusive Monitors & WFET Integration in `librbipc`
 
-In [`src/rbipc_arch.h`](src/rbipc_arch.h):
+In [`src/platform/rbipc_arch.h`](src/platform/rbipc_arch.h):
 
 ```c
 /**
@@ -311,7 +311,7 @@ struct futex_waitv {
 
 ##### futex_waitv Integration in `librbipc`
 
-We define a modern `futex2` wrapper in [`src/rbipc_futex.c`](src/rbipc_futex.c):
+We define a modern `futex2` wrapper in [`src/sync/rbipc_futex.c`](src/sync/rbipc_futex.c):
 
 ```c
 #include <linux/futex.h>
@@ -381,7 +381,7 @@ In **Linux 6.7**, Jens Axboe introduced native futex support to the `io_uring` s
 
 ##### io_uring Futex Microarchitectural Rationale
 
-`librbipc` currently integrates with epoll reactors via an `eventfd` file descriptor ([`src/rbipc_reactor.c`](src/rbipc_reactor.c)). This introduces:
+`librbipc` currently integrates with epoll reactors via an `eventfd` file descriptor ([`src/io/rbipc_reactor.c`](src/io/rbipc_reactor.c)). This introduces:
 
 - File descriptor table allocation in the kernel.
 - An extra 8-byte `write(2)` syscall on producer commit.
@@ -558,7 +558,7 @@ graph LR
 In a single-ring MPMC queue, the single `write_ticket` cache line is a physical bottleneck on multi-socket NUMA systems. In a partitioned multi-lane queue:
 
 - Each producer writes to its assigned lane (`pid % K`), eliminating cross-core cache invalidations on `write_ticket`.
-- Consumers poll lanes using AVX2 SIMD scanning ([`src/rbipc_simd.c`](src/rbipc_simd.c)), stealing from adjacent lanes when their primary lane is empty.
+- Consumers poll lanes using AVX2 SIMD scanning ([`src/io/rbipc_simd.c`](src/io/rbipc_simd.c)), stealing from adjacent lanes when their primary lane is empty.
 - Throughput scales linearly with the number of hardware execution lanes.
 
 ---
