@@ -38,7 +38,7 @@ typedef struct rbipc_sub rbipc_sub_t;
  * @return @ref RBIPC_OK on success.
  * @retval RBIPC_ERR_INVAL if parameters are NULL or len exceeds slot capacity.
  */
-RBIPC_NODISCARD RBIPC_LEAF int rbipc_publish(rbipc_ring_t *ring,
+RBIPC_API RBIPC_NODISCARD RBIPC_LEAF int rbipc_publish(rbipc_ring_t *ring,
                                              const void *buf, uint32_t len);
 
 /**
@@ -60,7 +60,7 @@ RBIPC_NODISCARD RBIPC_LEAF int rbipc_publish(rbipc_ring_t *ring,
  * @retval RBIPC_ERR_INVAL if parameters are NULL, count is 0, or any length
  * exceeds slot capacity.
  */
-RBIPC_NODISCARD RBIPC_LEAF int rbipc_publish_batch(rbipc_ring_t *ring,
+RBIPC_API RBIPC_NODISCARD RBIPC_LEAF int rbipc_publish_batch(rbipc_ring_t *ring,
                                                    uint32_t count,
                                                    const void *const *bufs,
                                                    const uint32_t *lens);
@@ -77,7 +77,7 @@ RBIPC_NODISCARD RBIPC_LEAF int rbipc_publish_batch(rbipc_ring_t *ring,
  * @retval RBIPC_ERR_INVAL if @p ring or @p out_sub is NULL.
  * @retval RBIPC_ERR_NOMEM if allocation fails.
  */
-RBIPC_NODISCARD RBIPC_LEAF int rbipc_sub_create_ex(rbipc_ring_t *ring,
+RBIPC_API RBIPC_NODISCARD RBIPC_LEAF int rbipc_sub_create_ex(rbipc_ring_t *ring,
                                                    bool from_oldest,
                                                    rbipc_sub_t **out_sub);
 
@@ -91,7 +91,7 @@ RBIPC_NODISCARD RBIPC_LEAF int rbipc_sub_create_ex(rbipc_ring_t *ring,
  * @retval RBIPC_ERR_INVAL if @p ring or @p out_sub is NULL.
  * @retval RBIPC_ERR_NOMEM if allocation fails.
  */
-RBIPC_NODISCARD RBIPC_LEAF int rbipc_sub_create(rbipc_ring_t *ring,
+RBIPC_API RBIPC_NODISCARD RBIPC_LEAF int rbipc_sub_create(rbipc_ring_t *ring,
                                                 rbipc_sub_t **out_sub);
 
 /**
@@ -99,7 +99,7 @@ RBIPC_NODISCARD RBIPC_LEAF int rbipc_sub_create(rbipc_ring_t *ring,
  *
  * @param[in] sub Subscriber handle to destroy.
  */
-RBIPC_LEAF
+RBIPC_API RBIPC_LEAF
 void rbipc_sub_destroy(rbipc_sub_t *sub);
 
 /**
@@ -114,7 +114,7 @@ void rbipc_sub_destroy(rbipc_sub_t *sub);
  * @retval RBIPC_ERR_INVAL if parameters are NULL.
  * @retval RBIPC_ERR_EMPTY if no new published messages are available.
  */
-RBIPC_NODISCARD RBIPC_LEAF int rbipc_sub_poll(rbipc_sub_t *sub,
+RBIPC_API RBIPC_NODISCARD RBIPC_LEAF int rbipc_sub_poll(rbipc_sub_t *sub,
                                               const void **out_buf,
                                               uint32_t *out_len,
                                               uint64_t *out_seq);
@@ -138,7 +138,7 @@ RBIPC_NODISCARD RBIPC_LEAF int rbipc_sub_poll(rbipc_sub_t *sub,
  * @return @ref RBIPC_OK on success.
  * @retval RBIPC_ERR_INVAL if parameters are NULL or max_count is 0.
  */
-RBIPC_NODISCARD RBIPC_LEAF int
+RBIPC_API RBIPC_NODISCARD RBIPC_LEAF int
 rbipc_sub_poll_batch(rbipc_sub_t *sub, uint32_t max_count,
                      const void **out_bufs, uint32_t *out_lens,
                      uint64_t *out_seqs, uint32_t *out_polled);
@@ -157,7 +157,7 @@ rbipc_sub_poll_batch(rbipc_sub_t *sub, uint32_t max_count,
  * published.
  * @retval RBIPC_ERR_SHUTDOWN if the topic ring was shut down.
  */
-RBIPC_NODISCARD RBIPC_LEAF int
+RBIPC_API RBIPC_NODISCARD RBIPC_LEAF int
 rbipc_sub_read(rbipc_sub_t *sub, uint64_t timeout_ns, const void **out_buf,
                uint32_t *out_len, uint64_t *out_seq);
 
@@ -169,7 +169,7 @@ rbipc_sub_read(rbipc_sub_t *sub, uint64_t timeout_ns, const void **out_buf,
  *
  * @return Pending message count (lag distance).
  */
-RBIPC_NODISCARD RBIPC_LEAF uint64_t rbipc_sub_get_lag(const rbipc_sub_t *sub);
+RBIPC_API RBIPC_NODISCARD RBIPC_LEAF uint64_t rbipc_sub_get_lag(const rbipc_sub_t *sub);
 
 #ifdef __cplusplus
 }

@@ -58,6 +58,12 @@ extern "C" {
 
 #if defined(__GNUC__) || defined(__clang__)
 /**
+ * @def RBIPC_API
+ * @brief Public shared library symbol export attribute.
+ */
+#define RBIPC_API __attribute__((visibility("default")))
+
+/**
  * @def RBIPC_NODISCARD
  * @brief Directs the compiler to emit a warning or error if the function return
  * value is discarded.
@@ -141,6 +147,7 @@ extern "C" {
  */
 #define RBIPC_RESTRICT restrict
 #else
+#define RBIPC_API
 #define RBIPC_NODISCARD
 #define RBIPC_RETURNS_NONNULL
 #define RBIPC_PURE
@@ -523,7 +530,7 @@ typedef struct rbipc_ring rbipc_ring_t;
  * @see rbipc_create
  * @see rbipc_destroy
  */
-RBIPC_NODISCARD RBIPC_LEAF int
+RBIPC_API RBIPC_NODISCARD RBIPC_LEAF int
 rbipc_create_ex(const char *RBIPC_RESTRICT name, size_t capacity,
                 uint32_t slot_size, uint32_t flags, mode_t mode,
                 rbipc_ring_t **RBIPC_RESTRICT out_ring);
@@ -551,7 +558,7 @@ rbipc_create_ex(const char *RBIPC_RESTRICT name, size_t capacity,
  * @see rbipc_create_ex
  * @see rbipc_destroy
  */
-RBIPC_NODISCARD RBIPC_LEAF int
+RBIPC_API RBIPC_NODISCARD RBIPC_LEAF int
 rbipc_create(const char *RBIPC_RESTRICT name, size_t capacity,
              uint32_t slot_size, rbipc_ring_t **RBIPC_RESTRICT out_ring);
 
@@ -575,7 +582,7 @@ rbipc_create(const char *RBIPC_RESTRICT name, size_t capacity,
  * @see rbipc_create
  * @see rbipc_detach
  */
-RBIPC_NODISCARD RBIPC_LEAF int
+RBIPC_API RBIPC_NODISCARD RBIPC_LEAF int
 rbipc_attach_ex(const char *RBIPC_RESTRICT name, uint32_t role_flags,
                 rbipc_ring_t **RBIPC_RESTRICT out_ring);
 
@@ -606,7 +613,7 @@ rbipc_attach_ex(const char *RBIPC_RESTRICT name, uint32_t role_flags,
  * @see rbipc_attach_fd
  * @see rbipc_detach
  */
-RBIPC_NODISCARD RBIPC_LEAF int
+RBIPC_API RBIPC_NODISCARD RBIPC_LEAF int
 rbipc_attach(const char *RBIPC_RESTRICT name,
              rbipc_ring_t **RBIPC_RESTRICT out_ring);
 
@@ -630,7 +637,7 @@ rbipc_attach(const char *RBIPC_RESTRICT name,
  * @see rbipc_attach
  * @see rbipc_get_fd
  */
-RBIPC_NODISCARD RBIPC_LEAF int
+RBIPC_API RBIPC_NODISCARD RBIPC_LEAF int
 rbipc_attach_fd_ex(int fd, uint32_t role_flags,
                    rbipc_ring_t **RBIPC_RESTRICT out_ring);
 
@@ -657,7 +664,7 @@ rbipc_attach_fd_ex(int fd, uint32_t role_flags,
  * @see rbipc_attach
  * @see rbipc_get_fd
  */
-RBIPC_NODISCARD RBIPC_LEAF int
+RBIPC_API RBIPC_NODISCARD RBIPC_LEAF int
 rbipc_attach_fd(int fd, rbipc_ring_t **RBIPC_RESTRICT out_ring);
 
 /**
@@ -677,7 +684,7 @@ rbipc_attach_fd(int fd, rbipc_ring_t **RBIPC_RESTRICT out_ring);
  *
  * @see rbipc_destroy
  */
-RBIPC_LEAF
+RBIPC_API RBIPC_LEAF
 int rbipc_detach(rbipc_ring_t *ring);
 
 /**
@@ -700,7 +707,7 @@ int rbipc_detach(rbipc_ring_t *ring);
  * @see rbipc_create
  * @see rbipc_detach
  */
-RBIPC_LEAF
+RBIPC_API RBIPC_LEAF
 int rbipc_destroy(const char *name);
 
 /**
@@ -714,7 +721,7 @@ int rbipc_destroy(const char *name);
  * @return @ref RBIPC_OK on success.
  * @retval RBIPC_ERR_INVAL if @p ring is NULL or @p policy is unsupported.
  */
-RBIPC_LEAF
+RBIPC_API RBIPC_LEAF
 int rbipc_set_wait_policy(rbipc_ring_t *ring, uint32_t policy);
 
 /**
@@ -725,7 +732,7 @@ int rbipc_set_wait_policy(rbipc_ring_t *ring, uint32_t policy);
  * @return Active policy flag mask, or @ref RBIPC_WAIT_ADAPTIVE if @p ring is
  * NULL.
  */
-RBIPC_NODISCARD RBIPC_LEAF uint32_t
+RBIPC_API RBIPC_NODISCARD RBIPC_LEAF uint32_t
 rbipc_get_wait_policy(const rbipc_ring_t *ring);
 
 /**
@@ -759,7 +766,7 @@ rbipc_get_wait_policy(const rbipc_ring_t *ring);
  * @see rbipc_reserve_write_timeout
  * @see rbipc_reserve_write_nonblock
  */
-RBIPC_NODISCARD RBIPC_HOT RBIPC_LEAF int
+RBIPC_API RBIPC_NODISCARD RBIPC_HOT RBIPC_LEAF int
 rbipc_reserve_write(rbipc_ring_t *RBIPC_RESTRICT ring, uint32_t len,
                     void **RBIPC_RESTRICT out_buf,
                     uint64_t *RBIPC_RESTRICT ticket);
@@ -788,7 +795,7 @@ rbipc_reserve_write(rbipc_ring_t *RBIPC_RESTRICT ring, uint32_t len,
  *
  * @see rbipc_reserve_write
  */
-RBIPC_NODISCARD RBIPC_LEAF int
+RBIPC_API RBIPC_NODISCARD RBIPC_LEAF int
 rbipc_reserve_write_timeout(rbipc_ring_t *RBIPC_RESTRICT ring, uint32_t len,
                             uint64_t timeout_ns, void **RBIPC_RESTRICT out_buf,
                             uint64_t *RBIPC_RESTRICT ticket);
@@ -811,7 +818,7 @@ rbipc_reserve_write_timeout(rbipc_ring_t *RBIPC_RESTRICT ring, uint32_t len,
  *
  * @see rbipc_reserve_write
  */
-RBIPC_NODISCARD RBIPC_HOT RBIPC_LEAF int
+RBIPC_API RBIPC_NODISCARD RBIPC_HOT RBIPC_LEAF int
 rbipc_reserve_write_nonblock(rbipc_ring_t *RBIPC_RESTRICT ring, uint32_t len,
                              void **RBIPC_RESTRICT out_buf,
                              uint64_t *RBIPC_RESTRICT ticket);
@@ -838,7 +845,7 @@ rbipc_reserve_write_nonblock(rbipc_ring_t *RBIPC_RESTRICT ring, uint32_t len,
  * @see rbipc_reserve_write
  * @see rbipc_abort_write
  */
-RBIPC_HOT RBIPC_LEAF int rbipc_commit_write(rbipc_ring_t *RBIPC_RESTRICT ring,
+RBIPC_API RBIPC_HOT RBIPC_LEAF int rbipc_commit_write(rbipc_ring_t *RBIPC_RESTRICT ring,
                                             uint64_t ticket,
                                             uint32_t written_len);
 
@@ -858,7 +865,7 @@ RBIPC_HOT RBIPC_LEAF int rbipc_commit_write(rbipc_ring_t *RBIPC_RESTRICT ring,
  * @see rbipc_reserve_write
  * @see rbipc_commit_write
  */
-RBIPC_COLD RBIPC_LEAF int rbipc_abort_write(rbipc_ring_t *RBIPC_RESTRICT ring,
+RBIPC_API RBIPC_COLD RBIPC_LEAF int rbipc_abort_write(rbipc_ring_t *RBIPC_RESTRICT ring,
                                             uint64_t ticket);
 
 /**
@@ -887,7 +894,7 @@ RBIPC_COLD RBIPC_LEAF int rbipc_abort_write(rbipc_ring_t *RBIPC_RESTRICT ring,
  * @see rbipc_read_acquire_timeout
  * @see rbipc_read_acquire_nonblock
  */
-RBIPC_NODISCARD RBIPC_HOT RBIPC_LEAF int rbipc_read_acquire(
+RBIPC_API RBIPC_NODISCARD RBIPC_HOT RBIPC_LEAF int rbipc_read_acquire(
     rbipc_ring_t *RBIPC_RESTRICT ring, const void **RBIPC_RESTRICT out_buf,
     uint32_t *RBIPC_RESTRICT out_len, uint64_t *RBIPC_RESTRICT ticket);
 
@@ -913,7 +920,7 @@ RBIPC_NODISCARD RBIPC_HOT RBIPC_LEAF int rbipc_read_acquire(
  *
  * @see rbipc_read_acquire
  */
-RBIPC_NODISCARD RBIPC_LEAF int rbipc_read_acquire_timeout(
+RBIPC_API RBIPC_NODISCARD RBIPC_LEAF int rbipc_read_acquire_timeout(
     rbipc_ring_t *RBIPC_RESTRICT ring, uint64_t timeout_ns,
     const void **RBIPC_RESTRICT out_buf, uint32_t *RBIPC_RESTRICT out_len,
     uint64_t *RBIPC_RESTRICT ticket);
@@ -937,7 +944,7 @@ RBIPC_NODISCARD RBIPC_LEAF int rbipc_read_acquire_timeout(
  *
  * @see rbipc_read_acquire
  */
-RBIPC_NODISCARD RBIPC_HOT RBIPC_LEAF int rbipc_read_acquire_nonblock(
+RBIPC_API RBIPC_NODISCARD RBIPC_HOT RBIPC_LEAF int rbipc_read_acquire_nonblock(
     rbipc_ring_t *RBIPC_RESTRICT ring, const void **RBIPC_RESTRICT out_buf,
     uint32_t *RBIPC_RESTRICT out_len, uint64_t *RBIPC_RESTRICT ticket);
 
@@ -956,7 +963,7 @@ RBIPC_NODISCARD RBIPC_HOT RBIPC_LEAF int rbipc_read_acquire_nonblock(
  *
  * @see rbipc_read_acquire
  */
-RBIPC_HOT RBIPC_LEAF int rbipc_read_release(rbipc_ring_t *RBIPC_RESTRICT ring,
+RBIPC_API RBIPC_HOT RBIPC_LEAF int rbipc_read_release(rbipc_ring_t *RBIPC_RESTRICT ring,
                                             uint64_t ticket);
 
 /* ============================================================================
@@ -984,7 +991,7 @@ RBIPC_HOT RBIPC_LEAF int rbipc_read_release(rbipc_ring_t *RBIPC_RESTRICT ring,
  * @see rbipc_write_nonblock
  * @see rbipc_reserve_write
  */
-RBIPC_NODISCARD RBIPC_LEAF int rbipc_write_timeout(rbipc_ring_t *RBIPC_RESTRICT ring,
+RBIPC_API RBIPC_NODISCARD RBIPC_LEAF int rbipc_write_timeout(rbipc_ring_t *RBIPC_RESTRICT ring,
                                                    const void *RBIPC_RESTRICT buf,
                                                    uint32_t len,
                                                    uint64_t timeout_ns);
@@ -1003,7 +1010,7 @@ RBIPC_NODISCARD RBIPC_LEAF int rbipc_write_timeout(rbipc_ring_t *RBIPC_RESTRICT 
  * @see rbipc_write_timeout
  * @see rbipc_write_nonblock
  */
-RBIPC_NODISCARD RBIPC_LEAF int rbipc_write(rbipc_ring_t *RBIPC_RESTRICT ring,
+RBIPC_API RBIPC_NODISCARD RBIPC_LEAF int rbipc_write(rbipc_ring_t *RBIPC_RESTRICT ring,
                                            const void *RBIPC_RESTRICT buf,
                                            uint32_t len);
 
@@ -1022,7 +1029,7 @@ RBIPC_NODISCARD RBIPC_LEAF int rbipc_write(rbipc_ring_t *RBIPC_RESTRICT ring,
  * @see rbipc_write
  * @see rbipc_write_timeout
  */
-RBIPC_NODISCARD RBIPC_LEAF int rbipc_write_nonblock(rbipc_ring_t *RBIPC_RESTRICT ring,
+RBIPC_API RBIPC_NODISCARD RBIPC_LEAF int rbipc_write_nonblock(rbipc_ring_t *RBIPC_RESTRICT ring,
                                                     const void *RBIPC_RESTRICT buf,
                                                     uint32_t len);
 
@@ -1049,7 +1056,7 @@ RBIPC_NODISCARD RBIPC_LEAF int rbipc_write_nonblock(rbipc_ring_t *RBIPC_RESTRICT
  * @see rbipc_read_nonblock
  * @see rbipc_read_acquire
  */
-RBIPC_NODISCARD RBIPC_LEAF int rbipc_read_timeout(rbipc_ring_t *RBIPC_RESTRICT ring,
+RBIPC_API RBIPC_NODISCARD RBIPC_LEAF int rbipc_read_timeout(rbipc_ring_t *RBIPC_RESTRICT ring,
                                                   void *RBIPC_RESTRICT buf,
                                                   uint32_t max_len,
                                                   uint32_t *RBIPC_RESTRICT out_len,
@@ -1071,7 +1078,7 @@ RBIPC_NODISCARD RBIPC_LEAF int rbipc_read_timeout(rbipc_ring_t *RBIPC_RESTRICT r
  * @see rbipc_read_timeout
  * @see rbipc_read_nonblock
  */
-RBIPC_NODISCARD RBIPC_LEAF int rbipc_read(rbipc_ring_t *RBIPC_RESTRICT ring,
+RBIPC_API RBIPC_NODISCARD RBIPC_LEAF int rbipc_read(rbipc_ring_t *RBIPC_RESTRICT ring,
                                           void *RBIPC_RESTRICT buf,
                                           uint32_t max_len,
                                           uint32_t *RBIPC_RESTRICT out_len);
@@ -1093,7 +1100,7 @@ RBIPC_NODISCARD RBIPC_LEAF int rbipc_read(rbipc_ring_t *RBIPC_RESTRICT ring,
  * @see rbipc_read
  * @see rbipc_read_timeout
  */
-RBIPC_NODISCARD RBIPC_LEAF int rbipc_read_nonblock(rbipc_ring_t *RBIPC_RESTRICT ring,
+RBIPC_API RBIPC_NODISCARD RBIPC_LEAF int rbipc_read_nonblock(rbipc_ring_t *RBIPC_RESTRICT ring,
                                                    void *RBIPC_RESTRICT buf,
                                                    uint32_t max_len,
                                                    uint32_t *RBIPC_RESTRICT out_len);
@@ -1121,7 +1128,7 @@ RBIPC_NODISCARD RBIPC_LEAF int rbipc_read_nonblock(rbipc_ring_t *RBIPC_RESTRICT 
  * @see rbipc_commit_write_batch
  * @see rbipc_read_acquire_batch
  */
-RBIPC_NODISCARD RBIPC_HOT RBIPC_LEAF int
+RBIPC_API RBIPC_NODISCARD RBIPC_HOT RBIPC_LEAF int
 rbipc_reserve_write_batch(rbipc_ring_t *RBIPC_RESTRICT ring, uint32_t count,
                           rbipc_iovec_t *RBIPC_RESTRICT iovecs,
                           uint32_t *RBIPC_RESTRICT out_reserved);
@@ -1137,7 +1144,7 @@ rbipc_reserve_write_batch(rbipc_ring_t *RBIPC_RESTRICT ring, uint32_t count,
  * @return RBIPC_OK on success, RBIPC_ERR_FULL if no slots available
  * immediately.
  */
-RBIPC_NODISCARD RBIPC_HOT RBIPC_LEAF int
+RBIPC_API RBIPC_NODISCARD RBIPC_HOT RBIPC_LEAF int
 rbipc_reserve_write_batch_nonblock(rbipc_ring_t *RBIPC_RESTRICT ring,
                                    uint32_t count,
                                    rbipc_iovec_t *RBIPC_RESTRICT iovecs,
@@ -1156,7 +1163,7 @@ rbipc_reserve_write_batch_nonblock(rbipc_ring_t *RBIPC_RESTRICT ring,
  * @return RBIPC_OK on success, RBIPC_ERR_TIMEOUT on expiry, RBIPC_ERR_FULL if
  * nonblock full.
  */
-RBIPC_NODISCARD RBIPC_HOT RBIPC_LEAF int
+RBIPC_API RBIPC_NODISCARD RBIPC_HOT RBIPC_LEAF int
 rbipc_reserve_write_batch_timeout(rbipc_ring_t *RBIPC_RESTRICT ring,
                                   uint32_t count, uint64_t timeout_ns,
                                   rbipc_iovec_t *RBIPC_RESTRICT iovecs,
@@ -1181,7 +1188,7 @@ rbipc_reserve_write_batch_timeout(rbipc_ring_t *RBIPC_RESTRICT ring,
  *
  * @see rbipc_reserve_write_batch
  */
-RBIPC_HOT RBIPC_LEAF int
+RBIPC_API RBIPC_HOT RBIPC_LEAF int
 rbipc_commit_write_batch(rbipc_ring_t *RBIPC_RESTRICT ring, uint32_t count,
                          const uint64_t *RBIPC_RESTRICT tickets,
                          const uint32_t *RBIPC_RESTRICT lens);
@@ -1206,7 +1213,7 @@ rbipc_commit_write_batch(rbipc_ring_t *RBIPC_RESTRICT ring, uint32_t count,
  *
  * @see rbipc_read_release_batch
  */
-RBIPC_NODISCARD RBIPC_HOT RBIPC_LEAF int
+RBIPC_API RBIPC_NODISCARD RBIPC_HOT RBIPC_LEAF int
 rbipc_read_acquire_batch(rbipc_ring_t *RBIPC_RESTRICT ring, uint32_t count,
                          rbipc_rovec_t *RBIPC_RESTRICT rovecs,
                          uint32_t *RBIPC_RESTRICT out_acquired);
@@ -1224,7 +1231,7 @@ rbipc_read_acquire_batch(rbipc_ring_t *RBIPC_RESTRICT ring, uint32_t count,
  * @return RBIPC_OK on success, RBIPC_ERR_EMPTY if no messages available
  * immediately.
  */
-RBIPC_NODISCARD RBIPC_HOT RBIPC_LEAF int
+RBIPC_API RBIPC_NODISCARD RBIPC_HOT RBIPC_LEAF int
 rbipc_read_acquire_batch_nonblock(rbipc_ring_t *RBIPC_RESTRICT ring,
                                   uint32_t count,
                                   rbipc_rovec_t *RBIPC_RESTRICT rovecs,
@@ -1245,7 +1252,7 @@ rbipc_read_acquire_batch_nonblock(rbipc_ring_t *RBIPC_RESTRICT ring,
  * @return RBIPC_OK on success, RBIPC_ERR_TIMEOUT on expiry, RBIPC_ERR_EMPTY if
  * nonblock empty.
  */
-RBIPC_NODISCARD RBIPC_HOT RBIPC_LEAF int
+RBIPC_API RBIPC_NODISCARD RBIPC_HOT RBIPC_LEAF int
 rbipc_read_acquire_batch_timeout(rbipc_ring_t *RBIPC_RESTRICT ring,
                                  uint32_t count, uint64_t timeout_ns,
                                  rbipc_rovec_t *RBIPC_RESTRICT rovecs,
@@ -1267,7 +1274,7 @@ rbipc_read_acquire_batch_timeout(rbipc_ring_t *RBIPC_RESTRICT ring,
  *
  * @see rbipc_read_acquire_batch
  */
-RBIPC_HOT RBIPC_LEAF int
+RBIPC_API RBIPC_HOT RBIPC_LEAF int
 rbipc_read_release_batch(rbipc_ring_t *RBIPC_RESTRICT ring, uint32_t count,
                          const uint64_t *RBIPC_RESTRICT tickets);
 
@@ -1292,7 +1299,7 @@ rbipc_read_release_batch(rbipc_ring_t *RBIPC_RESTRICT ring, uint32_t count,
  * @return @ref RBIPC_OK on success.
  * @retval RBIPC_ERR_INVAL if @p dst or @p src is NULL.
  */
-RBIPC_LEAF
+RBIPC_API RBIPC_LEAF
 int rbipc_stream_copy(void *RBIPC_RESTRICT dst, const void *RBIPC_RESTRICT src,
                       size_t size);
 
@@ -1309,7 +1316,7 @@ int rbipc_stream_copy(void *RBIPC_RESTRICT dst, const void *RBIPC_RESTRICT src,
  * @retval RBIPC_ERR_INVAL if arguments are invalid or @p len exceeds slot
  * capacity.
  */
-RBIPC_NODISCARD RBIPC_LEAF int
+RBIPC_API RBIPC_NODISCARD RBIPC_LEAF int
 rbipc_write_stream(rbipc_ring_t *RBIPC_RESTRICT ring,
                    const void *RBIPC_RESTRICT src, uint32_t len,
                    uint64_t *RBIPC_RESTRICT out_ticket);
@@ -1328,7 +1335,7 @@ rbipc_write_stream(rbipc_ring_t *RBIPC_RESTRICT ring,
  * @retval RBIPC_ERR_INVAL if arguments are invalid or @p len exceeds slot
  * capacity.
  */
-RBIPC_NODISCARD RBIPC_LEAF int
+RBIPC_API RBIPC_NODISCARD RBIPC_LEAF int
 rbipc_write_stream_nonblock(rbipc_ring_t *RBIPC_RESTRICT ring,
                             const void *RBIPC_RESTRICT src, uint32_t len,
                             uint64_t *RBIPC_RESTRICT out_ticket);
@@ -1350,7 +1357,7 @@ rbipc_write_stream_nonblock(rbipc_ring_t *RBIPC_RESTRICT ring,
  * @retval RBIPC_ERR_INVAL   if arguments are invalid or @p len exceeds slot
  * capacity.
  */
-RBIPC_NODISCARD RBIPC_LEAF int rbipc_write_stream_timeout(
+RBIPC_API RBIPC_NODISCARD RBIPC_LEAF int rbipc_write_stream_timeout(
     rbipc_ring_t *RBIPC_RESTRICT ring, const void *RBIPC_RESTRICT src,
     uint32_t len, uint64_t timeout_ns, uint64_t *RBIPC_RESTRICT out_ticket);
 /** @} */
@@ -1368,7 +1375,7 @@ RBIPC_NODISCARD RBIPC_LEAF int rbipc_write_stream_timeout(
  *
  * @see rbipc_detach
  */
-RBIPC_LEAF
+RBIPC_API RBIPC_LEAF
 int rbipc_signal_shutdown(rbipc_ring_t *ring);
 
 /**
@@ -1401,7 +1408,7 @@ static inline int rbipc_shutdown(rbipc_ring_t *ring) {
  * @return @ref RBIPC_OK on success.
  * @retval RBIPC_ERR_INVAL if arguments are null or descriptor creation fails.
  */
-RBIPC_NODISCARD RBIPC_LEAF int
+RBIPC_API RBIPC_NODISCARD RBIPC_LEAF int
 rbipc_enable_eventfd(rbipc_ring_t *RBIPC_RESTRICT ring,
                      int *RBIPC_RESTRICT out_fd);
 
@@ -1415,7 +1422,7 @@ rbipc_enable_eventfd(rbipc_ring_t *RBIPC_RESTRICT ring,
  * @return @ref RBIPC_OK on success.
  * @retval RBIPC_ERR_INVAL if ring is null or event_fd is negative.
  */
-RBIPC_NODISCARD RBIPC_LEAF int
+RBIPC_API RBIPC_NODISCARD RBIPC_LEAF int
 rbipc_set_eventfd(rbipc_ring_t *RBIPC_RESTRICT ring, int event_fd);
 
 /**
@@ -1429,7 +1436,7 @@ rbipc_set_eventfd(rbipc_ring_t *RBIPC_RESTRICT ring, int event_fd);
  * @retval RBIPC_ERR_INVAL if arguments are null.
  * @retval RBIPC_ERR_NOTSUP if no eventfd is currently bound to the ring handle.
  */
-RBIPC_NODISCARD RBIPC_LEAF int
+RBIPC_API RBIPC_NODISCARD RBIPC_LEAF int
 rbipc_get_eventfd(const rbipc_ring_t *RBIPC_RESTRICT ring,
                   int *RBIPC_RESTRICT out_fd);
 
@@ -1442,7 +1449,7 @@ rbipc_get_eventfd(const rbipc_ring_t *RBIPC_RESTRICT ring,
  * @retval RBIPC_ERR_INVAL if ring is null.
  * @retval RBIPC_ERR_NOTSUP if no eventfd is bound.
  */
-RBIPC_NODISCARD RBIPC_LEAF int
+RBIPC_API RBIPC_NODISCARD RBIPC_LEAF int
 rbipc_eventfd_drain(const rbipc_ring_t *RBIPC_RESTRICT ring);
 
 /**
@@ -1454,7 +1461,7 @@ rbipc_eventfd_drain(const rbipc_ring_t *RBIPC_RESTRICT ring);
  *
  * @see rbipc_attach_fd
  */
-RBIPC_NODISCARD RBIPC_PURE RBIPC_LEAF int
+RBIPC_API RBIPC_NODISCARD RBIPC_PURE RBIPC_LEAF int
 rbipc_get_fd(const rbipc_ring_t *ring);
 
 /**
@@ -1469,7 +1476,7 @@ rbipc_get_fd(const rbipc_ring_t *ring);
  * @return @ref RBIPC_OK on success.
  * @retval RBIPC_ERR_INVAL if @p ring or @p out_stats is NULL.
  */
-RBIPC_NODISCARD RBIPC_LEAF int
+RBIPC_API RBIPC_NODISCARD RBIPC_LEAF int
 rbipc_get_stats(const rbipc_ring_t *RBIPC_RESTRICT ring,
                 rbipc_stats_t *RBIPC_RESTRICT out_stats);
 
@@ -1487,7 +1494,7 @@ rbipc_get_stats(const rbipc_ring_t *RBIPC_RESTRICT ring,
  * @return @ref RBIPC_OK on success.
  * @retval RBIPC_ERR_INVAL if @p ring or @p out_slot_stats is NULL.
  */
-RBIPC_NODISCARD RBIPC_LEAF int
+RBIPC_API RBIPC_NODISCARD RBIPC_LEAF int
 rbipc_get_slot_stats(const rbipc_ring_t *RBIPC_RESTRICT ring,
                      rbipc_slot_stats_t *RBIPC_RESTRICT out_slot_stats);
 
@@ -1508,7 +1515,7 @@ rbipc_get_slot_stats(const rbipc_ring_t *RBIPC_RESTRICT ring,
  * @return @ref RBIPC_OK on success.
  * @retval RBIPC_ERR_INVAL if @p ring is NULL.
  */
-RBIPC_NODISCARD RBIPC_LEAF int
+RBIPC_API RBIPC_NODISCARD RBIPC_LEAF int
 rbipc_set_lease_timeout(rbipc_ring_t *ring, uint64_t lease_timeout_ns);
 
 /**
@@ -1518,7 +1525,7 @@ rbipc_set_lease_timeout(rbipc_ring_t *ring, uint64_t lease_timeout_ns);
  *
  * @return Lease timeout in nanoseconds (0 if disabled or invalid ring).
  */
-RBIPC_NODISCARD RBIPC_LEAF uint64_t
+RBIPC_API RBIPC_NODISCARD RBIPC_LEAF uint64_t
 rbipc_get_lease_timeout(const rbipc_ring_t *ring);
 
 /**
@@ -1528,7 +1535,7 @@ rbipc_get_lease_timeout(const rbipc_ring_t *ring);
  *
  * @return Number of expired leases revoked (>= 0), or negative error code.
  */
-RBIPC_NODISCARD RBIPC_LEAF int rbipc_revoke_expired_leases(rbipc_ring_t *ring);
+RBIPC_API RBIPC_NODISCARD RBIPC_LEAF int rbipc_revoke_expired_leases(rbipc_ring_t *ring);
 /** @} */
 
 /**
@@ -1538,7 +1545,7 @@ RBIPC_NODISCARD RBIPC_LEAF int rbipc_revoke_expired_leases(rbipc_ring_t *ring);
  *
  * @return Static constant string describing the status code.
  */
-RBIPC_RETURNS_NONNULL RBIPC_CONST RBIPC_COLD RBIPC_LEAF const char *
+RBIPC_API RBIPC_RETURNS_NONNULL RBIPC_CONST RBIPC_COLD RBIPC_LEAF const char *
 rbipc_strerror(int err);
 
 #ifdef __cplusplus

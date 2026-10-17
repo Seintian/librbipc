@@ -28,6 +28,12 @@
  * `__attribute__((always_inline))`. Eliminates function call overhead (call/ret
  * instructions, parameter shuffling) on the hot path.
  */
+/**
+ * @def RBIPC_INTERNAL
+ * @brief Hides internal function from dynamic shared library symbol exports.
+ */
+#define RBIPC_INTERNAL __attribute__((visibility("hidden")))
+
 #define RBIPC_INLINE static inline __attribute__((always_inline))
 
 /**
@@ -58,6 +64,7 @@
 #define RBIPC_PREFETCH(addr, rw, loc) __builtin_prefetch((addr), (rw), (loc))
 
 #else
+#define RBIPC_INTERNAL
 #define RBIPC_INLINE static inline
 #define RBIPC_PREFETCH_READ 0
 #define RBIPC_PREFETCH_WRITE 1

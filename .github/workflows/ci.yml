@@ -1,0 +1,85 @@
+﻿name: librbipc CI & Quality Verification Matrix
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-test:
+    name: Build & Test (${{ matrix.compiler }})
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        compiler: [gcc, clang]
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Install Toolchain & Dependencies
+        run: |
+          sudo apt-get update
+          if [ "${{ matrix.compiler }}" = "clang" ]; then
+            sudo apt-get install -y clang llvm
+          else
+            sudo apt-get install -y gcc
+          fi
+
+      - name: Build All Targets
+        run: make CC=${{ matrix.compiler }} clean all
+
+      - name: Execute Full Test Suite
+        run: make CC=${{ matrix.compiler }} test
+
+      - name: Verify Installation & Pkg-Config
+        run: |
+          make install DESTDIR=/tmp/rbipc_inst
+          test -f /tmp/rbipc_inst/usr/local/lib/librbipc.a
+          test -f /tmp/rbipc_inst/usr/local/lib/librbipc.so
+          test -f /tmp/rbipc_inst/usr/local/include/rbipc.h
+          test -f /tmp/rbipc_inst/usr/local/lib/pkgconfig/librbipc.pc
+          make uninstall DESTDIR=/tmp/rbipc_inst
+
+      - name: Validate Benchmark Target
+        run: make CC=${{ matrix.compiler }} bench-laptop-powersave
+
+  sanitizers:
+    name: Sanitizers (ASan, UBSan, TSan)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Install Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc
+
+      - name: Run AddressSanitizer & UndefinedBehaviorSanitizer
+        run: make asan
+
+      - name: Run ThreadSanitizer
+        run: make tsan
+
+  code-quality:
+    name: Code Quality & Coverage
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Install Analysis Tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y clang-tidy gcovr python3
+
+      - name: Run Clang-Tidy Static Analysis
+        run: make clang-tidy
+
+      - name: Generate Code Coverage
+        run: make coverage

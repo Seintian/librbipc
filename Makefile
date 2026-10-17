@@ -1,6 +1,14 @@
 CC ?= gcc
-CFLAGS ?= -std=c23 -Wall -Wextra -Wpedantic -Werror -O3 -fPIC -Iinclude -Isrc -Isrc/core -Isrc/memory -Isrc/sync -Isrc/io -Isrc/ipc -Isrc/audit -Isrc/platform -pthread -D_GNU_SOURCE
+CFLAGS ?= -std=c23 -Wall -Wextra -Wpedantic -Werror -O3 -fPIC -fvisibility=hidden -MMD -MP -Iinclude -Isrc -Isrc/core -Isrc/memory -Isrc/sync -Isrc/io -Isrc/ipc -Isrc/audit -Isrc/platform -pthread -D_GNU_SOURCE
 LDFLAGS ?= -pthread -lrt -lm
+VERSION_SCRIPT ?= scripts/librbipc.sym
+SO_LDFLAGS ?= $(LDFLAGS) -Wl,--version-script=$(VERSION_SCRIPT)
+
+PREFIX ?= /usr/local
+EXEC_PREFIX ?= $(PREFIX)
+LIBDIR_INSTALL ?= $(EXEC_PREFIX)/lib
+INCLUDEDIR ?= $(PREFIX)/include
+PKGCONFIGDIR ?= $(LIBDIR_INSTALL)/pkgconfig
 
 SRCDIR = src
 INCDIR = include
@@ -26,7 +34,7 @@ TOOLDIR = tools
 TOOL_SRCS = $(wildcard $(TOOLDIR)/*.c)
 TOOL_BINS = $(patsubst $(TOOLDIR)/%.c, $(BINDIR)/%, $(TOOL_SRCS))
 
-.PHONY: all clean test bench bench-laptop bench-laptop-powersave bench-home-pc monitor monitor-live coverage valgrind clang-tidy compile_commands docs tsan asan
+.PHONY: all clean test bench bench-laptop bench-laptop-powersave bench-home-pc monitor monitor-live coverage valgrind clang-tidy compile_commands docs tsan asan install uninstall format
 
 all: $(STATIC_LIB) $(SHARED_LIB) $(TEST_BINS) $(TOOL_BINS) compile_commands.json
 
@@ -37,11 +45,15 @@ $(BUILDDIR)/%.o: $(SRCDIR)/%.c $(INCDIR)/rbipc.h | $(BUILDDIR)
 	@mkdir -p $(dir $@)
 	$(CC) $(CFLAGS) -c $< -o $@
 
+
+DEPS = $(OBJS:.o=.d)
+-include $(DEPS)
+
 $(STATIC_LIB): $(OBJS) | $(LIBDIR)
 	ar rcs $@ $^
 
-$(SHARED_LIB): $(OBJS) | $(LIBDIR)
-	$(CC) -shared $(CFLAGS) -o $@ $^ $(LDFLAGS)
+$(SHARED_LIB): $(OBJS) $(VERSION_SCRIPT) | $(LIBDIR)
+	$(CC) -shared $(CFLAGS) -o $@ $(OBJS) $(SO_LDFLAGS)
 
 $(BINDIR)/%: $(TESTDIR)/%.c $(STATIC_LIB) | $(BINDIR)
 	@mkdir -p $(dir $@)
@@ -182,5 +194,43 @@ asan: CFLAGS = -std=c23 -Wall -Wextra -Wpedantic -Werror -O1 -g -fsanitize=addre
 asan: LDFLAGS += -fsanitize=address,undefined
 asan: clean test
 
+
+librbipc.pc:
+	@echo "Generating pkg-config file..."
+	@echo "prefix=$(PREFIX)" > $@
+	@echo "exec_prefix=$(EXEC_PREFIX)" >> $@
+	@echo "libdir=$(LIBDIR_INSTALL)" >> $@
+	@echo "includedir=$(INCLUDEDIR)" >> $@
+	@echo "" >> $@
+	@echo "Name: librbipc" >> $@
+	@echo "Description: High-Throughput, Zero-Idle-CPU, Crash-Resilient MPMC Shared-Memory IPC Engine in ISO C23" >> $@
+	@echo "Version: 1.0.0" >> $@
+	@echo "Libs: -L\$${libdir} -lrbipc -pthread -lrt -lm" >> $@
+	@echo "Cflags: -I\$${includedir}" >> $@
+
+install: $(STATIC_LIB) $(SHARED_LIB) librbipc.pc
+	install -d $(DESTDIR)$(LIBDIR_INSTALL)
+	install -m 644 $(STATIC_LIB) $(DESTDIR)$(LIBDIR_INSTALL)/
+	install -m 755 $(SHARED_LIB) $(DESTDIR)$(LIBDIR_INSTALL)/
+	install -d $(DESTDIR)$(INCLUDEDIR)
+	install -m 644 $(INCDIR)/*.h $(DESTDIR)$(INCLUDEDIR)/
+	install -d $(DESTDIR)$(PKGCONFIGDIR)
+	install -m 644 librbipc.pc $(DESTDIR)$(PKGCONFIGDIR)/
+
+uninstall:
+	rm -f $(DESTDIR)$(LIBDIR_INSTALL)/librbipc.a
+	rm -f $(DESTDIR)$(LIBDIR_INSTALL)/librbipc.so
+	rm -f $(DESTDIR)$(INCLUDEDIR)/rbipc.h
+	rm -f $(DESTDIR)$(INCLUDEDIR)/rbipc_ipc.h
+	rm -f $(DESTDIR)$(INCLUDEDIR)/rbipc_pubsub.h
+	rm -f $(DESTDIR)$(PKGCONFIGDIR)/librbipc.pc
+
+format:
+	@which clang-format > /dev/null 2>&1 && { \
+		echo "Formatting source tree with clang-format..."; \
+		clang-format -i $(SRCS) $(wildcard $(INCDIR)/*.h) $(wildcard $(SRCDIR)/*/*.h) $(TEST_SRCS) $(BENCH_SRCS) $(TOOL_SRCS); \
+		echo "Formatting completed successfully."; \
+	} || echo "clang-format not found; install clang-format to run automatic formatting."
+
 clean:
-	rm -rf $(BUILDDIR) $(BINDIR) $(LIBDIR) compile_commands.json *.gcda *.gcno *.gcov docs/html
+	rm -rf $(BUILDDIR) $(BINDIR) $(LIBDIR) compile_commands.json librbipc.pc *.gcda *.gcno *.gcov docs/html

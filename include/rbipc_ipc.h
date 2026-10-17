@@ -32,7 +32,7 @@ extern "C" {
  * @retval RBIPC_ERR_INVAL if @p socket_fd or @p fd_to_send is negative.
  * @retval RBIPC_ERR_SYS   if sendmsg fails.
  */
-RBIPC_NODISCARD RBIPC_LEAF int rbipc_ipc_send_fd(int socket_fd, int fd_to_send);
+RBIPC_API RBIPC_NODISCARD RBIPC_LEAF int rbipc_ipc_send_fd(int socket_fd, int fd_to_send);
 
 /**
  * @brief Receive a raw file descriptor from a UNIX domain stream or datagram
@@ -47,7 +47,7 @@ RBIPC_NODISCARD RBIPC_LEAF int rbipc_ipc_send_fd(int socket_fd, int fd_to_send);
  * @retval RBIPC_ERR_SYS   if recvmsg fails or ancillary SCM_RIGHTS payload is
  * missing.
  */
-RBIPC_NODISCARD RBIPC_LEAF int rbipc_ipc_recv_fd(int socket_fd,
+RBIPC_API RBIPC_NODISCARD RBIPC_LEAF int rbipc_ipc_recv_fd(int socket_fd,
                                                  int *out_received_fd);
 
 /**
@@ -61,7 +61,7 @@ RBIPC_NODISCARD RBIPC_LEAF int rbipc_ipc_recv_fd(int socket_fd,
  * @retval RBIPC_ERR_INVAL if @p socket_fd is negative or @p ring is NULL.
  * @retval RBIPC_ERR_SYS   if sendmsg fails.
  */
-RBIPC_NODISCARD RBIPC_LEAF int rbipc_send_fd(int socket_fd,
+RBIPC_API RBIPC_NODISCARD RBIPC_LEAF int rbipc_send_fd(int socket_fd,
                                              const rbipc_ring_t *ring);
 
 /**
@@ -78,7 +78,7 @@ RBIPC_NODISCARD RBIPC_LEAF int rbipc_send_fd(int socket_fd,
  * invalid, or @p out_ring is NULL.
  * @retval RBIPC_ERR_SYS   if recvmsg fails or attachment fails.
  */
-RBIPC_NODISCARD RBIPC_LEAF int
+RBIPC_API RBIPC_NODISCARD RBIPC_LEAF int
 rbipc_recv_fd_ex(int socket_fd, uint32_t role_flags, rbipc_ring_t **out_ring);
 
 /**
@@ -92,7 +92,7 @@ rbipc_recv_fd_ex(int socket_fd, uint32_t role_flags, rbipc_ring_t **out_ring);
  * @retval RBIPC_ERR_INVAL if @p socket_fd is negative or @p out_ring is NULL.
  * @retval RBIPC_ERR_SYS   if recvmsg fails or attachment fails.
  */
-RBIPC_NODISCARD RBIPC_LEAF int rbipc_recv_fd(int socket_fd,
+RBIPC_API RBIPC_NODISCARD RBIPC_LEAF int rbipc_recv_fd(int socket_fd,
                                              rbipc_ring_t **out_ring);
 
 #ifdef __cplusplus
