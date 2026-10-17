@@ -1,0 +1,10 @@
+prefix=@PREFIX@
+exec_prefix=@EXEC_PREFIX@
+libdir=@LIBDIR@
+includedir=@INCLUDEDIR@
+
+Name: librbipc
+Description: High-Throughput, Zero-Idle-CPU, Crash-Resilient MPMC Shared-Memory IPC Engine in ISO C23
+Version: @VERSION@
+Libs: -L${libdir} -lrbipc -pthread -lrt -lm
+Cflags: -I${includedir}

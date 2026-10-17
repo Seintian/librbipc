@@ -1,8 +1,13 @@
 CC ?= gcc
 CFLAGS ?= -std=c23 -Wall -Wextra -Wpedantic -Werror -O3 -fPIC -fvisibility=hidden -MMD -MP -Iinclude -Isrc -Isrc/core -Isrc/memory -Isrc/sync -Isrc/io -Isrc/ipc -Isrc/audit -Isrc/platform -pthread -D_GNU_SOURCE
 LDFLAGS ?= -pthread -lrt -lm
+VERSION_MAJOR ?= 1
+VERSION_MINOR ?= 0
+VERSION_PATCH ?= 0
+VERSION ?= $(VERSION_MAJOR).$(VERSION_MINOR).$(VERSION_PATCH)
+
 VERSION_SCRIPT ?= scripts/librbipc.sym
-SO_LDFLAGS ?= $(LDFLAGS) -Wl,--version-script=$(VERSION_SCRIPT)
+SO_LDFLAGS ?= $(LDFLAGS) -Wl,-soname,librbipc.so.$(VERSION_MAJOR) -Wl,--version-script=$(VERSION_SCRIPT)
 
 PREFIX ?= /usr/local
 EXEC_PREFIX ?= $(PREFIX)
@@ -36,7 +41,7 @@ TOOL_BINS = $(patsubst $(TOOLDIR)/%.c, $(BINDIR)/%, $(TOOL_SRCS))
 
 .PHONY: all clean test bench bench-laptop bench-laptop-powersave bench-home-pc monitor monitor-live coverage valgrind clang-tidy compile_commands docs tsan asan install uninstall format
 
-all: $(STATIC_LIB) $(SHARED_LIB) $(TEST_BINS) $(TOOL_BINS) compile_commands.json
+all: $(STATIC_LIB) $(SHARED_LIB) librbipc.pc $(TEST_BINS) $(TOOL_BINS) compile_commands.json
 
 $(BUILDDIR) $(BINDIR) $(LIBDIR):
 	mkdir -p $@
@@ -194,24 +199,21 @@ asan: CFLAGS = -std=c23 -Wall -Wextra -Wpedantic -Werror -O1 -g -fsanitize=addre
 asan: LDFLAGS += -fsanitize=address,undefined
 asan: clean test
 
-
-librbipc.pc:
-	@echo "Generating pkg-config file..."
-	@echo "prefix=$(PREFIX)" > $@
-	@echo "exec_prefix=$(EXEC_PREFIX)" >> $@
-	@echo "libdir=$(LIBDIR_INSTALL)" >> $@
-	@echo "includedir=$(INCLUDEDIR)" >> $@
-	@echo "" >> $@
-	@echo "Name: librbipc" >> $@
-	@echo "Description: High-Throughput, Zero-Idle-CPU, Crash-Resilient MPMC Shared-Memory IPC Engine in ISO C23" >> $@
-	@echo "Version: 1.0.0" >> $@
-	@echo "Libs: -L\$${libdir} -lrbipc -pthread -lrt -lm" >> $@
-	@echo "Cflags: -I\$${includedir}" >> $@
+librbipc.pc: librbipc.pc.in Makefile
+	@echo "Generating pkg-config file from $<..."
+	sed -e 's|@PREFIX@|$(PREFIX)|g' \
+	    -e 's|@EXEC_PREFIX@|$(EXEC_PREFIX)|g' \
+	    -e 's|@LIBDIR@|$(LIBDIR_INSTALL)|g' \
+	    -e 's|@INCLUDEDIR@|$(INCLUDEDIR)|g' \
+	    -e 's|@VERSION@|$(VERSION)|g' \
+	    $< > $@
 
 install: $(STATIC_LIB) $(SHARED_LIB) librbipc.pc
 	install -d $(DESTDIR)$(LIBDIR_INSTALL)
 	install -m 644 $(STATIC_LIB) $(DESTDIR)$(LIBDIR_INSTALL)/
-	install -m 755 $(SHARED_LIB) $(DESTDIR)$(LIBDIR_INSTALL)/
+	install -m 755 $(SHARED_LIB) $(DESTDIR)$(LIBDIR_INSTALL)/librbipc.so.$(VERSION)
+	ln -sf librbipc.so.$(VERSION) $(DESTDIR)$(LIBDIR_INSTALL)/librbipc.so.$(VERSION_MAJOR)
+	ln -sf librbipc.so.$(VERSION_MAJOR) $(DESTDIR)$(LIBDIR_INSTALL)/librbipc.so
 	install -d $(DESTDIR)$(INCLUDEDIR)
 	install -m 644 $(INCDIR)/*.h $(DESTDIR)$(INCLUDEDIR)/
 	install -d $(DESTDIR)$(PKGCONFIGDIR)
@@ -220,6 +222,8 @@ install: $(STATIC_LIB) $(SHARED_LIB) librbipc.pc
 uninstall:
 	rm -f $(DESTDIR)$(LIBDIR_INSTALL)/librbipc.a
 	rm -f $(DESTDIR)$(LIBDIR_INSTALL)/librbipc.so
+	rm -f $(DESTDIR)$(LIBDIR_INSTALL)/librbipc.so.$(VERSION_MAJOR)
+	rm -f $(DESTDIR)$(LIBDIR_INSTALL)/librbipc.so.$(VERSION)
 	rm -f $(DESTDIR)$(INCLUDEDIR)/rbipc.h
 	rm -f $(DESTDIR)$(INCLUDEDIR)/rbipc_ipc.h
 	rm -f $(DESTDIR)$(INCLUDEDIR)/rbipc_pubsub.h

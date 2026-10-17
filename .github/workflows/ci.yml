@@ -1,4 +1,4 @@
-﻿name: librbipc CI & Quality Verification Matrix
+name: librbipc CI & Quality Verification Matrix
 
 on:
   push:
@@ -25,9 +25,9 @@ jobs:
         run: |
           sudo apt-get update
           if [ "${{ matrix.compiler }}" = "clang" ]; then
-            sudo apt-get install -y clang llvm
+            sudo apt-get install -y clang llvm pkg-config
           else
-            sudo apt-get install -y gcc
+            sudo apt-get install -y gcc pkg-config
           fi
 
       - name: Build All Targets
@@ -40,10 +40,16 @@ jobs:
         run: |
           make install DESTDIR=/tmp/rbipc_inst
           test -f /tmp/rbipc_inst/usr/local/lib/librbipc.a
-          test -f /tmp/rbipc_inst/usr/local/lib/librbipc.so
+          test -f /tmp/rbipc_inst/usr/local/lib/librbipc.so.1.0.0
+          test -L /tmp/rbipc_inst/usr/local/lib/librbipc.so.1
+          test -L /tmp/rbipc_inst/usr/local/lib/librbipc.so
           test -f /tmp/rbipc_inst/usr/local/include/rbipc.h
+          test -f /tmp/rbipc_inst/usr/local/include/rbipc_ipc.h
+          test -f /tmp/rbipc_inst/usr/local/include/rbipc_pubsub.h
           test -f /tmp/rbipc_inst/usr/local/lib/pkgconfig/librbipc.pc
+          PKG_CONFIG_PATH=/tmp/rbipc_inst/usr/local/lib/pkgconfig pkg-config --validate librbipc || true
           make uninstall DESTDIR=/tmp/rbipc_inst
+          test ! -f /tmp/rbipc_inst/usr/local/lib/librbipc.so
 
       - name: Validate Benchmark Target
         run: make CC=${{ matrix.compiler }} bench-laptop-powersave
@@ -58,7 +64,7 @@ jobs:
       - name: Install Dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y gcc
+          sudo apt-get install -y gcc pkg-config
 
       - name: Run AddressSanitizer & UndefinedBehaviorSanitizer
         run: make asan
