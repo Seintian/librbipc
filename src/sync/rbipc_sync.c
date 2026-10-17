@@ -60,36 +60,6 @@ void rbipc_sync_state_init(rbipc_sync_state_t *RBIPC_RESTRICT state,
   }
 }
 
-/**
- * @brief Compute relative timeout timespec capped by RBIPC_FUTEX_PERIOD_NS.
- *
- * @param[in]  state  Sync state with configured deadline.
- * @param[in]  now    Current monotonic timestamp in nanoseconds.
- * @param[out] out_ts Timespec structure receiving the calculated timeout.
- *
- * @return 0 on success.
- * @retval RBIPC_ERR_TIMEOUT if deadline has already expired.
- */
-RBIPC_INLINE int
-rbipc_sync_calc_timeout_spec(const rbipc_sync_state_t *RBIPC_RESTRICT state,
-                             uint64_t now,
-                             struct timespec *RBIPC_RESTRICT out_ts) {
-  if (state->has_deadline) {
-    if (RBIPC_UNLIKELY(now >= state->deadline_ns)) {
-      return RBIPC_ERR_TIMEOUT;
-    }
-    uint64_t remaining_ns = state->deadline_ns - now;
-    if (remaining_ns > RBIPC_FUTEX_PERIOD_NS) {
-      remaining_ns = RBIPC_FUTEX_PERIOD_NS;
-    }
-    rbipc_ns_to_timespec(remaining_ns, out_ts);
-  } else {
-    out_ts->tv_sec = 0;
-    out_ts->tv_nsec = (long)RBIPC_FUTEX_PERIOD_NS;
-  }
-  return 0;
-}
-
 static _Atomic int s_membarrier_cmd = -1;
 
 /**

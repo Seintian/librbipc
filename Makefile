@@ -1,5 +1,9 @@
+ifeq ($(origin CC),default)
+  CC = gcc
+endif
 CC ?= gcc
-CFLAGS ?= -std=c23 -Wall -Wextra -Wpedantic -Werror -O3 -fPIC -fvisibility=hidden -MMD -MP -Iinclude -Isrc -Isrc/core -Isrc/memory -Isrc/sync -Isrc/io -Isrc/ipc -Isrc/audit -Isrc/platform -pthread -D_GNU_SOURCE
+CSTD ?= $(shell echo '' | $(CC) -std=c23 -E -x c - >/dev/null 2>&1 && echo -std=c23 || (echo '' | $(CC) -std=c2x -E -x c - >/dev/null 2>&1 && echo -std=c2x || echo -std=c11))
+CFLAGS ?= $(CSTD) -Wall -Wextra -Wpedantic -Werror -O3 -fPIC -fvisibility=hidden -MMD -MP -Iinclude -Isrc -Isrc/core -Isrc/memory -Isrc/sync -Isrc/io -Isrc/ipc -Isrc/audit -Isrc/platform -pthread -D_GNU_SOURCE
 LDFLAGS ?= -pthread -lrt -lm
 VERSION_MAJOR ?= 1
 VERSION_MINOR ?= 0
@@ -153,7 +157,7 @@ monitor-live: $(STATIC_LIB) $(TOOL_BINS)
 	fi; \
 	$(BINDIR)/rbipc_stat $(RING) --watch 0.5 --slots
 
-coverage: CFLAGS = -std=c23 -Wall -Wextra -Wpedantic -Werror -O0 -g --coverage -fPIC -Iinclude -Isrc -Isrc/core -Isrc/memory -Isrc/sync -Isrc/io -Isrc/ipc -Isrc/audit -Isrc/platform -pthread -D_GNU_SOURCE
+coverage: CFLAGS = $(CSTD) -Wall -Wextra -Wpedantic -Werror -O0 -g --coverage -fPIC -Iinclude -Isrc -Isrc/core -Isrc/memory -Isrc/sync -Isrc/io -Isrc/ipc -Isrc/audit -Isrc/platform -pthread -D_GNU_SOURCE
 coverage: LDFLAGS += --coverage
 coverage: clean test
 	@echo "=================================================="
@@ -179,23 +183,23 @@ clang-tidy:
 	@echo "=================================================="
 	@echo "           Running Clang-Tidy Static Analysis     "
 	@echo "=================================================="
-	clang-tidy -checks='bugprone-*,clang-analyzer-*,performance-*,-clang-analyzer-optin.performance.Padding,-bugprone-easily-swappable-parameters,-clang-analyzer-security.insecureAPI.DeprecatedOrUnsafeBufferHandling' $(SRCS) -- -std=c23 -Iinclude -Isrc -Isrc/core -Isrc/memory -Isrc/sync -Isrc/io -Isrc/ipc -Isrc/audit -Isrc/platform -D_GNU_SOURCE
+	clang-tidy -checks='bugprone-*,clang-analyzer-*,performance-*,-clang-analyzer-optin.performance.Padding,-bugprone-easily-swappable-parameters,-clang-analyzer-security.insecureAPI.DeprecatedOrUnsafeBufferHandling' $(SRCS) -- $(CSTD) -Iinclude -Isrc -Isrc/core -Isrc/memory -Isrc/sync -Isrc/io -Isrc/ipc -Isrc/audit -Isrc/platform -D_GNU_SOURCE
 	@echo "Clang-Tidy analysis passed with 0 errors!"
 
 compile_commands.json: Makefile $(SRCS) $(TEST_SRCS) $(BENCH_SRCS)
-	@python3 scripts/gen_compile_commands.py
+	@CSTD="$(CSTD)" CC="$(CC)" python3 scripts/gen_compile_commands.py
 
 compile_commands: compile_commands.json
 
 docs:
 	@which doxygen > /dev/null 2>&1 && doxygen Doxyfile && python3 scripts/postprocess_docs.py || echo "doxygen is not installed in the environment; install doxygen to generate HTML documentation."
 
-tsan: CFLAGS = -std=c23 -Wall -Wextra -Wpedantic -Werror -Wno-error=tsan -O1 -g -fsanitize=thread -fPIC -Iinclude -Isrc -Isrc/core -Isrc/memory -Isrc/sync -Isrc/io -Isrc/ipc -Isrc/audit -Isrc/platform -pthread -D_GNU_SOURCE
+tsan: CFLAGS = $(CSTD) -Wall -Wextra -Wpedantic -Werror -Wno-error=tsan -O1 -g -fsanitize=thread -fPIC -Iinclude -Isrc -Isrc/core -Isrc/memory -Isrc/sync -Isrc/io -Isrc/ipc -Isrc/audit -Isrc/platform -pthread -D_GNU_SOURCE
 tsan: LDFLAGS += -fsanitize=thread
 tsan: clean
 	make test RUN_TEST="setarch $$(uname -m) -R" CFLAGS="$(CFLAGS)" LDFLAGS="$(LDFLAGS)"
 
-asan: CFLAGS = -std=c23 -Wall -Wextra -Wpedantic -Werror -O1 -g -fsanitize=address,undefined -fPIC -Iinclude -Isrc -Isrc/core -Isrc/memory -Isrc/sync -Isrc/io -Isrc/ipc -Isrc/audit -Isrc/platform -pthread -D_GNU_SOURCE
+asan: CFLAGS = $(CSTD) -Wall -Wextra -Wpedantic -Werror -O1 -g -fsanitize=address,undefined -fPIC -Iinclude -Isrc -Isrc/core -Isrc/memory -Isrc/sync -Isrc/io -Isrc/ipc -Isrc/audit -Isrc/platform -pthread -D_GNU_SOURCE
 asan: LDFLAGS += -fsanitize=address,undefined
 asan: clean test
 

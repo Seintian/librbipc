@@ -15,6 +15,7 @@ jobs:
     name: Build & Test (${{ matrix.compiler }})
     runs-on: ubuntu-latest
     strategy:
+      fail-fast: false
       matrix:
         compiler: [gcc, clang]
     steps:
@@ -82,7 +83,7 @@ jobs:
       - name: Install Analysis Tools
         run: |
           sudo apt-get update
-          sudo apt-get install -y clang-tidy gcovr python3
+          sudo apt-get install -y gcc clang-tidy gcovr python3
 
       - name: Run Clang-Tidy Static Analysis
         run: make clang-tidy
