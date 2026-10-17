@@ -104,7 +104,8 @@ static void run_bench_idle(idle_metrics_t *out_metrics) {
         m.voluntary_ctxt_switches = ru.ru_nvcsw;
         m.involuntary_ctxt_switches = ru.ru_nivcsw;
 
-        write(pipefd[1], &m, sizeof(m));
+        ssize_t w = write(pipefd[1], &m, sizeof(m));
+        (void)w;
         close(pipefd[1]);
         rbipc_detach(c_ring);
         _exit(0);
@@ -118,7 +119,8 @@ static void run_bench_idle(idle_metrics_t *out_metrics) {
     rbipc_signal_shutdown(ring);
 
     idle_metrics_t m;
-    read(pipefd[0], &m, sizeof(m));
+    ssize_t r = read(pipefd[0], &m, sizeof(m));
+    (void)r;
     close(pipefd[0]);
     waitpid(pid, NULL, 0);
 
@@ -383,7 +385,8 @@ static void run_bench_streaming(int iterations, stream_metrics_t *out_metrics) {
         struct rusage ru;
         getrusage(RUSAGE_SELF, &ru);
         long cs[2] = { ru.ru_nvcsw, ru.ru_nivcsw };
-        write(pipefd[1], cs, sizeof(cs));
+        ssize_t w = write(pipefd[1], cs, sizeof(cs));
+        (void)w;
         close(pipefd[1]);
 
         rbipc_detach(p_ring);
@@ -410,7 +413,8 @@ static void run_bench_streaming(int iterations, stream_metrics_t *out_metrics) {
     double elapsed = (double)(t1 - t0) / 1e9;
 
     long prod_cs[2];
-    read(pipefd[0], prod_cs, sizeof(prod_cs));
+    ssize_t r = read(pipefd[0], prod_cs, sizeof(prod_cs));
+    (void)r;
     close(pipefd[0]);
     waitpid(pid, NULL, 0);
 

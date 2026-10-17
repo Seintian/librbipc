@@ -387,7 +387,8 @@ static result_t bench_rbipc_tput(size_t msgsz, uint64_t iters, transfer_semantic
             }
         }
         char sig[4] = "OK!";
-        write(sync_pipe[1], sig, sizeof(sig));
+        ssize_t w = write(sync_pipe[1], sig, sizeof(sig));
+        (void)w;
         close(sync_pipe[1]);
         rbipc_detach(rc);
         _exit(0);
@@ -448,7 +449,8 @@ static result_t bench_rte_tput(size_t msgsz, uint64_t iters, transfer_semantic_t
             rte_dequeue_wait(ring, &v);
         }
         char sig[4] = "OK!";
-        write(sync_pipe[1], sig, sizeof(sig));
+        ssize_t w = write(sync_pipe[1], sig, sizeof(sig));
+        (void)w;
         close(sync_pipe[1]);
         _exit(0);
     } else {
@@ -504,7 +506,8 @@ static result_t bench_disruptor_tput(size_t msgsz, uint64_t iters, transfer_sema
             }
         }
         char sig[4] = "OK!";
-        write(sync_pipe[1], sig, sizeof(sig));
+        ssize_t w = write(sync_pipe[1], sig, sizeof(sig));
+        (void)w;
         close(sync_pipe[1]);
         _exit(0);
     } else {
@@ -559,7 +562,8 @@ static result_t bench_mq_tput(size_t msgsz, uint64_t iters) {
             assert(s > 0);
         }
         char sig[4] = "OK!";
-        write(sync_pipe[1], sig, sizeof(sig));
+        ssize_t w = write(sync_pipe[1], sig, sizeof(sig));
+        (void)w;
         close(sync_pipe[1]);
         mq_close(mq);
         _exit(0);
@@ -616,7 +620,8 @@ static result_t bench_uds_tput(size_t msgsz, uint64_t iters) {
         }
         close(sv[1]);
         char sig[4] = "OK!";
-        write(sync_pipe[1], sig, sizeof(sig));
+        ssize_t w = write(sync_pipe[1], sig, sizeof(sig));
+        (void)w;
         close(sync_pipe[1]);
         _exit(0);
     } else {
@@ -670,7 +675,8 @@ static result_t bench_rbipc_lat(uint64_t iters) {
     pid_t pid = fork();
     if (pid == 0) {
         close(sync_pipe[0]);
-        write(sync_pipe[1], "RDY", 3);
+        ssize_t w = write(sync_pipe[1], "RDY", 3);
+        (void)w;
         for (uint64_t n = 0; n < iters; n++) {
             const void *buf; uint64_t tk; uint32_t ln;
             while (rbipc_read_acquire(rc, &buf, &ln, &tk) != RBIPC_OK) {}

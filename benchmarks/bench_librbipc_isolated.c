@@ -204,7 +204,8 @@ int main(int argc, char **argv) {
         if (pid == 0) {
             close(sync_pipe[0]);
             consumer_fn(&cons_ctx);
-            write(sync_pipe[1], "OK", 2);
+            ssize_t w = write(sync_pipe[1], "OK", 2);
+            (void)w;
             close(sync_pipe[1]);
             rbipc_detach(rc);
             _exit(0);
@@ -212,7 +213,8 @@ int main(int argc, char **argv) {
             close(sync_pipe[1]);
             producer_fn(&prod_ctx);
             char ack[4];
-            (void)read(sync_pipe[0], ack, 2);
+            ssize_t r = read(sync_pipe[0], ack, 2);
+            (void)r;
             close(sync_pipe[0]);
             waitpid(pid, NULL, 0);
         }

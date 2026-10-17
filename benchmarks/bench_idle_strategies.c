@@ -204,7 +204,8 @@ static int dpdk_try_enqueue(dpdk_ring_t *r, uintptr_t val) {
 
     if (atomic_load_explicit(&r->in_sleep, memory_order_seq_cst)) {
         uint64_t one = 1;
-        (void)write(r->efd, &one, sizeof(one));
+        ssize_t w = write(r->efd, &one, sizeof(one));
+        (void)w;
     }
     return 0;
 }
@@ -258,7 +259,8 @@ static void dpdk_dequeue_interrupt(dpdk_ring_t *r, uintptr_t *out) {
             int nfds = epoll_wait(r->epfd, &ev, 1, 10);
             if (nfds > 0) {
                 uint64_t val;
-                (void)read(r->efd, &val, sizeof(val));
+                ssize_t rret = read(r->efd, &val, sizeof(val));
+                (void)rret;
             }
             atomic_store_explicit(&r->in_sleep, false, memory_order_seq_cst);
             empty_polls = 0;
