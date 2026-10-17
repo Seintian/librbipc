@@ -110,7 +110,7 @@ struct futex_waitv {
  * @param[in]  ns Duration in nanoseconds.
  * @param[out] ts Pointer to caller-allocated struct timespec to populate.
  */
-RBIPC_LEAF
+RBIPC_INTERNAL RBIPC_LEAF
 void rbipc_ns_to_timespec(uint64_t ns, struct timespec *RBIPC_RESTRICT ts);
 
 /**
@@ -135,7 +135,7 @@ void rbipc_ns_to_timespec(uint64_t ns, struct timespec *RBIPC_RESTRICT ts);
  * @retval -EINTR       if interrupted by a POSIX signal.
  * @retval -EINVAL      if @p uaddr is null or misaligned.
  */
-RBIPC_LEAF
+RBIPC_INTERNAL RBIPC_LEAF
 int rbipc_futex_wait(_Atomic uint32_t *uaddr, uint32_t val,
                      const struct timespec *RBIPC_RESTRICT timeout);
 
@@ -155,7 +155,7 @@ int rbipc_futex_wait(_Atomic uint32_t *uaddr, uint32_t val,
  * @retval -EINVAL if @p uaddr is null or misaligned.
  * @retval -errno  if underlying futex syscall returns failure.
  */
-RBIPC_LEAF
+RBIPC_INTERNAL RBIPC_LEAF
 int rbipc_futex_wake(_Atomic uint32_t *uaddr, int count);
 
 /**
@@ -171,7 +171,7 @@ int rbipc_futex_wake(_Atomic uint32_t *uaddr, int count);
  * @retval -EINVAL if @p slot_seq is null.
  * @retval -errno  if underlying futex syscall returns failure.
  */
-RBIPC_LEAF
+RBIPC_INTERNAL RBIPC_LEAF
 int rbipc_futex_wake_slot(const _Atomic uint64_t *slot_seq, int count);
 
 /**
@@ -179,7 +179,7 @@ int rbipc_futex_wake_slot(const _Atomic uint64_t *slot_seq, int count);
  *
  * @return true if sys_futex_waitv is available, false otherwise.
  */
-RBIPC_LEAF
+RBIPC_INTERNAL RBIPC_LEAF
 bool rbipc_futex_has_waitv(void);
 
 /**
@@ -196,7 +196,7 @@ bool rbipc_futex_has_waitv(void);
  * @retval -EINVAL      if parameters are invalid.
  * @retval -errno       on other system call errors.
  */
-RBIPC_LEAF
+RBIPC_INTERNAL RBIPC_LEAF
 int rbipc_futex_waitv(const struct futex_waitv *waiters, unsigned int nr_waiters,
                       uint64_t timeout_ns);
 
@@ -215,7 +215,7 @@ int rbipc_futex_waitv(const struct futex_waitv *waiters, unsigned int nr_waiters
  *
  * @return 0 on successful wake or condition change, RBIPC_ERR_TIMEOUT on expiration, or error.
  */
-RBIPC_LEAF
+RBIPC_INTERNAL RBIPC_LEAF
 int rbipc_futex_wait_or_shutdown(_Atomic uint32_t *uaddr, uint32_t val,
                                  const _Atomic uint32_t *shutdown_flag,
                                  uint64_t timeout_ns);
@@ -235,7 +235,7 @@ int rbipc_futex_wait_or_shutdown(_Atomic uint32_t *uaddr, uint32_t val,
  *
  * @return 0 on success / condition satisfied, RBIPC_ERR_TIMEOUT on expiration, or error.
  */
-RBIPC_LEAF
+RBIPC_INTERNAL RBIPC_LEAF
 int rbipc_futex2_wait_slot_or_shutdown(const _Atomic uint64_t *slot_seq,
                                        uint64_t expected_seq,
                                        const _Atomic uint32_t *shutdown_flag,
@@ -254,7 +254,7 @@ int rbipc_futex2_wait_slot_or_shutdown(const _Atomic uint64_t *slot_seq,
  *
  * @return 0 on success / condition satisfied, RBIPC_ERR_TIMEOUT on expiration, or error.
  */
-RBIPC_LEAF
+RBIPC_INTERNAL RBIPC_LEAF
 int rbipc_futex2_wait_slot_or_proxy_or_shutdown(
     const _Atomic uint64_t *slot_seq, uint64_t expected_seq,
     _Atomic uint32_t *proxy_seq, const _Atomic uint32_t *shutdown_flag,
@@ -275,7 +275,7 @@ int rbipc_futex2_wait_slot_or_proxy_or_shutdown(
  *
  * @return Total number of awakened waiters on success, or negative errno on error.
  */
-RBIPC_LEAF
+RBIPC_INTERNAL RBIPC_LEAF
 int rbipc_futex_wake_op(_Atomic uint32_t *uaddr1, int val1,
                         _Atomic uint32_t *uaddr2, int val2,
                         uint32_t op, uint32_t oparg,

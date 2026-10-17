@@ -45,7 +45,7 @@
  * @param[in] pid Process identifier to audit.
  * @return true if process exists; false if confirmed terminated (ESRCH).
  */
-RBIPC_NODISCARD RBIPC_LEAF bool rbipc_audit_is_peer_alive(pid_t pid);
+RBIPC_INTERNAL RBIPC_NODISCARD RBIPC_LEAF bool rbipc_audit_is_peer_alive(pid_t pid);
 
 /**
  * @brief Inspect slot for dead producer crash and poison if producer
@@ -57,7 +57,7 @@ RBIPC_NODISCARD RBIPC_LEAF bool rbipc_audit_is_peer_alive(pid_t pid);
  *
  * @return true if slot was recovered and poisoned; false otherwise.
  */
-RBIPC_LEAF
+RBIPC_INTERNAL RBIPC_LEAF
 bool rbipc_audit_recover_dead_producer(rbipc_shm_header_t *hdr,
                                        rbipc_slot_t *slot, uint64_t ticket);
 
@@ -69,7 +69,7 @@ bool rbipc_audit_recover_dead_producer(rbipc_shm_header_t *hdr,
  * @param[in]     t     Starting ticket.
  * @param[in]     count Number of slots to audit.
  */
-RBIPC_LEAF
+RBIPC_INTERNAL RBIPC_LEAF
 void rbipc_audit_recover_dead_producer_range(rbipc_shm_header_t *hdr,
                                              rbipc_slot_t *slots, uint64_t t,
                                              uint32_t count);
@@ -84,7 +84,7 @@ void rbipc_audit_recover_dead_producer_range(rbipc_shm_header_t *hdr,
  *
  * @return true if slot was recovered; false otherwise.
  */
-RBIPC_LEAF
+RBIPC_INTERNAL RBIPC_LEAF
 bool rbipc_audit_recover_dead_consumer(rbipc_shm_header_t *hdr,
                                        rbipc_slot_t *slot, uint64_t ticket);
 
@@ -96,7 +96,7 @@ bool rbipc_audit_recover_dead_consumer(rbipc_shm_header_t *hdr,
  * @param[in]     t     Starting ticket.
  * @param[in]     count Number of slots to audit.
  */
-RBIPC_LEAF
+RBIPC_INTERNAL RBIPC_LEAF
 void rbipc_audit_recover_dead_consumer_range(rbipc_shm_header_t *hdr,
                                              rbipc_slot_t *slots, uint64_t t,
                                              uint32_t count);
@@ -114,7 +114,7 @@ void rbipc_audit_recover_dead_consumer_range(rbipc_shm_header_t *hdr,
  * @return true if ticket hole was diagnosed and healed via poisoning; false
  * otherwise.
  */
-RBIPC_LEAF
+RBIPC_INTERNAL RBIPC_LEAF
 bool rbipc_audit_check_and_heal_ticket_hole(rbipc_shm_header_t *hdr,
                                             rbipc_slot_t *slot, uint64_t ticket,
                                             rbipc_sync_state_t *sync_state);
@@ -128,7 +128,7 @@ bool rbipc_audit_check_and_heal_ticket_hole(rbipc_shm_header_t *hdr,
  *
  * @return Number of expired leases successfully revoked and recycled.
  */
-RBIPC_LEAF
+RBIPC_INTERNAL RBIPC_LEAF
 int rbipc_audit_revoke_expired_leases(rbipc_shm_header_t *hdr,
                                       rbipc_slot_t *slots);
 

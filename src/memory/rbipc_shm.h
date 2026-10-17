@@ -56,7 +56,7 @@ typedef struct {
  * page_size is invalid.
  * @retval RBIPC_ERR_OVERFLOW if arithmetic multiplication overflows size_t.
  */
-RBIPC_NODISCARD RBIPC_LEAF int
+RBIPC_INTERNAL RBIPC_NODISCARD RBIPC_LEAF int
 rbipc_shm_calc_layout(uint32_t capacity, uint32_t slot_size, size_t page_size,
                       rbipc_layout_t *RBIPC_RESTRICT layout);
 
@@ -78,7 +78,7 @@ rbipc_shm_calc_layout(uint32_t capacity, uint32_t slot_size, size_t page_size,
  * @retval RBIPC_ERR_INVAL if @p out_fd is NULL or @p total_size is zero.
  * @retval RBIPC_ERR_SYS   if shm_open, memfd_create, or ftruncate fails.
  */
-RBIPC_NODISCARD
+RBIPC_INTERNAL RBIPC_NODISCARD
 int rbipc_shm_create_ex(const char *RBIPC_RESTRICT name, size_t total_size,
                         uint32_t flags, mode_t mode,
                         int *RBIPC_RESTRICT out_fd);
@@ -113,7 +113,7 @@ RBIPC_INLINE int rbipc_shm_create(const char *RBIPC_RESTRICT name,
  * @retval RBIPC_ERR_INVAL if @p name or @p out_fd is NULL.
  * @retval RBIPC_ERR_SYS   if shm_open fails.
  */
-RBIPC_NODISCARD
+RBIPC_INTERNAL RBIPC_NODISCARD
 int rbipc_shm_open(const char *RBIPC_RESTRICT name, int *RBIPC_RESTRICT out_fd);
 
 /**
@@ -127,7 +127,7 @@ int rbipc_shm_open(const char *RBIPC_RESTRICT name, int *RBIPC_RESTRICT out_fd);
  * @return @ref RBIPC_OK on success or if sealing is unsupported by kernel.
  * @retval RBIPC_ERR_SYS if sealing fails unexpectedly.
  */
-RBIPC_LEAF
+RBIPC_INTERNAL RBIPC_LEAF
 int rbipc_shm_seal(int fd);
 
 /**
@@ -139,7 +139,7 @@ int rbipc_shm_seal(int fd);
  * @retval RBIPC_ERR_INVAL if @p name is NULL.
  * @retval RBIPC_ERR_SYS   if shm_unlink fails.
  */
-RBIPC_LEAF
+RBIPC_INTERNAL RBIPC_LEAF
 int rbipc_shm_unlink(const char *name);
 
 /**
@@ -147,7 +147,7 @@ int rbipc_shm_unlink(const char *name);
  *
  * @param[in] fd File descriptor to close.
  */
-RBIPC_LEAF
+RBIPC_INTERNAL RBIPC_LEAF
 void rbipc_shm_close(int fd);
 
 #endif /* RBIPC_SHM_H */

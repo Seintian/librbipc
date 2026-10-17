@@ -69,14 +69,14 @@ typedef struct {
  * @param[in]  timeout_ns Requested timeout in nanoseconds (0 for non-blocking,
  * UINT64_MAX for unbounded).
  */
-RBIPC_LEAF
+RBIPC_INTERNAL RBIPC_LEAF
 void rbipc_sync_state_init(rbipc_sync_state_t *RBIPC_RESTRICT state,
                            uint64_t timeout_ns);
 
 /**
  * @brief Initialize process-level synchronization capabilities (e.g. sys_membarrier registration).
  */
-RBIPC_LEAF
+RBIPC_INTERNAL RBIPC_LEAF
 void rbipc_sync_init_process(void);
 
 /**
@@ -86,7 +86,7 @@ void rbipc_sync_init_process(void);
  * producer/consumer commit and release fast paths onto this slow kernel sleep path.
  * Forces a hardware memory barrier across all active execution cores/threads on the system.
  */
-RBIPC_LEAF
+RBIPC_INTERNAL RBIPC_LEAF
 void rbipc_sync_asymmetric_barrier(void);
 
 /**
@@ -94,7 +94,7 @@ void rbipc_sync_asymmetric_barrier(void);
  *
  * @param[in,out] futex_waiters Atomic counter in shared memory.
  */
-RBIPC_LEAF
+RBIPC_INTERNAL RBIPC_LEAF
 void rbipc_sync_register_waiter(_Atomic uint32_t *futex_waiters);
 
 /**
@@ -102,7 +102,7 @@ void rbipc_sync_register_waiter(_Atomic uint32_t *futex_waiters);
  *
  * @param[in,out] futex_waiters Atomic counter in shared memory.
  */
-RBIPC_LEAF
+RBIPC_INTERNAL RBIPC_LEAF
 void rbipc_sync_deregister_waiter(_Atomic uint32_t *futex_waiters);
 
 /**
@@ -121,7 +121,7 @@ void rbipc_sync_deregister_waiter(_Atomic uint32_t *futex_waiters);
  * @return 0 on continued wait / successful wake.
  * @retval RBIPC_ERR_TIMEOUT if deadline timestamp has been exceeded.
  */
-RBIPC_NODISCARD RBIPC_LEAF int
+RBIPC_INTERNAL RBIPC_NODISCARD RBIPC_LEAF int
 rbipc_sync_wait_registered(rbipc_sync_state_t *RBIPC_RESTRICT state,
                            _Atomic uint32_t *futex_word,
                            _Atomic uint32_t *futex_waiters);
@@ -138,7 +138,7 @@ rbipc_sync_wait_registered(rbipc_sync_state_t *RBIPC_RESTRICT state,
  * @return 0 on continued wait / successful wake.
  * @retval RBIPC_ERR_TIMEOUT if deadline timestamp has been exceeded.
  */
-RBIPC_NODISCARD RBIPC_LEAF int
+RBIPC_INTERNAL RBIPC_NODISCARD RBIPC_LEAF int
 rbipc_sync_wait_registered_or_shutdown(
     rbipc_sync_state_t *RBIPC_RESTRICT state, _Atomic uint32_t *futex_word,
     _Atomic uint32_t *futex_waiters, const _Atomic uint32_t *shutdown_flag);
@@ -155,7 +155,7 @@ rbipc_sync_wait_registered_or_shutdown(
  *
  * @return 0 on continued wait / successful wake, RBIPC_ERR_TIMEOUT on expiration.
  */
-RBIPC_NODISCARD RBIPC_LEAF int
+RBIPC_INTERNAL RBIPC_NODISCARD RBIPC_LEAF int
 rbipc_sync_wait_slot_registered(
     rbipc_sync_state_t *RBIPC_RESTRICT state, const _Atomic uint64_t *slot_seq,
     uint64_t expected_seq, _Atomic uint32_t *proxy_seq,
@@ -177,7 +177,7 @@ rbipc_sync_wait_slot_registered(
  * @return 0 on continued wait / successful wake.
  * @retval RBIPC_ERR_TIMEOUT if deadline timestamp has been exceeded.
  */
-RBIPC_NODISCARD RBIPC_LEAF int
+RBIPC_INTERNAL RBIPC_NODISCARD RBIPC_LEAF int
 rbipc_sync_backoff(rbipc_sync_state_t *RBIPC_RESTRICT state,
                    _Atomic uint32_t *futex_word,
                    _Atomic uint32_t *futex_waiters);
@@ -200,7 +200,7 @@ rbipc_sync_backoff(rbipc_sync_state_t *RBIPC_RESTRICT state,
  * @return 0 on success / condition met, @ref RBIPC_ERR_TIMEOUT on expiration,
  * or error code.
  */
-RBIPC_NODISCARD RBIPC_LEAF int rbipc_sync_backoff_adaptive(
+RBIPC_INTERNAL RBIPC_NODISCARD RBIPC_LEAF int rbipc_sync_backoff_adaptive(
     rbipc_sync_state_t *RBIPC_RESTRICT state, _Atomic uint32_t *futex_word,
     _Atomic uint32_t *futex_waiters, uint32_t policy, uint32_t spin_budget,
     rbipc_spin_pred_t predicate, void *arg);
@@ -215,7 +215,7 @@ RBIPC_NODISCARD RBIPC_LEAF int rbipc_sync_backoff_adaptive(
  *
  * @return 0 on condition met, RBIPC_ERR_TIMEOUT on deadline, or -ENOSYS if unsupported.
  */
-RBIPC_NODISCARD RBIPC_LEAF int
+RBIPC_INTERNAL RBIPC_NODISCARD RBIPC_LEAF int
 rbipc_sync_hardware_wait(const void *monitored_addr, uint64_t timeout_ns,
                          rbipc_spin_pred_t predicate, void *arg);
 
@@ -230,7 +230,7 @@ rbipc_sync_hardware_wait(const void *monitored_addr, uint64_t timeout_ns,
  *
  * @return 0 on condition met, RBIPC_ERR_TIMEOUT on deadline, or -ENOSYS if unsupported.
  */
-RBIPC_NODISCARD RBIPC_LEAF int
+RBIPC_INTERNAL RBIPC_NODISCARD RBIPC_LEAF int
 rbipc_sync_hardware_wait_substate(const void *monitored_addr, uint64_t timeout_ns,
                                   rbipc_spin_pred_t predicate, void *arg,
                                   uint32_t substate);
@@ -243,7 +243,7 @@ rbipc_sync_hardware_wait_substate(const void *monitored_addr, uint64_t timeout_n
  * @param[in] futex_waiters Pointer to atomic waiter count in shared memory.
  * @param[in] count         Maximum number of waiting threads to awaken.
  */
-RBIPC_LEAF
+RBIPC_INTERNAL RBIPC_LEAF
 void rbipc_sync_wake_n(_Atomic uint32_t *futex_word,
                        _Atomic uint32_t *futex_waiters, uint32_t count);
 
@@ -259,7 +259,7 @@ void rbipc_sync_wake_n(_Atomic uint32_t *futex_word,
  * memory.
  * @param[in] futex_waiters Pointer to atomic waiter count in shared memory.
  */
-RBIPC_LEAF
+RBIPC_INTERNAL RBIPC_LEAF
 void rbipc_sync_wake_one(_Atomic uint32_t *futex_word,
                          _Atomic uint32_t *futex_waiters);
 
@@ -274,7 +274,7 @@ void rbipc_sync_wake_one(_Atomic uint32_t *futex_word,
  * memory.
  * @param[in] futex_waiters Pointer to atomic waiter count in shared memory.
  */
-RBIPC_LEAF
+RBIPC_INTERNAL RBIPC_LEAF
 void rbipc_sync_wake_all(_Atomic uint32_t *futex_word,
                          _Atomic uint32_t *futex_waiters);
 

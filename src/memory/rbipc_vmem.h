@@ -35,7 +35,7 @@
  * @retval RBIPC_ERR_INVAL Invalid descriptor, zero size, or null output pointer.
  * @retval RBIPC_ERR_SYS   Kernel @c mmap system call failed; inspect @c errno for root cause.
  */
-RBIPC_NODISCARD
+RBIPC_INTERNAL RBIPC_NODISCARD
 int rbipc_vmem_map_ctrl(int fd, size_t size, void ** RBIPC_RESTRICT out_map);
 
 /**
@@ -46,7 +46,7 @@ int rbipc_vmem_map_ctrl(int fd, size_t size, void ** RBIPC_RESTRICT out_map);
  * @param[in] map  Base virtual address of the mapped control region.
  * @param[in] size Size in bytes of the mapped control region.
  */
-RBIPC_LEAF
+RBIPC_INTERNAL RBIPC_LEAF
 void rbipc_vmem_unmap_ctrl(void *map, size_t size);
 
 /**
@@ -62,7 +62,7 @@ void rbipc_vmem_unmap_ctrl(void *map, size_t size);
  * @retval RBIPC_ERR_INVAL Invalid descriptor, zero size, or null output pointer.
  * @retval RBIPC_ERR_SYS   Kernel mmap system call failed.
  */
-RBIPC_NODISCARD
+RBIPC_INTERNAL RBIPC_NODISCARD
 int rbipc_vmem_map_data(int fd, size_t offset, size_t data_size, void ** RBIPC_RESTRICT out_data_map);
 
 /**
@@ -71,7 +71,7 @@ int rbipc_vmem_map_data(int fd, size_t offset, size_t data_size, void ** RBIPC_R
  * @param[in] data_map  Base virtual address of data region.
  * @param[in] data_size Size in bytes of data region.
  */
-RBIPC_LEAF
+RBIPC_INTERNAL RBIPC_LEAF
 void rbipc_vmem_unmap_data(void *data_map, size_t data_size);
 
 /**
@@ -102,7 +102,7 @@ void rbipc_vmem_unmap_data(void *data_map, size_t data_size);
  * @retval RBIPC_ERR_NOMEM  Failed to reserve 2x contiguous virtual address space.
  * @retval RBIPC_ERR_SYS    Failed to map physical backing store to one of the mirror halves.
  */
-RBIPC_NODISCARD
+RBIPC_INTERNAL RBIPC_NODISCARD
 int rbipc_vmem_map_double(int fd, size_t offset, size_t data_size, void ** RBIPC_RESTRICT out_data_map);
 
 /**
@@ -113,7 +113,7 @@ int rbipc_vmem_map_double(int fd, size_t offset, size_t data_size, void ** RBIPC
  * @param[in] data_map  Contiguous double-mapped base pointer.
  * @param[in] data_size Size in bytes of a single buffer (releases 2 * data_size).
  */
-RBIPC_LEAF
+RBIPC_INTERNAL RBIPC_LEAF
 void rbipc_vmem_unmap_double(void *data_map, size_t data_size);
 
 

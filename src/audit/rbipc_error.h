@@ -26,7 +26,7 @@ RBIPC_INLINE RBIPC_CONST bool rbipc_status_is_error(int status) {
  * @param[in] err System errno code.
  * @return Mapped RBIPC error code.
  */
-RBIPC_PURE RBIPC_LEAF
+RBIPC_INTERNAL RBIPC_PURE RBIPC_LEAF
 int rbipc_errno_to_status(int err);
 
 /**
@@ -39,7 +39,7 @@ int rbipc_errno_to_status(int err);
  *
  * @return Pointer to @p buf.
  */
-RBIPC_LEAF
+RBIPC_INTERNAL RBIPC_LEAF
 char *rbipc_error_format(int status, int sys_errno, char *buf, size_t buf_size);
 
 #endif /* RBIPC_ERROR_H */

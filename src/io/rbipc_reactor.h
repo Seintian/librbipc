@@ -30,7 +30,7 @@
  * @return RBIPC_OK on success, RBIPC_ERR_INVAL if parameters invalid,
  * RBIPC_ERR_SYS on syscall failure.
  */
-RBIPC_NODISCARD RBIPC_LEAF int
+RBIPC_INTERNAL RBIPC_NODISCARD RBIPC_LEAF int
 rbipc_reactor_enable(rbipc_ring_t *RBIPC_RESTRICT ring,
                      int *RBIPC_RESTRICT out_fd);
 
@@ -42,7 +42,7 @@ rbipc_reactor_enable(rbipc_ring_t *RBIPC_RESTRICT ring,
  *
  * @return RBIPC_OK on success, or RBIPC_ERR_INVAL if arguments invalid.
  */
-RBIPC_NODISCARD RBIPC_LEAF int
+RBIPC_INTERNAL RBIPC_NODISCARD RBIPC_LEAF int
 rbipc_reactor_set_fd(rbipc_ring_t *RBIPC_RESTRICT ring, int event_fd);
 
 /**
@@ -54,7 +54,7 @@ rbipc_reactor_set_fd(rbipc_ring_t *RBIPC_RESTRICT ring, int event_fd);
  *
  * @return RBIPC_OK on success, RBIPC_ERR_NOTSUP if no eventfd is enabled.
  */
-RBIPC_NODISCARD RBIPC_LEAF int
+RBIPC_INTERNAL RBIPC_NODISCARD RBIPC_LEAF int
 rbipc_reactor_get_fd(const rbipc_ring_t *RBIPC_RESTRICT ring,
                      int *RBIPC_RESTRICT out_fd);
 
@@ -66,7 +66,7 @@ rbipc_reactor_get_fd(const rbipc_ring_t *RBIPC_RESTRICT ring,
  * @return RBIPC_OK on success, RBIPC_ERR_NOTSUP if disabled, RBIPC_ERR_SYS on
  * failure.
  */
-RBIPC_LEAF
+RBIPC_INTERNAL RBIPC_LEAF
 int rbipc_reactor_drain(const rbipc_ring_t *RBIPC_RESTRICT ring);
 
 /**
@@ -75,7 +75,7 @@ int rbipc_reactor_drain(const rbipc_ring_t *RBIPC_RESTRICT ring);
  *
  * @param[in] ring Ring buffer handle.
  */
-RBIPC_LEAF
+RBIPC_INTERNAL RBIPC_LEAF
 void rbipc_reactor_signal(const rbipc_ring_t *ring);
 
 /**
@@ -84,7 +84,7 @@ void rbipc_reactor_signal(const rbipc_ring_t *ring);
  *
  * @param[in,out] ring Ring buffer handle being detached.
  */
-RBIPC_LEAF
+RBIPC_INTERNAL RBIPC_LEAF
 void rbipc_reactor_cleanup(rbipc_ring_t *ring);
 
 #endif /* RBIPC_REACTOR_H */

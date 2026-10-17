@@ -39,7 +39,7 @@
  *
  * @return Number of contiguous vacant slots available (0 to @p count).
  */
-RBIPC_NODISCARD RBIPC_LEAF uint32_t rbipc_simd_scan_vacant_slots(
+RBIPC_INTERNAL RBIPC_NODISCARD RBIPC_LEAF uint32_t rbipc_simd_scan_vacant_slots(
     const rbipc_slot_t *slots, uint32_t mask, uint64_t t, uint32_t count);
 
 /**
@@ -57,7 +57,7 @@ RBIPC_NODISCARD RBIPC_LEAF uint32_t rbipc_simd_scan_vacant_slots(
  *
  * @return Number of contiguous ready slots available (0 to @p count).
  */
-RBIPC_NODISCARD RBIPC_LEAF uint32_t rbipc_simd_scan_ready_slots(
+RBIPC_INTERNAL RBIPC_NODISCARD RBIPC_LEAF uint32_t rbipc_simd_scan_ready_slots(
     const rbipc_slot_t *slots, uint32_t mask, uint64_t t, uint32_t count);
 
 #endif /* RBIPC_SIMD_H */

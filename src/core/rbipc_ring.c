@@ -52,6 +52,9 @@ rbipc_ring_validate_create_params(size_t capacity, uint32_t slot_size,
   if (capacity == 0 || !rbipc_is_valid_slot_size(slot_size)) {
     return RBIPC_ERR_INVAL;
   }
+  if (capacity > (size_t)RBIPC_MAX_CAPACITY) {
+    return RBIPC_ERR_OVERFLOW;
+  }
 
   size_t page_size = rbipc_page_size();
   *out_page_size = page_size;

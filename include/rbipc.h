@@ -326,6 +326,13 @@ typedef struct {
                                             when slot was acquired. */
 } rbipc_slot_t;
 
+/* Enforce compile-time slot cache-line geometry and false-sharing immunity */
+static_assert(sizeof(rbipc_slot_t) == RBIPC_CACHE_LINE,
+              "rbipc_slot_t must be exactly 64 bytes (one cache line)");
+static_assert(alignof(rbipc_slot_t) == RBIPC_CACHE_LINE,
+              "rbipc_slot_t must be aligned to 64-byte cache line boundary");
+
+
 /**
  * @struct rbipc_shm_header_t
  * @brief Control header residing at byte offset 0 of the POSIX shared memory
@@ -405,6 +412,27 @@ typedef struct {
   _Atomic uint64_t
       ticket_holes_healed; /**< Cumulative count of orphaned ticket holes healed. */
 } rbipc_shm_header_t;
+
+/* Enforce compile-time header alignment and cache-line separation for atomic counters */
+static_assert(alignof(rbipc_shm_header_t) == RBIPC_CACHE_LINE,
+              "rbipc_shm_header_t must be aligned to 64-byte cache line boundary");
+static_assert(sizeof(rbipc_shm_header_t) % RBIPC_CACHE_LINE == 0,
+              "rbipc_shm_header_t size must be a multiple of cache line size");
+static_assert(offsetof(rbipc_shm_header_t, write_ticket) % RBIPC_CACHE_LINE == 0,
+              "rbipc_shm_header_t.write_ticket must reside on an isolated cache line");
+static_assert(offsetof(rbipc_shm_header_t, read_ticket) % RBIPC_CACHE_LINE == 0,
+              "rbipc_shm_header_t.read_ticket must reside on an isolated cache line");
+static_assert(offsetof(rbipc_shm_header_t, futex_seq) % RBIPC_CACHE_LINE == 0,
+              "rbipc_shm_header_t.futex_seq must reside on an isolated cache line");
+static_assert(offsetof(rbipc_shm_header_t, futex_waiters) % RBIPC_CACHE_LINE == 0,
+              "rbipc_shm_header_t.futex_waiters must reside on an isolated cache line");
+static_assert(offsetof(rbipc_shm_header_t, write_futex_seq) % RBIPC_CACHE_LINE == 0,
+              "rbipc_shm_header_t.write_futex_seq must reside on an isolated cache line");
+static_assert(offsetof(rbipc_shm_header_t, write_waiters) % RBIPC_CACHE_LINE == 0,
+              "rbipc_shm_header_t.write_waiters must reside on an isolated cache line");
+static_assert(offsetof(rbipc_shm_header_t, shutdown_flag) % RBIPC_CACHE_LINE == 0,
+              "rbipc_shm_header_t.shutdown_flag must reside on an isolated cache line");
+
 
 /**
  * @struct rbipc_stats_t

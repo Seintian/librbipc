@@ -32,7 +32,7 @@
  * descriptor array.
  * @param[in]  capacity Total number of slots to initialize.
  */
-RBIPC_LEAF
+RBIPC_INTERNAL RBIPC_LEAF
 void rbipc_slot_init_table(rbipc_slot_t *RBIPC_RESTRICT slots,
                            uint32_t capacity);
 
@@ -61,7 +61,7 @@ RBIPC_INLINE RBIPC_NODISCARD bool rbipc_slot_is_peer_alive(pid_t pid) {
  * @param[in,out] slot Direct pointer to slot descriptor.
  * @param[in]     pid  Process identifier of reserving producer.
  */
-RBIPC_LEAF
+RBIPC_INTERNAL RBIPC_LEAF
 void rbipc_slot_mark_reserving(rbipc_slot_t *slot, pid_t pid);
 
 /**
@@ -73,7 +73,7 @@ void rbipc_slot_mark_reserving(rbipc_slot_t *slot, pid_t pid);
  * @param[in,out] slot Direct pointer to slot descriptor.
  * @param[in]     pid  Process identifier of reserving producer.
  */
-RBIPC_LEAF
+RBIPC_INTERNAL RBIPC_LEAF
 void rbipc_slot_mark_reserved(rbipc_slot_t *slot, pid_t pid);
 
 /**
@@ -89,7 +89,7 @@ void rbipc_slot_mark_reserved(rbipc_slot_t *slot, pid_t pid);
  * @param[in]     ticket Reserving ticket number.
  * @param[in]     len    Actual payload byte length written.
  */
-RBIPC_LEAF
+RBIPC_INTERNAL RBIPC_LEAF
 void rbipc_slot_commit(rbipc_slot_t *slot, uint64_t ticket, uint32_t len);
 
 /**
@@ -105,7 +105,7 @@ void rbipc_slot_commit(rbipc_slot_t *slot, uint64_t ticket, uint32_t len);
  * @return true if slot was successfully transitioned to POISONED; false if
  * already committed/released.
  */
-RBIPC_LEAF
+RBIPC_INTERNAL RBIPC_LEAF
 bool rbipc_slot_poison(rbipc_slot_t *slot, uint64_t ticket);
 
 /**
@@ -115,7 +115,7 @@ bool rbipc_slot_poison(rbipc_slot_t *slot, uint64_t ticket);
  * @param[in]     pid          Process identifier of acquiring consumer.
  * @param[in]     timestamp_ns Monotonic timestamp in nanoseconds.
  */
-RBIPC_LEAF
+RBIPC_INTERNAL RBIPC_LEAF
 void rbipc_slot_mark_acquired(rbipc_slot_t *slot, pid_t pid,
                               uint64_t timestamp_ns);
 
@@ -131,7 +131,7 @@ void rbipc_slot_mark_acquired(rbipc_slot_t *slot, pid_t pid,
  *
  * @return true if slot was recovered from dead consumer; false otherwise.
  */
-RBIPC_LEAF
+RBIPC_INTERNAL RBIPC_LEAF
 bool rbipc_slot_recover_dead_consumer(rbipc_slot_t *slot, uint64_t ticket);
 
 /**
@@ -147,7 +147,7 @@ bool rbipc_slot_recover_dead_consumer(rbipc_slot_t *slot, uint64_t ticket);
  *
  * @return true if slot lease was revoked; false otherwise.
  */
-RBIPC_LEAF
+RBIPC_INTERNAL RBIPC_LEAF
 bool rbipc_slot_recover_expired_lease(rbipc_slot_t *slot,
                                       uint64_t target_vacant_ticket,
                                       uint64_t lease_timeout_ns,
@@ -168,7 +168,7 @@ bool rbipc_slot_recover_expired_lease(rbipc_slot_t *slot,
  *
  * @return true on successful release; false if consumer PID mismatch.
  */
-RBIPC_LEAF
+RBIPC_INTERNAL RBIPC_LEAF
 bool rbipc_slot_release_ex(rbipc_slot_t *slot, uint64_t ticket,
                            uint32_t capacity, pid_t expected_pid);
 

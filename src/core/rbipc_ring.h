@@ -34,7 +34,7 @@
  *
  * @return Pointer to the allocated and initialized ring handle, or @c NULL if heap allocation fails.
  */
-RBIPC_NODISCARD
+RBIPC_INTERNAL RBIPC_NODISCARD
 rbipc_ring_t *rbipc_ring_alloc_handle(int fd, const char * RBIPC_RESTRICT name,
                                       rbipc_shm_header_t *hdr,
                                       rbipc_slot_t *slots,
@@ -58,7 +58,7 @@ rbipc_ring_t *rbipc_ring_alloc_handle(int fd, const char * RBIPC_RESTRICT name,
  * @retval RBIPC_ERR_INVAL Invalid magic, version mismatch, or corrupted geometry fields.
  * @retval RBIPC_ERR_SYS   Failed to map the probe page.
  */
-RBIPC_NODISCARD
+RBIPC_INTERNAL RBIPC_NODISCARD
 int rbipc_ring_probe_and_validate_header(int fd, size_t page_size, rbipc_layout_t * RBIPC_RESTRICT out_layout);
 
 /**
@@ -68,7 +68,7 @@ int rbipc_ring_probe_and_validate_header(int fd, size_t page_size, rbipc_layout_
  *
  * @param[in,out] ring Pointer to the ring handle whose mappings are to be released.
  */
-RBIPC_LEAF
+RBIPC_INTERNAL RBIPC_LEAF
 void rbipc_ring_unmap_regions(rbipc_ring_t *ring);
 
 #endif /* RBIPC_RING_H */
