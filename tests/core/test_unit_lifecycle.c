@@ -122,7 +122,8 @@ static void test_corrupted_shm_detection(void) {
     int fd = shm_open(TEST_LIFECYCLE_NAME, O_RDWR, RBIPC_SHM_MODE);
     assert(fd >= 0);
     uint64_t bad_magic = 0xDEADBEEF;
-    pwrite(fd, &bad_magic, sizeof(bad_magic), 0);
+    ssize_t pw = pwrite(fd, &bad_magic, sizeof(bad_magic), 0);
+    assert(pw == (ssize_t)sizeof(bad_magic));
 
     /* Attempt to attach to corrupted shm should fail with RBIPC_ERR_INVAL */
     rbipc_ring_t *corrupt_attach = NULL;
@@ -130,16 +131,20 @@ static void test_corrupted_shm_detection(void) {
 
     /* Restore magic, but corrupt data_offset */
     uint64_t good_magic = RBIPC_MAGIC;
-    pwrite(fd, &good_magic, sizeof(good_magic), 0);
+    pw = pwrite(fd, &good_magic, sizeof(good_magic), 0);
+    assert(pw == (ssize_t)sizeof(good_magic));
     uint64_t bad_offset = 12345;
-    pwrite(fd, &bad_offset, sizeof(bad_offset), offsetof(rbipc_shm_header_t, data_offset));
+    pw = pwrite(fd, &bad_offset, sizeof(bad_offset), offsetof(rbipc_shm_header_t, data_offset));
+    assert(pw == (ssize_t)sizeof(bad_offset));
 
     assert(rbipc_attach(TEST_LIFECYCLE_NAME, &corrupt_attach) == RBIPC_ERR_INVAL);
 
     /* Corrupt header CRC explicitly */
     uint32_t bad_crc = 0xDEADBEEFU;
-    pwrite(fd, &bad_crc, sizeof(bad_crc), offsetof(rbipc_shm_header_t, header_crc));
+    pw = pwrite(fd, &bad_crc, sizeof(bad_crc), offsetof(rbipc_shm_header_t, header_crc));
+    assert(pw == (ssize_t)sizeof(bad_crc));
     assert(rbipc_attach(TEST_LIFECYCLE_NAME, &corrupt_attach) == RBIPC_ERR_INVAL);
+    (void)pw;
     close(fd);
 
     /* Test attaching invalid device fd like /dev/null */

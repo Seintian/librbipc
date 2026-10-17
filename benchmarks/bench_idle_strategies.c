@@ -282,10 +282,10 @@ typedef enum {
 } lmax_strat_t;
 
 typedef struct {
-    alignas(CACHE_LINE_SIZE) atomic_llong prod_cursor;
-    alignas(CACHE_LINE_SIZE) atomic_llong prod_claim;
-    alignas(CACHE_LINE_SIZE) atomic_llong work_sequence;
-    alignas(CACHE_LINE_SIZE) atomic_llong cons_gating;
+    alignas(CACHE_LINE_SIZE) _Atomic int64_t prod_cursor;
+    alignas(CACHE_LINE_SIZE) _Atomic int64_t prod_claim;
+    alignas(CACHE_LINE_SIZE) _Atomic int64_t work_sequence;
+    alignas(CACHE_LINE_SIZE) _Atomic int64_t cons_gating;
     uint32_t capacity;
     uint32_t mask;
 
