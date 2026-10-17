@@ -44,8 +44,10 @@ For the complete formal concurrency model, memory layout geometry, crash-recover
 | **Asymmetric Dekker Synchronization** | Kernel | Linux ≥ 4.3 (`MEMBARRIER_CMD_GLOBAL_EXPEDITED` / `GLOBAL`) | **`sys_membarrier`**: Producer commit path executes **zero hardware memory fences** (`MFENCE`); ordering cost shifted to waiter sleep path. | **Symmetric `MFENCE`**: `atomic_thread_fence(memory_order_seq_cst)` executed on every commit. | **+20% to +35%** single-stream throughput; saves 30–50 CPU cycles per message. |
 | **Atomic Multi-Futex Awakening** | Kernel | Linux `FUTEX_WAKE_OP` syscall support | **`FUTEX_WAKE_OP`**: Atomically advances `futex_word` and awakens waiters in a single kernel syscall. | **Two-Stage Wake**: `atomic_fetch_add(release)` followed by `SYS_futex(FUTEX_WAKE)`. | **+47.6%** zero-spin throughput (26.6k → 39.3k msgs/s); closes wakeup race window. |
 | **Nikolaev SCQ Bounded FAA Ticket Leasing** | Concurrency | Unbounded writes (`timeout_ns == UINT64_MAX`) | **Wait-Free FAA**: Fast path claims tickets via hardware-pipelined `atomic_fetch_add` with cycle validation. | **CAS Loop Backoff**: Compare-and-swap reservation with exponential pause backoff for bounded timeouts. | **+241.0%** throughput under contention; **73× faster than Disruptor** at 4P-4C (0.73 Mops/s). |
-| **SIMD Sequence Turn Scanning** | CPU ISA | x86-64 AVX2 (`__AVX2__` / CPUID) or ARM64 NEON (`__ARM_NEON`) | **256-Bit AVX2 / 128-Bit NEON**: Scans 4 (AVX2) or 2 (NEON) 64-bit sequence turns per instruction cycle (`_mm256_cmpeq_epi64` / `vceqq_u64`). | **Scalar Loop**: Portable 64-bit scalar sequence loop checking each slot turn serially. | **50.68M msgs/s** vector batch throughput (6.53× speedup over scalar batch-1). |
-| **Non-Temporal Streaming Stores** | CPU ISA | Payloads ≥ 256 B (≥ 4096 B for L1/L2 threshold) on AVX2 / SSE2 | **Streaming Stores (`_mm256_stream_si256` / `_mm_stream_si128`)**: Writes directly to DRAM write-combining buffers, bypassing CPU cache. | **Standard `memcpy`**: Cache-coherent memory copy for smaller payloads or non-x86 architectures. | **19,867.2 MB/s** throughput (+104.97% bandwidth over standard `memcpy`). |
+| **SIMD Sequence Turn Scanning** | CPU ISA | x86-64 AVX-512 / AVX2 / SSE4.1 or ARM64 NEON (`__ARM_NEON`) | **AVX-512 (8 turns) / AVX2 (4 turns) / SSE4.1 (2 turns) / NEON (2 turns)**: Vectorized sequence turn scanner with software prefetch lookahead. | **Scalar Loop**: Portable 64-bit scalar sequence loop checking each slot turn serially. | **50.68M msgs/s** vector batch throughput (6.53× speedup over scalar batch-1). |
+| **Non-Temporal Streaming Stores** | CPU ISA | Payloads ≥ 256 B on AVX-512, AVX2, or SSE2 | **Streaming Stores (`_mm512_stream_si512` / `_mm256_stream_si256` / `_mm_stream_si128`)**: Writes directly to DRAM write-combining buffers with 64-byte alignment preamble. | **Standard `memcpy`**: Cache-coherent memory copy for smaller payloads or non-x86 architectures. | **19,867.2 MB/s** throughput (+104.97% bandwidth over standard `memcpy`). |
+| **Strict ABI Encapsulation & Versioning** | ABI / Build | GNU Linker / ELF Shared Library | **`scripts/librbipc.sym` (`LIBRBIPC_1.0`) + `-fvisibility=hidden`**: Whitelists only 63 public API symbols, strictly eliminating 66 leaked internal routines. | Standard shared library export table without version node. | Zero symbol namespace pollution; immutable backward ABI compatibility. |
+| **C23 Compile-Time Structure Invariants** | C23 Core | Standard C23 `-std=c23` compiler | **`static_assert` Invariants**: Compile-time mathematical verification of 64-byte slot sizing and cache-line isolation for all synchronization counters. | Runtime `assert()` / documentation convention. | Zero runtime false-sharing hazards; guaranteed single-cache-line turn updates. |
 | **Double-Mapped Virtual Memory** | VMem | Contiguous $2 \times \text{buffer\_size}$ address space reservation via `mmap` | **2x Virtual Mirroring**: Dual consecutive virtual memory mappings of identical underlying physical ring buffer pages. | **Single Linear Mapping**: Standard single circular buffer with modulo boundary calculation. | Zero-copy contiguous buffer dereferencing across circular ring wrap-around. |
 | **Asynchronous Kernel Reactor** | Kernel | Linux `eventfd(2)` and `epoll(7)` | **Eventfd Reactor (`rbipc_reactor_t`)**: Non-blocking readiness notifications multiplexed into `epoll`, `poll`, or `io_uring`. | **Pure Shared Memory**: Ring operates purely through shared memory without kernel file descriptors. | Sub-microsecond event loop integration (874.8k events/s) for async event loops. |
 | **Race-Free Process Crash Auditing** | Kernel | Linux ≥ 5.3 (`pidfd_open(2)`) | **`pidfd_open` + `poll`**: Process-descriptor-based liveness verification; immune to PID recycling and zombie races. | **POSIX `kill(pid, 0)`**: Fallback signal-based liveness probing on legacy kernels. | Deterministic dead-peer recovery without PID recycling hazards. |
@@ -58,32 +60,49 @@ For the complete formal concurrency model, memory layout geometry, crash-recover
 
 ```text
 librbipc/
-├── include/
-│   ├── rbipc.h              # Public C23/C++ ABI: core ring, zero-copy I/O, convenience copy I/O, batching, streaming, reactor, leases
+├── .clang-format            # Canonical Google/C23 2-space styling configuration
+├── .github/
+│   └── workflows/
+│       └── ci.yml           # GitHub Actions matrix CI pipeline (GCC 13/14, Clang 17/18, ASAN, TSAN)
+├── include/                 # Public C23/C++ ABI Interfaces (RBIPC_API visibility annotated)
+│   ├── rbipc.h              # Public ABI: core ring, zero-copy I/O, streaming, reactor, leases, C23 invariants
 │   ├── rbipc_ipc.h          # Public ABI: UNIX domain socket SCM_RIGHTS descriptor passing
 │   └── rbipc_pubsub.h       # Public ABI: 1-to-N lock-free multicast publish-subscribe engine
-├── src/
-│   ├── rbipc_arch.h         # Monotonic clock (vDSO), CPU pause/yield, SSE4.2 + SW CRC32C (Castagnoli)
-│   ├── rbipc_attr.h         # Compiler inlining (RBIPC_INLINE) and cache prefetch hints (RBIPC_PREFETCH)
-│   ├── rbipc_math.h         # Power-of-two rounding, alignment, and 64-bit RFC 1982 modular sequence delta
-│   ├── rbipc_predicate.h    # Pure, side-effect-free invariant validation predicates
-│   ├── rbipc_internal.h     # Private runtime handle (struct rbipc_ring) and internal constants
-│   ├── rbipc_error.c/.h     # Status code descriptions and Linux errno translation
-│   ├── rbipc_shm.c/.h       # Overflow-safe layout geometry, shm_open / memfd_create, F_ADD_SEALS
-│   ├── rbipc_vmem.c/.h      # Control mapping, 1x linear slot mapping, and 2x MAP_FIXED virtual ring mirror
-│   ├── rbipc_futex.c/.h     # Process-shared Linux sys_futex (FUTEX_WAIT / FUTEX_WAKE) wrappers
-│   ├── rbipc_sync.c/.h      # Dekker seq_cst waiter registration and zero-spin / adaptive backoff engine
-│   ├── rbipc_slot.c/.h      # Per-slot Vyukov sequence state machine and CAS-guarded consumer release
-│   ├── rbipc_audit.c/.h     # pidfd_open(2) peer liveness auditing, slot poisoning, ticket-hole & lease recovery
-│   ├── rbipc_simd.c/.h      # AVX2 (256-bit), NEON (128-bit), and scalar sequence vacancy/readiness scanners
-│   ├── rbipc_stream.c/.h    # Non-temporal cache-bypassing memory streaming (_mm256_stream_si256)
-│   ├── rbipc_reactor.c/.h   # Asynchronous eventfd(2) lifecycle, signaling, and counter draining
-│   ├── rbipc_ring.c/.h      # Ring creation/attachment lifecycle, CRC32C verification, and telemetry
-│   ├── rbipc_io.c/.h        # Zero-copy single-slot reservation, commit, abort, acquisition, and release
-│   ├── rbipc_batch.c/.h     # B-Queue vector batch scatter-gather reservation and acquisition
-│   ├── rbipc_ipc.c          # Ancillary SCM_RIGHTS file descriptor transmission and attachment
-│   └── rbipc_pubsub.c       # 1-to-N multicast topic publishing and independent subscriber cursor polling
-├── tests/                   # 25 automated verification suites (16 unit, 3 I/O, 6 E2E & chaos fault-injection)
+├── src/                     # Modularized Internal Implementation Units
+│   ├── audit/               # Fault tolerance, liveness auditing, and error handling
+│   │   ├── rbipc_audit.c/.h # pidfd_open(2) process auditing, slot poisoning, ticket-hole healing
+│   │   └── rbipc_error.c/.h # Error status formatting and system errno translation
+│   ├── core/                # Core ring buffer lifecycle and slot state machines
+│   │   ├── rbipc_internal.h # Process-local runtime handle representation (struct rbipc_ring)
+│   │   ├── rbipc_predicate.h# Side-effect-free invariant validation predicates
+│   │   ├── rbipc_ring.c/.h  # Handle allocation, layout probe, and cooperative shutdown
+│   │   └── rbipc_slot.c/.h  # Vyukov sequence state machine and CAS-guarded consumer release
+│   ├── io/                  # High-throughput zero-copy I/O and vector scanning
+│   │   ├── rbipc_batch.c/.h # B-Queue scatter-gather vector batch reservation/commit
+│   │   ├── rbipc_io.c/.h    # Fast-path ticket reservation, address calculation, and copy wrappers
+│   │   ├── rbipc_reactor.c/.h# Linux eventfd(2) / epoll notification reactor
+│   │   └── rbipc_simd.c/.h  # Hardware-accelerated AVX2, SSE4.1, and NEON sequence scanners
+│   ├── ipc/                 # Inter-process transport integration
+│   │   ├── rbipc_ipc.c      # SCM_RIGHTS socket passing for file descriptors
+│   │   └── rbipc_pubsub.c   # Lock-free 1-to-N publish-subscribe multicast broker
+│   ├── memory/              # Virtual memory and cache-bypassing streaming
+│   │   ├── rbipc_shm.c/.h   # POSIX shm / Linux memfd_create, layout geometry, F_ADD_SEALS
+│   │   ├── rbipc_stream.c/.h# AVX-512, AVX2, and SSE2 non-temporal streaming store engines
+│   │   └── rbipc_vmem.c/.h  # 1x linear data mapping and 2x MAP_FIXED virtual memory mirror
+│   ├── platform/            # Architecture abstractions and hardware builtins
+│   │   ├── rbipc_arch.h     # vDSO monotonic clock, CPU pause/yield, hardware CRC32C (Castagnoli)
+│   │   ├── rbipc_attr.h     # Compiler optimization macros (RBIPC_INLINE, RBIPC_INTERNAL, PREFETCH)
+│   │   └── rbipc_math.h     # Hardware-accelerated bitwise math (CTZ, popcount, power-of-two)
+│   └── sync/                # Low-latency hybrid synchronization hierarchy
+│       ├── rbipc_futex.c/.h # Linux sys_futex (FUTEX_WAIT/WAKE) and Linux 5.16+ sys_futex_waitv
+│       └── rbipc_sync.c/.h  # Asymmetric Dekker barriers, bounded micro-pause, and adaptive backoff
+├── scripts/                 # Tooling, packaging, and symbol version scripts
+│   ├── coverage_summary.py  # Automated gcov summary generator
+│   ├── gen_compile_commands.py# Compilation database generator
+│   └── librbipc.sym         # GNU linker version script (LIBRBIPC_1.0 symbol export whitelist)
+├── tests/                   # 27 automated verification suites (18 unit, 3 I/O, 6 E2E & chaos fault-injection)
+├── Makefile                 # Modular build system with dependency tracking, sanitizers, and pkg-config
+└── librbipc.pc.in           # pkg-config package specification template
 ├── benchmarks/              # 5 benchmark suites + partitioned datasets (benchmarks/results/{home_pc,laptop,laptop_powersave}/*.json)
 │   ├── bench_common.h       # Shared hardware telemetry, path routing, and adaptive spin backoff
 │   ├── bench_suite.c        # Core latency, 1P-1C streaming, B-Queue batching, zero-copy payloads, MPMC
