@@ -34,9 +34,9 @@
  * @param[in] offset Sequence offset (0 for vacant, 1 for ready).
  * @return Number of contiguous matching slots.
  */
-static uint32_t rbipc_simd_scan_scalar(const rbipc_slot_t *slots, uint32_t mask,
-                                       uint64_t t, uint32_t count,
-                                       uint64_t offset, bool is_packed) {
+RBIPC_INTERNAL uint32_t rbipc_simd_scan_scalar(const rbipc_slot_t *slots, uint32_t mask,
+                                               uint64_t t, uint32_t count,
+                                               uint64_t offset, bool is_packed) {
   uint32_t avail = 0;
   for (uint32_t i = 0; i < count; ++i) {
     const rbipc_slot_t *slot = &slots[(t + i) & mask];
@@ -54,9 +54,10 @@ static uint32_t rbipc_simd_scan_scalar(const rbipc_slot_t *slots, uint32_t mask,
 #if defined(__x86_64__) || defined(_M_X64)
 #if defined(__GNUC__) || defined(__clang__)
 __attribute__((target("avx512f")))
-static uint32_t rbipc_simd_scan_avx512(const rbipc_slot_t *slots, uint32_t mask,
-                                       uint64_t t, uint32_t count,
-                                       uint64_t offset, bool is_packed) {
+#endif
+RBIPC_INTERNAL uint32_t rbipc_simd_scan_avx512(const rbipc_slot_t *slots, uint32_t mask,
+                                               uint64_t t, uint32_t count,
+                                               uint64_t offset, bool is_packed) {
   uint32_t avail = 0;
   long long start_t = (long long)t + (long long)offset;
   __m512i vtgt = _mm512_set_epi64(start_t + 7, start_t + 6, start_t + 5, start_t + 4,
@@ -103,6 +104,7 @@ static uint32_t rbipc_simd_scan_avx512(const rbipc_slot_t *slots, uint32_t mask,
   return avail;
 }
 
+#if defined(__GNUC__) || defined(__clang__)
 __attribute__((target("avx2")))
 #endif
 /**
@@ -116,9 +118,9 @@ __attribute__((target("avx2")))
  * @param[in] is_packed True if 64-bit packed sequence/len/state descriptors.
  * @return Number of contiguous matching slots.
  */
-static uint32_t rbipc_simd_scan_avx2(const rbipc_slot_t *slots, uint32_t mask,
-                                     uint64_t t, uint32_t count,
-                                     uint64_t offset, bool is_packed) {
+RBIPC_INTERNAL uint32_t rbipc_simd_scan_avx2(const rbipc_slot_t *slots, uint32_t mask,
+                                             uint64_t t, uint32_t count,
+                                             uint64_t offset, bool is_packed) {
   uint32_t avail = 0;
   long long start_t = (long long)t + (long long)offset;
   __m256i vtgt = _mm256_set_epi64x(start_t + 3, start_t + 2, start_t + 1, start_t);
@@ -170,14 +172,90 @@ static uint32_t rbipc_simd_scan_avx2(const rbipc_slot_t *slots, uint32_t mask,
 }
 
 #if defined(__GNUC__) || defined(__clang__)
+__attribute__((target("avx")))
+#endif
+/**
+ * @brief 256-bit AVX1 accelerated slot sequence scanner (dual 128-bit VEX-encoded lanes).
+ *
+ * @details Utilizes 128-bit VEX-encoded vector integer comparisons and a 256-bit
+ * combined mask via _mm256_set_m128d and _mm256_movemask_pd, scanning 4 slots per cycle
+ * on first-generation AVX architectures (Sandy Bridge / Ivy Bridge) where AVX2 is absent.
+ *
+ * @param[in] slots     Slot descriptor array.
+ * @param[in] mask      Ring capacity mask.
+ * @param[in] t         Starting ticket.
+ * @param[in] count     Maximum slots to inspect.
+ * @param[in] offset    Sequence offset (0 for vacant, 1 for ready).
+ * @param[in] is_packed True if 64-bit packed sequence/len/state descriptors.
+ * @return Number of contiguous matching slots.
+ */
+RBIPC_INTERNAL uint32_t rbipc_simd_scan_avx(const rbipc_slot_t *slots, uint32_t mask,
+                                            uint64_t t, uint32_t count,
+                                            uint64_t offset, bool is_packed) {
+  uint32_t avail = 0;
+  long long start_t = (long long)t + (long long)offset;
+  __m128i vtgt0 = _mm_set_epi64x(start_t + 1, start_t + 0);
+  __m128i vtgt1 = _mm_set_epi64x(start_t + 3, start_t + 2);
+  const __m128i vstep = _mm_set1_epi64x(4);
+
+  while (avail + 4 <= count) {
+    uint64_t base_t = t + avail;
+    uint32_t idx = (uint32_t)(base_t & mask);
+    RBIPC_PREFETCH(&slots[(base_t + 8) & mask].sequence, RBIPC_PREFETCH_READ,
+                   RBIPC_PREFETCH_LOCALITY_HIGH);
+    uint64_t s0, s1, s2, s3;
+    if (idx + 4 <= mask + 1) {
+      s0 = atomic_load_explicit(&slots[idx + 0].sequence, memory_order_acquire);
+      s1 = atomic_load_explicit(&slots[idx + 1].sequence, memory_order_acquire);
+      s2 = atomic_load_explicit(&slots[idx + 2].sequence, memory_order_acquire);
+      s3 = atomic_load_explicit(&slots[idx + 3].sequence, memory_order_acquire);
+    } else {
+      s0 = atomic_load_explicit(&slots[(base_t + 0) & mask].sequence,
+                                memory_order_acquire);
+      s1 = atomic_load_explicit(&slots[(base_t + 1) & mask].sequence,
+                                memory_order_acquire);
+      s2 = atomic_load_explicit(&slots[(base_t + 2) & mask].sequence,
+                                memory_order_acquire);
+      s3 = atomic_load_explicit(&slots[(base_t + 3) & mask].sequence,
+                                memory_order_acquire);
+    }
+
+    __m128i vseq0 = _mm_set_epi64x((long long)s1, (long long)s0);
+    __m128i vseq1 = _mm_set_epi64x((long long)s3, (long long)s2);
+    if (is_packed) {
+      vseq0 = _mm_srli_epi64(vseq0, RBIPC_PACKED_SEQ_SHIFT);
+      vseq1 = _mm_srli_epi64(vseq1, RBIPC_PACKED_SEQ_SHIFT);
+    }
+    __m128i cmp0 = _mm_cmpeq_epi64(vseq0, vtgt0);
+    __m128i cmp1 = _mm_cmpeq_epi64(vseq1, vtgt1);
+    __m256d combined = _mm256_set_m128d((__m128d)cmp1, (__m128d)cmp0);
+    uint32_t match_mask = (uint32_t)_mm256_movemask_pd(combined);
+
+    if (match_mask == 0x0FU) {
+      avail += 4;
+      vtgt0 = _mm_add_epi64(vtgt0, vstep);
+      vtgt1 = _mm_add_epi64(vtgt1, vstep);
+    } else {
+      uint32_t mismatch_bits = (~match_mask) & 0x0FU;
+      return avail + (uint32_t)__builtin_ctz(mismatch_bits);
+    }
+  }
+
+  if (avail < count) {
+    avail += rbipc_simd_scan_scalar(slots, mask, t + avail, count - avail, offset, is_packed);
+  }
+  return avail;
+}
+
+#if defined(__GNUC__) || defined(__clang__)
 __attribute__((target("sse4.1")))
 #endif
 /**
  * @brief 128-bit SSE4.1 accelerated slot sequence scanner (2 slots per vector).
  */
-static uint32_t rbipc_simd_scan_sse41(const rbipc_slot_t *slots, uint32_t mask,
-                                      uint64_t t, uint32_t count,
-                                      uint64_t offset, bool is_packed) {
+RBIPC_INTERNAL uint32_t rbipc_simd_scan_sse41(const rbipc_slot_t *slots, uint32_t mask,
+                                              uint64_t t, uint32_t count,
+                                              uint64_t offset, bool is_packed) {
   uint32_t avail = 0;
   long long start_t = (long long)t + (long long)offset;
   __m128i vtgt = _mm_set_epi64x(start_t + 1, start_t);
@@ -282,6 +360,9 @@ RBIPC_INLINE uint32_t rbipc_simd_scan_slots(const rbipc_slot_t *slots,
   }
   if (__builtin_cpu_supports("avx2") && count >= 4) {
     return rbipc_simd_scan_avx2(slots, mask, t, count, offset, is_packed);
+  }
+  if (__builtin_cpu_supports("avx") && count >= 4) {
+    return rbipc_simd_scan_avx(slots, mask, t, count, offset, is_packed);
   }
   if (__builtin_cpu_supports("sse4.1") && count >= 2) {
     return rbipc_simd_scan_sse41(slots, mask, t, count, offset, is_packed);

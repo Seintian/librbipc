@@ -68,4 +68,26 @@ RBIPC_INTERNAL RBIPC_NODISCARD RBIPC_LEAF uint32_t rbipc_simd_scan_ready_slots_e
     const rbipc_slot_t *slots, uint32_t mask, uint64_t t, uint32_t count,
     bool is_packed);
 
+#if defined(__x86_64__) || defined(_M_X64)
+RBIPC_INTERNAL RBIPC_NODISCARD RBIPC_LEAF uint32_t
+rbipc_simd_scan_avx512(const rbipc_slot_t *slots, uint32_t mask, uint64_t t,
+                       uint32_t count, uint64_t offset, bool is_packed);
+
+RBIPC_INTERNAL RBIPC_NODISCARD RBIPC_LEAF uint32_t
+rbipc_simd_scan_avx2(const rbipc_slot_t *slots, uint32_t mask, uint64_t t,
+                     uint32_t count, uint64_t offset, bool is_packed);
+
+RBIPC_INTERNAL RBIPC_NODISCARD RBIPC_LEAF uint32_t
+rbipc_simd_scan_avx(const rbipc_slot_t *slots, uint32_t mask, uint64_t t,
+                    uint32_t count, uint64_t offset, bool is_packed);
+
+RBIPC_INTERNAL RBIPC_NODISCARD RBIPC_LEAF uint32_t
+rbipc_simd_scan_sse41(const rbipc_slot_t *slots, uint32_t mask, uint64_t t,
+                      uint32_t count, uint64_t offset, bool is_packed);
+#endif
+
+RBIPC_INTERNAL RBIPC_NODISCARD RBIPC_LEAF uint32_t
+rbipc_simd_scan_scalar(const rbipc_slot_t *slots, uint32_t mask, uint64_t t,
+                       uint32_t count, uint64_t offset, bool is_packed);
+
 #endif /* RBIPC_SIMD_H */
