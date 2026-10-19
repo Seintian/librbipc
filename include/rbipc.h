@@ -221,6 +221,39 @@ extern "C" {
 #define RBIPC_ROLE_MONITOR                                                     \
   0x0008U /**< Process observes/monitors telemetry; does not increment active  \
              counters. */
+
+#define RBIPC_SHM_ANON                                                         \
+  0x0010U /**< Explicitly select anonymous memfd shared memory. Default when   \
+             no choice is emitted. */
+#define RBIPC_SHM_NAMED                                                        \
+  0x0020U /**< Explicitly select named POSIX shared memory. */
+
+#define RBIPC_FLAG_TRUSTED                                                     \
+  0x0040U /**< Tier 2: Ultra-low-latency trusted mode (pure Vyukov sequence    \
+             turns, bypasses PID tracking and state lag checks). */
+#define RBIPC_FLAG_PACKED                                                      \
+  0x0080U /**< Tier 3: 64-bit packed sequence/len/state descriptors for       \
+             single-store atomic publication. */
+
+#define RBIPC_CREATE_ANON RBIPC_SHM_ANON
+#define RBIPC_CREATE_NAMED RBIPC_SHM_NAMED
+#define RBIPC_SHM_TYPE_ANONYMOUS RBIPC_SHM_ANON
+#define RBIPC_SHM_TYPE_NAMED RBIPC_SHM_NAMED
+#define RBIPC_MODE_TRUSTED RBIPC_FLAG_TRUSTED
+#define RBIPC_MODE_PACKED RBIPC_FLAG_PACKED
+
+/**
+ * @defgroup rbipc_packed_constants 64-Bit Packed Descriptor Bitfield Constants
+ * @brief Bitmasks and bit shifts for Tier 3 packed sequence/len/state descriptors.
+ * @{
+ */
+#define RBIPC_PACKED_STATE_MASK 0x000000000000000FULL
+#define RBIPC_PACKED_LEN_SHIFT 4U
+#define RBIPC_PACKED_LEN_MASK 0x000000000000FFF0ULL
+#define RBIPC_PACKED_SEQ_SHIFT 16U
+#define RBIPC_PACKED_SEQ_MASK 0xFFFFFFFFFFFF0000ULL
+#define RBIPC_PACKED_MAX_LEN 4095U
+/** @} */
 /** @} */
 
 /**
@@ -331,10 +364,10 @@ typedef struct {
   _Atomic uint64_t
       magic; /**< Structural header identification signature (@ref RBIPC_MAGIC)
                 published last with release semantics. */
-  uint32_t version;    /**< Header protocol layout format version (@ref
-                          RBIPC_VERSION). */
-  uint32_t _reserved0; /**< Explicit 32-bit alignment padding for deterministic
-                          CRC calculation. */
+  uint32_t version; /**< Header protocol layout format version (@ref
+                         RBIPC_VERSION). */
+  uint32_t flags;   /**< Operational mode and architecture flags (e.g.
+                       RBIPC_FLAG_TRUSTED, RBIPC_FLAG_PACKED). */
   uint64_t total_shm_size; /**< Total file size in bytes of the shared memory
                               region. */
   uint64_t data_offset;    /**< Page-aligned byte offset from base where payload
@@ -360,15 +393,16 @@ typedef struct {
   _Alignas(RBIPC_CACHE_LINE) _Atomic uint32_t
       futex_seq; /**< Futex word sequence counter for consumer wakeups (data
                     ready). Used as 32-bit proxy word in classical SYS_futex
-                    mode and as auxiliary wake target in vectorized futex2 mode. */
+                    mode and as auxiliary wake target in vectorized futex2 mode.
+                  */
   _Alignas(RBIPC_CACHE_LINE) _Atomic uint32_t
       futex_waiters; /**< Count of consumer threads actively sleeping on @c
                         futex_seq or slot sequence futexes. */
   _Alignas(RBIPC_CACHE_LINE) _Atomic uint32_t
       write_futex_seq; /**< Futex word sequence counter for producer wakeups
                           (space ready). Used as 32-bit proxy word in classical
-                          SYS_futex mode and as auxiliary wake target in vectorized
-                          futex2 mode. */
+                          SYS_futex mode and as auxiliary wake target in
+                          vectorized futex2 mode. */
   _Alignas(RBIPC_CACHE_LINE) _Atomic uint32_t
       write_waiters; /**< Count of producer threads actively sleeping on @c
                         write_futex_seq or slot sequence futexes. */
@@ -388,15 +422,16 @@ typedef struct {
 
   /* Cache-line isolated telemetry & operational error counters */
   _Alignas(RBIPC_CACHE_LINE) _Atomic uint64_t
-      poisoned_slots_count; /**< Cumulative count of slots poisoned (aborts / dead peers / holes). */
-  _Atomic uint64_t
-      dead_producers_recovered; /**< Cumulative count of dead producer crash recoveries. */
-  _Atomic uint64_t
-      dead_consumers_recovered; /**< Cumulative count of dead consumer process recoveries. */
-  _Atomic uint64_t
-      leases_revoked_count; /**< Cumulative count of expired consumer leases revoked. */
-  _Atomic uint64_t
-      ticket_holes_healed; /**< Cumulative count of orphaned ticket holes healed. */
+      poisoned_slots_count; /**< Cumulative count of slots poisoned (aborts /
+                               dead peers / holes). */
+  _Atomic uint64_t dead_producers_recovered; /**< Cumulative count of dead
+                                                producer crash recoveries. */
+  _Atomic uint64_t dead_consumers_recovered; /**< Cumulative count of dead
+                                                consumer process recoveries. */
+  _Atomic uint64_t leases_revoked_count;     /**< Cumulative count of expired
+                                                consumer leases revoked. */
+  _Atomic uint64_t ticket_holes_healed; /**< Cumulative count of orphaned ticket
+                                           holes healed. */
 } rbipc_shm_header_t;
 
 /**
@@ -424,13 +459,20 @@ typedef struct {
                                 suspended waiting for space (write_futex_seq). */
   uint32_t eventfd_waiters;  /**< Count of registered eventfd/epoll reactor
                                 waiters. */
-  uint64_t lease_timeout_ns; /**< Configured consumer holding lease duration in nanoseconds. */
-  uint64_t backlog;          /**< Instantaneous unconsumed message count clamped to [0, capacity]. */
-  uint64_t poisoned_slots_count;     /**< Cumulative count of slots marked POISONED (aborts / dead peers / holes). */
-  uint64_t dead_producers_recovered; /**< Cumulative count of dead producer crash recoveries. */
-  uint64_t dead_consumers_recovered; /**< Cumulative count of dead consumer process recoveries. */
-  uint64_t leases_revoked_count;     /**< Cumulative count of expired consumer leases revoked. */
-  uint64_t ticket_holes_healed;      /**< Cumulative count of orphaned ticket holes healed. */
+  uint64_t lease_timeout_ns; /**< Configured consumer holding lease duration in
+                                nanoseconds. */
+  uint64_t backlog; /**< Instantaneous unconsumed message count clamped to [0,
+                       capacity]. */
+  uint64_t poisoned_slots_count; /**< Cumulative count of slots marked POISONED
+                                    (aborts / dead peers / holes). */
+  uint64_t dead_producers_recovered; /**< Cumulative count of dead producer
+                                        crash recoveries. */
+  uint64_t dead_consumers_recovered; /**< Cumulative count of dead consumer
+                                        process recoveries. */
+  uint64_t leases_revoked_count;     /**< Cumulative count of expired consumer
+                                        leases revoked. */
+  uint64_t ticket_holes_healed; /**< Cumulative count of orphaned ticket holes
+                                   healed. */
   bool is_shutdown; /**< Boolean indicator confirming if ring shutdown has been
                        signaled. */
 } rbipc_stats_t;
@@ -440,14 +482,19 @@ typedef struct {
  * @brief Point-in-time instantaneous histogram of slot states across the ring.
  */
 typedef struct {
-  uint32_t capacity;               /**< Total capacity of the slot table. */
-  uint32_t empty_count;            /**< Number of slots currently in EMPTY state. */
-  uint32_t reserving_count;        /**< Number of slots currently in RESERVING state. */
-  uint32_t reserved_count;         /**< Number of slots currently in RESERVED state (being populated). */
-  uint32_t committed_count;        /**< Number of slots currently in COMMITTED state (ready to read). */
-  uint32_t poisoned_count;         /**< Number of slots currently in POISONED state. */
-  uint32_t active_leased_slots;    /**< Number of slots currently held under consumer lease. */
-  uint64_t max_lease_elapsed_ns;   /**< Maximum elapsed holding duration in ns among currently leased slots. */
+  uint32_t capacity;    /**< Total capacity of the slot table. */
+  uint32_t empty_count; /**< Number of slots currently in EMPTY state. */
+  uint32_t
+      reserving_count;     /**< Number of slots currently in RESERVING state. */
+  uint32_t reserved_count; /**< Number of slots currently in RESERVED state
+                              (being populated). */
+  uint32_t committed_count; /**< Number of slots currently in COMMITTED state
+                               (ready to read). */
+  uint32_t poisoned_count;  /**< Number of slots currently in POISONED state. */
+  uint32_t active_leased_slots;  /**< Number of slots currently held under
+                                    consumer lease. */
+  uint64_t max_lease_elapsed_ns; /**< Maximum elapsed holding duration in ns
+                                    among currently leased slots. */
 } rbipc_slot_stats_t;
 
 /**
@@ -502,14 +549,17 @@ typedef struct rbipc_ring rbipc_ring_t;
  * establishes the shared memory virtual address region.
  *
  * @param[in]  name      POSIX shared memory object name (e.g. "/my_ring"), or
- * NULL for anonymous memory.
+ * NULL/empty to use the default anonymous shared memory.
  * @param[in]  capacity  Requested slot count (must be power of two, >= @ref
  * RBIPC_MIN_CAPACITY).
  * @param[in]  slot_size Requested payload size per slot in bytes.
  * @param[in]  flags     Creation flags (@ref RBIPC_CREATE_EXCL or @ref
- * RBIPC_CREATE_OVERWRITE) combined with optional role flags (@ref RBIPC_ROLE_PRODUCER).
- * @param[in]  mode      POSIX file permission mode bits (e.g. 0660; enforced via
- * fchmod).
+ * RBIPC_CREATE_OVERWRITE) combined with optional role flags (@ref
+ * RBIPC_ROLE_PRODUCER) and optional memory backing flags (@ref RBIPC_SHM_ANON
+ * or @ref RBIPC_SHM_NAMED). If no backing type is specified, anonymous memfd is
+ * the default.
+ * @param[in]  mode      POSIX file permission mode bits (e.g. 0660; enforced
+ * via fchmod).
  * @param[out] out_ring  Location to store pointer to the allocated ring buffer
  * handle.
  *
@@ -521,6 +571,7 @@ typedef struct rbipc_ring rbipc_ring_t;
  * @retval RBIPC_ERR_SYS    if an underlying kernel syscall fails.
  *
  * @see rbipc_create
+ * @see rbipc_create_anon
  * @see rbipc_destroy
  */
 RBIPC_NODISCARD RBIPC_LEAF int
@@ -529,13 +580,14 @@ rbipc_create_ex(const char *RBIPC_RESTRICT name, size_t capacity,
                 rbipc_ring_t **RBIPC_RESTRICT out_ring);
 
 /**
- * @brief Create a new named shared-memory IPC ring buffer with default
- * permissions and exclusive creation.
+ * @brief Create a new shared-memory IPC ring buffer.
  *
- * @details Equivalent to calling rbipc_create_ex(name, capacity, slot_size,
- * RBIPC_CREATE_EXCL, 0660, out_ring).
+ * @details If @p name is NULL or empty, creates an anonymous memory ring buffer
+ * via memfd_create() (the default choice). If @p name is a valid POSIX shared
+ * memory name (e.g. "/my_ring"), creates a named POSIX shared memory object.
  *
- * @param[in]  name      POSIX shared memory object name (e.g. "/my_ring").
+ * @param[in]  name      POSIX shared memory object name (e.g. "/my_ring"), or
+ * NULL/empty to create the default anonymous memory ring buffer.
  * @param[in]  capacity  Requested slot count (automatically rounded up to next
  * power of two).
  * @param[in]  slot_size Requested payload size per slot in bytes.
@@ -543,17 +595,42 @@ rbipc_create_ex(const char *RBIPC_RESTRICT name, size_t capacity,
  * handle.
  *
  * @return @ref RBIPC_OK on successful initialization.
- * @retval RBIPC_ERR_EXISTS if object exists.
+ * @retval RBIPC_ERR_EXISTS if named object exists.
  * @retval RBIPC_ERR_INVAL  if parameters are invalid.
  * @retval RBIPC_ERR_NOMEM  if virtual memory allocation or mmap fails.
  * @retval RBIPC_ERR_SYS    if an underlying kernel syscall fails.
  *
  * @see rbipc_create_ex
+ * @see rbipc_create_anon
  * @see rbipc_destroy
  */
 RBIPC_NODISCARD RBIPC_LEAF int
 rbipc_create(const char *RBIPC_RESTRICT name, size_t capacity,
              uint32_t slot_size, rbipc_ring_t **RBIPC_RESTRICT out_ring);
+
+/**
+ * @brief Create a new anonymous shared-memory IPC ring buffer.
+ *
+ * @details Creates an anonymous memory ring buffer via memfd_create()
+ * (default). Does not expose any path in /dev/shm.
+ *
+ * @param[in]  capacity  Requested slot count (automatically rounded up to next
+ * power of two).
+ * @param[in]  slot_size Requested payload size per slot in bytes.
+ * @param[out] out_ring  Location to store pointer to the allocated ring buffer
+ * handle.
+ *
+ * @return @ref RBIPC_OK on successful initialization.
+ * @retval RBIPC_ERR_INVAL  if parameters are invalid.
+ * @retval RBIPC_ERR_NOMEM  if virtual memory allocation or mmap fails.
+ * @retval RBIPC_ERR_SYS    if an underlying kernel syscall fails.
+ *
+ * @see rbipc_create
+ * @see rbipc_create_ex
+ */
+RBIPC_NODISCARD RBIPC_LEAF int
+rbipc_create_anon(size_t capacity, uint32_t slot_size,
+                  rbipc_ring_t **RBIPC_RESTRICT out_ring);
 
 /**
  * @brief Attach to an existing named shared-memory IPC ring buffer with
@@ -965,18 +1042,22 @@ RBIPC_HOT RBIPC_LEAF int rbipc_read_release(rbipc_ring_t *RBIPC_RESTRICT ring,
  */
 
 /**
- * @brief Write a message into the ring buffer with timeout (Convenience Copy I/O).
+ * @brief Write a message into the ring buffer with timeout (Convenience Copy
+ * I/O).
  *
  * @details Atomically reserves a slot, copies the payload from @p buf into the
  * shared-memory slot buffer, and commits the slot to waiting consumers.
  *
  * @param[in,out] ring       Ring buffer handle.
  * @param[in]     buf        Pointer to source payload data buffer.
- * @param[in]     len        Length of payload data in bytes (must be <= slot size).
- * @param[in]     timeout_ns Timeout deadline in nanoseconds (or UINT64_MAX for blocking).
+ * @param[in]     len        Length of payload data in bytes (must be <= slot
+ * size).
+ * @param[in]     timeout_ns Timeout deadline in nanoseconds (or UINT64_MAX for
+ * blocking).
  *
  * @return @ref RBIPC_OK on success.
- * @retval RBIPC_ERR_INVAL    if @p ring or @p buf is NULL, or @p len exceeds slot size.
+ * @retval RBIPC_ERR_INVAL    if @p ring or @p buf is NULL, or @p len exceeds
+ * slot size.
  * @retval RBIPC_ERR_TIMEOUT  if deadline expired before a slot became vacant.
  * @retval RBIPC_ERR_SHUTDOWN if ring buffer has shut down.
  *
@@ -984,13 +1065,14 @@ RBIPC_HOT RBIPC_LEAF int rbipc_read_release(rbipc_ring_t *RBIPC_RESTRICT ring,
  * @see rbipc_write_nonblock
  * @see rbipc_reserve_write
  */
-RBIPC_NODISCARD RBIPC_LEAF int rbipc_write_timeout(rbipc_ring_t *RBIPC_RESTRICT ring,
-                                                   const void *RBIPC_RESTRICT buf,
-                                                   uint32_t len,
-                                                   uint64_t timeout_ns);
+RBIPC_NODISCARD RBIPC_LEAF int
+rbipc_write_timeout(rbipc_ring_t *RBIPC_RESTRICT ring,
+                    const void *RBIPC_RESTRICT buf, uint32_t len,
+                    uint64_t timeout_ns);
 
 /**
- * @brief Write a message into the ring buffer blocking indefinitely (Convenience Copy I/O).
+ * @brief Write a message into the ring buffer blocking indefinitely
+ * (Convenience Copy I/O).
  *
  * @param[in,out] ring Ring buffer handle.
  * @param[in]     buf  Pointer to source payload data buffer.
@@ -1008,7 +1090,8 @@ RBIPC_NODISCARD RBIPC_LEAF int rbipc_write(rbipc_ring_t *RBIPC_RESTRICT ring,
                                            uint32_t len);
 
 /**
- * @brief Write a message into the ring buffer without blocking (Convenience Copy I/O).
+ * @brief Write a message into the ring buffer without blocking (Convenience
+ * Copy I/O).
  *
  * @param[in,out] ring Ring buffer handle.
  * @param[in]     buf  Pointer to source payload data buffer.
@@ -1022,12 +1105,13 @@ RBIPC_NODISCARD RBIPC_LEAF int rbipc_write(rbipc_ring_t *RBIPC_RESTRICT ring,
  * @see rbipc_write
  * @see rbipc_write_timeout
  */
-RBIPC_NODISCARD RBIPC_LEAF int rbipc_write_nonblock(rbipc_ring_t *RBIPC_RESTRICT ring,
-                                                    const void *RBIPC_RESTRICT buf,
-                                                    uint32_t len);
+RBIPC_NODISCARD RBIPC_LEAF int
+rbipc_write_nonblock(rbipc_ring_t *RBIPC_RESTRICT ring,
+                     const void *RBIPC_RESTRICT buf, uint32_t len);
 
 /**
- * @brief Read a message from the ring buffer with timeout (Convenience Copy I/O).
+ * @brief Read a message from the ring buffer with timeout (Convenience Copy
+ * I/O).
  *
  * @details Atomically acquires the next committed slot, copies up to @p max_len
  * bytes into caller buffer @p buf, optionally returns actual message length in
@@ -1036,8 +1120,10 @@ RBIPC_NODISCARD RBIPC_LEAF int rbipc_write_nonblock(rbipc_ring_t *RBIPC_RESTRICT
  * @param[in,out] ring       Ring buffer handle.
  * @param[out]    buf        Caller-provided destination buffer.
  * @param[in]     max_len    Maximum capacity of destination buffer in bytes.
- * @param[out]    out_len    Optional pointer receiving actual payload length (may be NULL).
- * @param[in]     timeout_ns Timeout deadline in nanoseconds (or UINT64_MAX for blocking).
+ * @param[out]    out_len    Optional pointer receiving actual payload length
+ * (may be NULL).
+ * @param[in]     timeout_ns Timeout deadline in nanoseconds (or UINT64_MAX for
+ * blocking).
  *
  * @return @ref RBIPC_OK on success.
  * @retval RBIPC_ERR_INVAL    if @p ring or @p buf is NULL.
@@ -1049,19 +1135,20 @@ RBIPC_NODISCARD RBIPC_LEAF int rbipc_write_nonblock(rbipc_ring_t *RBIPC_RESTRICT
  * @see rbipc_read_nonblock
  * @see rbipc_read_acquire
  */
-RBIPC_NODISCARD RBIPC_LEAF int rbipc_read_timeout(rbipc_ring_t *RBIPC_RESTRICT ring,
-                                                  void *RBIPC_RESTRICT buf,
-                                                  uint32_t max_len,
-                                                  uint32_t *RBIPC_RESTRICT out_len,
-                                                  uint64_t timeout_ns);
+RBIPC_NODISCARD RBIPC_LEAF int
+rbipc_read_timeout(rbipc_ring_t *RBIPC_RESTRICT ring, void *RBIPC_RESTRICT buf,
+                   uint32_t max_len, uint32_t *RBIPC_RESTRICT out_len,
+                   uint64_t timeout_ns);
 
 /**
- * @brief Read a message from the ring buffer blocking indefinitely (Convenience Copy I/O).
+ * @brief Read a message from the ring buffer blocking indefinitely (Convenience
+ * Copy I/O).
  *
  * @param[in,out] ring    Ring buffer handle.
  * @param[out]    buf     Caller-provided destination buffer.
  * @param[in]     max_len Maximum capacity of destination buffer in bytes.
- * @param[out]    out_len Optional pointer receiving actual payload length (may be NULL).
+ * @param[out]    out_len Optional pointer receiving actual payload length (may
+ * be NULL).
  *
  * @return @ref RBIPC_OK on success.
  * @retval RBIPC_ERR_INVAL    if arguments are invalid.
@@ -1077,12 +1164,14 @@ RBIPC_NODISCARD RBIPC_LEAF int rbipc_read(rbipc_ring_t *RBIPC_RESTRICT ring,
                                           uint32_t *RBIPC_RESTRICT out_len);
 
 /**
- * @brief Read a message from the ring buffer without blocking (Convenience Copy I/O).
+ * @brief Read a message from the ring buffer without blocking (Convenience Copy
+ * I/O).
  *
  * @param[in,out] ring    Ring buffer handle.
  * @param[out]    buf     Caller-provided destination buffer.
  * @param[in]     max_len Maximum capacity of destination buffer in bytes.
- * @param[out]    out_len Optional pointer receiving actual payload length (may be NULL).
+ * @param[out]    out_len Optional pointer receiving actual payload length (may
+ * be NULL).
  *
  * @return @ref RBIPC_OK on success.
  * @retval RBIPC_ERR_EMPTY    if the ring buffer is currently empty.
@@ -1093,10 +1182,9 @@ RBIPC_NODISCARD RBIPC_LEAF int rbipc_read(rbipc_ring_t *RBIPC_RESTRICT ring,
  * @see rbipc_read
  * @see rbipc_read_timeout
  */
-RBIPC_NODISCARD RBIPC_LEAF int rbipc_read_nonblock(rbipc_ring_t *RBIPC_RESTRICT ring,
-                                                   void *RBIPC_RESTRICT buf,
-                                                   uint32_t max_len,
-                                                   uint32_t *RBIPC_RESTRICT out_len);
+RBIPC_NODISCARD RBIPC_LEAF int
+rbipc_read_nonblock(rbipc_ring_t *RBIPC_RESTRICT ring, void *RBIPC_RESTRICT buf,
+                    uint32_t max_len, uint32_t *RBIPC_RESTRICT out_len);
 
 /**
  * @brief Reserve a batch of contiguous slots for writing (Zero-Copy, B-Queue
@@ -1458,6 +1546,24 @@ RBIPC_NODISCARD RBIPC_PURE RBIPC_LEAF int
 rbipc_get_fd(const rbipc_ring_t *ring);
 
 /**
+ * @brief Query whether ring operates in Tier 2 trusted mode.
+ *
+ * @param[in] ring Ring buffer handle.
+ * @return true if trusted mode is active, false otherwise.
+ */
+RBIPC_NODISCARD RBIPC_PURE RBIPC_LEAF bool
+rbipc_ring_is_trusted(const rbipc_ring_t *ring);
+
+/**
+ * @brief Query whether ring operates in Tier 3 64-bit packed descriptor mode.
+ *
+ * @param[in] ring Ring buffer handle.
+ * @return true if packed mode is active, false otherwise.
+ */
+RBIPC_NODISCARD RBIPC_PURE RBIPC_LEAF bool
+rbipc_ring_is_packed(const rbipc_ring_t *ring);
+
+/**
  * @brief Collect a point-in-time snapshot of ring buffer telemetry metrics.
  *
  * @details Captures memory geometry, current ticket positions, active
@@ -1474,15 +1580,17 @@ rbipc_get_stats(const rbipc_ring_t *RBIPC_RESTRICT ring,
                 rbipc_stats_t *RBIPC_RESTRICT out_stats);
 
 /**
- * @brief Collect an instantaneous histogram of slot states across the ring buffer.
+ * @brief Collect an instantaneous histogram of slot states across the ring
+ * buffer.
  *
- * @details Iterates over all capacity slot descriptors using relaxed atomic loads,
- * categorizing slots into lifecycle states and computing the maximum elapsed lease age.
- * Because this function only performs read-only inspection on demand, it incurs
- * zero overhead during normal producer/consumer operation.
+ * @details Iterates over all capacity slot descriptors using relaxed atomic
+ * loads, categorizing slots into lifecycle states and computing the maximum
+ * elapsed lease age. Because this function only performs read-only inspection
+ * on demand, it incurs zero overhead during normal producer/consumer operation.
  *
  * @param[in]  ring            Ring buffer handle.
- * @param[out] out_slot_stats  Destination structure to receive the slot histogram.
+ * @param[out] out_slot_stats  Destination structure to receive the slot
+ * histogram.
  *
  * @return @ref RBIPC_OK on success.
  * @retval RBIPC_ERR_INVAL if @p ring or @p out_slot_stats is NULL.

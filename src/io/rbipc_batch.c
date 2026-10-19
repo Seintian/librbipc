@@ -16,10 +16,10 @@
 #endif
 
 #include "rbipc_batch.h"
-#include "rbipc_io.h"
 #include "rbipc_attr.h"
 #include "rbipc_audit.h"
 #include "rbipc_internal.h"
+#include "rbipc_io.h"
 #include "rbipc_predicate.h"
 #include "rbipc_reactor.h"
 #include "rbipc_simd.h"
@@ -45,7 +45,9 @@ rbipc_batch_populate_reserved(rbipc_ring_t *RBIPC_RESTRICT ring, uint64_t t,
     uint32_t idx = (uint32_t)(ticket_i & mask);
     rbipc_slot_t *slot = &slots[idx];
 
-    rbipc_slot_mark_reserved(slot, my_pid);
+    if (RBIPC_LIKELY(!ring->is_trusted)) {
+      rbipc_slot_mark_reserved(slot, my_pid);
+    }
 
     iovecs[i].buf = rbipc_io_calc_slot_ptr(ring, ticket_i);
     iovecs[i].ticket = ticket_i;
@@ -76,9 +78,33 @@ rbipc_batch_populate_acquired(const rbipc_ring_t *RBIPC_RESTRICT ring,
     uint64_t ticket_i = t + (uint64_t)i;
     uint32_t idx = (uint32_t)(ticket_i & mask);
     rbipc_slot_t *slot = &slots[idx];
-    uint32_t state = atomic_load_explicit(&slot->state, memory_order_acquire);
 
     rovecs[i].ticket = ticket_i;
+
+    if (RBIPC_UNLIKELY(ring->is_packed)) {
+      uint64_t packed = atomic_load_explicit(&slot->sequence, memory_order_acquire);
+      uint32_t state = rbipc_slot_unpack_state(packed);
+      if (RBIPC_UNLIKELY(state == RBIPC_SLOT_POISONED)) {
+        rovecs[i].buf = NULL;
+        rovecs[i].len = 0;
+      } else {
+        rovecs[i].buf = rbipc_io_calc_slot_ptr(ring, ticket_i);
+        rovecs[i].len = rbipc_slot_unpack_len(packed);
+        RBIPC_PREFETCH(rovecs[i].buf, RBIPC_PREFETCH_READ,
+                       RBIPC_PREFETCH_LOCALITY_HIGH);
+      }
+      continue;
+    }
+
+    if (RBIPC_UNLIKELY(ring->is_trusted)) {
+      rovecs[i].buf = rbipc_io_calc_slot_ptr(ring, ticket_i);
+      rovecs[i].len = atomic_load_explicit(&slot->len, memory_order_acquire);
+      RBIPC_PREFETCH(rovecs[i].buf, RBIPC_PREFETCH_READ,
+                     RBIPC_PREFETCH_LOCALITY_HIGH);
+      continue;
+    }
+
+    uint32_t state = atomic_load_explicit(&slot->state, memory_order_acquire);
     if (rbipc_slot_state_is_committed(state)) {
       rbipc_slot_mark_acquired(slot, my_pid, now_ts);
       rovecs[i].buf = rbipc_io_calc_slot_ptr(ring, ticket_i);
@@ -123,7 +149,14 @@ rbipc_batch_commit_slots(rbipc_ring_t *RBIPC_RESTRICT ring, uint32_t count,
   for (uint32_t i = 0; i < count; ++i) {
     uint64_t ticket = tickets[i];
     rbipc_slot_t *slot = &slots[ticket & mask];
-    rbipc_slot_commit(slot, ticket, written_lens[i]);
+    if (RBIPC_UNLIKELY(ring->is_packed)) {
+      rbipc_slot_commit_packed(slot, ticket, written_lens[i]);
+    } else if (RBIPC_UNLIKELY(ring->is_trusted)) {
+      atomic_store_explicit(&slot->len, written_lens[i], memory_order_relaxed);
+      atomic_store_explicit(&slot->sequence, ticket + 1, memory_order_release);
+    } else {
+      rbipc_slot_commit(slot, ticket, written_lens[i]);
+    }
   }
 }
 
@@ -138,14 +171,23 @@ static int rbipc_batch_release_slots(rbipc_ring_t *RBIPC_RESTRICT ring,
   const uint32_t cap = hdr->capacity;
   rbipc_slot_t *slots =
       (rbipc_slot_t *)RBIPC_ASSUME_ALIGNED(ring->slots, RBIPC_CACHE_LINE);
-  pid_t my_pid = ring->cached_pid;
+  pid_t my_pid =
+      (atomic_load_explicit(&hdr->lease_timeout_ns, memory_order_relaxed) > 0)
+          ? ring->cached_pid
+          : 0;
   int rc = RBIPC_OK;
 
   for (uint32_t i = 0; i < count; ++i) {
     uint64_t ticket = tickets[i];
     rbipc_slot_t *slot = &slots[ticket & mask];
-    if (RBIPC_UNLIKELY(!rbipc_slot_release_ex(slot, ticket, cap, my_pid))) {
-      rc = RBIPC_ERR_TIMEOUT;
+    if (RBIPC_UNLIKELY(ring->is_packed)) {
+      rbipc_slot_release_packed(slot, ticket, cap);
+    } else if (RBIPC_UNLIKELY(ring->is_trusted)) {
+      atomic_store_explicit(&slot->sequence, ticket + cap, memory_order_release);
+    } else {
+      if (RBIPC_UNLIKELY(!rbipc_slot_release_ex(slot, ticket, cap, my_pid))) {
+        rc = RBIPC_ERR_TIMEOUT;
+      }
     }
   }
   return rc;
@@ -179,9 +221,12 @@ int rbipc_reserve_write_batch_timeout(rbipc_ring_t *RBIPC_RESTRICT ring,
       return RBIPC_ERR_SHUTDOWN;
     }
 
-    rbipc_audit_recover_dead_consumer_range(hdr, slots, t, count);
+    if (!ring->is_trusted) {
+      rbipc_audit_recover_dead_consumer_range(hdr, slots, t, count);
+    }
     uint32_t avail =
-        rbipc_simd_scan_vacant_slots(slots, hdr->capacity_mask, t, count);
+        rbipc_simd_scan_vacant_slots_ex(slots, hdr->capacity_mask, t, count,
+                                        ring->is_packed);
     if (avail > 0) {
       if (rbipc_io_try_claim_write_ticket(hdr, &t, avail)) {
         rbipc_batch_populate_reserved(ring, t, avail, iovecs);
@@ -196,7 +241,8 @@ int rbipc_reserve_write_batch_timeout(rbipc_ring_t *RBIPC_RESTRICT ring,
         for (uint32_t spin = 0; spin < RBIPC_SPIN_COUNT_DEFAULT; ++spin) {
           rbipc_cpu_pause();
           avail =
-              rbipc_simd_scan_vacant_slots(slots, hdr->capacity_mask, t, count);
+              rbipc_simd_scan_vacant_slots_ex(slots, hdr->capacity_mask, t,
+                                              count, ring->is_packed);
           if (avail > 0 || RBIPC_UNLIKELY(rbipc_ring_is_shutdown(hdr))) {
             break;
           }
@@ -206,8 +252,11 @@ int rbipc_reserve_write_batch_timeout(rbipc_ring_t *RBIPC_RESTRICT ring,
         }
       }
       rbipc_sync_register_waiter(&hdr->write_waiters);
-      rbipc_audit_recover_dead_consumer_range(hdr, slots, t, count);
-      avail = rbipc_simd_scan_vacant_slots(slots, hdr->capacity_mask, t, count);
+      if (!ring->is_trusted) {
+        rbipc_audit_recover_dead_consumer_range(hdr, slots, t, count);
+      }
+      avail = rbipc_simd_scan_vacant_slots_ex(slots, hdr->capacity_mask, t,
+                                              count, ring->is_packed);
       if (avail > 0 || RBIPC_UNLIKELY(rbipc_ring_is_shutdown(hdr))) {
         rbipc_sync_deregister_waiter(&hdr->write_waiters);
         continue;
@@ -290,9 +339,12 @@ int rbipc_read_acquire_batch_timeout(rbipc_ring_t *RBIPC_RESTRICT ring,
       (rbipc_slot_t *)RBIPC_ASSUME_ALIGNED(ring->slots, RBIPC_CACHE_LINE);
 
   for (;;) {
-    rbipc_audit_recover_dead_producer_range(hdr, slots, t, count);
+    if (!ring->is_trusted) {
+      rbipc_audit_recover_dead_producer_range(hdr, slots, t, count);
+    }
     uint32_t avail =
-        rbipc_simd_scan_ready_slots(slots, hdr->capacity_mask, t, count);
+        rbipc_simd_scan_ready_slots_ex(slots, hdr->capacity_mask, t, count,
+                                       ring->is_packed);
     if (avail > 0) {
       if (rbipc_io_try_claim_read_ticket(hdr, &t, avail)) {
         rbipc_batch_populate_acquired(ring, t, avail, rovecs);
@@ -310,7 +362,8 @@ int rbipc_read_acquire_batch_timeout(rbipc_ring_t *RBIPC_RESTRICT ring,
         for (uint32_t spin = 0; spin < RBIPC_SPIN_COUNT_DEFAULT; ++spin) {
           rbipc_cpu_pause();
           avail =
-              rbipc_simd_scan_ready_slots(slots, hdr->capacity_mask, t, count);
+              rbipc_simd_scan_ready_slots_ex(slots, hdr->capacity_mask, t,
+                                             count, ring->is_packed);
           if (avail > 0 ||
               RBIPC_UNLIKELY(rbipc_ring_is_drained_on_shutdown(hdr, t))) {
             break;
@@ -322,8 +375,11 @@ int rbipc_read_acquire_batch_timeout(rbipc_ring_t *RBIPC_RESTRICT ring,
       }
 
       rbipc_sync_register_waiter(&hdr->futex_waiters);
-      rbipc_audit_recover_dead_producer_range(hdr, slots, t, count);
-      avail = rbipc_simd_scan_ready_slots(slots, hdr->capacity_mask, t, count);
+      if (!ring->is_trusted) {
+        rbipc_audit_recover_dead_producer_range(hdr, slots, t, count);
+      }
+      avail = rbipc_simd_scan_ready_slots_ex(slots, hdr->capacity_mask, t, count,
+                                             ring->is_packed);
       if (avail > 0 ||
           RBIPC_UNLIKELY(rbipc_ring_is_drained_on_shutdown(hdr, t))) {
         rbipc_sync_deregister_waiter(&hdr->futex_waiters);
@@ -337,8 +393,10 @@ int rbipc_read_acquire_batch_timeout(rbipc_ring_t *RBIPC_RESTRICT ring,
       }
 
       /* Unified ticket-hole audit & healing */
-      rbipc_slot_t *slot_t = &slots[t & hdr->capacity_mask];
-      rbipc_audit_check_and_heal_ticket_hole(hdr, slot_t, t, &sync_state);
+      if (!ring->is_trusted) {
+        rbipc_slot_t *slot_t = &slots[t & hdr->capacity_mask];
+        rbipc_audit_check_and_heal_ticket_hole(hdr, slot_t, t, &sync_state);
+      }
 
       t = atomic_load_explicit(&hdr->read_ticket, memory_order_relaxed);
     }

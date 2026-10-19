@@ -22,6 +22,7 @@
 #include "rbipc_arch.h"
 #include "rbipc_attr.h"
 #include "rbipc_audit.h"
+#include "rbipc_futex.h"
 #include "rbipc_internal.h"
 #include "rbipc_math.h"
 #include "rbipc_predicate.h"
@@ -29,7 +30,6 @@
 #include "rbipc_shm.h"
 #include "rbipc_slot.h"
 #include "rbipc_sync.h"
-#include "rbipc_futex.h"
 #include "rbipc_vmem.h"
 
 #include <stdlib.h>
@@ -74,10 +74,10 @@ rbipc_ring_validate_create_params(size_t capacity, uint32_t slot_size,
 static void
 rbipc_ring_init_header_fields(rbipc_shm_header_t *RBIPC_RESTRICT hdr,
                               const rbipc_layout_t *RBIPC_RESTRICT layout,
-                              uint32_t cap, uint32_t roles) {
+                              uint32_t cap, uint32_t roles, uint32_t flags) {
   atomic_init(&hdr->magic, 0);
   hdr->version = htole32(RBIPC_VERSION);
-  hdr->_reserved0 = 0;
+  hdr->flags = htole32(flags & (RBIPC_FLAG_TRUSTED | RBIPC_FLAG_PACKED));
   hdr->total_shm_size = htole64((uint64_t)layout->total_shm_size);
   hdr->data_offset = htole64((uint64_t)layout->data_offset);
   hdr->data_size = htole64((uint64_t)layout->data_size);
@@ -184,6 +184,9 @@ rbipc_ring_t *rbipc_ring_alloc_handle(int fd, const char *RBIPC_RESTRICT name,
   ring->event_fd = -1;
   ring->owns_eventfd = false;
   ring->wait_policy = RBIPC_WAIT_ADAPTIVE;
+  uint32_t hdr_flags = hdr ? le32toh(hdr->flags) : 0;
+  ring->is_trusted = (hdr_flags & RBIPC_FLAG_TRUSTED) != 0;
+  ring->is_packed = (hdr_flags & RBIPC_FLAG_PACKED) != 0;
 
   rbipc_sync_init_process();
 
@@ -220,8 +223,17 @@ int rbipc_create_ex(const char *RBIPC_RESTRICT name, size_t capacity,
     return RBIPC_ERR_INVAL;
   }
   uint32_t known_flags = RBIPC_CREATE_OVERWRITE | RBIPC_ROLE_PRODUCER |
-                         RBIPC_ROLE_CONSUMER | RBIPC_ROLE_MONITOR;
+                         RBIPC_ROLE_CONSUMER | RBIPC_ROLE_MONITOR |
+                         RBIPC_SHM_ANON | RBIPC_SHM_NAMED |
+                         RBIPC_FLAG_TRUSTED | RBIPC_FLAG_PACKED;
   if (RBIPC_UNLIKELY((flags & ~known_flags) != 0)) {
+    return RBIPC_ERR_INVAL;
+  }
+  if (RBIPC_UNLIKELY((flags & RBIPC_SHM_ANON) && (flags & RBIPC_SHM_NAMED))) {
+    return RBIPC_ERR_INVAL;
+  }
+  if (RBIPC_UNLIKELY((flags & RBIPC_FLAG_PACKED) &&
+                     slot_size > RBIPC_PACKED_MAX_LEN)) {
     return RBIPC_ERR_INVAL;
   }
   uint32_t roles =
@@ -245,7 +257,8 @@ int rbipc_create_ex(const char *RBIPC_RESTRICT name, size_t capacity,
   }
 
   int fd = -1;
-  uint32_t shm_flags = flags & RBIPC_CREATE_OVERWRITE;
+  uint32_t shm_flags =
+      flags & (RBIPC_CREATE_OVERWRITE | RBIPC_SHM_ANON | RBIPC_SHM_NAMED);
   rc = rbipc_shm_create_ex(name, layout.total_shm_size, shm_flags, mode, &fd);
   if (RBIPC_UNLIKELY(rc != RBIPC_OK)) {
     return rc;
@@ -253,27 +266,32 @@ int rbipc_create_ex(const char *RBIPC_RESTRICT name, size_t capacity,
 
   rbipc_shm_seal(fd);
 
+  bool is_named =
+      (flags & RBIPC_SHM_NAMED) ||
+      (!(flags & RBIPC_SHM_ANON) && name != NULL && name[0] != '\0');
+  const char *effective_name = is_named ? name : NULL;
+
   void *ctrl_map = NULL;
   void *data_map = NULL;
   rc = rbipc_ring_map_regions(fd, &layout, &ctrl_map, &data_map);
   if (RBIPC_UNLIKELY(rc != RBIPC_OK)) {
-    rbipc_ring_abort_create(fd, name, NULL, 0, NULL, 0);
+    rbipc_ring_abort_create(fd, effective_name, NULL, 0, NULL, 0);
     return rc;
   }
 
   rbipc_shm_header_t *hdr = (rbipc_shm_header_t *)ctrl_map;
-  rbipc_ring_init_header_fields(hdr, &layout, cap, roles);
+  rbipc_ring_init_header_fields(hdr, &layout, cap, roles, flags);
 
   rbipc_slot_t *slots =
       (rbipc_slot_t *)((char *)ctrl_map + sizeof(rbipc_shm_header_t));
-  rbipc_slot_init_table(slots, cap);
+  rbipc_slot_init_table_ex(slots, cap, (flags & RBIPC_FLAG_PACKED) != 0);
 
-  rbipc_ring_t *ring = rbipc_ring_alloc_handle(fd, name, hdr, slots, ctrl_map,
-                                               layout.data_offset, data_map,
-                                               layout.data_size, roles, true);
+  rbipc_ring_t *ring = rbipc_ring_alloc_handle(
+      fd, effective_name, hdr, slots, ctrl_map, layout.data_offset, data_map,
+      layout.data_size, roles, true);
   if (RBIPC_UNLIKELY(!ring)) {
-    rbipc_ring_abort_create(fd, name, ctrl_map, layout.data_offset, data_map,
-                            layout.data_size);
+    rbipc_ring_abort_create(fd, effective_name, ctrl_map, layout.data_offset,
+                            data_map, layout.data_size);
     return RBIPC_ERR_NOMEM;
   }
 
@@ -290,6 +308,13 @@ int rbipc_create(const char *RBIPC_RESTRICT name, size_t capacity,
                  uint32_t slot_size, rbipc_ring_t **RBIPC_RESTRICT out_ring) {
   return rbipc_create_ex(name, capacity, slot_size, RBIPC_CREATE_EXCL, 0,
                          out_ring);
+}
+
+RBIPC_LEAF
+int rbipc_create_anon(size_t capacity, uint32_t slot_size,
+                      rbipc_ring_t **RBIPC_RESTRICT out_ring) {
+  return rbipc_create_ex(NULL, capacity, slot_size,
+                         RBIPC_CREATE_EXCL | RBIPC_SHM_ANON, 0, out_ring);
 }
 
 int rbipc_ring_probe_and_validate_header(
@@ -462,6 +487,16 @@ RBIPC_LEAF
 int rbipc_get_fd(const rbipc_ring_t *ring) { return ring ? ring->fd : -1; }
 
 RBIPC_LEAF
+bool rbipc_ring_is_trusted(const rbipc_ring_t *ring) {
+  return ring != NULL && ring->is_trusted;
+}
+
+RBIPC_LEAF
+bool rbipc_ring_is_packed(const rbipc_ring_t *ring) {
+  return ring != NULL && ring->is_packed;
+}
+
+RBIPC_LEAF
 int rbipc_get_stats(const rbipc_ring_t *RBIPC_RESTRICT ring,
                     rbipc_stats_t *RBIPC_RESTRICT out_stats) {
   if (RBIPC_UNLIKELY(!ring || !ring->hdr || !out_stats)) {
@@ -473,10 +508,8 @@ int rbipc_get_stats(const rbipc_ring_t *RBIPC_RESTRICT ring,
   out_stats->data_size = hdr->data_size;
   out_stats->capacity = hdr->capacity;
   out_stats->slot_size = hdr->slot_size;
-  uint64_t wt =
-      atomic_load_explicit(&hdr->write_ticket, memory_order_relaxed);
-  uint64_t rt =
-      atomic_load_explicit(&hdr->read_ticket, memory_order_relaxed);
+  uint64_t wt = atomic_load_explicit(&hdr->write_ticket, memory_order_relaxed);
+  uint64_t rt = atomic_load_explicit(&hdr->read_ticket, memory_order_relaxed);
   out_stats->write_ticket = wt;
   out_stats->read_ticket = rt;
   out_stats->active_producers =
@@ -493,10 +526,10 @@ int rbipc_get_stats(const rbipc_ring_t *RBIPC_RESTRICT ring,
       atomic_load_explicit(&hdr->lease_timeout_ns, memory_order_relaxed);
   out_stats->poisoned_slots_count =
       atomic_load_explicit(&hdr->poisoned_slots_count, memory_order_relaxed);
-  out_stats->dead_producers_recovered =
-      atomic_load_explicit(&hdr->dead_producers_recovered, memory_order_relaxed);
-  out_stats->dead_consumers_recovered =
-      atomic_load_explicit(&hdr->dead_consumers_recovered, memory_order_relaxed);
+  out_stats->dead_producers_recovered = atomic_load_explicit(
+      &hdr->dead_producers_recovered, memory_order_relaxed);
+  out_stats->dead_consumers_recovered = atomic_load_explicit(
+      &hdr->dead_consumers_recovered, memory_order_relaxed);
   out_stats->leases_revoked_count =
       atomic_load_explicit(&hdr->leases_revoked_count, memory_order_relaxed);
   out_stats->ticket_holes_healed =
@@ -548,9 +581,11 @@ int rbipc_get_slot_stats(const rbipc_ring_t *RBIPC_RESTRICT ring,
       break;
     }
 
-    uint32_t cpid = atomic_load_explicit(&slot->consumer_pid, memory_order_relaxed);
+    uint32_t cpid =
+        atomic_load_explicit(&slot->consumer_pid, memory_order_relaxed);
     if (cpid > 0) {
-      uint64_t acq_ts = atomic_load_explicit(&slot->acquire_timestamp_ns, memory_order_relaxed);
+      uint64_t acq_ts = atomic_load_explicit(&slot->acquire_timestamp_ns,
+                                             memory_order_relaxed);
       if (acq_ts > 0) {
         out_slot_stats->active_leased_slots++;
         if (now_ns > acq_ts) {

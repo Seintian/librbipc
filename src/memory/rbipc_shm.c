@@ -163,9 +163,13 @@ int rbipc_shm_calc_layout(uint32_t capacity, uint32_t slot_size,
  * @brief Atomic helper: Create an anonymous memory file descriptor via Linux
  * memfd_create.
  */
-RBIPC_INLINE int rbipc_shm_create_anonymous(mode_t mode,
+RBIPC_INLINE int rbipc_shm_create_anonymous(const char *name, mode_t mode,
                                             int *RBIPC_RESTRICT out_fd) {
-  int fd = memfd_create(RBIPC_ANON_MEMFD_NAME, MFD_CLOEXEC | MFD_ALLOW_SEALING);
+  const char *desc_name = RBIPC_ANON_MEMFD_NAME;
+  if (name && name[0] != '\0') {
+    desc_name = (name[0] == '/') ? &name[1] : name;
+  }
+  int fd = memfd_create(desc_name, MFD_CLOEXEC | MFD_ALLOW_SEALING);
   if (fd < 0) {
     return RBIPC_ERR_SYS;
   }
@@ -236,13 +240,31 @@ int rbipc_shm_create_ex(const char *RBIPC_RESTRICT name, size_t total_size,
   if (RBIPC_UNLIKELY(!out_fd || total_size == 0)) {
     return RBIPC_ERR_INVAL;
   }
-  if (RBIPC_UNLIKELY((flags & ~RBIPC_CREATE_OVERWRITE) != 0)) {
+  uint32_t known_flags =
+      RBIPC_CREATE_OVERWRITE | RBIPC_SHM_ANON | RBIPC_SHM_NAMED;
+  if (RBIPC_UNLIKELY((flags & ~known_flags) != 0)) {
+    return RBIPC_ERR_INVAL;
+  }
+  if (RBIPC_UNLIKELY((flags & RBIPC_SHM_ANON) && (flags & RBIPC_SHM_NAMED))) {
     return RBIPC_ERR_INVAL;
   }
 
+  bool is_named = false;
+  if (flags & RBIPC_SHM_NAMED) {
+    if (RBIPC_UNLIKELY(!name)) {
+      return RBIPC_ERR_INVAL;
+    }
+    is_named = true;
+  } else if (flags & RBIPC_SHM_ANON) {
+    is_named = false;
+  } else {
+    /* Anonymous is the default if user does not emit an explicit choice */
+    is_named = (name != NULL && name[0] != '\0');
+  }
+
   int fd = -1;
-  int rc = name ? rbipc_shm_create_named(name, flags, mode, &fd)
-                : rbipc_shm_create_anonymous(mode, &fd);
+  int rc = is_named ? rbipc_shm_create_named(name, flags, mode, &fd)
+                    : rbipc_shm_create_anonymous(name, mode, &fd);
   if (RBIPC_UNLIKELY(rc != RBIPC_OK)) {
     return rc;
   }
@@ -251,7 +273,7 @@ int rbipc_shm_create_ex(const char *RBIPC_RESTRICT name, size_t total_size,
   if (RBIPC_UNLIKELY(rc != RBIPC_OK)) {
     int err = errno;
     close(fd);
-    if (name)
+    if (is_named && name)
       shm_unlink(name);
     errno = err;
     return rc;

@@ -106,7 +106,7 @@ static void test_header_and_sync_predicates(void) {
 
     atomic_init(&hdr.magic, htole64(RBIPC_MAGIC));
     hdr.version = htole32(RBIPC_VERSION);
-    hdr._reserved0 = 0;
+    hdr.flags = 0;
     hdr.capacity = htole32(1024);
     hdr.capacity_mask = htole32(1023);
     hdr.slot_size = htole32(256);

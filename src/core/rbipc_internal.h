@@ -66,6 +66,8 @@ struct rbipc_ring {
                    if disabled). */
   bool owns_eventfd; /**< True if this ring handle created the eventfd and
                         should close it on detach. */
+  bool is_trusted; /**< True if ring operates in Tier 2 trusted mode (pure Vyukov sequence turns). */
+  bool is_packed;  /**< True if ring operates in Tier 3 64-bit packed descriptor mode. */
 };
 
 /**

@@ -36,11 +36,12 @@
  */
 static uint32_t rbipc_simd_scan_scalar(const rbipc_slot_t *slots, uint32_t mask,
                                        uint64_t t, uint32_t count,
-                                       uint64_t offset) {
+                                       uint64_t offset, bool is_packed) {
   uint32_t avail = 0;
   for (uint32_t i = 0; i < count; ++i) {
     const rbipc_slot_t *slot = &slots[(t + i) & mask];
-    uint64_t seq = atomic_load_explicit(&slot->sequence, memory_order_acquire);
+    uint64_t raw = atomic_load_explicit(&slot->sequence, memory_order_acquire);
+    uint64_t seq = is_packed ? (raw >> RBIPC_PACKED_SEQ_SHIFT) : raw;
     if (rbipc_seq_diff(seq, t + i + offset) == 0) {
       avail++;
     } else {
@@ -57,16 +58,17 @@ __attribute__((target("avx2")))
 /**
  * @brief 256-bit AVX2 accelerated slot sequence scanner.
  *
- * @param[in] slots  Slot descriptor array.
- * @param[in] mask   Ring capacity mask.
- * @param[in] t      Starting ticket.
- * @param[in] count  Maximum slots to inspect.
- * @param[in] offset Sequence offset (0 for vacant, 1 for ready).
+ * @param[in] slots     Slot descriptor array.
+ * @param[in] mask      Ring capacity mask.
+ * @param[in] t         Starting ticket.
+ * @param[in] count     Maximum slots to inspect.
+ * @param[in] offset    Sequence offset (0 for vacant, 1 for ready).
+ * @param[in] is_packed True if 64-bit packed sequence/len/state descriptors.
  * @return Number of contiguous matching slots.
  */
 static uint32_t rbipc_simd_scan_avx2(const rbipc_slot_t *slots, uint32_t mask,
                                      uint64_t t, uint32_t count,
-                                     uint64_t offset) {
+                                     uint64_t offset, bool is_packed) {
   uint32_t avail = 0;
   while (avail + 4 <= count) {
     uint64_t base_t = t + avail;
@@ -90,6 +92,9 @@ static uint32_t rbipc_simd_scan_avx2(const rbipc_slot_t *slots, uint32_t mask,
 
     __m256i vseq = _mm256_set_epi64x((long long)s3, (long long)s2,
                                      (long long)s1, (long long)s0);
+    if (is_packed) {
+      vseq = _mm256_srli_epi64(vseq, RBIPC_PACKED_SEQ_SHIFT);
+    }
     long long t0 = (long long)base_t + (long long)offset;
     __m256i vtgt = _mm256_set_epi64x(t0 + 3, t0 + 2, t0 + 1, t0);
     __m256i cmp = _mm256_cmpeq_epi64(vseq, vtgt);
@@ -109,7 +114,7 @@ static uint32_t rbipc_simd_scan_avx2(const rbipc_slot_t *slots, uint32_t mask,
   }
 
   if (avail < count) {
-    avail += rbipc_simd_scan_scalar(slots, mask, t + avail, count - avail, offset);
+    avail += rbipc_simd_scan_scalar(slots, mask, t + avail, count - avail, offset, is_packed);
   }
   return avail;
 }
@@ -119,7 +124,7 @@ static uint32_t rbipc_simd_scan_avx2(const rbipc_slot_t *slots, uint32_t mask,
  */
 static uint32_t rbipc_simd_scan_neon(const rbipc_slot_t *slots, uint32_t mask,
                                      uint64_t t, uint32_t count,
-                                     uint64_t offset) {
+                                     uint64_t offset, bool is_packed) {
   uint32_t avail = 0;
   while (avail + 2 <= count) {
     uint64_t base_t = t + avail;
@@ -136,6 +141,9 @@ static uint32_t rbipc_simd_scan_neon(const rbipc_slot_t *slots, uint32_t mask,
     }
 
     uint64x2_t vseq = {s0, s1};
+    if (is_packed) {
+      vseq = vshrq_n_u64(vseq, RBIPC_PACKED_SEQ_SHIFT);
+    }
     uint64x2_t vtgt = {base_t + 0 + offset, base_t + 1 + offset};
     uint64x2_t cmp = vceqq_u64(vseq, vtgt);
     if (vgetq_lane_u64(cmp, 0) == 0)
@@ -146,7 +154,7 @@ static uint32_t rbipc_simd_scan_neon(const rbipc_slot_t *slots, uint32_t mask,
   }
 
   if (avail < count) {
-    avail += rbipc_simd_scan_scalar(slots, mask, t + avail, count - avail, offset);
+    avail += rbipc_simd_scan_scalar(slots, mask, t + avail, count - avail, offset, is_packed);
   }
   return avail;
 }
@@ -157,31 +165,44 @@ static uint32_t rbipc_simd_scan_neon(const rbipc_slot_t *slots, uint32_t mask,
  */
 RBIPC_INLINE uint32_t rbipc_simd_scan_slots(const rbipc_slot_t *slots,
                                             uint32_t mask, uint64_t t,
-                                            uint32_t count, uint64_t offset) {
+                                            uint32_t count, uint64_t offset,
+                                            bool is_packed) {
   if (RBIPC_UNLIKELY(!slots || count == 0))
     return 0;
 #if defined(__x86_64__) || defined(_M_X64)
 #if defined(__GNUC__) || defined(__clang__)
   if (__builtin_cpu_supports("avx2") && count >= 4) {
-    return rbipc_simd_scan_avx2(slots, mask, t, count, offset);
+    return rbipc_simd_scan_avx2(slots, mask, t, count, offset, is_packed);
   }
 #endif
 #elif defined(__aarch64__)
   if (count >= 2) {
-    return rbipc_simd_scan_neon(slots, mask, t, count, offset);
+    return rbipc_simd_scan_neon(slots, mask, t, count, offset, is_packed);
   }
 #endif
-  return rbipc_simd_scan_scalar(slots, mask, t, count, offset);
+  return rbipc_simd_scan_scalar(slots, mask, t, count, offset, is_packed);
 }
 
 RBIPC_LEAF
 uint32_t rbipc_simd_scan_vacant_slots(const rbipc_slot_t *slots, uint32_t mask,
                                       uint64_t t, uint32_t count) {
-  return rbipc_simd_scan_slots(slots, mask, t, count, 0);
+  return rbipc_simd_scan_slots(slots, mask, t, count, 0, false);
+}
+
+RBIPC_LEAF
+uint32_t rbipc_simd_scan_vacant_slots_ex(const rbipc_slot_t *slots, uint32_t mask,
+                                         uint64_t t, uint32_t count, bool is_packed) {
+  return rbipc_simd_scan_slots(slots, mask, t, count, 0, is_packed);
 }
 
 RBIPC_LEAF
 uint32_t rbipc_simd_scan_ready_slots(const rbipc_slot_t *slots, uint32_t mask,
                                      uint64_t t, uint32_t count) {
-  return rbipc_simd_scan_slots(slots, mask, t, count, 1);
+  return rbipc_simd_scan_slots(slots, mask, t, count, 1, false);
+}
+
+RBIPC_LEAF
+uint32_t rbipc_simd_scan_ready_slots_ex(const rbipc_slot_t *slots, uint32_t mask,
+                                        uint64_t t, uint32_t count, bool is_packed) {
+  return rbipc_simd_scan_slots(slots, mask, t, count, 1, is_packed);
 }

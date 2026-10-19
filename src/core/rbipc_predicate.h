@@ -192,6 +192,29 @@ RBIPC_INLINE RBIPC_CONST bool rbipc_slot_is_ready(uint64_t seq, uint64_t ticket)
     return rbipc_seq_diff(seq, ticket + 1) == 0;
 }
 
+RBIPC_INLINE RBIPC_CONST bool rbipc_slot_is_vacant_packed(uint64_t packed, uint64_t ticket) {
+    return rbipc_seq_diff(packed >> RBIPC_PACKED_SEQ_SHIFT, ticket) == 0;
+}
+
+RBIPC_INLINE RBIPC_CONST bool rbipc_slot_is_ready_packed(uint64_t packed, uint64_t ticket) {
+    return rbipc_seq_diff(packed >> RBIPC_PACKED_SEQ_SHIFT, ticket + 1) == 0;
+}
+
+RBIPC_INLINE RBIPC_CONST bool rbipc_slot_is_vacant_any(uint64_t word, uint64_t ticket, bool is_packed) {
+    uint64_t seq = is_packed ? (word >> RBIPC_PACKED_SEQ_SHIFT) : word;
+    return rbipc_seq_diff(seq, ticket) == 0;
+}
+
+RBIPC_INLINE RBIPC_CONST bool rbipc_slot_is_ready_any(uint64_t word, uint64_t ticket, bool is_packed) {
+    uint64_t seq = is_packed ? (word >> RBIPC_PACKED_SEQ_SHIFT) : word;
+    return rbipc_seq_diff(seq, ticket + 1) == 0;
+}
+
+RBIPC_INLINE RBIPC_CONST bool rbipc_seq_is_behind_any(uint64_t word, uint64_t target, bool is_packed) {
+    uint64_t seq = is_packed ? (word >> RBIPC_PACKED_SEQ_SHIFT) : word;
+    return rbipc_seq_diff(seq, target) < 0;
+}
+
 /**
  * @brief Evaluate whether slot state word equals RBIPC_SLOT_EMPTY.
  *
