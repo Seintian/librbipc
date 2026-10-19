@@ -42,6 +42,58 @@ RBIPC_API RBIPC_NODISCARD RBIPC_LEAF int rbipc_publish(rbipc_ring_t *ring,
                                              const void *buf, uint32_t len);
 
 /**
+ * @brief Reserve a slot in shared memory for zero-copy multicast publication.
+ *
+ * @details Claims the next write ticket in the topic ring buffer, reserves the slot,
+ * and yields a direct memory pointer into shared memory so the caller can serialize
+ * or write payload data directly into the slot without intermediate buffer copies.
+ * The publication must be completed via @ref rbipc_publish_commit or cancelled
+ * via @ref rbipc_publish_abort.
+ *
+ * @param[in]  ring       Ring buffer instance acting as the multicast topic.
+ * @param[in]  len        Anticipated maximum payload byte length (must be <= ring slot_size).
+ * @param[out] out_buf    Pointer to receive the direct shared-memory payload buffer.
+ * @param[out] out_ticket Pointer to receive the assigned publication ticket.
+ *
+ * @return @ref RBIPC_OK on success.
+ * @retval RBIPC_ERR_INVAL if parameters are NULL or len exceeds slot capacity.
+ */
+RBIPC_API RBIPC_NODISCARD RBIPC_LEAF int
+rbipc_publish_reserve(rbipc_ring_t *ring, uint32_t len, void **out_buf,
+                      uint64_t *out_ticket);
+
+/**
+ * @brief Commit a previously reserved zero-copy multicast publication.
+ *
+ * @details Publishes the payload written into the reserved slot, advancing the sequence
+ * turn and waking suspended topic subscribers with memory release ordering.
+ *
+ * @param[in] ring   Ring buffer instance acting as the multicast topic.
+ * @param[in] ticket Reservation ticket returned by @ref rbipc_publish_reserve.
+ * @param[in] len    Actual payload byte length written (must be <= ring slot_size).
+ *
+ * @return @ref RBIPC_OK on success.
+ * @retval RBIPC_ERR_INVAL if parameters are NULL or len exceeds slot capacity.
+ */
+RBIPC_API RBIPC_NODISCARD RBIPC_LEAF int
+rbipc_publish_commit(rbipc_ring_t *ring, uint64_t ticket, uint32_t len);
+
+/**
+ * @brief Abort a previously reserved multicast publication.
+ *
+ * @details Transitions the reserved slot to @ref RBIPC_SLOT_POISONED, allowing
+ * subscribers to safely bypass the abandoned ticket without blocking or deadlocking.
+ *
+ * @param[in] ring   Ring buffer instance acting as the multicast topic.
+ * @param[in] ticket Reservation ticket returned by @ref rbipc_publish_reserve.
+ *
+ * @return @ref RBIPC_OK on success.
+ * @retval RBIPC_ERR_INVAL if @p ring is NULL.
+ */
+RBIPC_API RBIPC_NODISCARD RBIPC_LEAF int
+rbipc_publish_abort(rbipc_ring_t *ring, uint64_t ticket);
+
+/**
  * @brief Publish a contiguous batch of messages to all subscribers on the ring
  * buffer topic.
  *

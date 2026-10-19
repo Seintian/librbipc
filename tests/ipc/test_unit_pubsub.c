@@ -393,6 +393,51 @@ static void test_pubsub_packed_multicast(void) {
     rbipc_detach(ring);
 }
 
+static void test_pubsub_zero_copy_and_abort(void) {
+    rbipc_ring_t *ring = NULL;
+    assert(rbipc_create(NULL, 8, 128, &ring) == RBIPC_OK);
+
+    rbipc_sub_t *sub = NULL;
+    assert(rbipc_sub_create(ring, &sub) == RBIPC_OK);
+
+    /* 1. Zero-copy reserve and commit */
+    void *wbuf = NULL;
+    uint64_t ticket = 0;
+    assert(rbipc_publish_reserve(ring, 64, &wbuf, &ticket) == RBIPC_OK);
+    assert(ticket == 0);
+    snprintf((char *)wbuf, 64, "Zero-copy multicast payload 1");
+    assert(rbipc_publish_commit(ring, ticket, (uint32_t)strlen((char *)wbuf) + 1) == RBIPC_OK);
+
+    const void *rbuf = NULL;
+    uint32_t rlen = 0;
+    uint64_t rseq = 0;
+    assert(rbipc_sub_poll(sub, &rbuf, &rlen, &rseq) == RBIPC_OK);
+    assert(rseq == 0);
+    assert(strcmp((const char *)rbuf, "Zero-copy multicast payload 1") == 0);
+
+    /* 2. Zero-copy reserve and abort */
+    assert(rbipc_publish_reserve(ring, 64, &wbuf, &ticket) == RBIPC_OK);
+    assert(ticket == 1);
+    assert(rbipc_publish_abort(ring, ticket) == RBIPC_OK);
+
+    /* Subscriber encounters aborted/poisoned slot */
+    assert(rbipc_sub_poll(sub, &rbuf, &rlen, &rseq) == RBIPC_ERR_POISONED);
+    assert(rseq == 1);
+
+    /* 3. Next message published after abort */
+    assert(rbipc_publish_reserve(ring, 64, &wbuf, &ticket) == RBIPC_OK);
+    assert(ticket == 2);
+    snprintf((char *)wbuf, 64, "Zero-copy multicast payload 3");
+    assert(rbipc_publish_commit(ring, ticket, (uint32_t)strlen((char *)wbuf) + 1) == RBIPC_OK);
+
+    assert(rbipc_sub_poll(sub, &rbuf, &rlen, &rseq) == RBIPC_OK);
+    assert(rseq == 2);
+    assert(strcmp((const char *)rbuf, "Zero-copy multicast payload 3") == 0);
+
+    rbipc_sub_destroy(sub);
+    rbipc_detach(ring);
+}
+
 int main(void) {
     printf("[test_unit_pubsub] Running 1-to-N multicast publish-subscribe tests...\n");
     test_pubsub_basic_multicast();
@@ -401,6 +446,7 @@ int main(void) {
     test_pubsub_from_oldest_and_validation();
     test_pubsub_concurrent_wait_wakeup_and_shutdown();
     test_pubsub_packed_multicast();
+    test_pubsub_zero_copy_and_abort();
     printf("[test_unit_pubsub] All tests passed!\n");
     return 0;
 }

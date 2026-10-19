@@ -25,7 +25,10 @@ LIBRBIPC_1.0 {
         rbipc_ipc_send_fd;
         rbipc_ipc_verify_peer;
         rbipc_publish;
+        rbipc_publish_abort;
         rbipc_publish_batch;
+        rbipc_publish_commit;
+        rbipc_publish_reserve;
         rbipc_read;
         rbipc_read_acquire;
         rbipc_read_acquire_batch;
