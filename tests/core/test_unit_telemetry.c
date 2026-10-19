@@ -302,6 +302,62 @@ static void test_slot_stats_histogram(void) {
     rbipc_detach(ring);
 }
 
+static void test_slot_stats_histogram_packed(void) {
+    rbipc_ring_t *ring = NULL;
+    int rc = rbipc_create_ex(NULL, 8, 64, RBIPC_FLAG_PACKED, 0, &ring);
+    assert(rc == RBIPC_OK);
+
+    rbipc_slot_stats_t ss;
+    assert(rbipc_get_slot_stats(ring, &ss) == RBIPC_OK);
+    assert(ss.capacity == 8);
+    assert(ss.empty_count == 8);
+    assert(ss.committed_count == 0);
+    assert(ss.poisoned_count == 0);
+
+    /* 1. Write a message and commit */
+    void *wbuf1 = NULL;
+    uint64_t ticket1 = 0;
+    rc = rbipc_reserve_write(ring, 32, &wbuf1, &ticket1);
+    assert(rc == RBIPC_OK);
+    rc = rbipc_commit_write(ring, ticket1, 32);
+    assert(rc == RBIPC_OK);
+
+    assert(rbipc_get_slot_stats(ring, &ss) == RBIPC_OK);
+    assert(ss.empty_count == 7);
+    assert(ss.committed_count == 1);
+    assert(ss.poisoned_count == 0);
+
+    /* 2. Abort a write */
+    void *wbuf2 = NULL;
+    uint64_t ticket2 = 0;
+    rc = rbipc_reserve_write(ring, 32, &wbuf2, &ticket2);
+    assert(rc == RBIPC_OK);
+    rc = rbipc_abort_write(ring, ticket2);
+    assert(rc == RBIPC_OK);
+
+    assert(rbipc_get_slot_stats(ring, &ss) == RBIPC_OK);
+    assert(ss.empty_count == 6);
+    assert(ss.committed_count == 1);
+    assert(ss.poisoned_count == 1);
+
+    /* 3. Read and release message 1 */
+    const void *rbuf = NULL;
+    uint32_t rlen = 0;
+    uint64_t rticket = 0;
+    rc = rbipc_read_acquire(ring, &rbuf, &rlen, &rticket);
+    assert(rc == RBIPC_OK);
+    assert(rticket == ticket1);
+    rc = rbipc_read_release(ring, rticket);
+    assert(rc == RBIPC_OK);
+
+    assert(rbipc_get_slot_stats(ring, &ss) == RBIPC_OK);
+    assert(ss.empty_count == 7);
+    assert(ss.committed_count == 0);
+    assert(ss.poisoned_count == 1);
+
+    rbipc_detach(ring);
+}
+
 int main(void) {
     printf("[test_unit_telemetry] Running telemetry enhancement tests...\n");
     test_stats_waiter_disaggregation();
@@ -309,6 +365,7 @@ int main(void) {
     test_stats_lease_and_cumulative_counters();
     test_audit_recovery_counters();
     test_slot_stats_histogram();
+    test_slot_stats_histogram_packed();
     printf("[test_unit_telemetry] All telemetry unit tests passed successfully!\n");
     return 0;
 }

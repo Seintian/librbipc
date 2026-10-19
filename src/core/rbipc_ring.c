@@ -573,7 +573,11 @@ int rbipc_get_slot_stats(const rbipc_ring_t *RBIPC_RESTRICT ring,
 
   for (uint32_t i = 0; i < cap; ++i) {
     rbipc_slot_t *slot = &ring->slots[i];
-    uint32_t state = atomic_load_explicit(&slot->state, memory_order_relaxed);
+    uint32_t state =
+        ring->is_packed
+            ? rbipc_slot_unpack_state(
+                  atomic_load_explicit(&slot->sequence, memory_order_relaxed))
+            : atomic_load_explicit(&slot->state, memory_order_relaxed);
     switch (state) {
     case RBIPC_SLOT_EMPTY:
       out_slot_stats->empty_count++;
