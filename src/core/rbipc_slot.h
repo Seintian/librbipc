@@ -42,6 +42,23 @@ void rbipc_slot_init_table_ex(rbipc_slot_t *RBIPC_RESTRICT slots,
 
 /**
  * @brief Pack sequence, length, and state into a single 64-bit atomic word.
+ *
+ * @details Format specification:
+ *  - Bits [63:16] (48 bits): Monotonic Vyukov sequence turn counter. Provides
+ *    @f$ 2^{48} \approx 2.81 \times 10^{14} @f$ turns (~325 days continuous
+ *    operation at 10M msgs/sec before wrap).
+ *  - Bits [15:4] (12 bits): Payload length (0 to 4,095 bytes,
+ *    @ref RBIPC_PACKED_MAX_LEN). Trade-off: enables single-store atomic
+ *    publication on producer commit and single-shift SIMD vector turn scanning,
+ *    eliminating the secondary store to slot->len while bounding payloads to 4 KiB.
+ *  - Bits [3:0] (4 bits): Slot lifecycle state flags (@ref RBIPC_SLOT_EMPTY,
+ *    @ref RBIPC_SLOT_RESERVED, @ref RBIPC_SLOT_COMMITTED, @ref RBIPC_SLOT_POISONED).
+ *
+ * @param[in] seq   Monotonic sequence turn counter.
+ * @param[in] len   Payload byte length (clamped to @ref RBIPC_PACKED_MAX_LEN).
+ * @param[in] state Slot lifecycle state flags.
+ *
+ * @return 64-bit composite packed descriptor word.
  */
 RBIPC_INLINE uint64_t rbipc_slot_pack(uint64_t seq, uint32_t len,
                                       uint32_t state) {
@@ -52,14 +69,23 @@ RBIPC_INLINE uint64_t rbipc_slot_pack(uint64_t seq, uint32_t len,
          ((uint64_t)state & RBIPC_PACKED_STATE_MASK);
 }
 
+/**
+ * @brief Extract the 48-bit sequence turn counter from a 64-bit packed descriptor.
+ */
 RBIPC_INLINE uint64_t rbipc_slot_unpack_seq(uint64_t packed) {
   return packed >> RBIPC_PACKED_SEQ_SHIFT;
 }
 
+/**
+ * @brief Extract the 12-bit payload length (0 to 4,095 bytes) from a 64-bit packed descriptor.
+ */
 RBIPC_INLINE uint32_t rbipc_slot_unpack_len(uint64_t packed) {
   return (uint32_t)((packed & RBIPC_PACKED_LEN_MASK) >> RBIPC_PACKED_LEN_SHIFT);
 }
 
+/**
+ * @brief Extract the 4-bit state flags from a 64-bit packed descriptor.
+ */
 RBIPC_INLINE uint32_t rbipc_slot_unpack_state(uint64_t packed) {
   return (uint32_t)(packed & RBIPC_PACKED_STATE_MASK);
 }

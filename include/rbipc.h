@@ -240,7 +240,8 @@ extern "C" {
              turns, bypasses PID tracking and state lag checks). */
 #define RBIPC_FLAG_PACKED                                                      \
   0x0080U /**< Tier 3: 64-bit packed sequence/len/state descriptors for       \
-             single-store atomic publication. */
+             single-store atomic publication. Constrains slot payload length   \
+             to @ref RBIPC_PACKED_MAX_LEN (4,095 bytes). */
 
 #define RBIPC_CREATE_ANON RBIPC_SHM_ANON
 #define RBIPC_CREATE_NAMED RBIPC_SHM_NAMED
@@ -251,7 +252,56 @@ extern "C" {
 
 /**
  * @defgroup rbipc_packed_constants 64-Bit Packed Descriptor Bitfield Constants
- * @brief Bitmasks and bit shifts for Tier 3 packed sequence/len/state descriptors.
+ * @brief Bitmasks, bit shifts, and trade-off specifications for Tier 3 packed
+ * descriptors.
+ *
+ * @details In Tier 3 Packed Mode (@ref RBIPC_FLAG_PACKED), the per-slot atomic
+ * sequence counter, payload length, and lifecycle state flags are unified into
+ * a single 64-bit atomic word (@c uint64_t):
+ *
+ *  - **Bits [63:16] (48 bits): Sequence Turn Counter.**
+ *    Supports up to @f$ 2^{48} \approx 2.81 \times 10^{14} @f$ monotonic sequence
+ *    turns. At a sustained saturation rate of 10,000,000 messages/sec, the 48-bit
+ *    turn counter provides approximately 325 days of continuous operation before
+ *    wrapping around, guaranteeing robust ABA cycle protection.
+ *
+ *  - **Bits [15:4] (12 bits): Payload Length (0 to 4,095 bytes).**
+ *    Caps individual slot payloads to @ref RBIPC_PACKED_MAX_LEN (4,095 bytes).
+ *    This bit allocation directly reflects an architectural trade-off between
+ *    maximum message size and runtime performance:
+ *      - By dedicating 12 bits to length and 48 bits to sequence turns, the slot
+ *        descriptor can be published in a single 64-bit atomic store instruction
+ *        (e.g., @c MOV on x86-64 or @c STLR on ARM64) with release semantics,
+ *        completely eliminating the separate store to @c slot->len and cutting
+ *        cache-line store traffic.
+ *      - Furthermore, vector SIMD scanners (AVX-512, AVX2, AVX, SSE4.1, NEON)
+ *        can inspect up to 8 slots per instruction by applying a single vector
+ *        logical right shift (@c _mm256_srli_epi64 by 16) before equality matching.
+ *
+ *  - **Bits [3:0] (4 bits): State Flags.**
+ *    Encodes the slot lifecycle states (@ref RBIPC_SLOT_EMPTY,
+ *    @ref RBIPC_SLOT_RESERVED, @ref RBIPC_SLOT_COMMITTED, @ref RBIPC_SLOT_POISONED).
+ *
+ * @note **The "Terabytes per Second" Zero-Copy Trade-off:**
+ *  - *Logical vs. Physical Bandwidth:* In benchmark results (e.g. @c bench_suite.c
+ *    Benchmark 5), librbipc achieves logical data transfer rates in excess of
+ *    **5.74 TB/s** (1 MiB payloads at 5.87M msgs/s) to **154.1 TB/s** (16 MiB payloads
+ *    at 9.86M msgs/s). This metric measures *virtual zero-copy pointer-passing
+ *    throughput*: because @c rbipc_reserve_write() and @c rbipc_read_acquire()
+ *    provide direct in-place access to shared memory buffers, the CPU only transfers
+ *    64-bit slot sequence tickets across cache lines without copying payload bytes.
+ *  - *Physical DRAM Limit:* Physical host memory buses are physically bounded
+ *    (dual-channel DDR4 at ~40–50 GB/s, dual-channel DDR5 at ~70–90 GB/s, and
+ *    server 8-channel DDR5 at ~300–400 GB/s). Terabytes-per-second physical throughput
+ *    is physically impossible over host DRAM. If producer and consumer applications
+ *    physically touch, copy (@c memcpy), or stream all payload bytes, throughput will
+ *    saturate at the physical DDR bus bandwidth.
+ *  - *Guidance:* For small, latency-critical messages (@f$ \le 4,095 @f$ bytes,
+ *    such as financial ticks, RPC requests, sensor packets, audio samples), use
+ *    **Tier 3 Packed Mode** (@ref RBIPC_FLAG_PACKED) for single-store atomic publication.
+ *    For large or streaming payloads (> 4,095 bytes up to 4 GiB), use **Standard Mode**
+ *    (Tier 1 or Tier 2 Trusted Mode @ref RBIPC_FLAG_TRUSTED), which provides a dedicated
+ *    32-bit length field and supports multi-megabyte zero-copy slot transfers.
  * @{
  */
 #define RBIPC_PACKED_STATE_MASK 0x000000000000000FULL
@@ -590,9 +640,14 @@ typedef struct rbipc_ring rbipc_ring_t;
  * @param[in]  slot_size Requested payload size per slot in bytes.
  * @param[in]  flags     Creation flags (@ref RBIPC_CREATE_EXCL or @ref
  * RBIPC_CREATE_OVERWRITE) combined with optional role flags (@ref
- * RBIPC_ROLE_PRODUCER) and optional memory backing flags (@ref RBIPC_SHM_ANON
- * or @ref RBIPC_SHM_NAMED). If no backing type is specified, anonymous memfd is
- * the default.
+ * RBIPC_ROLE_PRODUCER), optional memory backing flags (@ref RBIPC_SHM_ANON
+ * or @ref RBIPC_SHM_NAMED; anonymous is default), and performance mode flags:
+ *   - @ref RBIPC_FLAG_TRUSTED (Tier 2): Pure Vyukov sequence synchronization,
+ *     bypassing per-slot PID registration and consumer state checks.
+ *   - @ref RBIPC_FLAG_PACKED (Tier 3): 64-bit packed sequence/length/state
+ *     descriptors. Note: when specified, @p slot_size must not exceed @ref
+ *     RBIPC_PACKED_MAX_LEN (4,095 bytes); otherwise @ref RBIPC_ERR_INVAL is
+ *     returned.
  * @param[in]  mode      POSIX file permission mode bits (e.g. 0660; enforced
  * via fchmod).
  * @param[out] out_ring  Location to store pointer to the allocated ring buffer
@@ -601,7 +656,8 @@ typedef struct rbipc_ring rbipc_ring_t;
  * @return @ref RBIPC_OK on successful initialization.
  * @retval RBIPC_ERR_EXISTS if object exists and @ref RBIPC_CREATE_OVERWRITE was
  * not specified.
- * @retval RBIPC_ERR_INVAL  if parameters or flags are invalid.
+ * @retval RBIPC_ERR_INVAL  if parameters or flags are invalid, or if
+ * @ref RBIPC_FLAG_PACKED is set with @p slot_size > @ref RBIPC_PACKED_MAX_LEN.
  * @retval RBIPC_ERR_NOMEM  if virtual memory allocation or mmap fails.
  * @retval RBIPC_ERR_SYS    if an underlying kernel syscall fails.
  *

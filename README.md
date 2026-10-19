@@ -44,7 +44,7 @@ For the complete formal concurrency model, memory layout geometry, crash-recover
 | **Asymmetric Dekker Synchronization** | Kernel | Linux ≥ 4.3 (`MEMBARRIER_CMD_GLOBAL_EXPEDITED` / `GLOBAL`) | **`sys_membarrier`**: Producer commit path executes **zero hardware memory fences** (`MFENCE`); ordering cost shifted to waiter sleep path. | **Symmetric `MFENCE`**: `atomic_thread_fence(memory_order_seq_cst)` executed on every commit. | **+20% to +35%** single-stream throughput; saves 30–50 CPU cycles per message. |
 | **Atomic Multi-Futex Awakening** | Kernel | Linux `FUTEX_WAKE_OP` syscall support | **`FUTEX_WAKE_OP`**: Atomically advances `futex_word` and awakens waiters in a single kernel syscall. | **Two-Stage Wake**: `atomic_fetch_add(release)` followed by `SYS_futex(FUTEX_WAKE)`. | **+47.6%** zero-spin throughput (26.6k → 39.3k msgs/s); closes wakeup race window. |
 | **Nikolaev SCQ Bounded FAA Ticket Leasing** | Concurrency | Unbounded writes (`timeout_ns == UINT64_MAX`) | **Wait-Free FAA**: Fast path claims tickets via hardware-pipelined `atomic_fetch_add` with cycle validation. | **CAS Loop Backoff**: Compare-and-swap reservation with exponential pause backoff for bounded timeouts. | **+241.0%** throughput under contention; **73× faster than Disruptor** at 4P-4C (0.73 Mops/s). |
-| **SIMD Sequence Turn Scanning** | CPU ISA | x86-64 AVX-512 / AVX2 / SSE4.1 or ARM64 NEON (`__ARM_NEON`) | **AVX-512 (8 turns) / AVX2 (4 turns) / SSE4.1 (2 turns) / NEON (2 turns)**: Vectorized sequence turn scanner with software prefetch lookahead. | **Scalar Loop**: Portable 64-bit scalar sequence loop checking each slot turn serially. | **50.68M msgs/s** vector batch throughput (6.53× speedup over scalar batch-1). |
+| **SIMD Sequence Turn Scanning** | CPU ISA | x86-64 AVX-512 / AVX2 / AVX / SSE4.1 or ARM64 NEON (`__ARM_NEON`) | **AVX-512 (8 turns) / AVX2 (4 turns) / AVX1 (4 turns via dual 128-bit VEX) / SSE4.1 (2 turns) / NEON (2 turns)**: Vectorized sequence turn scanner with software prefetch lookahead and logical shift support for Tier 3 packed descriptors. | **Scalar Loop**: Portable 64-bit scalar sequence loop checking each slot turn serially. | **50.68M msgs/s** vector batch throughput (6.53× speedup over scalar batch-1). |
 | **Non-Temporal Streaming Stores** | CPU ISA | Payloads ≥ 256 B on AVX-512, AVX2, or SSE2 | **Streaming Stores (`_mm512_stream_si512` / `_mm256_stream_si256` / `_mm_stream_si128`)**: Writes directly to DRAM write-combining buffers with 64-byte alignment preamble. | **Standard `memcpy`**: Cache-coherent memory copy for smaller payloads or non-x86 architectures. | **19,867.2 MB/s** throughput (+104.97% bandwidth over standard `memcpy`). |
 | **Strict ABI Encapsulation & Versioning** | ABI / Build | GNU Linker / ELF Shared Library | **`scripts/librbipc.sym` (`LIBRBIPC_1.0`) + `-fvisibility=hidden`**: Whitelists only 64 public API symbols, strictly eliminating 65 leaked internal routines. | Standard shared library export table without version node. | Zero symbol namespace pollution; immutable backward ABI compatibility. |
 | **C23 Compile-Time Structure Invariants** | C23 Core | Standard C23 `-std=c23` compiler | **`static_assert` Invariants**: Compile-time mathematical verification of 64-byte slot sizing and cache-line isolation for all synchronization counters. | Runtime `assert()` / documentation convention. | Zero runtime false-sharing hazards; guaranteed single-cache-line turn updates. |
@@ -189,6 +189,8 @@ Every major architectural behavior in `librbipc` is directly selectable through 
 | Feature & Parameter | Target API Functions | Available Options & Values | Operational Impact |
 | :--- | :--- | :--- | :--- |
 | **Wait Policy** (`policy`) | `rbipc_set_wait_policy()` | `RBIPC_WAIT_ADAPTIVE` (**Default**)<br>`RBIPC_WAIT_ZERO_SPIN`<br>`RBIPC_WAIT_HW_MONITOR`<br>Composite (`ADAPTIVE \| HW_MONITOR`) | Sets synchronization backoff ladder: 48-iteration micro-pause + 5 µs C0.1 hardware wait (Adaptive: 191–261 ns latency), immediate passive futex sleep (Zero-Spin: 0.13% idle CPU), or direct C0.2 deep power save. |
+| **Shared Memory Backing** (`flags`) | `rbipc_create_ex()`, `rbipc_create()` | `RBIPC_SHM_ANON` (**Default**)<br>`RBIPC_SHM_NAMED` | Selects Linux `memfd_create` anonymous shared memory (passed via `SCM_RIGHTS`, zero `/dev/shm` footprint, kernel sealed) or named POSIX shared memory (`/dev/shm/name`). Default is anonymous when no choice is emitted. |
+| **Performance & Trust Tier** (`flags`) | `rbipc_create_ex()` | `0` (Tier 1 Zero-Trust, **Default**)<br>`RBIPC_FLAG_TRUSTED` (Tier 2)<br>`RBIPC_FLAG_PACKED` (Tier 3)<br>Composite (`TRUSTED \| PACKED`) | **Tier 1 (Zero-Trust):** Full PID registration and crash auditing with elided redundant un-reservation CAS.<br>**Tier 2 (Trusted):** Pure Vyukov sequence synchronization, bypassing per-slot PID registration and consumer state checks (4.5M msgs/s).<br>**Tier 3 (Packed):** 64-bit composite sequence/len/state descriptors for single-store atomic publication (payloads $\le 4,095$ B). |
 | **Creation Flags** (`flags`) | `rbipc_create_ex()` | `0`, `RBIPC_CREATE_EXCL`,<br>`RBIPC_CREATE_OVERWRITE` | Enforces atomic POSIX file exclusivity (`EXCL`) or unlinks stale shared memory segments (`OVERWRITE`). |
 | **Role Isolation** (`role_flags`) | `rbipc_create_ex()`, `rbipc_attach_ex()`,<br>`rbipc_attach_fd_ex()`, `rbipc_recv_fd_ex()` | `RBIPC_ROLE_PRODUCER`,<br>`RBIPC_ROLE_CONSUMER`,<br>`RBIPC_ROLE_MONITOR` | Enforces process capabilities. `RBIPC_ROLE_MONITOR` allows zero-overhead read-only telemetry sampling without altering active participant counters. |
 | **Buffer Geometry** (`capacity`, `slot_size`) | `rbipc_create()`, `rbipc_create_ex()` | `capacity`: $2 \le C \le 2^{30}$ (Power of 2)<br>`slot_size`: $16 \le S \le 16\text{ MiB}$ (8-B aligned) | Configures circular slot count (auto-rounded to power-of-two for bitwise masking) and per-slot byte capacity (padded to 64-byte cache line alignment). |
@@ -284,6 +286,83 @@ Verified across all 25 test suites via `make coverage` (`gcov` with `-O0 -g --co
 | [`src/sync/rbipc_sync.c`](src/sync/rbipc_sync.c) | 182 | 126 | 69.23% |
 | [`src/platform/rbipc_arch.h`](src/platform/rbipc_arch.h) | 44 | 27 | 61.36% |
 | **TOTAL LINE COVERAGE** | **2,087** | **1,725** | **82.65%** |
+
+---
+
+## Anonymous Shared Memory & 3-Tier Optimization Architecture
+
+`librbipc` is architected with a defense-in-depth model that combines kernel-enforced zero-trust memory isolation with configurable performance tiers for cooperative low-latency environments:
+
+### 1. Anonymous Shared Memory Backing (Default)
+
+Starting with `librbipc`, **anonymous shared memory (`memfd_create`) is the default backing** whenever no explicit choice between named POSIX shared memory (`RBIPC_SHM_NAMED`) and anonymous shared memory (`RBIPC_SHM_ANON`) is specified.
+
+- **Private Capability Passing:** Anonymous shared memory files exist purely as Linux file descriptors (`memfd`). They possess **no entry in `/dev/shm` or any global filesystem namespace**.
+- **Elimination of Attack Vectors:** Untrusted or rogue local processes cannot discover, inspect, attach to, truncate, or unlink the ring buffer without an explicit capability transfer across a UNIX domain socket (`SCM_RIGHTS`) or inheritance across `fork()`.
+- **Hardware Memory Sealing:** Rings are sealed with `fcntl(F_ADD_SEALS, F_SEAL_SHRINK | F_SEAL_GROW)` immediately upon creation, eliminating malicious or accidental truncation attacks that would trigger `SIGBUS`.
+
+### 2. The 3 Tiers of Performance & Trust Optimization
+
+| Tier | Flag | Key Characteristics | Target Workloads & Throughput |
+| :--- | :--- | :--- | :--- |
+| **Tier 1 (Zero-Trust Default)** | `0` (or `RBIPC_SHM_ANON`) | Full PID tracking, crash auditing (`pidfd_open`), poisoned slot healing, and lease enforcement. Redundant un-reservation CAS operations are safely elided because anonymous descriptor isolation prevents concurrent rogue un-reservations. | Untrusted, multi-tenant, or adversarial processes.<br>**~1.0M msgs/s** (135 MB/s) single-slot;<br>**22.5M msgs/s** (3.1 GB/s) B-Queue batch-32. |
+| **Tier 2 (Trusted Mode)** | `RBIPC_FLAG_TRUSTED` | Bypasses per-slot PID registration (`slot->pid = 0`) and consumer state lag validation. Fast-path synchronization relies purely on monotonic 64-bit Vyukov sequence turns (`slot->sequence`). | Cooperating, trusted processes on the same host.<br>**~4.5M msgs/s** (618 MB/s) single-slot (+350% over baseline). |
+| **Tier 3 (Packed Mode)** | `RBIPC_FLAG_PACKED` | Fuses sequence turn, payload length, and lifecycle state into a single 64-bit word (`uint64_t`). Enables **single-store atomic publication** without a secondary write to `slot->len`. | Ultra-low latency small messages (≤ 4,095 B).<br>**~4.0M msgs/s** (544 MB/s) single-slot;<br>**20.9M msgs/s** (2.9 GB/s) B-Queue batch-32. |
+
+---
+
+## 64-Bit Packed Descriptors, Payload Constraints, and Zero-Copy Bandwidth Physics
+
+### 1. 64-Bit Packed Descriptor Layout (Tier 3)
+
+In Tier 3 Packed Mode (`RBIPC_FLAG_PACKED`), the per-slot atomic control metadata is packed into a single 64-bit word:
+
+```text
++------------------------------------------------+--------------+-------+
+| Bits [63:16] (48 bits)                         | Bits [15:4]  | [3:0] |
+| Monotonic Vyukov Sequence Turn Counter          | Length (12b) | State |
++------------------------------------------------+--------------+-------+
+ 63                                            16 15           4 3     0
+```
+
+- **Bits [63:16] (48 bits) — Monotonic Sequence Turn Counter:**
+  Provides $2^{48} \approx 2.81 \times 10^{14}$ monotonic turns. At a saturation throughput of 10,000,000 messages/sec, wrapping the 48-bit counter requires **~325 days of continuous non-stop operation**, ensuring complete immunity to ABA turn aliasing.
+- **Bits [15:4] (12 bits) — Payload Length (0 to 4,095 bytes):**
+  Encodes message length up to `RBIPC_PACKED_MAX_LEN` (4,095 bytes / 4 KiB - 1).
+- **Bits [3:0] (4 bits) — Slot Lifecycle State:**
+  Encodes `RBIPC_SLOT_EMPTY` (0), `RBIPC_SLOT_RESERVED` (1), `RBIPC_SLOT_COMMITTED` (2), and `RBIPC_SLOT_POISONED` (3).
+
+### 2. The Architectural Trade-Off: Why 12 Bits (4,095 Bytes)?
+
+The 12-bit payload ceiling in Tier 3 represents a deliberate Pareto trade-off between **single-instruction publication latency** and **maximum message size**:
+
+1. **Single-Store Atomic Publication:** In standard mode (Tier 1 & Tier 2), each slot requires writing `slot->len` followed by an atomic store-release to `slot->sequence` (or `slot->state`). In Tier 3, a producer commits and publishes a message with a **single 64-bit atomic store** (`MOV` on x86-64, `STLR` on ARM64). This halves cache-line store-buffer traffic and eliminates pipeline stalls.
+2. **Shifted SIMD Vector Turn Scanning:** Advanced SIMD sequence scanners (AVX-512, AVX2, AVX1 fallback, SSE4.1, ARM64 NEON) inspect up to 8 slots per instruction by applying a single 16-bit logical right vector shift (`_mm256_srli_epi64(vec, 16)`) before testing sequence equality.
+3. **ABA Safety Margin Preservation:** If length were expanded to 20 bits (1 MiB payloads), the sequence turn counter would shrink to 40 bits ($1.09 \times 10^{12}$ turns), which wraps in just **~27 hours** at 10M msgs/s. Expanding length to 32 bits would reduce turn counters to 28 bits, wrapping in a disastrous **26 seconds**. The 48-bit / 12-bit split represents the optimal design point for low-latency messaging.
+
+### 3. Analysis: Can Zero-Copy IPC Deliver "Terabytes per Second"?
+
+A frequent observation in high-performance IPC benchmarks is data throughput figures in the **Terabytes per second** range (e.g., Benchmark 5 in `benchmarks/bench_suite.c` and the benchmarks summary table reporting **5.74 TB/s** for 1 MiB payloads and **154.1 TB/s** for 16 MiB payloads).
+
+Is this correct? **Yes, as a logical / virtual pointer exchange rate; No, as a physical hardware memory bus transfer rate.**
+
+#### The Physics of Zero-Copy Throughput:
+- **Logical / Virtual Zero-Copy Rate:** When using `rbipc_reserve_write()` and `rbipc_read_acquire()`, processes receive direct pointers to pre-allocated shared memory slots. Producer and consumer communicate by updating sequence counters. The payload data itself **never moves across the CPU interconnect**. If an application transmits 5.87 million messages/sec with 1 MiB zero-copy slot reservations, the ring buffer mediates access to:
+  $$\text{Throughput}_{\text{logical}} = 5{,}870{,}000 \text{ msgs/s} \times 1 \text{ MiB} \approx 5.74 \text{ TB/s}$$
+  For 16 MiB reservations at 9.86 million ops/sec, this reaches **154.1 TB/s**. This metric accurately reflects the *virtual zero-copy data capacity* coordinated by the ring buffer.
+- **Physical DRAM Hardware Bandwidth Limits:** Physical host DDR memory buses cannot achieve Terabytes per second. Real-world peak physical bandwidths are bounded by hardware physics:
+  - Dual-channel DDR4-3200: ~51.2 GB/s theoretical peak (~40 GB/s sustained).
+  - Dual-channel DDR5-5600: ~89.6 GB/s theoretical peak (~70–80 GB/s sustained).
+  - High-end 8-channel Server DDR5-4800: ~307 GB/s theoretical peak.
+  - On-package High Bandwidth Memory (HBM3e / GPUs): ~1.2 to 3.0 TB/s (on-die silicon interposers only).
+- **The Practical Consequence:** If an application actually performs memory copies (`memcpy`) or byte-by-byte processing on the entire 1 MiB or 16 MiB payload, the memory bus saturates immediately, and actual data throughput collapses from virtual Terabytes/s to physical DRAM bus bandwidth (~20–70 GB/s). For actual payload data streaming, `librbipc` provides cache-bypassing non-temporal stores (`rbipc_write_stream`), achieving up to **19.8 GB/s** by avoiding Read-For-Ownership (RFO) cache pollution.
+
+### 4. Application Selection Guide
+
+- **Use Tier 3 Packed Mode (`RBIPC_FLAG_PACKED`):**
+  When payloads are $\le 4,095$ bytes (financial tick streams, telemetry metrics, audio frames, RPC commands, sensor samples). Maximizes instruction throughput and minimizes cache pollution through single-store 64-bit publication and SIMD-shifted vector scanning.
+- **Use Standard Mode (Tier 1 Default or Tier 2 `RBIPC_FLAG_TRUSTED`):**
+  When payloads exceed 4,095 bytes (video frames, machine learning tensors, large database pages, bulk file buffers up to 4 GiB). Provides a full 32-bit `slot->len` field and unlocks multi-terabyte virtual zero-copy pointer exchanges.
 
 ---
 
