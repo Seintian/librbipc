@@ -46,7 +46,7 @@ For the complete formal concurrency model, memory layout geometry, crash-recover
 | **Nikolaev SCQ Bounded FAA Ticket Leasing** | Concurrency | Unbounded writes (`timeout_ns == UINT64_MAX`) | **Wait-Free FAA**: Fast path claims tickets via hardware-pipelined `atomic_fetch_add` with cycle validation. | **CAS Loop Backoff**: Compare-and-swap reservation with exponential pause backoff for bounded timeouts. | **+241.0%** throughput under contention; **73× faster than Disruptor** at 4P-4C (0.73 Mops/s). |
 | **SIMD Sequence Turn Scanning** | CPU ISA | x86-64 AVX-512 / AVX2 / AVX / SSE4.1 or ARM64 NEON (`__ARM_NEON`) | **AVX-512 (8 turns) / AVX2 (4 turns) / AVX1 (4 turns via dual 128-bit VEX) / SSE4.1 (2 turns) / NEON (2 turns)**: Vectorized sequence turn scanner with software prefetch lookahead and logical shift support for Tier 3 packed descriptors. | **Scalar Loop**: Portable 64-bit scalar sequence loop checking each slot turn serially. | **50.68M msgs/s** vector batch throughput (6.53× speedup over scalar batch-1). |
 | **Non-Temporal Streaming Stores** | CPU ISA | Payloads ≥ 256 B on AVX-512, AVX2, or SSE2 | **Streaming Stores (`_mm512_stream_si512` / `_mm256_stream_si256` / `_mm_stream_si128`)**: Writes directly to DRAM write-combining buffers with 64-byte alignment preamble. | **Standard `memcpy`**: Cache-coherent memory copy for smaller payloads or non-x86 architectures. | **19,867.2 MB/s** throughput (+104.97% bandwidth over standard `memcpy`). |
-| **Strict ABI Encapsulation & Versioning** | ABI / Build | GNU Linker / ELF Shared Library | **`scripts/librbipc.sym` (`LIBRBIPC_1.0`) + `-fvisibility=hidden`**: Whitelists only 64 public API symbols, strictly eliminating 65 leaked internal routines. | Standard shared library export table without version node. | Zero symbol namespace pollution; immutable backward ABI compatibility. |
+| **Strict ABI Encapsulation & Versioning** | ABI / Build | GNU Linker / ELF Shared Library | **`scripts/librbipc.sym` (`LIBRBIPC_1.0`) + `-fvisibility=hidden`**: Whitelists only 71 public API symbols, strictly eliminating leaked internal routines. | Standard shared library export table without version node. | Zero symbol namespace pollution; immutable backward ABI compatibility. |
 | **C23 Compile-Time Structure Invariants** | C23 Core | Standard C23 `-std=c23` compiler | **`static_assert` Invariants**: Compile-time mathematical verification of 64-byte slot sizing and cache-line isolation for all synchronization counters. | Runtime `assert()` / documentation convention. | Zero runtime false-sharing hazards; guaranteed single-cache-line turn updates. |
 | **Double-Mapped Virtual Memory** | VMem | Contiguous 2× `buffer_size` address space reservation via `mmap` | **2x Virtual Mirroring**: Dual consecutive virtual memory mappings of identical underlying physical ring buffer pages. | **Single Linear Mapping**: Standard single circular buffer with modulo boundary calculation. | Zero-copy contiguous buffer dereferencing across circular ring wrap-around. |
 | **Asynchronous Kernel Reactor** | Kernel | Linux `eventfd(2)` and `epoll(7)` | **Eventfd Reactor (`rbipc_reactor_t`)**: Non-blocking readiness notifications multiplexed into `epoll`, `poll`, or `io_uring`. | **Pure Shared Memory**: Ring operates purely through shared memory without kernel file descriptors. | Sub-microsecond event loop integration (874.8k events/s) for async event loops. |
@@ -236,10 +236,10 @@ make monitor-live RING=/my_ring
 ## Build, Verification, & Documentation
 
 ```bash
-# Build static (lib/librbipc.a), shared (lib/librbipc.so), and all 25 test binaries (-O3 -std=c23)
+# Build static (lib/librbipc.a), shared (lib/librbipc.so), and all 26 test binaries (-O3 -std=c23)
 make -j4
 
-# Execute the full 25-suite verification matrix (Unit, I/O, MPMC, Crash Recovery, Fault Injection)
+# Execute the full 26-suite verification matrix (Unit, I/O, MPMC, Crash Recovery, Fault Injection)
 make test
 
 # Run AddressSanitizer + UndefinedBehaviorSanitizer or ThreadSanitizer verification
@@ -260,32 +260,33 @@ make docs
 
 ## Test Coverage {#test-coverage}
 
-Verified across all 25 test suites via `make coverage` (`gcov` with `-O0 -g --coverage`):
+Verified across all 26 test suites via `make coverage` (`gcov` with `-O0 -g --coverage`):
 
 | Source File | Executable Lines | Covered Lines | Coverage % |
 | :--- | ---: | ---: | ---: |
 | [`src/audit/rbipc_error.c`](src/audit/rbipc_error.c) | 56 | 56 | **100.00%** |
-| [`src/io/rbipc_io.h`](src/io/rbipc_io.h) | 13 | 13 | **100.00%** |
+| [`src/io/rbipc_io.h`](src/io/rbipc_io.h) | 3 | 3 | **100.00%** |
 | [`src/memory/rbipc_stream.h`](src/memory/rbipc_stream.h) | 4 | 4 | **100.00%** |
-| [`src/io/rbipc_simd.c`](src/io/rbipc_simd.c) | 56 | 55 | **98.21%** |
-| [`src/core/rbipc_predicate.h`](src/core/rbipc_predicate.h) | 39 | 38 | 97.44% |
-| [`src/platform/rbipc_math.h`](src/platform/rbipc_math.h) | 13 | 12 | 92.31% |
-| [`src/audit/rbipc_audit.c`](src/audit/rbipc_audit.c) | 120 | 110 | 91.67% |
-| [`src/io/rbipc_batch.c`](src/io/rbipc_batch.c) | 181 | 165 | 91.16% |
-| [`src/core/rbipc_slot.c`](src/core/rbipc_slot.c) | 91 | 82 | 90.11% |
-| [`src/core/rbipc_ring.c`](src/core/rbipc_ring.c) | 286 | 252 | 88.11% |
+| [`src/core/rbipc_slot.h`](src/core/rbipc_slot.h) | 1 | 1 | **100.00%** |
+| [`src/core/rbipc_predicate.h`](src/core/rbipc_predicate.h) | 3 | 3 | **100.00%** |
+| [`src/platform/rbipc_math.h`](src/platform/rbipc_math.h) | 2 | 2 | **100.00%** |
+| [`src/ipc/rbipc_pubsub.c`](src/ipc/rbipc_pubsub.c) | 146 | 141 | **96.58%** |
+| [`src/io/rbipc_reactor.c`](src/io/rbipc_reactor.c) | 70 | 67 | **95.71%** |
+| [`src/audit/rbipc_audit.c`](src/audit/rbipc_audit.c) | 142 | 131 | **92.25%** |
+| [`src/core/rbipc_ring.c`](src/core/rbipc_ring.c) | 369 | 333 | **90.24%** |
+| [`src/io/rbipc_batch.c`](src/io/rbipc_batch.c) | 211 | 189 | 89.57% |
+| [`src/ipc/rbipc_ipc.c`](src/ipc/rbipc_ipc.c) | 103 | 91 | 88.35% |
+| [`src/io/rbipc_io.c`](src/io/rbipc_io.c) | 360 | 314 | 87.22% |
 | [`src/memory/rbipc_vmem.c`](src/memory/rbipc_vmem.c) | 53 | 46 | 86.79% |
-| [`src/ipc/rbipc_ipc.c`](src/ipc/rbipc_ipc.c) | 73 | 63 | 86.30% |
-| [`src/ipc/rbipc_pubsub.c`](src/ipc/rbipc_pubsub.c) | 149 | 119 | 79.87% |
-| [`src/memory/rbipc_shm.c`](src/memory/rbipc_shm.c) | 130 | 102 | 78.46% |
-| [`src/io/rbipc_io.c`](src/io/rbipc_io.c) | 282 | 219 | 77.66% |
-| [`src/sync/rbipc_futex.c`](src/sync/rbipc_futex.c) | 181 | 140 | 77.35% |
-| [`src/memory/rbipc_stream.c`](src/memory/rbipc_stream.c) | 54 | 40 | 74.07% |
+| [`src/sync/rbipc_futex.c`](src/sync/rbipc_futex.c) | 146 | 124 | 84.93% |
+| [`src/core/rbipc_slot.c`](src/core/rbipc_slot.c) | 131 | 111 | 84.73% |
+| [`src/memory/rbipc_shm.c`](src/memory/rbipc_shm.c) | 144 | 116 | 80.56% |
+| [`src/io/rbipc_simd.c`](src/io/rbipc_simd.c) | 152 | 122 | 80.26% |
+| [`src/sync/rbipc_sync.c`](src/sync/rbipc_sync.c) | 182 | 131 | 71.98% |
 | [`src/core/rbipc_internal.h`](src/core/rbipc_internal.h) | 10 | 7 | 70.00% |
-| [`src/io/rbipc_reactor.c`](src/io/rbipc_reactor.c) | 70 | 49 | 70.00% |
-| [`src/sync/rbipc_sync.c`](src/sync/rbipc_sync.c) | 182 | 126 | 69.23% |
-| [`src/platform/rbipc_arch.h`](src/platform/rbipc_arch.h) | 44 | 27 | 61.36% |
-| **TOTAL LINE COVERAGE** | **2,087** | **1,725** | **82.65%** |
+| [`src/platform/rbipc_arch.h`](src/platform/rbipc_arch.h) | 21 | 12 | 57.14% |
+| [`src/memory/rbipc_stream.c`](src/memory/rbipc_stream.c) | 91 | 52 | 57.14% |
+| **TOTAL LINE COVERAGE** | **2,400** | **2,056** | **85.67%** |
 
 ---
 
