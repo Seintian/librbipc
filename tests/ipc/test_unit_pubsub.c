@@ -336,6 +336,63 @@ static void test_pubsub_concurrent_wait_wakeup_and_shutdown(void) {
     rbipc_detach(ring);
 }
 
+static void test_pubsub_packed_multicast(void) {
+    rbipc_ring_t *ring = NULL;
+    int rc = rbipc_create_ex(NULL, 16, 256, RBIPC_FLAG_PACKED, 0, &ring);
+    assert(rc == RBIPC_OK);
+    assert(ring != NULL);
+
+    rbipc_sub_t *sub1 = NULL;
+    rbipc_sub_t *sub2 = NULL;
+    assert(rbipc_sub_create(ring, &sub1) == RBIPC_OK);
+    assert(rbipc_sub_create(ring, &sub2) == RBIPC_OK);
+
+    const void *buf = NULL;
+    uint32_t len = 0;
+    uint64_t seq = 0;
+    assert(rbipc_sub_poll(sub1, &buf, &len, &seq) == RBIPC_ERR_EMPTY);
+
+    for (int i = 0; i < 8; ++i) {
+        char msg[64];
+        snprintf(msg, sizeof(msg), "Packed multicast %d", i);
+        assert(rbipc_publish(ring, msg, (uint32_t)strlen(msg) + 1) == RBIPC_OK);
+    }
+
+    assert(rbipc_sub_get_lag(sub1) == 8);
+    assert(rbipc_sub_get_lag(sub2) == 8);
+
+    /* Single poll on sub1 */
+    for (int i = 0; i < 8; ++i) {
+        char expected[64];
+        snprintf(expected, sizeof(expected), "Packed multicast %d", i);
+        assert(rbipc_sub_poll(sub1, &buf, &len, &seq) == RBIPC_OK);
+        assert(seq == (uint64_t)i);
+        assert(len == (uint32_t)strlen(expected) + 1);
+        assert(strcmp((const char *)buf, expected) == 0);
+    }
+    assert(rbipc_sub_get_lag(sub1) == 0);
+
+    /* Batch poll on sub2 */
+    const void *bufs[8];
+    uint32_t lens[8];
+    uint64_t seqs[8];
+    uint32_t polled = 0;
+    assert(rbipc_sub_poll_batch(sub2, 8, bufs, lens, seqs, &polled) == RBIPC_OK);
+    assert(polled == 8);
+    for (uint32_t i = 0; i < 8; ++i) {
+        char expected[64];
+        snprintf(expected, sizeof(expected), "Packed multicast %u", i);
+        assert(seqs[i] == (uint64_t)i);
+        assert(lens[i] == (uint32_t)strlen(expected) + 1);
+        assert(strcmp((const char *)bufs[i], expected) == 0);
+    }
+    assert(rbipc_sub_get_lag(sub2) == 0);
+
+    rbipc_sub_destroy(sub1);
+    rbipc_sub_destroy(sub2);
+    rbipc_detach(ring);
+}
+
 int main(void) {
     printf("[test_unit_pubsub] Running 1-to-N multicast publish-subscribe tests...\n");
     test_pubsub_basic_multicast();
@@ -343,6 +400,7 @@ int main(void) {
     test_pubsub_batch_and_streaming();
     test_pubsub_from_oldest_and_validation();
     test_pubsub_concurrent_wait_wakeup_and_shutdown();
+    test_pubsub_packed_multicast();
     printf("[test_unit_pubsub] All tests passed!\n");
     return 0;
 }

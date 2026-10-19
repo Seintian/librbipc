@@ -56,7 +56,11 @@ static void rbipc_pubsub_commit_slot_payload(rbipc_ring_t *ring,
   void *slot_ptr = rbipc_io_calc_slot_ptr(ring, ticket);
   rbipc_stream_copy_auto(slot_ptr, buf, len);
 
-  rbipc_slot_commit(slot, ticket, len);
+  if (ring->is_packed) {
+    rbipc_slot_commit_packed(slot, ticket, len);
+  } else {
+    rbipc_slot_commit(slot, ticket, len);
+  }
 }
 
 /**
@@ -195,9 +199,10 @@ int rbipc_sub_poll(rbipc_sub_t *sub, const void **out_buf, uint32_t *out_len,
   const rbipc_slot_t *slot = &slots[sub->cursor & mask];
   uint64_t seq = atomic_load_explicit(&slot->sequence, memory_order_acquire);
 
-  if (rbipc_slot_is_ready(seq, sub->cursor)) {
+  if (rbipc_slot_is_ready_any(seq, sub->cursor, ring->is_packed)) {
     *out_buf = rbipc_io_calc_slot_ptr(ring, sub->cursor);
-    *out_len = atomic_load_explicit(&slot->len, memory_order_acquire);
+    *out_len = ring->is_packed ? rbipc_slot_unpack_len(seq)
+                               : atomic_load_explicit(&slot->len, memory_order_acquire);
     *out_seq = sub->cursor;
     sub->cursor++;
     return RBIPC_OK;
@@ -236,12 +241,13 @@ int rbipc_sub_poll_batch(rbipc_sub_t *sub, uint32_t max_count,
     uint64_t cur = sub->cursor;
     const rbipc_slot_t *slot = &slots[cur & mask];
     uint64_t seq = atomic_load_explicit(&slot->sequence, memory_order_acquire);
-    if (!rbipc_slot_is_ready(seq, cur)) {
+    if (!rbipc_slot_is_ready_any(seq, cur, ring->is_packed)) {
       break;
     }
 
     out_bufs[count] = rbipc_io_calc_slot_ptr(ring, cur);
-    out_lens[count] = atomic_load_explicit(&slot->len, memory_order_acquire);
+    out_lens[count] = ring->is_packed ? rbipc_slot_unpack_len(seq)
+                                      : atomic_load_explicit(&slot->len, memory_order_acquire);
     out_seqs[count] = cur;
     sub->cursor++;
     count++;
