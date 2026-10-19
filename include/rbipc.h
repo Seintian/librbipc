@@ -40,6 +40,8 @@
 #ifndef RBIPC_H
 #define RBIPC_H
 
+#include <assert.h>
+#include <stdalign.h>
 #include <stdatomic.h>
 #include <stdbool.h>
 #include <stddef.h>

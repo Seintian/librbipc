@@ -67,6 +67,7 @@ RBIPC_LEAF
 void rbipc_slot_commit_packed(rbipc_slot_t *slot, uint64_t ticket, uint32_t len) {
   if (RBIPC_UNLIKELY(rbipc_is_null(slot)))
     return;
+  atomic_store_explicit(&slot->state, RBIPC_SLOT_COMMITTED, memory_order_relaxed);
   uint64_t packed = rbipc_slot_pack(ticket + 1, len, RBIPC_SLOT_COMMITTED);
   atomic_store_explicit(&slot->sequence, packed, memory_order_release);
 }
@@ -95,6 +96,10 @@ bool rbipc_slot_release_packed(rbipc_slot_t *slot, uint64_t ticket,
                                uint32_t capacity) {
   if (RBIPC_UNLIKELY(rbipc_is_null(slot)))
     return false;
+  atomic_store_explicit(&slot->state, RBIPC_SLOT_EMPTY, memory_order_relaxed);
+  atomic_store_explicit(&slot->producer_pid, 0, memory_order_relaxed);
+  atomic_store_explicit(&slot->consumer_pid, 0, memory_order_relaxed);
+  atomic_store_explicit(&slot->acquire_timestamp_ns, 0, memory_order_relaxed);
   uint64_t next_packed =
       rbipc_slot_pack(ticket + (uint64_t)capacity, 0, RBIPC_SLOT_EMPTY);
   atomic_store_explicit(&slot->sequence, next_packed, memory_order_release);

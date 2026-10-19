@@ -78,7 +78,17 @@ bool rbipc_audit_recover_dead_producer(rbipc_shm_header_t *hdr,
   if (RBIPC_UNLIKELY(!hdr || !slot))
     return false;
   bool is_packed = (le32toh(hdr->flags) & RBIPC_FLAG_PACKED) != 0;
-  uint32_t state = atomic_load_explicit(&slot->state, memory_order_acquire);
+  uint64_t raw_seq = atomic_load_explicit(&slot->sequence, memory_order_acquire);
+  uint64_t turn = is_packed ? rbipc_slot_unpack_seq(raw_seq) : raw_seq;
+  if (turn != ticket)
+    return false;
+
+  uint32_t state =
+      is_packed ? rbipc_slot_unpack_state(raw_seq)
+                : atomic_load_explicit(&slot->state, memory_order_acquire);
+  if (state == RBIPC_SLOT_EMPTY && is_packed) {
+    state = atomic_load_explicit(&slot->state, memory_order_acquire);
+  }
   if (state == RBIPC_SLOT_RESERVED || state == RBIPC_SLOT_RESERVING) {
     pid_t ppid =
         (pid_t)atomic_load_explicit(&slot->producer_pid, memory_order_relaxed);

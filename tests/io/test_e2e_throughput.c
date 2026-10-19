@@ -61,7 +61,7 @@ static void run_producer(int iterations) {
 
     rbipc_signal_shutdown(ring);
     rbipc_detach(ring);
-    exit(0);
+    _exit(0);
 }
 
 static void run_consumer(const char *mode_name, int expected_iterations) {
@@ -157,7 +157,7 @@ static void run_producer_batch(int iterations, uint32_t batch_size) {
 
     rbipc_signal_shutdown(ring);
     rbipc_detach(ring);
-    exit(0);
+    _exit(0);
 }
 
 static void run_consumer_batch(const char *mode_name, int expected_iterations, uint32_t batch_size) {
@@ -222,6 +222,8 @@ static void run_bench_mode(const char *mode_name, uint32_t flags, int iterations
                              RBIPC_SHM_NAMED | flags, 0, &creator);
     assert(rc == RBIPC_OK);
 
+    fflush(stdout);
+
     pid_t pid = fork();
     if (pid < 0) {
         perror("fork");
@@ -244,6 +246,8 @@ static void run_batch_bench_mode(const char *mode_name, uint32_t flags, int iter
     int rc = rbipc_create_ex(BENCH_SHM_NAME, BENCH_CAPACITY, BENCH_SLOT_SIZE,
                              RBIPC_SHM_NAMED | flags, 0, &creator);
     assert(rc == RBIPC_OK);
+
+    fflush(stdout);
 
     pid_t pid = fork();
     if (pid < 0) {
