@@ -183,6 +183,17 @@ RBIPC_INTERNAL RBIPC_LEAF
 bool rbipc_futex_has_waitv(void);
 
 /**
+ * @brief Checks if Linux 5.16+ sys_futex_waitv supports 64-bit futex words (FUTEX2_SIZE_U64).
+ *
+ * @details Probes kernel capability via non-blocking sys_futex_waitv probe and memoizes
+ * the result to eliminate repeated kernel syscall overhead.
+ *
+ * @return true if FUTEX2_SIZE_U64 is supported by the kernel, false otherwise.
+ */
+RBIPC_INTERNAL RBIPC_LEAF
+bool rbipc_futex2_has_u64(void);
+
+/**
  * @brief Wait on multiple futex words via Linux 5.16+ sys_futex_waitv.
  *
  * @param[in] waiters    Array of futex_waitv descriptors.

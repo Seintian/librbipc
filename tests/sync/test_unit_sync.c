@@ -279,6 +279,10 @@ static void test_hardware_wait(void) {
 static void test_futex2_waitv(void) {
     bool has_waitv = rbipc_futex_has_waitv();
     printf("  [test_futex2_waitv] Kernel sys_futex_waitv support: %d\n", (int)has_waitv);
+    bool has_u64 = rbipc_futex2_has_u64();
+    printf("  [test_futex2_waitv] Kernel sys_futex_waitv 64-bit support: %d\n", (int)has_u64);
+    /* Verify memoization returns consistent state in O(1) */
+    assert(rbipc_futex2_has_u64() == has_u64);
 
     /* Parameter validation */
     assert(rbipc_futex_waitv(NULL, 1, 1000) == -EINVAL);

@@ -101,7 +101,8 @@ bool rbipc_futex_has_waitv(void) {
 #endif
 }
 
-static bool rbipc_futex2_has_u64(void) {
+RBIPC_LEAF
+bool rbipc_futex2_has_u64(void) {
 #if defined(__linux__) && defined(SYS_futex_waitv)
   static _Atomic int s_has_u64 = -1;
   int cached = atomic_load_explicit(&s_has_u64, memory_order_acquire);
