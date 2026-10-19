@@ -37,17 +37,69 @@ RBIPC_INLINE void rbipc_slot_init_single(rbipc_slot_t *slot, uint32_t index) {
 }
 
 RBIPC_LEAF
-void rbipc_slot_init_table(rbipc_slot_t *RBIPC_RESTRICT slots,
-                           uint32_t capacity) {
+void rbipc_slot_init_table_ex(rbipc_slot_t *RBIPC_RESTRICT slots,
+                              uint32_t capacity, bool is_packed) {
   if (RBIPC_UNLIKELY(rbipc_is_null(slots)))
     return;
   rbipc_slot_t *s =
       (rbipc_slot_t *)RBIPC_ASSUME_ALIGNED(slots, RBIPC_CACHE_LINE);
   for (uint32_t i = 0; i < capacity; ++i) {
-    rbipc_slot_init_single(&s[i], i);
+    if (is_packed) {
+      atomic_init(&s[i].sequence, rbipc_slot_pack(i, 0, RBIPC_SLOT_EMPTY));
+      atomic_init(&s[i].state, RBIPC_SLOT_EMPTY);
+      atomic_init(&s[i].producer_pid, 0);
+      atomic_init(&s[i].len, 0);
+      atomic_init(&s[i].consumer_pid, 0);
+      atomic_init(&s[i].acquire_timestamp_ns, 0);
+    } else {
+      rbipc_slot_init_single(&s[i], i);
+    }
   }
 }
 
+RBIPC_LEAF
+void rbipc_slot_init_table(rbipc_slot_t *RBIPC_RESTRICT slots,
+                           uint32_t capacity) {
+  rbipc_slot_init_table_ex(slots, capacity, false);
+}
+
+RBIPC_LEAF
+void rbipc_slot_commit_packed(rbipc_slot_t *slot, uint64_t ticket, uint32_t len) {
+  if (RBIPC_UNLIKELY(rbipc_is_null(slot)))
+    return;
+  uint64_t packed = rbipc_slot_pack(ticket + 1, len, RBIPC_SLOT_COMMITTED);
+  atomic_store_explicit(&slot->sequence, packed, memory_order_release);
+}
+
+RBIPC_LEAF
+bool rbipc_slot_poison_packed(rbipc_slot_t *slot, uint64_t ticket) {
+  if (RBIPC_UNLIKELY(rbipc_is_null(slot)))
+    return false;
+  uint64_t cur = atomic_load_explicit(&slot->sequence, memory_order_acquire);
+  while (true) {
+    uint64_t seq = rbipc_slot_unpack_seq(cur);
+    if (seq != ticket) {
+      return false;
+    }
+    uint64_t poisoned = rbipc_slot_pack(ticket + 1, 0, RBIPC_SLOT_POISONED);
+    if (atomic_compare_exchange_weak_explicit(&slot->sequence, &cur, poisoned,
+                                              memory_order_release,
+                                              memory_order_acquire)) {
+      return true;
+    }
+  }
+}
+
+RBIPC_LEAF
+bool rbipc_slot_release_packed(rbipc_slot_t *slot, uint64_t ticket,
+                               uint32_t capacity) {
+  if (RBIPC_UNLIKELY(rbipc_is_null(slot)))
+    return false;
+  uint64_t next_packed =
+      rbipc_slot_pack(ticket + (uint64_t)capacity, 0, RBIPC_SLOT_EMPTY);
+  atomic_store_explicit(&slot->sequence, next_packed, memory_order_release);
+  return true;
+}
 
 RBIPC_LEAF
 void rbipc_slot_mark_reserving(rbipc_slot_t *slot, pid_t pid) {

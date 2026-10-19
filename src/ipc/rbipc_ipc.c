@@ -152,3 +152,59 @@ RBIPC_LEAF
 int rbipc_recv_fd(int socket_fd, rbipc_ring_t **out_ring) {
     return rbipc_recv_fd_ex(socket_fd, RBIPC_ROLE_PRODUCER | RBIPC_ROLE_CONSUMER, out_ring);
 }
+
+RBIPC_LEAF
+int rbipc_ipc_get_peer_cred(int socket_fd, rbipc_peer_cred_t *out_cred) {
+    if (RBIPC_UNLIKELY(!rbipc_is_valid_fd(socket_fd) || !out_cred)) {
+        return RBIPC_ERR_INVAL;
+    }
+#ifdef SO_PEERCRED
+    struct ucred cred = {};
+    socklen_t len = sizeof(cred);
+    if (getsockopt(socket_fd, SOL_SOCKET, SO_PEERCRED, &cred, &len) != 0) {
+        return RBIPC_ERR_SYS;
+    }
+    out_cred->pid = cred.pid;
+    out_cred->uid = cred.uid;
+    out_cred->gid = cred.gid;
+    return RBIPC_OK;
+#else
+    return RBIPC_ERR_NOTSUP;
+#endif
+}
+
+RBIPC_LEAF
+int rbipc_ipc_verify_peer(int socket_fd, uid_t expected_uid, gid_t expected_gid) {
+    rbipc_peer_cred_t cred;
+    int rc = rbipc_ipc_get_peer_cred(socket_fd, &cred);
+    if (RBIPC_UNLIKELY(rc != RBIPC_OK)) {
+        return rc;
+    }
+    if (expected_uid != (uid_t)-1 && cred.uid != expected_uid) {
+        return RBIPC_ERR_INVAL;
+    }
+    if (expected_gid != (gid_t)-1 && cred.gid != expected_gid) {
+        return RBIPC_ERR_INVAL;
+    }
+    return RBIPC_OK;
+}
+
+RBIPC_LEAF
+int rbipc_send_fd_auth(int socket_fd, const rbipc_ring_t *ring, uid_t expected_uid,
+                       gid_t expected_gid) {
+    int rc = rbipc_ipc_verify_peer(socket_fd, expected_uid, expected_gid);
+    if (RBIPC_UNLIKELY(rc != RBIPC_OK)) {
+        return rc;
+    }
+    return rbipc_send_fd(socket_fd, ring);
+}
+
+RBIPC_LEAF
+int rbipc_recv_fd_auth(int socket_fd, uint32_t role_flags, uid_t expected_uid,
+                       gid_t expected_gid, rbipc_ring_t **out_ring) {
+    int rc = rbipc_ipc_verify_peer(socket_fd, expected_uid, expected_gid);
+    if (RBIPC_UNLIKELY(rc != RBIPC_OK)) {
+        return rc;
+    }
+    return rbipc_recv_fd_ex(socket_fd, role_flags, out_ring);
+}

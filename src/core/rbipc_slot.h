@@ -36,6 +36,44 @@ RBIPC_INTERNAL RBIPC_LEAF
 void rbipc_slot_init_table(rbipc_slot_t *RBIPC_RESTRICT slots,
                            uint32_t capacity);
 
+RBIPC_LEAF
+void rbipc_slot_init_table_ex(rbipc_slot_t *RBIPC_RESTRICT slots,
+                              uint32_t capacity, bool is_packed);
+
+/**
+ * @brief Pack sequence, length, and state into a single 64-bit atomic word.
+ */
+RBIPC_INLINE uint64_t rbipc_slot_pack(uint64_t seq, uint32_t len,
+                                      uint32_t state) {
+  uint64_t l =
+      (len > RBIPC_PACKED_MAX_LEN) ? RBIPC_PACKED_MAX_LEN : (uint64_t)len;
+  return ((seq << RBIPC_PACKED_SEQ_SHIFT) & RBIPC_PACKED_SEQ_MASK) |
+         ((l << RBIPC_PACKED_LEN_SHIFT) & RBIPC_PACKED_LEN_MASK) |
+         ((uint64_t)state & RBIPC_PACKED_STATE_MASK);
+}
+
+RBIPC_INLINE uint64_t rbipc_slot_unpack_seq(uint64_t packed) {
+  return packed >> RBIPC_PACKED_SEQ_SHIFT;
+}
+
+RBIPC_INLINE uint32_t rbipc_slot_unpack_len(uint64_t packed) {
+  return (uint32_t)((packed & RBIPC_PACKED_LEN_MASK) >> RBIPC_PACKED_LEN_SHIFT);
+}
+
+RBIPC_INLINE uint32_t rbipc_slot_unpack_state(uint64_t packed) {
+  return (uint32_t)(packed & RBIPC_PACKED_STATE_MASK);
+}
+
+RBIPC_LEAF
+void rbipc_slot_commit_packed(rbipc_slot_t *slot, uint64_t ticket, uint32_t len);
+
+RBIPC_LEAF
+bool rbipc_slot_poison_packed(rbipc_slot_t *slot, uint64_t ticket);
+
+RBIPC_LEAF
+bool rbipc_slot_release_packed(rbipc_slot_t *slot, uint64_t ticket,
+                               uint32_t capacity);
+
 /**
  * @brief Audit whether a peer process with the specified PID is currently
  * alive.
