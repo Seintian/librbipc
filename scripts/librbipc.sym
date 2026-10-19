@@ -22,7 +22,9 @@ LIBRBIPC_1.0 {
         rbipc_get_wait_policy;
         rbipc_ipc_get_peer_cred;
         rbipc_ipc_recv_fd;
+        rbipc_ipc_recv_fds;
         rbipc_ipc_send_fd;
+        rbipc_ipc_send_fds;
         rbipc_ipc_verify_peer;
         rbipc_publish;
         rbipc_publish_abort;

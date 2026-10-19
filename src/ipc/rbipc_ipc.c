@@ -15,13 +15,20 @@
 #include <string.h>
 #include <errno.h>
 
+#define RBIPC_IPC_MAX_FDS 8
+
 /**
- * @brief Transmit a raw file descriptor across a UNIX domain socket via SCM_RIGHTS.
+ * @brief Transmit multiple file descriptors across a UNIX domain socket via SCM_RIGHTS.
  */
 RBIPC_LEAF
-int rbipc_ipc_send_fd(int socket_fd, int fd_to_send) {
-    if (RBIPC_UNLIKELY(!rbipc_is_valid_fd(socket_fd) || !rbipc_is_valid_fd(fd_to_send))) {
+int rbipc_ipc_send_fds(int socket_fd, const int *fds, size_t count) {
+    if (RBIPC_UNLIKELY(!rbipc_is_valid_fd(socket_fd) || !fds || count == 0 || count > RBIPC_IPC_MAX_FDS)) {
         return RBIPC_ERR_INVAL;
+    }
+    for (size_t i = 0; i < count; ++i) {
+        if (RBIPC_UNLIKELY(!rbipc_is_valid_fd(fds[i]))) {
+            return RBIPC_ERR_INVAL;
+        }
     }
 
     struct msghdr msg = {};
@@ -33,9 +40,9 @@ int rbipc_ipc_send_fd(int socket_fd, int fd_to_send) {
     msg.msg_iov = &iov;
     msg.msg_iovlen = 1;
 
-    char cmsg_buf[CMSG_SPACE(sizeof(int))] = {};
+    char cmsg_buf[CMSG_SPACE(RBIPC_IPC_MAX_FDS * sizeof(int))] = {};
     msg.msg_control = cmsg_buf;
-    msg.msg_controllen = sizeof(cmsg_buf);
+    msg.msg_controllen = CMSG_SPACE(count * sizeof(int));
 
     struct cmsghdr *cmsg = CMSG_FIRSTHDR(&msg);
     if (RBIPC_UNLIKELY(!cmsg)) {
@@ -43,8 +50,8 @@ int rbipc_ipc_send_fd(int socket_fd, int fd_to_send) {
     }
     cmsg->cmsg_level = SOL_SOCKET;
     cmsg->cmsg_type = SCM_RIGHTS;
-    cmsg->cmsg_len = CMSG_LEN(sizeof(int));
-    memcpy(CMSG_DATA(cmsg), &fd_to_send, sizeof(int));
+    cmsg->cmsg_len = CMSG_LEN(count * sizeof(int));
+    memcpy(CMSG_DATA(cmsg), fds, count * sizeof(int));
 
     ssize_t ret = sendmsg(socket_fd, &msg, 0);
     if (RBIPC_UNLIKELY(ret <= 0)) {
@@ -55,14 +62,25 @@ int rbipc_ipc_send_fd(int socket_fd, int fd_to_send) {
 }
 
 /**
- * @brief Receive a raw file descriptor from a UNIX domain socket via SCM_RIGHTS.
+ * @brief Transmit a raw file descriptor across a UNIX domain socket via SCM_RIGHTS.
  */
 RBIPC_LEAF
-int rbipc_ipc_recv_fd(int socket_fd, int *out_received_fd) {
-    if (RBIPC_UNLIKELY(!rbipc_is_valid_fd(socket_fd) || !out_received_fd)) {
+int rbipc_ipc_send_fd(int socket_fd, int fd_to_send) {
+    return rbipc_ipc_send_fds(socket_fd, &fd_to_send, 1);
+}
+
+/**
+ * @brief Receive multiple file descriptors from a UNIX domain socket via SCM_RIGHTS.
+ */
+RBIPC_LEAF
+int rbipc_ipc_recv_fds(int socket_fd, int *out_fds, size_t max_count, size_t *out_count) {
+    if (RBIPC_UNLIKELY(!rbipc_is_valid_fd(socket_fd) || !out_fds || max_count == 0 || !out_count)) {
         return RBIPC_ERR_INVAL;
     }
-    *out_received_fd = -1;
+    *out_count = 0;
+    for (size_t i = 0; i < max_count; ++i) {
+        out_fds[i] = -1;
+    }
 
     struct msghdr msg = {};
     char dummy = 0;
@@ -73,7 +91,7 @@ int rbipc_ipc_recv_fd(int socket_fd, int *out_received_fd) {
     msg.msg_iov = &iov;
     msg.msg_iovlen = 1;
 
-    char cmsg_buf[CMSG_SPACE(sizeof(int))] = {};
+    char cmsg_buf[CMSG_SPACE(RBIPC_IPC_MAX_FDS * sizeof(int))] = {};
     msg.msg_control = cmsg_buf;
     msg.msg_controllen = sizeof(cmsg_buf);
 
@@ -86,37 +104,72 @@ int rbipc_ipc_recv_fd(int socket_fd, int *out_received_fd) {
     if (RBIPC_UNLIKELY(!cmsg || cmsg->cmsg_level != SOL_SOCKET || cmsg->cmsg_type != SCM_RIGHTS)) {
         return RBIPC_ERR_SYS;
     }
-    if (RBIPC_UNLIKELY(cmsg->cmsg_len < CMSG_LEN(sizeof(int)))) {
+
+    size_t data_bytes = (cmsg->cmsg_len > sizeof(struct cmsghdr)) ? (cmsg->cmsg_len - sizeof(struct cmsghdr)) : 0;
+    size_t num_fds = data_bytes / sizeof(int);
+    if (RBIPC_UNLIKELY(num_fds == 0)) {
         return RBIPC_ERR_SYS;
     }
 
-    int received_fd = -1;
-    memcpy(&received_fd, CMSG_DATA(cmsg), sizeof(int));
-    if (RBIPC_UNLIKELY(!rbipc_is_valid_fd(received_fd))) {
-        return RBIPC_ERR_SYS;
+    size_t copy_count = (num_fds < max_count) ? num_fds : max_count;
+    memcpy(out_fds, CMSG_DATA(cmsg), copy_count * sizeof(int));
+
+    /* Safely close any excess descriptors beyond caller's max_count */
+    if (RBIPC_UNLIKELY(num_fds > max_count)) {
+        int excess_fds[RBIPC_IPC_MAX_FDS];
+        size_t excess_count = num_fds - max_count;
+        if (excess_count > RBIPC_IPC_MAX_FDS) excess_count = RBIPC_IPC_MAX_FDS;
+        memcpy(excess_fds, ((const char *)CMSG_DATA(cmsg)) + max_count * sizeof(int),
+               excess_count * sizeof(int));
+        for (size_t i = 0; i < excess_count; ++i) {
+            if (rbipc_is_valid_fd(excess_fds[i])) {
+                close(excess_fds[i]);
+            }
+        }
     }
 
-    *out_received_fd = received_fd;
+    *out_count = copy_count;
     return RBIPC_OK;
 }
 
 /**
- * @brief Transmit the backing file descriptor of a ring buffer across a UNIX domain socket.
+ * @brief Receive a raw file descriptor from a UNIX domain socket via SCM_RIGHTS.
+ */
+RBIPC_LEAF
+int rbipc_ipc_recv_fd(int socket_fd, int *out_received_fd) {
+    if (RBIPC_UNLIKELY(!out_received_fd)) {
+        return RBIPC_ERR_INVAL;
+    }
+    size_t received_count = 0;
+    int rc = rbipc_ipc_recv_fds(socket_fd, out_received_fd, 1, &received_count);
+    if (RBIPC_UNLIKELY(rc != RBIPC_OK || received_count == 0)) {
+        return (rc != RBIPC_OK) ? rc : RBIPC_ERR_SYS;
+    }
+    return RBIPC_OK;
+}
+
+/**
+ * @brief Transmit the backing file descriptor (and optional eventfd reactor) of a ring buffer across a UNIX domain socket.
  */
 RBIPC_LEAF
 int rbipc_send_fd(int socket_fd, const rbipc_ring_t *ring) {
     if (RBIPC_UNLIKELY(!rbipc_is_valid_fd(socket_fd) || !ring)) {
         return RBIPC_ERR_INVAL;
     }
-    int fd = rbipc_get_fd(ring);
-    if (RBIPC_UNLIKELY(!rbipc_is_valid_fd(fd))) {
+    int shm_fd = rbipc_get_fd(ring);
+    if (RBIPC_UNLIKELY(!rbipc_is_valid_fd(shm_fd))) {
         return RBIPC_ERR_INVAL;
     }
-    return rbipc_ipc_send_fd(socket_fd, fd);
+    int event_fd = -1;
+    if (rbipc_get_eventfd(ring, &event_fd) == RBIPC_OK && rbipc_is_valid_fd(event_fd)) {
+        int fds[2] = { shm_fd, event_fd };
+        return rbipc_ipc_send_fds(socket_fd, fds, 2);
+    }
+    return rbipc_ipc_send_fds(socket_fd, &shm_fd, 1);
 }
 
 /**
- * @brief Receive a ring buffer descriptor across a socket and attach with role flags.
+ * @brief Receive a ring buffer descriptor across a socket and attach with role flags, auto-binding eventfd if present.
  */
 RBIPC_LEAF
 int rbipc_recv_fd_ex(int socket_fd, uint32_t role_flags, rbipc_ring_t **out_ring) {
@@ -130,16 +183,27 @@ int rbipc_recv_fd_ex(int socket_fd, uint32_t role_flags, rbipc_ring_t **out_ring
         return RBIPC_ERR_INVAL;
     }
 
-    int received_fd = -1;
-    int rc = rbipc_ipc_recv_fd(socket_fd, &received_fd);
+    int received_fds[2] = { -1, -1 };
+    size_t received_count = 0;
+    int rc = rbipc_ipc_recv_fds(socket_fd, received_fds, 2, &received_count);
+    if (RBIPC_UNLIKELY(rc != RBIPC_OK || received_count == 0)) {
+        return (rc != RBIPC_OK) ? rc : RBIPC_ERR_SYS;
+    }
+
+    rc = rbipc_attach_fd_ex(received_fds[0], role_flags, out_ring);
     if (RBIPC_UNLIKELY(rc != RBIPC_OK)) {
+        close(received_fds[0]);
+        if (received_count > 1 && rbipc_is_valid_fd(received_fds[1])) {
+            close(received_fds[1]);
+        }
         return rc;
     }
 
-    rc = rbipc_attach_fd_ex(received_fd, role_flags, out_ring);
-    if (RBIPC_UNLIKELY(rc != RBIPC_OK)) {
-        close(received_fd);
-        return rc;
+    if (received_count > 1 && rbipc_is_valid_fd(received_fds[1])) {
+        int s_rc = rbipc_set_eventfd(*out_ring, received_fds[1]);
+        if (RBIPC_UNLIKELY(s_rc != RBIPC_OK)) {
+            close(received_fds[1]);
+        }
     }
 
     return RBIPC_OK;

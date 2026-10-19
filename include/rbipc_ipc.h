@@ -35,6 +35,20 @@ extern "C" {
 RBIPC_API RBIPC_NODISCARD RBIPC_LEAF int rbipc_ipc_send_fd(int socket_fd, int fd_to_send);
 
 /**
+ * @brief Transmit multiple file descriptors across a UNIX domain socket via SCM_RIGHTS.
+ *
+ * @param[in] socket_fd An open, connected UNIX domain socket (AF_UNIX).
+ * @param[in] fds       Array of open file descriptors to transmit.
+ * @param[in] count     Number of file descriptors in @p fds array (must be > 0 and <= 8).
+ *
+ * @return @ref RBIPC_OK on success.
+ * @retval RBIPC_ERR_INVAL if arguments are invalid or any fd is negative.
+ * @retval RBIPC_ERR_SYS   if sendmsg fails.
+ */
+RBIPC_API RBIPC_NODISCARD RBIPC_LEAF int
+rbipc_ipc_send_fds(int socket_fd, const int *fds, size_t count);
+
+/**
  * @brief Receive a raw file descriptor from a UNIX domain stream or datagram
  * socket.
  *
@@ -49,6 +63,21 @@ RBIPC_API RBIPC_NODISCARD RBIPC_LEAF int rbipc_ipc_send_fd(int socket_fd, int fd
  */
 RBIPC_API RBIPC_NODISCARD RBIPC_LEAF int rbipc_ipc_recv_fd(int socket_fd,
                                                  int *out_received_fd);
+
+/**
+ * @brief Receive multiple file descriptors from a UNIX domain socket via SCM_RIGHTS.
+ *
+ * @param[in]  socket_fd An open, connected UNIX domain socket (AF_UNIX).
+ * @param[out] out_fds   Array to store received file descriptors.
+ * @param[in]  max_count Maximum number of file descriptors that can be stored in @p out_fds.
+ * @param[out] out_count Pointer to store actual count of received file descriptors.
+ *
+ * @return @ref RBIPC_OK on success.
+ * @retval RBIPC_ERR_INVAL if arguments are invalid or max_count is 0.
+ * @retval RBIPC_ERR_SYS   if recvmsg fails or ancillary SCM_RIGHTS payload is missing.
+ */
+RBIPC_API RBIPC_NODISCARD RBIPC_LEAF int
+rbipc_ipc_recv_fds(int socket_fd, int *out_fds, size_t max_count, size_t *out_count);
 
 /**
  * @brief Transmit the underlying shared memory descriptor of a ring buffer

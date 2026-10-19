@@ -124,11 +124,84 @@ static void test_ipc_peer_credentials_and_auth(void) {
     close(sv[1]);
 }
 
+static void test_ipc_multi_fds(void) {
+    int sv[2];
+    assert(socketpair(AF_UNIX, SOCK_STREAM, 0, sv) == 0);
+
+    int p1[2], p2[2];
+    assert(pipe(p1) == 0);
+    assert(pipe(p2) == 0);
+
+    int send_fds[3] = { p1[0], p1[1], p2[0] };
+    assert(rbipc_ipc_send_fds(sv[0], send_fds, 3) == RBIPC_OK);
+
+    int recv_fds[4] = { -1, -1, -1, -1 };
+    size_t recv_count = 0;
+    assert(rbipc_ipc_recv_fds(sv[1], recv_fds, 4, &recv_count) == RBIPC_OK);
+    assert(recv_count == 3);
+    assert(recv_fds[0] >= 0 && recv_fds[1] >= 0 && recv_fds[2] >= 0);
+    assert(recv_fds[3] == -1);
+
+    /* Test write through pipe across received descriptors */
+    char write_byte = 'X';
+    assert(write(recv_fds[1], &write_byte, 1) == 1);
+    char read_byte = 0;
+    assert(read(recv_fds[0], &read_byte, 1) == 1);
+    assert(read_byte == 'X');
+
+    close(recv_fds[0]);
+    close(recv_fds[1]);
+    close(recv_fds[2]);
+    close(p1[0]);
+    close(p1[1]);
+    close(p2[0]);
+    close(p2[1]);
+    close(sv[0]);
+    close(sv[1]);
+}
+
+static void test_ipc_auto_eventfd_binding(void) {
+    int sv[2];
+    assert(socketpair(AF_UNIX, SOCK_STREAM, 0, sv) == 0);
+
+    /* 1. Create anonymous ring and enable eventfd reactor */
+    rbipc_ring_t *sender_ring = NULL;
+    assert(rbipc_create(NULL, 16, 64, &sender_ring) == RBIPC_OK);
+    int s_efd = -1;
+    assert(rbipc_enable_eventfd(sender_ring, &s_efd) == RBIPC_OK);
+    assert(s_efd >= 0);
+
+    /* 2. Send ring across socket: rbipc_send_fd bundles both shm_fd and event_fd */
+    assert(rbipc_send_fd(sv[0], sender_ring) == RBIPC_OK);
+
+    /* 3. Receive ring on peer end */
+    rbipc_ring_t *recv_ring = NULL;
+    assert(rbipc_recv_fd(sv[1], &recv_ring) == RBIPC_OK);
+    assert(recv_ring != NULL);
+
+    /* 4. Verify receiver automatically bound the eventfd */
+    int r_efd = -1;
+    assert(rbipc_get_eventfd(recv_ring, &r_efd) == RBIPC_OK);
+    assert(r_efd >= 0);
+
+    /* 5. Signal from sender and drain from receiver */
+    uint64_t inc = 1;
+    assert(write(s_efd, &inc, sizeof(inc)) == (ssize_t)sizeof(inc));
+    assert(rbipc_eventfd_drain(recv_ring) == RBIPC_OK);
+
+    rbipc_detach(recv_ring);
+    rbipc_detach(sender_ring);
+    close(sv[0]);
+    close(sv[1]);
+}
+
 int main(void) {
     printf("[test_unit_ipc] Running UNIX domain socket SCM_RIGHTS tests...\n");
     test_ipc_invalid_params();
     test_ipc_send_recv_ring();
     test_ipc_peer_credentials_and_auth();
+    test_ipc_multi_fds();
+    test_ipc_auto_eventfd_binding();
     printf("[test_unit_ipc] All tests passed!\n");
     return 0;
 }
