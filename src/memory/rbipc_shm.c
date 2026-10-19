@@ -44,13 +44,13 @@
 #define MFD_HUGETLB 0x0004U
 #endif
 #ifndef MFD_HUGE_2MB
-#define MFD_HUGE_2MB (21U << 26)
+#define MFD_HUGE_2MB (21U << 26U)
 #endif
 #ifndef MAP_HUGETLB
-#define MAP_HUGETLB 0x40000
+#define MAP_HUGETLB 0x40000U
 #endif
 #ifndef MAP_HUGE_2MB
-#define MAP_HUGE_2MB (21U << 26)
+#define MAP_HUGE_2MB (21U << 26U)
 #endif
 
 /**
