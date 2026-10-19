@@ -77,12 +77,15 @@ bool rbipc_audit_recover_dead_producer(rbipc_shm_header_t *hdr,
                                        rbipc_slot_t *slot, uint64_t ticket) {
   if (RBIPC_UNLIKELY(!hdr || !slot))
     return false;
+  bool is_packed = (le32toh(hdr->flags) & RBIPC_FLAG_PACKED) != 0;
   uint32_t state = atomic_load_explicit(&slot->state, memory_order_acquire);
   if (state == RBIPC_SLOT_RESERVED || state == RBIPC_SLOT_RESERVING) {
     pid_t ppid =
         (pid_t)atomic_load_explicit(&slot->producer_pid, memory_order_relaxed);
     if (ppid > 0 && !rbipc_audit_is_peer_alive(ppid)) {
-      if (rbipc_slot_poison(slot, ticket)) {
+      bool poisoned = is_packed ? rbipc_slot_poison_packed(slot, ticket)
+                                : rbipc_slot_poison(slot, ticket);
+      if (poisoned) {
         atomic_fetch_add_explicit(&hdr->poisoned_slots_count, 1,
                                   memory_order_relaxed);
         atomic_fetch_add_explicit(&hdr->dead_producers_recovered, 1,
@@ -102,13 +105,14 @@ void rbipc_audit_recover_dead_producer_range(rbipc_shm_header_t *hdr,
                                              uint32_t count) {
   if (RBIPC_UNLIKELY(!hdr || !slots))
     return;
+  bool is_packed = (le32toh(hdr->flags) & RBIPC_FLAG_PACKED) != 0;
   const uint32_t mask = hdr->capacity_mask;
   for (uint32_t i = 0; i < count; ++i) {
     uint64_t ticket_i = t + (uint64_t)i;
     rbipc_slot_t *slot_i = &slots[ticket_i & mask];
     uint64_t seq =
         atomic_load_explicit(&slot_i->sequence, memory_order_acquire);
-    if (rbipc_slot_is_ready(seq, ticket_i)) {
+    if (rbipc_slot_is_ready_any(seq, ticket_i, is_packed)) {
       continue;
     }
     rbipc_audit_recover_dead_producer(hdr, slot_i, ticket_i);
@@ -120,11 +124,13 @@ bool rbipc_audit_recover_dead_consumer(rbipc_shm_header_t *hdr,
                                        rbipc_slot_t *slot, uint64_t ticket) {
   if (RBIPC_UNLIKELY(!hdr || !slot))
     return false;
+  bool is_packed = (le32toh(hdr->flags) & RBIPC_FLAG_PACKED) != 0;
   uint64_t lease_ns =
       atomic_load_explicit(&hdr->lease_timeout_ns, memory_order_relaxed);
   if (lease_ns > 0) {
     uint64_t now_ns = rbipc_clock_monotonic_ns();
-    if (rbipc_slot_recover_expired_lease(slot, ticket, lease_ns, now_ns)) {
+    if (rbipc_slot_recover_expired_lease_ex(slot, ticket, lease_ns, now_ns,
+                                            is_packed)) {
       atomic_fetch_add_explicit(&hdr->leases_revoked_count, 1,
                                 memory_order_relaxed);
       atomic_thread_fence(memory_order_seq_cst);
@@ -132,7 +138,7 @@ bool rbipc_audit_recover_dead_consumer(rbipc_shm_header_t *hdr,
       return true;
     }
   }
-  if (rbipc_slot_recover_dead_consumer(slot, ticket)) {
+  if (rbipc_slot_recover_dead_consumer_ex(slot, ticket, is_packed)) {
     atomic_fetch_add_explicit(&hdr->dead_consumers_recovered, 1,
                               memory_order_relaxed);
     atomic_thread_fence(memory_order_seq_cst);
@@ -148,13 +154,14 @@ void rbipc_audit_recover_dead_consumer_range(rbipc_shm_header_t *hdr,
                                              uint32_t count) {
   if (RBIPC_UNLIKELY(!hdr || !slots))
     return;
+  bool is_packed = (le32toh(hdr->flags) & RBIPC_FLAG_PACKED) != 0;
   const uint32_t mask = hdr->capacity_mask;
   for (uint32_t i = 0; i < count; ++i) {
     uint64_t ticket_i = t + (uint64_t)i;
     rbipc_slot_t *slot_i = &slots[ticket_i & mask];
     uint64_t seq =
         atomic_load_explicit(&slot_i->sequence, memory_order_acquire);
-    if (rbipc_slot_is_vacant(seq, ticket_i)) {
+    if (rbipc_slot_is_vacant_any(seq, ticket_i, is_packed)) {
       continue;
     }
     rbipc_audit_recover_dead_consumer(hdr, slot_i, ticket_i);
@@ -168,7 +175,11 @@ bool rbipc_audit_check_and_heal_ticket_hole(rbipc_shm_header_t *hdr,
   if (RBIPC_UNLIKELY(!hdr || !slot || !sync_state))
     return false;
 
-  uint32_t state = atomic_load_explicit(&slot->state, memory_order_acquire);
+  bool is_packed = (le32toh(hdr->flags) & RBIPC_FLAG_PACKED) != 0;
+  uint32_t state =
+      is_packed ? rbipc_slot_unpack_state(
+                      atomic_load_explicit(&slot->sequence, memory_order_acquire))
+                : atomic_load_explicit(&slot->state, memory_order_acquire);
   if (state == RBIPC_SLOT_EMPTY) {
     uint64_t wt =
         atomic_load_explicit(&hdr->write_ticket, memory_order_acquire);
@@ -179,7 +190,9 @@ bool rbipc_audit_check_and_heal_ticket_hole(rbipc_shm_header_t *hdr,
           (sync_state->hole_first_seen_ns != 0 &&
            now_ts - sync_state->hole_first_seen_ns >=
                RBIPC_TICKET_HOLE_GRACE_NS)) {
-        if (rbipc_slot_poison(slot, ticket)) {
+        bool poisoned = is_packed ? rbipc_slot_poison_packed(slot, ticket)
+                                  : rbipc_slot_poison(slot, ticket);
+        if (poisoned) {
           atomic_fetch_add_explicit(&hdr->poisoned_slots_count, 1,
                                     memory_order_relaxed);
           atomic_fetch_add_explicit(&hdr->ticket_holes_healed, 1,
@@ -209,6 +222,7 @@ int rbipc_audit_revoke_expired_leases(rbipc_shm_header_t *hdr,
   if (lease == 0)
     return 0;
 
+  bool is_packed = (le32toh(hdr->flags) & RBIPC_FLAG_PACKED) != 0;
   uint64_t now = rbipc_clock_monotonic_ns();
   uint32_t cap = hdr->capacity;
   int revoked_count = 0;
@@ -224,8 +238,10 @@ int rbipc_audit_revoke_expired_leases(rbipc_shm_header_t *hdr,
           (now - acquired_ts) >= lease) {
         uint64_t seq =
             atomic_load_explicit(&slot->sequence, memory_order_acquire);
-        uint64_t target_ticket = (seq > 0 ? (seq - 1) : 0) + (uint64_t)cap;
-        if (rbipc_slot_recover_expired_lease(slot, target_ticket, lease, now)) {
+        uint64_t turn = is_packed ? rbipc_slot_unpack_seq(seq) : seq;
+        uint64_t target_ticket = (turn > 0 ? (turn - 1) : 0) + (uint64_t)cap;
+        if (rbipc_slot_recover_expired_lease_ex(slot, target_ticket, lease, now,
+                                               is_packed)) {
           revoked_count++;
         }
       }

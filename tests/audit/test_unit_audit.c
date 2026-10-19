@@ -62,6 +62,51 @@ int main(void) {
     assert(healed == true);
     assert(atomic_load_explicit(&slot.state, memory_order_relaxed) == RBIPC_SLOT_POISONED);
 
+    /* 5. Dead producer recovery on packed ring */
+    rbipc_shm_header_t packed_hdr = {};
+    packed_hdr.flags = htole32(RBIPC_FLAG_PACKED);
+    atomic_init(&packed_hdr.futex_seq, 0);
+    atomic_init(&packed_hdr.futex_waiters, 0);
+    atomic_init(&packed_hdr.write_ticket, 10);
+    packed_hdr.capacity_mask = 3;
+    atomic_init(&packed_hdr.active_producers, 1);
+
+    rbipc_slot_t packed_slot;
+    atomic_init(&packed_slot.sequence, rbipc_slot_pack(0, 0, RBIPC_SLOT_EMPTY));
+    atomic_init(&packed_slot.state, RBIPC_SLOT_RESERVED);
+    atomic_init(&packed_slot.producer_pid, 9999999);
+    atomic_init(&packed_slot.consumer_pid, 0);
+    atomic_init(&packed_slot.acquire_timestamp_ns, 0);
+
+    bool p_recovered = rbipc_audit_recover_dead_producer(&packed_hdr, &packed_slot, 0);
+    assert(p_recovered == true);
+    uint64_t p_seq = atomic_load_explicit(&packed_slot.sequence, memory_order_relaxed);
+    assert(rbipc_slot_unpack_seq(p_seq) == 1);
+    assert(rbipc_slot_unpack_state(p_seq) == RBIPC_SLOT_POISONED);
+
+    /* 6. Dead consumer recovery on packed ring */
+    atomic_init(&packed_slot.consumer_pid, 9999999);
+    atomic_init(&packed_slot.acquire_timestamp_ns, 100);
+    bool p_crecovered = rbipc_audit_recover_dead_consumer(&packed_hdr, &packed_slot, 4);
+    assert(p_crecovered == true);
+    uint64_t c_seq = atomic_load_explicit(&packed_slot.sequence, memory_order_relaxed);
+    assert(rbipc_slot_unpack_seq(c_seq) == 4);
+    assert(rbipc_slot_unpack_state(c_seq) == RBIPC_SLOT_EMPTY);
+
+    /* 7. Ticket hole healing on packed ring */
+    rbipc_sync_state_t packed_sync_state;
+    rbipc_sync_state_init(&packed_sync_state, 1000000000ULL);
+    atomic_init(&packed_slot.sequence, rbipc_slot_pack(5, 0, RBIPC_SLOT_EMPTY));
+    atomic_init(&packed_slot.state, RBIPC_SLOT_EMPTY);
+    atomic_init(&packed_hdr.write_ticket, 10);
+    atomic_init(&packed_hdr.active_producers, 0);
+
+    bool p_healed = rbipc_audit_check_and_heal_ticket_hole(&packed_hdr, &packed_slot, 5, &packed_sync_state);
+    assert(p_healed == true);
+    uint64_t h_seq = atomic_load_explicit(&packed_slot.sequence, memory_order_relaxed);
+    assert(rbipc_slot_unpack_seq(h_seq) == 6);
+    assert(rbipc_slot_unpack_state(h_seq) == RBIPC_SLOT_POISONED);
+
     printf("[test_unit_audit] All tests passed!\n");
     return 0;
 }

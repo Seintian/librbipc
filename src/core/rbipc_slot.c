@@ -160,7 +160,8 @@ void rbipc_slot_mark_acquired(rbipc_slot_t *slot, pid_t pid,
 }
 
 RBIPC_LEAF
-bool rbipc_slot_recover_dead_consumer(rbipc_slot_t *slot, uint64_t ticket) {
+bool rbipc_slot_recover_dead_consumer_ex(rbipc_slot_t *slot, uint64_t ticket,
+                                         bool is_packed) {
   if (RBIPC_UNLIKELY(rbipc_is_null(slot)))
     return false;
   uint32_t cpid =
@@ -175,17 +176,25 @@ bool rbipc_slot_recover_dead_consumer(rbipc_slot_t *slot, uint64_t ticket) {
     atomic_store_explicit(&slot->acquire_timestamp_ns, 0, memory_order_relaxed);
     atomic_store_explicit(&slot->len, 0, memory_order_relaxed);
     atomic_store_explicit(&slot->state, RBIPC_SLOT_EMPTY, memory_order_release);
-    atomic_store_explicit(&slot->sequence, ticket, memory_order_release);
+    uint64_t next_seq =
+        is_packed ? rbipc_slot_pack(ticket, 0, RBIPC_SLOT_EMPTY) : ticket;
+    atomic_store_explicit(&slot->sequence, next_seq, memory_order_release);
     return true;
   }
   return false;
 }
 
 RBIPC_LEAF
-bool rbipc_slot_recover_expired_lease(rbipc_slot_t *slot,
-                                      uint64_t target_vacant_ticket,
-                                      uint64_t lease_timeout_ns,
-                                      uint64_t now_ns) {
+bool rbipc_slot_recover_dead_consumer(rbipc_slot_t *slot, uint64_t ticket) {
+  return rbipc_slot_recover_dead_consumer_ex(slot, ticket, false);
+}
+
+RBIPC_LEAF
+bool rbipc_slot_recover_expired_lease_ex(rbipc_slot_t *slot,
+                                         uint64_t target_vacant_ticket,
+                                         uint64_t lease_timeout_ns,
+                                         uint64_t now_ns,
+                                         bool is_packed) {
   if (RBIPC_UNLIKELY(rbipc_is_null(slot) || lease_timeout_ns == 0))
     return false;
   uint32_t cpid =
@@ -206,12 +215,24 @@ bool rbipc_slot_recover_expired_lease(rbipc_slot_t *slot,
       atomic_store_explicit(&slot->len, 0, memory_order_relaxed);
       atomic_store_explicit(&slot->state, RBIPC_SLOT_EMPTY,
                             memory_order_release);
-      atomic_store_explicit(&slot->sequence, target_vacant_ticket,
+      uint64_t next_seq = is_packed ? rbipc_slot_pack(target_vacant_ticket, 0,
+                                                      RBIPC_SLOT_EMPTY)
+                                    : target_vacant_ticket;
+      atomic_store_explicit(&slot->sequence, next_seq,
                             memory_order_release);
       return true;
     }
   }
   return false;
+}
+
+RBIPC_LEAF
+bool rbipc_slot_recover_expired_lease(rbipc_slot_t *slot,
+                                      uint64_t target_vacant_ticket,
+                                      uint64_t lease_timeout_ns,
+                                      uint64_t now_ns) {
+  return rbipc_slot_recover_expired_lease_ex(
+      slot, target_vacant_ticket, lease_timeout_ns, now_ns, false);
 }
 
 RBIPC_LEAF
