@@ -80,7 +80,7 @@ rbipc_ring_init_header_fields(rbipc_shm_header_t *RBIPC_RESTRICT hdr,
                               uint32_t cap, uint32_t roles, uint32_t flags) {
   atomic_init(&hdr->magic, 0);
   hdr->version = htole32(RBIPC_VERSION);
-  hdr->flags = htole32(flags & (RBIPC_FLAG_TRUSTED | RBIPC_FLAG_PACKED));
+  hdr->flags = htole32(flags & (RBIPC_FLAG_TRUSTED | RBIPC_FLAG_PACKED | RBIPC_FLAG_HUGETLB));
   hdr->total_shm_size = htole64((uint64_t)layout->total_shm_size);
   hdr->data_offset = htole64((uint64_t)layout->data_offset);
   hdr->data_size = htole64((uint64_t)layout->data_size);
@@ -195,6 +195,7 @@ rbipc_ring_t *rbipc_ring_alloc_handle(int fd, const char *RBIPC_RESTRICT name,
   uint32_t hdr_flags = hdr ? le32toh(hdr->flags) : 0;
   ring->is_trusted = (hdr_flags & RBIPC_FLAG_TRUSTED) != 0;
   ring->is_packed = (hdr_flags & RBIPC_FLAG_PACKED) != 0;
+  ring->is_hugetlb = (hdr_flags & RBIPC_FLAG_HUGETLB) != 0;
 
   rbipc_sync_init_process();
 
@@ -233,11 +234,15 @@ int rbipc_create_ex(const char *RBIPC_RESTRICT name, size_t capacity,
   uint32_t known_flags = RBIPC_CREATE_OVERWRITE | RBIPC_ROLE_PRODUCER |
                          RBIPC_ROLE_CONSUMER | RBIPC_ROLE_MONITOR |
                          RBIPC_SHM_ANON | RBIPC_SHM_NAMED |
-                         RBIPC_FLAG_TRUSTED | RBIPC_FLAG_PACKED;
+                         RBIPC_FLAG_TRUSTED | RBIPC_FLAG_PACKED |
+                         RBIPC_FLAG_HUGETLB;
   if (RBIPC_UNLIKELY((flags & ~known_flags) != 0)) {
     return RBIPC_ERR_INVAL;
   }
   if (RBIPC_UNLIKELY((flags & RBIPC_SHM_ANON) && (flags & RBIPC_SHM_NAMED))) {
+    return RBIPC_ERR_INVAL;
+  }
+  if (RBIPC_UNLIKELY((flags & RBIPC_FLAG_HUGETLB) && (flags & RBIPC_SHM_NAMED))) {
     return RBIPC_ERR_INVAL;
   }
   if (RBIPC_UNLIKELY((flags & RBIPC_FLAG_PACKED) &&
@@ -248,6 +253,50 @@ int rbipc_create_ex(const char *RBIPC_RESTRICT name, size_t capacity,
       flags & (RBIPC_ROLE_PRODUCER | RBIPC_ROLE_CONSUMER | RBIPC_ROLE_MONITOR);
   if (roles == 0) {
     roles = RBIPC_ROLE_PRODUCER;
+  }
+
+  /* Handle HugeTLB (2MB huge pages) request with graceful fallback */
+  if (flags & RBIPC_FLAG_HUGETLB) {
+    if (rbipc_shm_hugetlb_available()) {
+      size_t huge_page = RBIPC_HUGE_PAGE_2MB;
+      uint32_t h_cap = 0;
+      int h_rc = rbipc_ring_validate_create_params(capacity, slot_size, &huge_page, &h_cap);
+      if (h_rc == RBIPC_OK) {
+        huge_page = RBIPC_HUGE_PAGE_2MB;
+        rbipc_layout_t h_layout;
+        h_rc = rbipc_shm_calc_layout(h_cap, slot_size, huge_page, &h_layout);
+        if (h_rc == RBIPC_OK) {
+          int h_fd = -1;
+          uint32_t shm_flags = (flags & (RBIPC_CREATE_OVERWRITE | RBIPC_SHM_ANON | RBIPC_SHM_NAMED)) | RBIPC_FLAG_HUGETLB;
+          h_rc = rbipc_shm_create_ex(name, h_layout.total_shm_size, shm_flags, mode, &h_fd);
+          if (h_rc == RBIPC_OK) {
+            rbipc_shm_seal(h_fd);
+            void *ctrl_map = NULL;
+            void *data_map = NULL;
+            h_rc = rbipc_ring_map_regions(h_fd, &h_layout, &ctrl_map, &data_map);
+            if (h_rc == RBIPC_OK) {
+              rbipc_shm_header_t *hdr = (rbipc_shm_header_t *)ctrl_map;
+              rbipc_ring_init_header_fields(hdr, &h_layout, h_cap, roles, flags);
+              rbipc_slot_t *slots = (rbipc_slot_t *)((char *)ctrl_map + sizeof(rbipc_shm_header_t));
+              rbipc_slot_init_table_ex(slots, h_cap, (flags & RBIPC_FLAG_PACKED) != 0);
+              rbipc_ring_t *ring = rbipc_ring_alloc_handle(
+                  h_fd, NULL, hdr, slots, ctrl_map, h_layout.data_offset, data_map,
+                  h_layout.data_size, roles, true);
+              if (ring) {
+                atomic_store_explicit(&hdr->magic, htole64(RBIPC_MAGIC), memory_order_release);
+                *out_ring = ring;
+                return RBIPC_OK;
+              }
+              rbipc_ring_abort_create(h_fd, NULL, ctrl_map, h_layout.data_offset, data_map, h_layout.data_size);
+            } else {
+              close(h_fd);
+            }
+          }
+        }
+      }
+    }
+    /* Graceful fallback: clear RBIPC_FLAG_HUGETLB and proceed with standard 4KB pages */
+    flags &= ~RBIPC_FLAG_HUGETLB;
   }
 
   size_t page_size = 0;
@@ -328,14 +377,19 @@ int rbipc_create_anon(size_t capacity, uint32_t slot_size,
 int rbipc_ring_probe_and_validate_header(
     int fd, size_t page_size, rbipc_layout_t *RBIPC_RESTRICT out_layout) {
   void *probe_map = NULL;
-  int rc = rbipc_vmem_map_ctrl(fd, page_size, &probe_map);
-  if (RBIPC_UNLIKELY(rc != RBIPC_OK)) {
-    return rc;
+  size_t probe_size = page_size;
+  int rc = rbipc_vmem_map_ctrl(fd, probe_size, &probe_map);
+  if (rc != RBIPC_OK) {
+    probe_size = RBIPC_HUGE_PAGE_2MB;
+    rc = rbipc_vmem_map_ctrl(fd, probe_size, &probe_map);
+    if (RBIPC_UNLIKELY(rc != RBIPC_OK)) {
+      return rc;
+    }
   }
 
   const rbipc_shm_header_t *hdr_check = (const rbipc_shm_header_t *)probe_map;
   if (RBIPC_UNLIKELY(!rbipc_header_is_valid(hdr_check))) {
-    rbipc_vmem_unmap_ctrl(probe_map, page_size);
+    rbipc_vmem_unmap_ctrl(probe_map, probe_size);
     return RBIPC_ERR_INVAL;
   }
 
@@ -343,10 +397,13 @@ int rbipc_ring_probe_and_validate_header(
   size_t data_size = (size_t)hdr_check->data_size;
   uint32_t cap = hdr_check->capacity;
   uint32_t slot_size = hdr_check->slot_size;
+  uint32_t hdr_flags = hdr_check->flags;
 
-  rbipc_vmem_unmap_ctrl(probe_map, page_size);
+  rbipc_vmem_unmap_ctrl(probe_map, probe_size);
 
-  rc = rbipc_shm_calc_layout(cap, slot_size, page_size, out_layout);
+  size_t effective_page_size =
+      (hdr_flags & RBIPC_FLAG_HUGETLB) ? RBIPC_HUGE_PAGE_2MB : page_size;
+  rc = rbipc_shm_calc_layout(cap, slot_size, effective_page_size, out_layout);
   if (RBIPC_UNLIKELY(rc != RBIPC_OK || out_layout->data_offset != data_offset ||
                      out_layout->data_size != data_size)) {
     return RBIPC_ERR_INVAL;
@@ -507,6 +564,11 @@ bool rbipc_ring_is_trusted(const rbipc_ring_t *ring) {
 RBIPC_LEAF
 bool rbipc_ring_is_packed(const rbipc_ring_t *ring) {
   return ring != NULL && ring->is_packed;
+}
+
+RBIPC_LEAF
+bool rbipc_ring_is_hugetlb(const rbipc_ring_t *ring) {
+  return ring != NULL && ring->is_hugetlb;
 }
 
 RBIPC_LEAF

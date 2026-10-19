@@ -52,6 +52,7 @@ LIBRBIPC_1.0 {
         rbipc_reserve_write_nonblock;
         rbipc_reserve_write_timeout;
         rbipc_revoke_expired_leases;
+        rbipc_ring_is_hugetlb;
         rbipc_ring_is_packed;
         rbipc_ring_is_trusted;
         rbipc_send_fd;
@@ -59,6 +60,7 @@ LIBRBIPC_1.0 {
         rbipc_set_eventfd;
         rbipc_set_lease_timeout;
         rbipc_set_wait_policy;
+        rbipc_shm_hugetlb_available;
         rbipc_shutdown;
         rbipc_signal_shutdown;
         rbipc_stream_copy;

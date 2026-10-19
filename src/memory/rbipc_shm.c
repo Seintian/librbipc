@@ -24,6 +24,7 @@
 
 #include <errno.h>
 #include <fcntl.h>
+#include <stdatomic.h>
 #include <sys/mman.h>
 #include <sys/stat.h>
 #include <unistd.h>
@@ -37,6 +38,19 @@
 #define F_SEAL_SEAL 0x0001
 #define F_SEAL_SHRINK 0x0002
 #define F_SEAL_GROW 0x0004
+#endif
+
+#ifndef MFD_HUGETLB
+#define MFD_HUGETLB 0x0004U
+#endif
+#ifndef MFD_HUGE_2MB
+#define MFD_HUGE_2MB (21U << 26)
+#endif
+#ifndef MAP_HUGETLB
+#define MAP_HUGETLB 0x40000
+#endif
+#ifndef MAP_HUGE_2MB
+#define MAP_HUGE_2MB (21U << 26)
 #endif
 
 /**
@@ -159,17 +173,57 @@ int rbipc_shm_calc_layout(uint32_t capacity, uint32_t slot_size,
   return RBIPC_OK;
 }
 
+static _Atomic int s_hugetlb_available = -1;
+
+RBIPC_LEAF
+bool rbipc_shm_hugetlb_available(void) {
+  int cached = atomic_load_explicit(&s_hugetlb_available, memory_order_relaxed);
+  if (RBIPC_LIKELY(cached >= 0)) {
+    return cached == 1;
+  }
+
+  int fd = memfd_create("rbipc_huge_probe",
+                        MFD_CLOEXEC | MFD_HUGETLB | MFD_HUGE_2MB);
+  if (fd < 0) {
+    atomic_store_explicit(&s_hugetlb_available, 0, memory_order_relaxed);
+    return false;
+  }
+
+  bool ok = false;
+  if (ftruncate(fd, (off_t)RBIPC_HUGE_PAGE_2MB) == 0) {
+    void *p = mmap(NULL, RBIPC_HUGE_PAGE_2MB, PROT_READ | PROT_WRITE,
+                   MAP_SHARED, fd, 0);
+    if (p != MAP_FAILED) {
+      ok = true;
+      munmap(p, RBIPC_HUGE_PAGE_2MB);
+    }
+  }
+  close(fd);
+
+  atomic_store_explicit(&s_hugetlb_available, ok ? 1 : 0, memory_order_relaxed);
+  return ok;
+}
+
 /**
  * @brief Atomic helper: Create an anonymous memory file descriptor via Linux
  * memfd_create.
  */
 RBIPC_INLINE int rbipc_shm_create_anonymous(const char *name, mode_t mode,
+                                            uint32_t flags,
                                             int *RBIPC_RESTRICT out_fd) {
   const char *desc_name = RBIPC_ANON_MEMFD_NAME;
   if (name && name[0] != '\0') {
     desc_name = (name[0] == '/') ? &name[1] : name;
   }
-  int fd = memfd_create(desc_name, MFD_CLOEXEC | MFD_ALLOW_SEALING);
+
+  int fd = -1;
+  if ((flags & RBIPC_FLAG_HUGETLB) && rbipc_shm_hugetlb_available()) {
+    fd = memfd_create(desc_name,
+                      MFD_CLOEXEC | MFD_ALLOW_SEALING | MFD_HUGETLB | MFD_HUGE_2MB);
+  }
+  if (fd < 0) {
+    fd = memfd_create(desc_name, MFD_CLOEXEC | MFD_ALLOW_SEALING);
+  }
   if (fd < 0) {
     return RBIPC_ERR_SYS;
   }
@@ -241,11 +295,14 @@ int rbipc_shm_create_ex(const char *RBIPC_RESTRICT name, size_t total_size,
     return RBIPC_ERR_INVAL;
   }
   uint32_t known_flags =
-      RBIPC_CREATE_OVERWRITE | RBIPC_SHM_ANON | RBIPC_SHM_NAMED;
+      RBIPC_CREATE_OVERWRITE | RBIPC_SHM_ANON | RBIPC_SHM_NAMED | RBIPC_FLAG_HUGETLB;
   if (RBIPC_UNLIKELY((flags & ~known_flags) != 0)) {
     return RBIPC_ERR_INVAL;
   }
   if (RBIPC_UNLIKELY((flags & RBIPC_SHM_ANON) && (flags & RBIPC_SHM_NAMED))) {
+    return RBIPC_ERR_INVAL;
+  }
+  if (RBIPC_UNLIKELY((flags & RBIPC_FLAG_HUGETLB) && (flags & RBIPC_SHM_NAMED))) {
     return RBIPC_ERR_INVAL;
   }
 
@@ -264,13 +321,35 @@ int rbipc_shm_create_ex(const char *RBIPC_RESTRICT name, size_t total_size,
 
   int fd = -1;
   int rc = is_named ? rbipc_shm_create_named(name, flags, mode, &fd)
-                    : rbipc_shm_create_anonymous(name, mode, &fd);
+                    : rbipc_shm_create_anonymous(name, mode, flags, &fd);
   if (RBIPC_UNLIKELY(rc != RBIPC_OK)) {
     return rc;
   }
 
-  rc = rbipc_shm_truncate_file(fd, total_size);
+  size_t trunc_size = total_size;
+  if ((flags & RBIPC_FLAG_HUGETLB) && rbipc_shm_hugetlb_available()) {
+    trunc_size = rbipc_align_up(total_size, RBIPC_HUGE_PAGE_2MB);
+  }
+
+  rc = rbipc_shm_truncate_file(fd, trunc_size);
   if (RBIPC_UNLIKELY(rc != RBIPC_OK)) {
+    /* If truncation failed on hugetlb fd, fallback gracefully to standard memfd */
+    if ((flags & RBIPC_FLAG_HUGETLB) && !is_named) {
+      close(fd);
+      rc = rbipc_shm_create_anonymous(name, mode, 0, &fd);
+      if (RBIPC_UNLIKELY(rc != RBIPC_OK)) {
+        return rc;
+      }
+      rc = rbipc_shm_truncate_file(fd, total_size);
+      if (RBIPC_UNLIKELY(rc != RBIPC_OK)) {
+        int err = errno;
+        close(fd);
+        errno = err;
+        return rc;
+      }
+      *out_fd = fd;
+      return RBIPC_OK;
+    }
     int err = errno;
     close(fd);
     if (is_named && name)

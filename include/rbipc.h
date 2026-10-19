@@ -242,6 +242,12 @@ extern "C" {
   0x0080U /**< Tier 3: 64-bit packed sequence/len/state descriptors for       \
              single-store atomic publication. Constrains slot payload length   \
              to @ref RBIPC_PACKED_MAX_LEN (4,095 bytes). */
+#define RBIPC_FLAG_HUGETLB                                                     \
+  0x0100U /**< Request HugeTLB (2MB huge pages) backing shared memory.        \
+             Reduces TLB misses and page table walking overhead for large      \
+             buffers. Falls back cleanly if hugepages are unavailable on host. */
+
+#define RBIPC_HUGE_PAGE_2MB (2ULL * 1024 * 1024)
 
 #define RBIPC_CREATE_ANON RBIPC_SHM_ANON
 #define RBIPC_CREATE_NAMED RBIPC_SHM_NAMED
@@ -249,6 +255,7 @@ extern "C" {
 #define RBIPC_SHM_TYPE_NAMED RBIPC_SHM_NAMED
 #define RBIPC_MODE_TRUSTED RBIPC_FLAG_TRUSTED
 #define RBIPC_MODE_PACKED RBIPC_FLAG_PACKED
+#define RBIPC_CREATE_HUGETLB RBIPC_FLAG_HUGETLB
 
 /**
  * @defgroup rbipc_packed_constants 64-Bit Packed Descriptor Bitfield Constants
@@ -1651,6 +1658,24 @@ rbipc_ring_is_trusted(const rbipc_ring_t *ring);
  */
 RBIPC_API RBIPC_NODISCARD RBIPC_PURE RBIPC_LEAF bool
 rbipc_ring_is_packed(const rbipc_ring_t *ring);
+
+/**
+ * @brief Query whether ring buffer memory is backed by HugeTLB 2MB pages.
+ *
+ * @param[in] ring Ring buffer handle.
+ * @return true if HugeTLB pages back the ring buffer, false otherwise.
+ */
+RBIPC_API RBIPC_NODISCARD RBIPC_PURE RBIPC_LEAF bool
+rbipc_ring_is_hugetlb(const rbipc_ring_t *ring);
+
+/**
+ * @brief Probe whether HugeTLB 2MB huge page allocation is supported and available on the host.
+ *
+ * @return true if HugeTLB 2MB pages can be allocated in the current kernel/container,
+ *         false otherwise.
+ */
+RBIPC_API RBIPC_NODISCARD RBIPC_PURE RBIPC_LEAF bool
+rbipc_shm_hugetlb_available(void);
 
 /**
  * @brief Collect a point-in-time snapshot of ring buffer telemetry metrics.

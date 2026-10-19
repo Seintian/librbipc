@@ -71,6 +71,7 @@ struct rbipc_ring {
                         should close it on detach. */
   bool is_trusted; /**< True if ring operates in Tier 2 trusted mode (pure Vyukov sequence turns). */
   bool is_packed;  /**< True if ring operates in Tier 3 64-bit packed descriptor mode. */
+  bool is_hugetlb; /**< True if ring memory is backed by HugeTLB 2MB pages. */
 };
 
 /**

@@ -8,6 +8,7 @@
 #include <assert.h>
 #include <fcntl.h>
 #include <stdio.h>
+#include <string.h>
 #include <unistd.h>
 
 static void test_layout_calculation(void) {
@@ -157,11 +158,64 @@ static void test_shm_lifecycle(void) {
   assert(rbipc_shm_open(test_name, &fd) == RBIPC_ERR_SYS);
 }
 
+static void test_shm_hugetlb_support_and_fallback(void) {
+  /* 1. Test rbipc_shm_hugetlb_available */
+  bool hugetlb_avail = rbipc_shm_hugetlb_available();
+  printf("  [hugetlb] Kernel HugeTLB 2MB availability: %d\n", (int)hugetlb_avail);
+
+  /* 2. Direct shm_create_ex with RBIPC_FLAG_HUGETLB: must succeed (backed by hugetlb or graceful fallback) */
+  int fd_huge = -1;
+  int rc = rbipc_shm_create_ex(NULL, 4096, RBIPC_SHM_ANON | RBIPC_FLAG_HUGETLB, 0, &fd_huge);
+  assert(rc == RBIPC_OK);
+  assert(fd_huge >= 0);
+  assert(rbipc_shm_seal(fd_huge) == RBIPC_OK);
+  rbipc_shm_close(fd_huge);
+
+  /* 3. Incompatible flags: named shm + RBIPC_FLAG_HUGETLB must return RBIPC_ERR_INVAL */
+  int fd_err = -1;
+  assert(rbipc_shm_create_ex("/named_hugetlb_test", 4096, RBIPC_SHM_NAMED | RBIPC_FLAG_HUGETLB, 0, &fd_err) == RBIPC_ERR_INVAL);
+
+  /* 4. Full ring buffer creation with RBIPC_FLAG_HUGETLB */
+  rbipc_ring_t *ring = NULL;
+  rc = rbipc_create_ex(NULL, 16, 64, RBIPC_FLAG_HUGETLB, 0, &ring);
+  assert(rc == RBIPC_OK);
+  assert(ring != NULL);
+
+  /* Verify rbipc_ring_is_hugetlb matches expected availability */
+  if (hugetlb_avail) {
+    assert(rbipc_ring_is_hugetlb(ring) == true);
+  } else {
+    assert(rbipc_ring_is_hugetlb(ring) == false);
+  }
+
+  /* Verify transmission and receiving through the ring works flawlessly */
+  void *wbuf = NULL;
+  uint64_t wticket = 0;
+  assert(rbipc_reserve_write(ring, 16, &wbuf, &wticket) == RBIPC_OK);
+  memcpy(wbuf, "HugeTLB Test Msg", 16);
+  assert(rbipc_commit_write(ring, wticket, 16) == RBIPC_OK);
+
+  const void *rbuf = NULL;
+  uint32_t rlen = 0;
+  uint64_t rticket = 0;
+  assert(rbipc_read_acquire(ring, &rbuf, &rlen, &rticket) == RBIPC_OK);
+  assert(rlen == 16);
+  assert(memcmp(rbuf, "HugeTLB Test Msg", 16) == 0);
+  assert(rbipc_read_release(ring, rticket) == RBIPC_OK);
+
+  rbipc_detach(ring);
+
+  /* 5. rbipc_create_ex with invalid flag combination (named + hugetlb) */
+  rbipc_ring_t *err_ring = NULL;
+  assert(rbipc_create_ex("/named_huge", 16, 64, RBIPC_SHM_NAMED | RBIPC_FLAG_HUGETLB, 0, &err_ring) == RBIPC_ERR_INVAL);
+}
+
 int main(void) {
   printf("[test_unit_shm] Running tests...\n");
   test_layout_calculation();
   test_shm_lifecycle();
   test_shm_permissions_and_umask();
+  test_shm_hugetlb_support_and_fallback();
   printf("[test_unit_shm] All tests passed!\n");
   return 0;
 }
