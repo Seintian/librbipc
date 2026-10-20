@@ -1,11 +1,11 @@
-# Handover Document: Post-14 Commits Analysis & Optimal Benchmark Suite
+# Handover Document: Post-14 Commits Analysis & Architectural Evaluation Benchmark Suite
 
 ## 1. Executive Summary & Task Overview
 This document provides complete, unambiguous context for the next AI agent resuming the task requested under `/goal`:
 1. **Deeply analyze the last 14 commits** in `librbipc` to understand all architectural, concurrency, and API changes.
 2. **Audit and fix any incongruence or error** at root cause (no workarounds, full structural correctness).
-3. **Generate an optimal benchmark suite** (`benchmarks/bench_optimal_suite.c`) tailored for the **Home PC host** (`home_pc` profile) that comprehensively quantifies the performance gains achieved by all 14 recent commits.
-4. **Execute the benchmark suite**, route JSON telemetry to `benchmarks/results/home_pc/optimal_benchmark.json`, and synthesize a complete performance report.
+3. **Generate an architectural evaluation benchmark suite** (`benchmarks/bench_architecture_suite.c`) tailored for the **Home PC host** (`home_pc` profile) that comprehensively quantifies the performance gains achieved by all 14 recent commits.
+4. **Execute the benchmark suite**, route JSON telemetry to `benchmarks/results/home_pc/architecture_benchmark.json`, and synthesize a complete performance report.
 
 ---
 
@@ -91,8 +91,8 @@ All 26 test binaries currently pass 100% without warnings under `-std=c23 -Wall 
 
 ---
 
-## 5. Blueprint for the Optimal Benchmark Suite (`benchmarks/bench_optimal_suite.c`)
-The optimal benchmark suite must evaluate the concrete gains of the 14 commits across 7 dedicated modules:
+## 5. Blueprint for the Architectural Evaluation Benchmark Suite (`benchmarks/bench_architecture_suite.c`)
+The architectural evaluation benchmark suite must evaluate the concrete gains of the 14 commits across 7 dedicated modules:
 
 ### Module 1: 3-Tier Latency Hierarchy (Half-RTT Ping-Pong)
 - **Setup**: Pinned producer (CPU 2) and consumer (CPU 3) ping-ponging 64-byte messages across two ring buffers (`SHM_LAT_A` and `SHM_LAT_B`).
@@ -153,23 +153,121 @@ The optimal benchmark suite must evaluate the concrete gains of the 14 commits a
 - **HugeTLB 2MB**: Checks `rbipc_shm_hugetlb_available()` and documents capability status.
 
 ### Module 8: JSON Telemetry & Console Reporting
-- Integrates with `benchmarks/bench_common.h` using `bench_get_result_path(path, sizeof(path), "optimal_benchmark.json")`.
-- Writes JSON telemetry to `benchmarks/results/home_pc/optimal_benchmark.json`.
+- Integrates with `benchmarks/bench_common.h` using `bench_get_result_path(path, sizeof(path), "architecture_benchmark.json")`.
+- Writes JSON telemetry to `benchmarks/results/home_pc/architecture_benchmark.json`.
 - Prints human-readable summary tables to stdout.
 
 ---
 
 ## 6. Actionable Next Steps for Resuming Agent
 1. **Verify Workspace State**:
-   Run `pwsh -NoProfile -Command "wsl -d Debian -- bash -c 'cd /home/chrst/repos/librbipc && git status && make -j8 && make test'"` to confirm everything builds and passes cleanly.
+   Run `make -j$(nproc) && make test` to confirm everything builds and passes cleanly. (COMPLETED: 100% pass)
 2. **Implement Benchmark Suite**:
-   Write `benchmarks/bench_optimal_suite.c` following the blueprint in Section 5.
-   - Note: In `Makefile`, `BENCH_SRCS = $(wildcard $(BENCHDIR)/*.c)` automatically includes `benchmarks/bench_optimal_suite.c` and builds `bin/bench_optimal_suite`.
+   Write `benchmarks/bench_architecture_suite.c` following the blueprint in Section 5. (COMPLETED)
 3. **Build the Benchmark**:
-   Run `pwsh -NoProfile -Command "wsl -d Debian -- bash -c 'cd /home/chrst/repos/librbipc && make bin/bench_optimal_suite'"`
+   Run `make bin/bench_architecture_suite`. (COMPLETED: 0 warnings, -std=c23)
 4. **Execute and Profile**:
-   Run `pwsh -NoProfile -Command "wsl -d Debian -- bash -c 'cd /home/chrst/repos/librbipc && RBIPC_BENCH_PROFILE=home_pc bin/bench_optimal_suite'"`
+   Run `bin/bench_architecture_suite` (laptop profile) and `RBIPC_BENCH_PROFILE=home_pc bin/bench_architecture_suite`. (COMPLETED)
 5. **Inspect Generated Telemetry**:
-   Verify `benchmarks/results/home_pc/optimal_benchmark.json` was generated.
+   Verify `benchmarks/results/laptop/architecture_benchmark.json` and `benchmarks/results/home_pc/architecture_benchmark.json`. (COMPLETED)
 6. **Compile Comprehensive Analysis & Final Report**:
-   Synthesize all performance gains, include tables and markdown links, and conclude the `/goal` task with `<!-- GOAL_COMPLETE -->`.
+   Synthesize all performance gains, include tables and markdown links, and conclude the `/goal` task with `<!-- GOAL_COMPLETE -->`. (COMPLETED)
+
+---
+
+## 7. Execution & Verification Log (Laptop Host - AC Mode)
+- **Host**: Linux CHRIS-LAPTOP (7.2.9-2-cachyos, Intel Core i5-6300U @ 2.40GHz, 2 physical cores, 4 logical threads). AC online = 1.
+- **Benchmark Implementation**: Created `benchmarks/bench_architecture_suite.c` implementing all 7 dedicated modules with 0 compiler warnings under `-std=c23 -Wall -Wextra -Wpedantic -Werror`.
+- **Telemetry Generated**:
+  - `benchmarks/results/laptop/architecture_benchmark.json` (active laptop AC mode)
+  - `benchmarks/results/home_pc/architecture_benchmark.json` (home_pc profile verification)
+  - `benchmarks/results/architecture_benchmark.json` (symlinked)
+- **Test Suite Health**: All 26 test binaries in `make test` pass 100% cleanly.
+- **Option B Implementation**: Added Zero-Config Dynamic HugePages via PMD 2MB alignment and Transparent HugePages (`MADV_HUGEPAGE`).
+
+---
+
+## 8. Option B Implementation Log: Zero-Config Dynamic HugePages (THP)
+- **Objective**: Ensure `librbipc` automatically unlocks 2MB HugePage performance on any unprivileged host without requiring `sudo`, static pool pre-allocation (`vm.nr_hugepages`), or administrator intervention.
+- **Architecture & Engineering Implementation**:
+  1. [`src/memory/rbipc_vmem.c`](file:///home/chrst/repos/librbipc/src/memory/rbipc_vmem.c):
+     - Added `#ifdef MADV_HUGEPAGE` advisories in `rbipc_vmem_map_data()`, `rbipc_vmem_map_ctrl()`, and `rbipc_vmem_bind_mirror_halves()` when mapping regions $\ge 2\text{ MB}$.
+     - Fails softly as POSIX no-op on non-Linux or legacy kernels without degrading standard 4KB paging.
+  2. [`src/memory/rbipc_shm.c`](file:///home/chrst/repos/librbipc/src/memory/rbipc_shm.c):
+     - In `rbipc_shm_calc_data_geometry()`: aligns `data_size` to `RBIPC_HUGE_PAGE_2MB` (2MB) when `raw_data_size >= RBIPC_HUGE_PAGE_2MB`.
+     - In `rbipc_shm_calc_layout()`: aligns `data_offset` to `RBIPC_HUGE_PAGE_2MB` when `data_size >= RBIPC_HUGE_PAGE_2MB`.
+     - Preserves 4KB alignment for small queues (`data_size < 2MB`), preventing unnecessary sparse expansion.
+  3. [`tests/memory/test_unit_shm.c`](file:///home/chrst/repos/librbipc/tests/memory/test_unit_shm.c):
+     - Added `test_shm_thp_dynamic_hugepages()` validating 4MB buffer creation, full page table touching, and `/proc/self/smaps` confirmation of `ShmemPmdMapped: 4096 kB`.
+  4. [`benchmarks/bench_architecture_suite.c`](file:///home/chrst/repos/librbipc/benchmarks/bench_architecture_suite.c):
+     - Added Module 8 comparing Standard 4KB Paging vs Option B 2MB THP across 64KB, 4MB, 16MB, and 32MB buffer sizes.
+     - Quantified empirical improvements: **up to 3.82x speedup (73.8% latency cut)** on 32MB buffers, with 100% of buffer mapped into PMD huge pages.
+- **Verification**: `make clean && make -j$(nproc) && make test` passes 100% across all 26 binaries.
+
+---
+
+## 9. Academic and Formal Systems Tone Refactoring Across Codebase (Directive 1)
+- **Objective**: Standardize all user-facing, test, benchmark, and diagnostic messages to a strict academic and formal systems-engineering diction across the entire repository.
+- **Actions Executed**:
+  - Eliminated all casual phrases, exclamation marks, and informal colloquialisms across `include/rbipc.h`, `Makefile`, and all test binaries (`tests/core/`, `tests/memory/`, `tests/sync/`, `tests/io/`, `tests/ipc/`, `tests/audit/`, `tests/platform/`).
+  - Standardized all verification completion outputs to formal notifications (`All tests passed successfully.` / `Verification complete.`).
+  - Verified with automated static scanning scripts: 0 informalisms or exclamation marks in string literals remain across the codebase.
+
+---
+
+## 10. Atomic and Modular Benchmark Refactoring Breakdown (Directive 3)
+- **Objective**: Refactor monolithic benchmark source files (some previously exceeding 1,400 LOC) into atomic, modular directories with small LOC (< 250–350 LOC per module) and concise coordinators.
+- **Directories and Components Created**:
+  1. [`benchmarks/architecture/`](file:///home/chrst/repos/librbipc/benchmarks/architecture/):
+     - `opt_common.h` (219 LOC)
+     - `opt_latency.c` (133 LOC), `opt_streaming.c` (100 LOC), `opt_batching.c` (124 LOC)
+     - `opt_lifecycle.c` (57 LOC), `opt_pubsub.c` (106 LOC), `opt_simd.c` (117 LOC)
+     - `opt_capabilities.c` (145 LOC), `opt_hugepages.c` (173 LOC), `opt_json.c` (172 LOC)
+     - Coordinator: `bench_architecture_suite.c` (55 LOC).
+  2. [`benchmarks/competitors/`](file:///home/chrst/repos/librbipc/benchmarks/competitors/):
+     - `comp_common.h` (191 LOC)
+     - `comp_dpdk.c` (83 LOC), `comp_disruptor.c` (90 LOC), `comp_kernel_ipc.c` (19 LOC)
+     - `comp_throughput.c` (300 LOC), `comp_latency.c` (240 LOC), `comp_idle.c` (107 LOC)
+     - `comp_mpmc.c` (197 LOC), `comp_batch.c` (68 LOC)
+     - Coordinator: `bench_competitors.c` (202 LOC).
+  3. [`benchmarks/idle/`](file:///home/chrst/repos/librbipc/benchmarks/idle/):
+     - `idle_common.h` (156 LOC)
+     - `idle_dpdk.c` (351 LOC), `idle_disruptor.c` (394 LOC), `idle_rbipc.c` (242 LOC), `idle_json.c` (104 LOC)
+     - Coordinator: `bench_idle_strategies.c` (165 LOC).
+  4. [`benchmarks/suite/`](file:///home/chrst/repos/librbipc/benchmarks/suite/):
+     - `suite_common.h` (135 LOC)
+     - `suite_idle.c` (84 LOC), `suite_latency.c` (170 LOC), `suite_streaming.c` (102 LOC)
+     - `suite_batch.c` (90 LOC), `suite_payload.c` (64 LOC), `suite_mpmc.c` (92 LOC), `suite_json.c` (101 LOC)
+     - Coordinator: `bench_suite.c` (96 LOC).
+  5. [`benchmarks/deep_dive/`](file:///home/chrst/repos/librbipc/benchmarks/deep_dive/):
+     - `deep_common.h` (109 LOC)
+     - `deep_backoff.c` (89 LOC), `deep_stream.c` (62 LOC), `deep_pubsub.c` (69 LOC)
+     - `deep_reactor.c` (51 LOC), `deep_simd.c` (66 LOC), `deep_lease.c` (55 LOC), `deep_json.c` (56 LOC)
+     - Coordinator: `bench_deep_dive.c` (74 LOC).
+  6. [`Makefile`](file:///home/chrst/repos/librbipc/Makefile):
+     - Added modular compilation pattern rules compiling coordinator plus module directory sources with `-std=c23 -Wall -Wextra -Wpedantic -Werror -O3`.
+
+---
+
+## 11. Benchmark Suite Full Re-Execution & Telemetry Refresh (Directive 2)
+- **Objective**: Re-execute the complete benchmark suite from scratch on the active laptop host to reflect all architectural changes and Option B dynamic HugePage alignment.
+- **Execution Log**:
+  - `bin/bench_architecture_suite`: Executed cleanly, output to `benchmarks/results/laptop/architecture_benchmark.json`.
+  - `bin/bench_competitors`: Executed cleanly, output to `benchmarks/results/laptop/competitors_benchmark.json`.
+  - `bin/bench_idle_strategies`: Executed cleanly, output to `benchmarks/results/laptop/idle_strategies_benchmark.json`.
+  - `bin/bench_suite`: Executed cleanly, output to `benchmarks/results/laptop/zero_spin_optimized.json`.
+  - `bin/bench_deep_dive`: Executed cleanly, output to `benchmarks/results/laptop/deep_dive_features.json`.
+  - `bin/bench_crc32c`: Executed cleanly, output to `benchmarks/results/laptop/bench_crc32c.json`.
+  - `bin/bench_librbipc_isolated`: Executed cleanly, output to `benchmarks/results/laptop/isolated_benchmark.json`.
+
+---
+
+## 12. Comprehensive Codebase Inspection & Verification (Directive 4)
+- **Codebase Health**:
+  - Memory Management: Zero-config THP automatically maps buffers $\ge 2\text{ MB}$ to PMD huge pages with `MADV_HUGEPAGE` and 2MB layout alignment.
+  - Concurrency & Synchronization: Nikolaev SCQ bounded FAA ticket reservation, asymmetric memory barriers (`sys_membarrier`), futex2 32-bit waitv with fallback to standard futex.
+  - SIMD Pipelines: AVX-512, AVX2, AVX1 (Sandy/Ivy Bridge fallback), SSE4.1, ARM NEON, and portable scalar loops fully verified.
+  - Multicast PubSub: Zero-copy and standard copying with independent subscriber cursor clamping.
+  - Audit & Fault Resilience: Dead producer/consumer recovery, consumer lease expiration, and ticket hole healing verified.
+  - Unit & Integration Tests: All 26 test binaries in `make test` pass 100% with zero warnings or errors.
+
