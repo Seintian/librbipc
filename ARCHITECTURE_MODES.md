@@ -8,7 +8,7 @@ This document provides the definitive architectural specification of execution m
 
 `librbipc` implements an orthogonal, multi-dimensional configuration model allowing systems engineers to fine-tune Inter-Process Communication (IPC) across three primary axes:
 
-```
+```txt
                           librbipc Configuration Model
                                        |
         +------------------------------+------------------------------+
@@ -27,9 +27,10 @@ This document provides the definitive architectural specification of execution m
 ### 2.1 Tier 1: Zero-Trust Process Isolation Mode (`flags = 0`, Default)
 
 #### Core Microarchitectural Mechanism
+
 Tier 1 operates under an adversarial assumption where peer processes may crash, stall indefinitely, or fail to honor protocol invariants. Every slot lifecycle transition is audited through explicit operating system process identifiers (`pid_t`), atomic state transitions (`EMPTY` $\to$ `RESERVING` $\to$ `RESERVED` $\to$ `COMMITTED` $\to$ `ACQUIRED` $\to$ `POISONED`), and monotonic lease deadlines.
 
-```
+```txt
        Tier 1 Slot Layout (64-byte Cache-Line Aligned)
 +-----------------------+------------+------------+---------------+---------------+
 | Sequence Word (64b)   | State (4b) | Len (32b)  | Prod PID (32b)| Cons PID (32b)|
@@ -45,16 +46,19 @@ Tier 1 operates under an adversarial assumption where peer processes may crash, 
 5. **Dead-Peer Detection**: Audits peer liveness via Linux 5.3+ `pidfd_open(2)` + `poll(2)` (immune to PID recycling) or POSIX `kill(pid, 0)`. Orphaned slots from crashed producers are poisoned (`RBIPC_SLOT_POISONED`), while dead consumer slots are recovered.
 
 #### Operational Contexts
+
 - Multi-tenant architectures and untrusted client-server processes.
 - Long-running system daemons hosting third-party plugins or microservices across privilege boundaries.
 - Resilient message queues where consumer deadlocks must be automatically reclaimed via leases.
 
 #### Paired API Functions & Features
+
 - **Bounded Leases**: `rbipc_set_lease_timeout()`, `rbipc_revoke_expired_leases()`.
 - **Reservation Rollback**: `rbipc_abort_write()` (safely poisons slot if serialization fails).
 - **Crash Recovery & Forensics**: `rbipc_get_slot_stats()`, `rbipc_audit_check_and_heal_ticket_hole()`, CLI tool `bin/rbipc_stat --audit`.
 
 #### Anti-Patterns & Caveats
+
 - **Sub-100ns Latency Budgets**: The 13 memory stores per round-trip and lease timestamp loads impose store-buffer drain latencies incompatible with ultra-low-latency tick matching.
 - **Tightly-Coupled Threads**: Running Tier 1 inside a single process adds unnecessary PID tracking overhead.
 
@@ -62,7 +66,8 @@ Tier 1 operates under an adversarial assumption where peer processes may crash, 
 
 ### 2.2 Tier 2: Trusted Mode (Pure Vyukov Sequence Synchronization, `RBIPC_FLAG_TRUSTED`)
 
-#### Core Microarchitectural Mechanism
+#### 2.2 Core Microarchitectural Mechanism
+
 Tier 2 implements Dmitriy Vyukov's turn-based MPMC sequence algorithm. It assumes cooperating processes within the same trust boundary. Process registration (`producer_pid`, `consumer_pid`) and intermediate state validation (`RESERVING`, `ACQUIRED`) are completely bypassed.
 
 1. **Write Reservation (`rbipc_reserve_write`)**: Zero descriptor stores. Ticket claimed via wait-free `atomic_fetch_add` or bounded CAS.
@@ -70,23 +75,26 @@ Tier 2 implements Dmitriy Vyukov's turn-based MPMC sequence algorithm. It assume
 3. **Read Acquisition (`rbipc_read_acquire`)**: Direct integer comparison (`seq == ticket + 1`). Reads `slot->len`. Zero descriptor stores.
 4. **Read Release (`rbipc_read_release`)**: Atomic release store to `slot->sequence = ticket + capacity` (**1 store total**).
 
-```
+```txt
 Round-Trip Descriptor Stores: Tier 1 (13 stores) vs. Tier 2 (3 stores) [-77% Memory Traffic]
 ```
 
-#### Operational Contexts
+#### 2.2 Operational Contexts
+
 - High-Frequency Trading (HFT) gateways communicating with matching engines on the same physical host.
 - Intra-process thread communication (lock-free actor queues, worker thread pools).
 - High-bandwidth video frame or machine learning tensor pipelines where crash recovery is managed by external process supervisors (e.g., systemd, Kubernetes).
 - Message payloads exceeding 4,095 bytes (supports full 32-bit `slot->len` up to 4 GiB).
 
-#### Paired API Functions & Features
+#### 2.2 Paired API Functions & Features
+
 - **Zero-Copy Single-Slot I/O**: `rbipc_reserve_write()`, `rbipc_commit_write()`, `rbipc_read_acquire()`, `rbipc_read_release()`.
 - **Dedicated Core Polling**: `RBIPC_WAIT_ZERO_SPIN` or `RBIPC_WAIT_ADAPTIVE` with CPU core affinity (`pthread_setaffinity_np`).
 - **Cache-Bypassing Streaming Stores**: `rbipc_write_stream()`, `rbipc_stream_copy()` (AVX2 `_mm256_stream_si256` avoiding cache pollution on large payloads).
 - **HugePage Alignment**: Combine with `RBIPC_FLAG_HUGETLB` for buffers $\ge 4\text{ MB}$.
 
-#### Anti-Patterns & Caveats
+#### 2.2 Anti-Patterns & Caveats
+
 - **Untrusted Peers**: If a producer or consumer process terminates unexpectedly while holding a slot, the slot sequence will remain locked, blocking the queue without automated healing.
 - **Payloads $\le 4\text{ KiB}$ in High-Rate Batches**: Prefer Combined Tier 2+3 for small payloads.
 
@@ -94,10 +102,11 @@ Round-Trip Descriptor Stores: Tier 1 (13 stores) vs. Tier 2 (3 stores) [-77% Mem
 
 ### 2.3 Tier 3: Packed Descriptor Mode (`RBIPC_FLAG_PACKED`)
 
-#### Core Microarchitectural Mechanism
+#### 2.3 Core Microarchitectural Mechanism
+
 Tier 3 unifies the monotonic sequence turn counter, message payload length, and slot lifecycle state into a single 64-bit integer (`uint64_t`).
 
-```
+```txt
 +------------------------------------------------+--------------+-------+
 | Bits [63:16] (48 bits)                         | Bits [15:4]  | [3:0] |
 | Monotonic Sequence Turn Counter                | Length (12b) | State |
@@ -110,17 +119,20 @@ Tier 3 unifies the monotonic sequence turn counter, message payload length, and 
 3. **Shifted SIMD Vector Turn Scanning**: 256-bit AVX2 vector instructions evaluate 4 slots simultaneously via `_mm256_srli_epi64` and `_mm256_cmpeq_epi64`, achieving **514.70 Mslots/s** inspection rates.
 4. **Constraint**: Constrains payload lengths to $0 \le \text{len} \le 4{,}095$ bytes (`RBIPC_PACKED_MAX_LEN`).
 
-#### Operational Contexts
+#### 2.3 Operational Contexts
+
 - 1-to-N Multicast Publish-Subscribe topic feeds (market data dissemination, telemetry broadcasting).
 - IoT and telemetry metrics aggregation pipelines.
 - Small financial RPC commands and tick distribution ($\le 4\text{ KiB}$).
 
-#### Paired API Functions & Features
+#### 2.3 Paired API Functions & Features
+
 - **Multicast Publish-Subscribe**: `rbipc_publish()`, `rbipc_publish_batch()`, `rbipc_sub_poll()`, `rbipc_sub_poll_batch()`.
 - **B-Queue Vector Batching**: `rbipc_reserve_write_batch()`, `rbipc_commit_write_batch()`.
 - **SIMD Hardware Scanning**: Evaluated automatically via internal AVX2/AVX-512 engines.
 
-#### Anti-Patterns & Caveats
+#### 2.3 Anti-Patterns & Caveats
+
 - **Payloads > 4,095 Bytes**: Passing `slot_size > 4095` to `rbipc_create_ex` returns `RBIPC_ERR_INVAL`.
 - **Pure Scalar Spin-Loops without Batching**: Re-evaluating `seq >> 16` inside an un-batched scalar spinloop adds 1 cycle of ALU dependency compared to Tier 2.
 
@@ -128,7 +140,8 @@ Tier 3 unifies the monotonic sequence turn counter, message payload length, and 
 
 ### 2.4 Combined Tier 2+3: Trusted & Packed Mode (`RBIPC_FLAG_TRUSTED | RBIPC_FLAG_PACKED`)
 
-#### Core Microarchitectural Mechanism
+#### 2.4 Core Microarchitectural Mechanism
+
 Combined Tier 2+3 represents the pinnacle of small-message IPC performance ($\le 4,095$ bytes). It fuses Tier 2's zero-metadata overhead with Tier 3's 64-bit composite descriptor:
 
 1. **Commit Fast-Path**: Exactly **1 atomic store** (`slot->sequence = packed`).
@@ -136,12 +149,14 @@ Combined Tier 2+3 represents the pinnacle of small-message IPC performance ($\le
 3. **Acquisition Fast-Path**: Zero redundant memory loads. The sequence loaded during the polling check is passed directly in a CPU register (`%rax`/`%rdx`) to extract payload length.
 4. **Cache Traffic**: 1 store on producer, 1 store on consumer (**2 total stores per round-trip**).
 
-#### Operational Contexts
+#### 2.4 Operational Contexts
+
 - Ultra-high throughput small-message pipelines ($\le 4\text{ KiB}$) requiring tens of millions of messages/second.
 - Financial exchange matching engines and order book dissemination.
 - High-rate packet processing (Vector Packet Processing / DPDK-adjacent pipelines).
 
-#### Paired API Functions & Features
+#### 2.4 Paired API Functions & Features
+
 - **B-Queue Batching**: `rbipc_reserve_write_batch()`, `rbipc_commit_write_batch()` (Batch sizes 16, 32, 64 achieve **35.34 Mops/s** and **28.3 ns latency**).
 - **Core Pinning**: Isolate producer and consumer threads on dedicated CPU cores (`sched_setaffinity`).
 
@@ -150,6 +165,7 @@ Combined Tier 2+3 represents the pinnacle of small-message IPC performance ($\le
 ## 3. Memory Backing & Wait Policy Dimensions
 
 ### 3.1 Shared Memory Backing
+
 | Backing Mode | Creation Flag | Mechanism | Best Paired With | Operational Context |
 | :--- | :--- | :--- | :--- | :--- |
 | **Anonymous memfd** (*Default*) | `RBIPC_SHM_ANON` | Linux `memfd_create`, sealed with `F_ADD_SEALS`, zero `/dev/shm` footprint. | `rbipc_send_fd()`, `rbipc_recv_fd_ex()` | Containerized workloads, sandboxed microservices, secure IPC crossing parent-child or socket connections. |
@@ -157,6 +173,7 @@ Combined Tier 2+3 represents the pinnacle of small-message IPC performance ($\le
 | **HugeTLB & Dynamic 2MB THP** | `RBIPC_FLAG_HUGETLB` | 2MB HugeTLB with dynamic Transparent HugePage fallback. | Rings $\ge 4\text{ MB}$, `rbipc_write_stream()` | High-bandwidth streaming buffers (4 MB to 32 MB+). Cuts TLB misses, yielding up to **4.51x speedup (+77.8% latency reduction)**. |
 
 ### 3.2 Wait & Backoff Synchronization Policies
+
 | Policy | Configuration Flag | Backoff Ladder | Idle CPU | Best Paired With |
 | :--- | :--- | :--- | :--- | :--- |
 | **Adaptive Hybrid** (*Default*) | `RBIPC_WAIT_ADAPTIVE` | 48-iteration micro-pause $\to$ 5 µs C0.1 wait $\to$ `sched_yield` $\to$ `SYS_futex` sleep. | 0.13% | General production multi-threaded workloads with mixed burst and idle periods. |
@@ -312,16 +329,19 @@ void run_vector_batch_pipeline(const char *shm_name) {
 ## 6. Microarchitectural Analysis & Anti-Patterns
 
 ### 6.1 Store-Buffer Drain Latency & Cache-Line Dirtying
+
 - Every memory store instruction issued by a CPU core must reside in the hardware store buffer until committed to the L1 data cache.
 - In **Tier 1 Zero-Trust**, updating `producer_pid`, `state`, `sequence`, `consumer_pid`, and `timestamp` requires **13 distinct stores**. This creates store-buffer backpressure and generates frequent Read-For-Ownership (RFO) invalidation cycles across core caches via the MESI/MOESI protocol.
 - In **Pure Tier 2** and **Combined Tier 2+3**, stores are reduced to **2 or 3 per round trip**, minimizing RFO invalidations and store-buffer stalls.
 
 ### 6.2 Instruction-Level Parallelism (ILP) in Packed Processing
+
 - While Tier 3 introduces a logical bit-shift (`seq >> 16`), modern out-of-order execution cores hide this latency when processing **batches**:
   - Independent slot descriptors evaluate simultaneously across CPU execution ports 0, 1, 5, and 6.
   - In batch sizes $\ge 16$, Combined Tier 2+3 achieves **35.34 Mops/s**, outperforming all other modes.
 
 ### 6.3 When NOT to Use Each Mode (Anti-Pattern Matrix)
+
 1. **Do NOT use Tier 2 or Tier 2+3** when communicating with untrusted, third-party, or unstable processes that could terminate unexpectedly without releasing slots.
 2. **Do NOT use Tier 3 or Tier 2+3** when message payloads exceed 4,095 bytes (use Tier 1 or Tier 2).
 3. **Do NOT use Tier 1** in high-frequency trading matching engines or pinned intra-thread pipelines where the latency budget is strictly sub-100 nanoseconds.
