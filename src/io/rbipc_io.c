@@ -59,27 +59,30 @@ rbipc_io_complete_write_reservation(rbipc_ring_t *RBIPC_RESTRICT ring,
  */
 RBIPC_INLINE int rbipc_io_complete_read_acquisition(
     const rbipc_ring_t *RBIPC_RESTRICT ring, rbipc_slot_t *RBIPC_RESTRICT slot,
-    uint64_t ticket, const void **RBIPC_RESTRICT out_buf,
+    uint64_t ticket, uint64_t seq, const void **RBIPC_RESTRICT out_buf,
     uint32_t *RBIPC_RESTRICT out_len, uint64_t *RBIPC_RESTRICT out_ticket) {
   *out_ticket = ticket;
 
-  if (RBIPC_UNLIKELY(ring->is_packed)) {
-    uint64_t packed = atomic_load_explicit(&slot->sequence, memory_order_acquire);
-    uint32_t state = rbipc_slot_unpack_state(packed);
+  if (ring->is_trusted) {
+    *out_buf = rbipc_io_calc_slot_ptr(ring, ticket);
+    if (ring->is_packed) {
+      *out_len = rbipc_slot_unpack_len(seq);
+    } else {
+      *out_len = atomic_load_explicit(&slot->len, memory_order_acquire);
+    }
+    rbipc_io_prefetch_read_next(ring, ticket + 1);
+    return RBIPC_OK;
+  }
+
+  if (ring->is_packed) {
+    uint32_t state = rbipc_slot_unpack_state(seq);
     if (RBIPC_UNLIKELY(state == RBIPC_SLOT_POISONED)) {
       *out_buf = NULL;
       *out_len = 0;
       return RBIPC_ERR_POISONED;
     }
     *out_buf = rbipc_io_calc_slot_ptr(ring, ticket);
-    *out_len = rbipc_slot_unpack_len(packed);
-    rbipc_io_prefetch_read_next(ring, ticket + 1);
-    return RBIPC_OK;
-  }
-
-  if (RBIPC_UNLIKELY(ring->is_trusted)) {
-    *out_buf = rbipc_io_calc_slot_ptr(ring, ticket);
-    *out_len = atomic_load_explicit(&slot->len, memory_order_acquire);
+    *out_len = rbipc_slot_unpack_len(seq);
     rbipc_io_prefetch_read_next(ring, ticket + 1);
     return RBIPC_OK;
   }
@@ -461,11 +464,17 @@ int rbipc_commit_write(rbipc_ring_t *RBIPC_RESTRICT ring, uint64_t ticket,
   rbipc_slot_t *slot =
       (rbipc_slot_t *)RBIPC_ASSUME_ALIGNED(&ring->slots[idx], RBIPC_CACHE_LINE);
 
-  if (RBIPC_UNLIKELY(ring->is_packed)) {
+  if (ring->is_trusted) {
+    if (ring->is_packed) {
+      uint64_t packed =
+          rbipc_slot_pack(ticket + 1, written_len, RBIPC_SLOT_COMMITTED);
+      atomic_store_explicit(&slot->sequence, packed, memory_order_release);
+    } else {
+      atomic_store_explicit(&slot->len, written_len, memory_order_relaxed);
+      atomic_store_explicit(&slot->sequence, ticket + 1, memory_order_release);
+    }
+  } else if (ring->is_packed) {
     rbipc_slot_commit_packed(slot, ticket, written_len);
-  } else if (RBIPC_UNLIKELY(ring->is_trusted)) {
-    atomic_store_explicit(&slot->len, written_len, memory_order_relaxed);
-    atomic_store_explicit(&slot->sequence, ticket + 1, memory_order_release);
   } else {
     rbipc_slot_commit(slot, ticket, written_len);
   }
@@ -555,7 +564,7 @@ int rbipc_read_acquire_timeout(rbipc_ring_t *RBIPC_RESTRICT ring,
             atomic_load_explicit(&slot->sequence, memory_order_acquire);
 
         if (RBIPC_LIKELY(rbipc_slot_is_ready_any(seq, t, ring->is_packed))) {
-          return rbipc_io_complete_read_acquisition(ring, slot, t, out_buf,
+          return rbipc_io_complete_read_acquisition(ring, slot, t, seq, out_buf,
                                                     out_len, ticket);
         }
 
@@ -573,7 +582,7 @@ int rbipc_read_acquire_timeout(rbipc_ring_t *RBIPC_RESTRICT ring,
           }
           seq = atomic_load_explicit(&slot->sequence, memory_order_acquire);
         }
-        return rbipc_io_complete_read_acquisition(ring, slot, t, out_buf,
+        return rbipc_io_complete_read_acquisition(ring, slot, t, seq, out_buf,
                                                   out_len, ticket);
       }
 
@@ -600,7 +609,7 @@ int rbipc_read_acquire_timeout(rbipc_ring_t *RBIPC_RESTRICT ring,
 
     if (RBIPC_LIKELY(rbipc_slot_is_ready_any(seq, t, ring->is_packed))) {
       if (RBIPC_LIKELY(rbipc_io_try_claim_read_ticket(hdr, &t, 1))) {
-        return rbipc_io_complete_read_acquisition(ring, slot, t, out_buf,
+        return rbipc_io_complete_read_acquisition(ring, slot, t, seq, out_buf,
                                                   out_len, ticket);
       }
       rbipc_cpu_pause();
@@ -651,10 +660,16 @@ int rbipc_read_release(rbipc_ring_t *RBIPC_RESTRICT ring, uint64_t ticket) {
       &ring->slots[ticket & mask], RBIPC_CACHE_LINE);
 
   bool released = true;
-  if (RBIPC_UNLIKELY(ring->is_packed)) {
+  if (ring->is_trusted) {
+    if (ring->is_packed) {
+      uint64_t next_packed =
+          rbipc_slot_pack(ticket + cap, 0, RBIPC_SLOT_EMPTY);
+      atomic_store_explicit(&slot->sequence, next_packed, memory_order_release);
+    } else {
+      atomic_store_explicit(&slot->sequence, ticket + cap, memory_order_release);
+    }
+  } else if (ring->is_packed) {
     released = rbipc_slot_release_packed(slot, ticket, cap);
-  } else if (RBIPC_UNLIKELY(ring->is_trusted)) {
-    atomic_store_explicit(&slot->sequence, ticket + cap, memory_order_release);
   } else {
     pid_t expected_pid =
         (atomic_load_explicit(&hdr->lease_timeout_ns, memory_order_relaxed) > 0)
