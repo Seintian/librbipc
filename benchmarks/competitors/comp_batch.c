@@ -22,7 +22,7 @@ void run_bench_batch_scaling(FILE *json_fp, uint64_t batch_iters) {
         uint32_t batch = (uint32_t)bsizes[b];
         rbipc_ring_t *br = NULL;
         rbipc_destroy("/rbench_batch");
-        if (rbipc_create("/rbench_batch", RING_CAPACITY, 128, &br) == RBIPC_OK) {
+        if (rbipc_create_ex("/rbench_batch", RING_CAPACITY, 128, RBIPC_SHM_NAMED | RBIPC_FLAG_TRUSTED, 0660, &br) == RBIPC_OK) {
             rbipc_set_wait_policy(br, RBIPC_WAIT_ADAPTIVE);
             uint64_t total = batch_iters, iters = total / batch;
             uint64_t t0 = comp_get_ns();

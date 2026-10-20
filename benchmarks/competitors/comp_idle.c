@@ -80,7 +80,7 @@ void run_bench_idle_cpu(FILE *json_fp) {
     {
         rbipc_ring_t *ir = NULL;
         rbipc_destroy("/rbench_idle");
-        if (rbipc_create("/rbench_idle", RING_CAPACITY, 72, &ir) == RBIPC_OK) {
+        if (rbipc_create_ex("/rbench_idle", RING_CAPACITY, 72, RBIPC_SHM_NAMED | RBIPC_FLAG_TRUSTED, 0660, &ir) == RBIPC_OK) {
             struct rusage ru0, ru1;
             getrusage(RUSAGE_SELF, &ru0);
             uint64_t t0 = comp_get_ns();

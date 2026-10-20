@@ -164,7 +164,7 @@ void run_bench_mpmc(FILE *json_fp, uint64_t mpmc_iters) {
 
     rbipc_ring_t *mpmc_r = NULL;
     rbipc_destroy("/rbench_mpmc");
-    if (rbipc_create("/rbench_mpmc", RING_CAPACITY, 128, &mpmc_r) == RBIPC_OK) {
+    if (rbipc_create_ex("/rbench_mpmc", RING_CAPACITY, 128, RBIPC_SHM_NAMED | RBIPC_FLAG_TRUSTED, 0660, &mpmc_r) == RBIPC_OK) {
         rbipc_set_wait_policy(mpmc_r, RBIPC_WAIT_ADAPTIVE);
         typedef struct { int np, nc; } cfg_t;
         cfg_t cfgs[] = { {1,1}, {2,2}, {4,2}, {4,4} };

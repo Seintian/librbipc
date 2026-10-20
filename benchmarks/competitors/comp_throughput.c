@@ -15,7 +15,7 @@ result_t bench_rbipc_tput(size_t msgsz, uint64_t iters, transfer_semantic_t mode
     uint32_t slot = (mode == TRANSFER_VALUE_COPY) ? (uint32_t)(msgsz + 64) : 64;
     uint32_t req_sz = (mode == TRANSFER_VALUE_COPY) ? (uint32_t)msgsz : (uint32_t)sizeof(uintptr_t);
     rbipc_destroy(shm);
-    if (rbipc_create(shm, RING_CAPACITY, slot, &rp) != RBIPC_OK ||
+    if (rbipc_create_ex(shm, RING_CAPACITY, slot, RBIPC_SHM_NAMED | RBIPC_FLAG_TRUSTED, 0660, &rp) != RBIPC_OK ||
         rbipc_attach(shm, &rc) != RBIPC_OK) return r;
     rbipc_set_wait_policy(rp, RBIPC_WAIT_ADAPTIVE);
     rbipc_set_wait_policy(rc, RBIPC_WAIT_ADAPTIVE);

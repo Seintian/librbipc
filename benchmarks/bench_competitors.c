@@ -29,7 +29,9 @@ int main(void) {
     printf("%s%s=== librbipc vs. DPDK rte_ring | LMAX Disruptor | POSIX mqueue | AF_UNIX DGRAM ===%s\n",
            COL_BOLD, COL_CYAN, COL_RESET);
     printf("%s%s    Cross-System Competing-Consumer IPC Benchmark%s\n", COL_BOLD, COL_CYAN, COL_RESET);
-    printf("%s%s    Evaluation Targets: DPDK, Linux Kernel, Disruptor-cpp, librbipc%s\n\n", COL_BOLD, COL_CYAN, COL_RESET);
+    printf("%s%s    Evaluation Targets: DPDK, Linux Kernel, Disruptor-cpp, librbipc%s\n", COL_BOLD, COL_CYAN, COL_RESET);
+    printf("%s%s    librbipc Mode: Tier 2 Trusted Mode (pure Vyukov turn sequence parity with DPDK/Disruptor)%s\n\n",
+           COL_BOLD, COL_GREEN, COL_RESET);
 
     char json_path[256];
     bench_get_result_path(json_path, sizeof(json_path), "competitors_benchmark.json");

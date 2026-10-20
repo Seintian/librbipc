@@ -12,8 +12,8 @@ result_t bench_rbipc_lat(uint64_t iters) {
     const char *sa = "/rbench_lat_a", *sb = "/rbench_lat_b";
     rbipc_ring_t *rp = NULL, *rc = NULL, *rp2 = NULL, *rc2 = NULL;
     rbipc_destroy(sa); rbipc_destroy(sb);
-    assert(rbipc_create(sa, 256, 72, &rp) == RBIPC_OK);
-    assert(rbipc_create(sb, 256, 72, &rp2) == RBIPC_OK);
+    assert(rbipc_create_ex(sa, 256, 72, RBIPC_SHM_NAMED | RBIPC_FLAG_TRUSTED, 0660, &rp) == RBIPC_OK);
+    assert(rbipc_create_ex(sb, 256, 72, RBIPC_SHM_NAMED | RBIPC_FLAG_TRUSTED, 0660, &rp2) == RBIPC_OK);
     assert(rbipc_attach(sa, &rc) == RBIPC_OK);
     assert(rbipc_attach(sb, &rc2) == RBIPC_OK);
     rbipc_set_wait_policy(rp, RBIPC_WAIT_ADAPTIVE);
