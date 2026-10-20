@@ -256,4 +256,4 @@ format:
 	} || echo "clang-format not found; install clang-format to run automatic formatting."
 
 clean:
-	rm -rf $(BUILDDIR) $(BINDIR) $(LIBDIR) compile_commands.json librbipc.pc *.gcda *.gcno *.gcov docs/html
+	rm -rf $(BUILDDIR) $(BINDIR) $(LIBDIR) compile_commands.json librbipc.pc *.gcda *.gcno *.gcov docs

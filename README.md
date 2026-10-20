@@ -124,6 +124,7 @@ librbipc/
 │   ├── inspect_codebase.py  # AST symbol visibility and export audit utility
 │   ├── librbipc.sym         # GNU linker version script (LIBRBIPC_1.0 symbol export whitelist)
 │   └── postprocess_docs.py  # Doxygen HTML asset bundler and navigation post-processor
+├── ARCHITECTURE_MODES.md    # Exhaustive execution modes, operational tiers, and C23 blueprints
 ├── AUDIT_REPORT.md          # Comprehensive engineering audit report, modularity, and verification
 ├── TECHNICAL_REPORT.md      # Unified architectural monograph, formal proofs, and empirical evaluation
 ├── TODO.md                  # Next-generation synchronization hierarchy specification and roadmap
@@ -370,7 +371,7 @@ Is this correct? **Yes, as a logical / virtual pointer exchange rate; No, as a p
 | **Bulk Streaming / Video / ML Tensors ($> 4\text{ KiB}$)** | **Tier 2** (`RBIPC_FLAG_TRUSTED` \| `RBIPC_FLAG_HUGETLB`) | `rbipc_write_stream()`, `rbipc_stream_copy()`, Option B 2MB THP alignment | Unlocks 32-bit length fields, avoids TLB miss stalls on multi-megabyte buffers (up to 4.51x speedup), and transfers at up to 19.8 GB/s via AVX2 non-temporal stores. |
 | **Battery / Edge / Quiescent Daemons** | **Tier 1 or Tier 2** + `RBIPC_WAIT_ZERO_SPIN` | `rbipc_set_wait_policy()`, `rbipc_read_acquire_timeout()`, `bin/rbipc_stat --watch` | Drops CPU utilization to **0.13% - 0.3%** when idle via kernel `futex` sleep, preventing core burn. |
 
-For the complete architectural monograph, microarchitectural cache analyses, and end-to-end C23 implementation patterns, see **[`docs/ARCHITECTURE_MODES.md`](docs/ARCHITECTURE_MODES.md)**.
+For the complete architectural monograph, microarchitectural cache analyses, and end-to-end C23 implementation patterns, see **[`ARCHITECTURE_MODES.md`](ARCHITECTURE_MODES.md)**.
 
 ---
 

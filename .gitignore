@@ -2,7 +2,7 @@
 build/
 bin/
 lib/
-docs/html/
+docs/
 *.o
 *.a
 *.so
