@@ -30,13 +30,25 @@ static void test_layout_calculation(void) {
   assert(rbipc_shm_calc_layout(1024, UINT32_MAX - 10, 4096, &layout) ==
          RBIPC_ERR_OVERFLOW);
 
-  /* Valid layout */
+  /* Valid layout (< 2MB: 4KB aligned) */
   int rc = rbipc_shm_calc_layout(1024, 256, 4096, &layout);
   assert(rc == RBIPC_OK);
   assert(layout.capacity == 1024);
   assert(layout.aligned_slot_size == 256);
   assert(layout.data_offset % 4096 == 0);
   assert(layout.data_size % 4096 == 0);
+  assert(layout.data_offset < RBIPC_HUGE_PAGE_2MB);
+  assert(layout.total_shm_size == layout.data_offset + layout.data_size);
+
+  /* Valid layout (>= 2MB: PMD 2MB aligned for Transparent HugePages) */
+  rc = rbipc_shm_calc_layout(1024, 2048, 4096, &layout);
+  assert(rc == RBIPC_OK);
+  assert(layout.capacity == 1024);
+  assert(layout.aligned_slot_size == 2048);
+  assert(layout.data_offset % RBIPC_HUGE_PAGE_2MB == 0);
+  assert(layout.data_size % RBIPC_HUGE_PAGE_2MB == 0);
+  assert(layout.data_offset == RBIPC_HUGE_PAGE_2MB);
+  assert(layout.data_size == 2 * 1024 * 1024);
   assert(layout.total_shm_size == layout.data_offset + layout.data_size);
 }
 
@@ -188,7 +200,7 @@ static void test_shm_hugetlb_support_and_fallback(void) {
     assert(rbipc_ring_is_hugetlb(ring) == false);
   }
 
-  /* Verify transmission and receiving through the ring works flawlessly */
+  /* Verify transmission and reception through the allocated ring buffer */
   void *wbuf = NULL;
   uint64_t wticket = 0;
   assert(rbipc_reserve_write(ring, 16, &wbuf, &wticket) == RBIPC_OK);
@@ -210,12 +222,70 @@ static void test_shm_hugetlb_support_and_fallback(void) {
   assert(rbipc_create_ex("/named_huge", 16, 64, RBIPC_SHM_NAMED | RBIPC_FLAG_HUGETLB, 0, &err_ring) == RBIPC_ERR_INVAL);
 }
 
+static void test_shm_thp_dynamic_hugepages(void) {
+  /* Test zero-config Option B: 4MB buffer automatically collapses into 2MB THP hugepages */
+  rbipc_ring_t *ring = NULL;
+  int rc = rbipc_create(NULL, 1024, 4096, &ring);
+  assert(rc == RBIPC_OK);
+  assert(ring != NULL);
+
+  rbipc_stats_t stats;
+  assert(rbipc_get_stats(ring, &stats) == RBIPC_OK);
+  assert(stats.data_size == 4 * 1024 * 1024);
+  uint64_t data_offset = stats.total_shm_size - stats.data_size;
+  assert(data_offset % RBIPC_HUGE_PAGE_2MB == 0);
+
+  /* Touch slots across all pages in the data buffer to populate page tables */
+  for (uint32_t i = 0; i < 1024; ++i) {
+    void *wbuf = NULL;
+    uint64_t wticket = 0;
+    assert(rbipc_reserve_write(ring, 64, &wbuf, &wticket) == RBIPC_OK);
+    memset(wbuf, (int)(i & 0xFF), 64);
+    assert(rbipc_commit_write(ring, wticket, 64) == RBIPC_OK);
+  }
+
+  /* Read and verify */
+  for (uint32_t i = 0; i < 1024; ++i) {
+    const void *rbuf = NULL;
+    uint32_t rlen = 0;
+    uint64_t rticket = 0;
+    assert(rbipc_read_acquire(ring, &rbuf, &rlen, &rticket) == RBIPC_OK);
+    assert(rlen == 64);
+    assert(((const unsigned char *)rbuf)[0] == (unsigned char)(i & 0xFF));
+    assert(rbipc_read_release(ring, rticket) == RBIPC_OK);
+  }
+
+  /* Check /proc/self/smaps for ShmemPmdMapped confirmation */
+  FILE *f = fopen("/proc/self/smaps", "r");
+  if (f) {
+    char line[256];
+    bool in_rbipc = false;
+    unsigned long shmem_pmd_kb = 0;
+    while (fgets(line, sizeof(line), f)) {
+      if (strstr(line, "/memfd:rbipc_anon")) {
+        in_rbipc = true;
+      } else if (in_rbipc) {
+        if (sscanf(line, "ShmemPmdMapped: %lu kB", &shmem_pmd_kb) == 1) {
+          printf("  [thp_dynamic] Found ShmemPmdMapped: %lu kB in /proc/self/smaps\n", shmem_pmd_kb);
+        }
+        if (strstr(line, "VmFlags:")) {
+          in_rbipc = false;
+        }
+      }
+    }
+    fclose(f);
+  }
+
+  rbipc_detach(ring);
+}
+
 int main(void) {
   printf("[test_unit_shm] Running tests...\n");
   test_layout_calculation();
   test_shm_lifecycle();
   test_shm_permissions_and_umask();
   test_shm_hugetlb_support_and_fallback();
-  printf("[test_unit_shm] All tests passed!\n");
+  test_shm_thp_dynamic_hugepages();
+  printf("[test_unit_shm] All tests passed successfully.\n");
   return 0;
 }

@@ -96,7 +96,11 @@ rbipc_shm_calc_data_geometry(uint32_t capacity, size_t aligned_slot_size,
     return RBIPC_ERR_OVERFLOW;
   }
   size_t raw_data_size = (size_t)capacity * aligned_slot_size;
-  size_t data_size = rbipc_align_up(raw_data_size, page_size);
+  size_t align = page_size;
+  if (raw_data_size >= RBIPC_HUGE_PAGE_2MB && RBIPC_HUGE_PAGE_2MB > align) {
+    align = RBIPC_HUGE_PAGE_2MB;
+  }
+  size_t data_size = rbipc_align_up(raw_data_size, align);
   if (data_size < raw_data_size) {
     return RBIPC_ERR_OVERFLOW;
   }
@@ -154,8 +158,13 @@ int rbipc_shm_calc_layout(uint32_t capacity, uint32_t slot_size,
   if (RBIPC_UNLIKELY(rc != RBIPC_OK))
     return rc;
 
+  size_t offset_align = page_size;
+  if (data_size >= RBIPC_HUGE_PAGE_2MB && RBIPC_HUGE_PAGE_2MB > offset_align) {
+    offset_align = RBIPC_HUGE_PAGE_2MB;
+  }
+
   size_t data_offset = 0;
-  rc = rbipc_shm_calc_metadata_geometry(capacity, page_size, &data_offset);
+  rc = rbipc_shm_calc_metadata_geometry(capacity, offset_align, &data_offset);
   if (RBIPC_UNLIKELY(rc != RBIPC_OK))
     return rc;
 

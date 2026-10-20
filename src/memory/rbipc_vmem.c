@@ -31,6 +31,12 @@ int rbipc_vmem_map_ctrl(int fd, size_t size, void ** RBIPC_RESTRICT out_map) {
         return RBIPC_ERR_SYS;
     }
 
+#ifdef MADV_HUGEPAGE
+    if (size >= RBIPC_HUGE_PAGE_2MB) {
+        (void)madvise(ctrl, size, MADV_HUGEPAGE);
+    }
+#endif
+
     *out_map = ctrl;
     return RBIPC_OK;
 }
@@ -58,6 +64,12 @@ int rbipc_vmem_map_data(int fd, size_t offset, size_t data_size, void ** RBIPC_R
     if (data == MAP_FAILED) {
         return RBIPC_ERR_SYS;
     }
+
+#ifdef MADV_HUGEPAGE
+    if (data_size >= RBIPC_HUGE_PAGE_2MB) {
+        (void)madvise(data, data_size, MADV_HUGEPAGE);
+    }
+#endif
 
     *out_data_map = data;
     return RBIPC_OK;
@@ -123,6 +135,13 @@ RBIPC_INLINE int rbipc_vmem_bind_mirror_halves(int fd, size_t offset, size_t dat
     if (m2 == MAP_FAILED) {
         return RBIPC_ERR_SYS;
     }
+
+#ifdef MADV_HUGEPAGE
+    if (data_size >= RBIPC_HUGE_PAGE_2MB) {
+        (void)madvise(m1, data_size, MADV_HUGEPAGE);
+        (void)madvise(m2, data_size, MADV_HUGEPAGE);
+    }
+#endif
 
     return RBIPC_OK;
 }
