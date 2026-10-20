@@ -68,6 +68,21 @@ $(BINDIR)/%: $(TESTDIR)/%.c $(STATIC_LIB) | $(BINDIR)
 	@mkdir -p $(dir $@)
 	$(CC) $(CFLAGS) $< $(STATIC_LIB) $(LDFLAGS) -o $@
 
+$(BINDIR)/bench_architecture_suite: $(BENCHDIR)/bench_architecture_suite.c $(wildcard $(BENCHDIR)/architecture/*.c) $(wildcard $(BENCHDIR)/architecture/*.h) $(BENCHDIR)/bench_common.h $(STATIC_LIB) | $(BINDIR)
+	$(CC) $(CFLAGS) -I$(BENCHDIR)/architecture $(filter %.c,$^) $(STATIC_LIB) $(LDFLAGS) -o $@
+
+$(BINDIR)/bench_competitors: $(BENCHDIR)/bench_competitors.c $(wildcard $(BENCHDIR)/competitors/*.c) $(wildcard $(BENCHDIR)/competitors/*.h) $(BENCHDIR)/bench_common.h $(STATIC_LIB) | $(BINDIR)
+	$(CC) $(CFLAGS) -I$(BENCHDIR)/competitors $(filter %.c,$^) $(STATIC_LIB) $(LDFLAGS) -o $@
+
+$(BINDIR)/bench_idle_strategies: $(BENCHDIR)/bench_idle_strategies.c $(wildcard $(BENCHDIR)/idle/*.c) $(wildcard $(BENCHDIR)/idle/*.h) $(BENCHDIR)/bench_common.h $(STATIC_LIB) | $(BINDIR)
+	$(CC) $(CFLAGS) -I$(BENCHDIR)/idle $(filter %.c,$^) $(STATIC_LIB) $(LDFLAGS) -o $@
+
+$(BINDIR)/bench_suite: $(BENCHDIR)/bench_suite.c $(wildcard $(BENCHDIR)/suite/*.c) $(wildcard $(BENCHDIR)/suite/*.h) $(BENCHDIR)/bench_common.h $(STATIC_LIB) | $(BINDIR)
+	$(CC) $(CFLAGS) -I$(BENCHDIR)/suite $(filter %.c,$^) $(STATIC_LIB) $(LDFLAGS) -o $@
+
+$(BINDIR)/bench_deep_dive: $(BENCHDIR)/bench_deep_dive.c $(wildcard $(BENCHDIR)/deep_dive/*.c) $(wildcard $(BENCHDIR)/deep_dive/*.h) $(BENCHDIR)/bench_common.h $(STATIC_LIB) | $(BINDIR)
+	$(CC) $(CFLAGS) -I$(BENCHDIR)/deep_dive $(filter %.c,$^) $(STATIC_LIB) $(LDFLAGS) -o $@
+
 $(BINDIR)/%: $(BENCHDIR)/%.c $(BENCHDIR)/bench_common.h $(STATIC_LIB) | $(BINDIR)
 	$(CC) $(CFLAGS) $< $(STATIC_LIB) $(LDFLAGS) -o $@
 
@@ -84,7 +99,7 @@ test: $(STATIC_LIB) $(TEST_BINS)
 		echo ""; \
 	done
 	@echo "=================================================="
-	@echo "           All Tests Passed Successfully!         "
+	@echo "           All Tests Passed Successfully         "
 	@echo "=================================================="
 
 bench: $(STATIC_LIB) $(BENCH_BINS)
@@ -176,7 +191,7 @@ valgrind: $(STATIC_LIB) $(BINDIR)/core/test_unit_lifecycle $(BINDIR)/io/test_io_
 		valgrind --leak-check=full --show-leak-kinds=all --error-exitcode=1 $(BINDIR)/core/test_unit_lifecycle && \
 		valgrind --leak-check=full --show-leak-kinds=all --error-exitcode=1 $(BINDIR)/io/test_io_basic && \
 		valgrind --leak-check=full --show-leak-kinds=all --error-exitcode=1 $(BINDIR)/io/test_io_abort && \
-		echo "Valgrind checks passed with 0 errors!"; \
+		echo "Valgrind checks passed with 0 errors."; \
 	} || echo "valgrind is not installed in the environment; install valgrind to run dynamic memory analysis."
 
 clang-tidy:
@@ -184,7 +199,7 @@ clang-tidy:
 	@echo "           Running Clang-Tidy Static Analysis     "
 	@echo "=================================================="
 	clang-tidy -checks='bugprone-*,clang-analyzer-*,performance-*,-clang-analyzer-optin.performance.Padding,-bugprone-easily-swappable-parameters,-clang-analyzer-security.insecureAPI.DeprecatedOrUnsafeBufferHandling' $(SRCS) -- $(CSTD) -Iinclude -Isrc -Isrc/core -Isrc/memory -Isrc/sync -Isrc/io -Isrc/ipc -Isrc/audit -Isrc/platform -D_GNU_SOURCE
-	@echo "Clang-Tidy analysis passed with 0 errors!"
+	@echo "Clang-Tidy analysis passed with 0 errors."
 
 compile_commands.json: Makefile $(SRCS) $(TEST_SRCS) $(BENCH_SRCS)
 	@CSTD="$(CSTD)" CC="$(CC)" python3 scripts/gen_compile_commands.py
