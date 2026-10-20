@@ -231,6 +231,89 @@ extern "C" {
   0x0008U /**< Process observes/monitors telemetry; does not increment active  \
              counters. */
 
+/**
+ * @defgroup rbipc_modes Architecture, Performance Tiers, and Execution Modes Guide
+ * @brief Comprehensive specification of librbipc execution modes, trust tiers, memory backings,
+ * and their operational function pairings.
+ *
+ * @details
+ * @section modes_overview 1. Architectural Philosophy & Mode Dimensions
+ * librbipc provides an orthogonal multi-dimensional configuration model:
+ *
+ * 1. **Trust & Performance Tier**:
+ *    - **Tier 1 (Zero-Trust Mode, Default, flag: 0)**:
+ *      - *Core Concept*: Maximum process isolation, fault tolerance, and crash forensics. Every slot
+ *        transition is stamped with process identifiers (@c pid_t) and monitored via monotonic lease
+ *        timestamps. Dead peers are detected using Linux @c pidfd_open(2) + @c poll(2) or @c kill(pid, 0).
+ *      - *Workload Contexts*: Multi-tenant architectures, untrusted peer processes, distributed microservices
+ *        crossing security/privilege boundaries, long-running daemons where peer crashes are expected.
+ *      - *Paired Functions & Features*:
+ *        - Bounded Consumer Leases: @ref rbipc_set_lease_timeout, @ref rbipc_revoke_expired_leases
+ *        - Crash Audit & Slot Healing: @ref rbipc_audit_check_and_heal_ticket_hole, @ref rbipc_audit_is_peer_alive
+ *        - Safe Reservation Rollback: @ref rbipc_abort_write
+ *        - Forensic Inspection: @ref rbipc_get_slot_stats, CLI utility @c bin/rbipc_stat
+ *      - *Avoid When*: Latency budget is strictly sub-100 nanoseconds and all peers operate within a shared trusted boundary.
+ *
+ *    - **Tier 2 (Trusted Mode, @ref RBIPC_FLAG_TRUSTED)**:
+ *      - *Core Concept*: Pure Dmitriy Vyukov turn-based single sequence word synchronization. Bypasses
+ *        per-slot PID registration and state validation. Fast path executes exactly 2 stores on write
+ *        (@c slot->len + @c slot->sequence) and 1 store on read release (@c slot->sequence).
+ *      - *Workload Contexts*: Single-tenant architectures, cooperative high-frequency trading (HFT) matching
+ *        engines, intra-process thread rings, tightly-coupled microservices within the same trust boundary,
+ *        and low-latency audio/video DSP pipelines where crash resilience is handled by an orchestrator.
+ *      - *Paired Functions & Features*:
+ *        - Core Zero-Copy Single-Slot I/O: @ref rbipc_reserve_write, @ref rbipc_commit_write,
+ *          @ref rbipc_read_acquire, @ref rbipc_read_release
+ *        - Wait Policies: @ref RBIPC_WAIT_ZERO_SPIN or @ref RBIPC_WAIT_ADAPTIVE for dedicated pinned cores
+ *        - Large Payloads (> 4,095 bytes up to 4 GiB): Dedicated 32-bit @c slot->len field
+ *        - Non-Temporal Cache-Bypassing Stores: @ref rbipc_write_stream, @ref rbipc_stream_copy
+ *      - *Avoid When*: Untrusted peers might crash while holding a slot, leaving it indefinitely locked.
+ *
+ *    - **Tier 3 (Packed Descriptor Mode, @ref RBIPC_FLAG_PACKED)**:
+ *      - *Core Concept*: 64-bit composite descriptor packing 48 bits of monotonic sequence turn, 12 bits
+ *        of payload length (0 to 4,095 bytes), and 4 bits of lifecycle state into a single atomic integer.
+ *        Enables single-store atomic publication and single-load tear-free multi-subscriber reads.
+ *      - *Workload Contexts*: High-rate telemetry pipelines, IoT/sensor stream aggregation, small RPC commands,
+ *        financial market-data tick feeds, and 1-to-N Multicast / PubSub.
+ *      - *Paired Functions & Features*:
+ *        - 1-to-N Multicast Publish-Subscribe: @ref rbipc_publish, @ref rbipc_publish_batch,
+ *          @ref rbipc_sub_poll, @ref rbipc_sub_poll_batch (guarantees hardware-atomic tear-free reads)
+ *        - B-Queue Vector Batching: @ref rbipc_reserve_write_batch, @ref rbipc_commit_write_batch,
+ *          @ref rbipc_read_acquire_batch, @ref rbipc_read_release_batch
+ *        - SIMD Vector Sequence Scanning: Hardware-accelerated AVX2, AVX-512, and ARM64 NEON scanners
+ *      - *Avoid When*: Payloads exceed @ref RBIPC_PACKED_MAX_LEN (4,095 bytes).
+ *
+ *    - **Combined Tier 2+3 (Trusted & Packed Mode, @ref RBIPC_FLAG_TRUSTED | @ref RBIPC_FLAG_PACKED)**:
+ *      - *Core Concept*: The pinnacle of low-latency small-message communication (@f$ \le 4,095 @f$ bytes). Fuses
+ *        trusted zero-metadata overhead with 64-bit atomic composite descriptors. Exactly 1 store on commit,
+ *        1 store on release, zero redundant metadata zeroing, and direct register unpacking.
+ *      - *Workload Contexts*: High-frequency tick matching engines, low-latency inter-thread actor queues,
+ *        vector packet processing (VPP) pipelines requiring maximum operations per second.
+ *      - *Paired Functions & Features*:
+ *        - B-Queue Vector Batching (Batch Sizes 16, 32, 64): Reaches **35.34 Mops/s** (> 2.15 GB/s transfer rate)
+ *          and **28.3 ns latency** on modern x86 cores.
+ *        - CPU Core Pinning: @c pthread_setaffinity_np / @c sched_setaffinity
+ *        - AVX2 Vectorized Sequence Scanning: Up to **514.70 Mslots/s** scan throughput.
+ *      - *Avoid When*: Payloads exceed 4,095 bytes or crash auditing is required.
+ *
+ * 2. **Shared Memory Backing**:
+ *    - **Anonymous Shared Memory (@ref RBIPC_SHM_ANON, Default)**: Fileless @c memfd_create descriptor,
+ *      sealed with @c F_ADD_SEALS, zero `/dev/shm` footprint. Paired with @ref rbipc_send_fd and @ref rbipc_recv_fd_ex.
+ *    - **Named POSIX Shared Memory (@ref RBIPC_SHM_NAMED)**: Global `/dev/shm` filesystem rendezvous.
+ *      Paired with @ref rbipc_create, @ref rbipc_attach, and CLI monitoring via @c bin/rbipc_stat.
+ *    - **HugeTLB & Dynamic 2MB Transparent HugePages (@ref RBIPC_FLAG_HUGETLB)**: 2MB page alignment eliminating
+ *      TLB miss stalls on large rings (@f$ \ge 4\text{ MB} @f$ to 32MB+). Up to **4.51x speedup (+77.8% latency reduction)**.
+ *
+ * 3. **Wait & Backoff Synchronization Policies**:
+ *    - **Adaptive Hybrid (@ref RBIPC_WAIT_ADAPTIVE, Default)**: 48-iteration micro-pause + 5 µs C0.1 hardware wait
+ *      before kernel futex suspension. Paired with general multi-threaded production workloads.
+ *    - **Zero-Spin (@ref RBIPC_WAIT_ZERO_SPIN)**: Immediate passive futex sleep. Paired with battery-powered
+ *      devices, background jobs, and quiescent services (0.13% - 0.3% idle CPU).
+ *    - **Hardware Monitor-Wait (@ref RBIPC_WAIT_HW_MONITOR)**: Intel WAITPKG (@c UMONITOR/@c UMWAIT) or ARM64
+ *      FEAT_WFxT (@c WFET). Paired with pinned low-latency cores for 40–70 ns hardware wakeups without 100% core burn.
+ * @{
+ */
+
 #define RBIPC_SHM_ANON                                                         \
   0x0010U /**< Explicitly select anonymous memfd shared memory. Default when   \
              no choice is emitted. */
@@ -258,6 +341,7 @@ extern "C" {
 #define RBIPC_MODE_TRUSTED RBIPC_FLAG_TRUSTED
 #define RBIPC_MODE_PACKED RBIPC_FLAG_PACKED
 #define RBIPC_CREATE_HUGETLB RBIPC_FLAG_HUGETLB
+/** @} */
 
 /**
  * @defgroup rbipc_packed_constants 64-Bit Packed Descriptor Bitfield Constants
@@ -651,12 +735,18 @@ typedef struct rbipc_ring rbipc_ring_t;
  * RBIPC_CREATE_OVERWRITE) combined with optional role flags (@ref
  * RBIPC_ROLE_PRODUCER), optional memory backing flags (@ref RBIPC_SHM_ANON
  * or @ref RBIPC_SHM_NAMED; anonymous is default), and performance mode flags:
+ *   - @c 0 (Tier 1 Zero-Trust, Default): Full process isolation, PID stamping,
+ *     lease timeout auditing, and dead-peer crash recovery.
  *   - @ref RBIPC_FLAG_TRUSTED (Tier 2): Pure Vyukov sequence synchronization,
- *     bypassing per-slot PID registration and consumer state checks.
+ *     bypassing per-slot PID registration and consumer state checks. Ideal for
+ *     trusted processes and sub-100ns latency.
  *   - @ref RBIPC_FLAG_PACKED (Tier 3): 64-bit packed sequence/length/state
- *     descriptors. Note: when specified, @p slot_size must not exceed @ref
- *     RBIPC_PACKED_MAX_LEN (4,095 bytes); otherwise @ref RBIPC_ERR_INVAL is
- *     returned.
+ *     descriptors for single-store atomic publication and tear-free multicast.
+ *     Payload length constrained to @f$ \le @ref RBIPC_PACKED_MAX_LEN @f$ (4,095 B).
+ *   - @c RBIPC_FLAG_TRUSTED | @c RBIPC_FLAG_PACKED (Combined Tier 2+3): Peak
+ *     throughput small-message mode (1 store on commit, 1 on release).
+ *   - @ref RBIPC_FLAG_HUGETLB (HugeTLB / THP): Request 2MB HugeTLB / Dynamic THP backing.
+ *   For an exhaustive contextual selection guide, see @ref rbipc_modes.
  * @param[in]  mode      POSIX file permission mode bits (e.g. 0660; enforced
  * via fchmod).
  * @param[out] out_ring  Location to store pointer to the allocated ring buffer
@@ -670,6 +760,7 @@ typedef struct rbipc_ring rbipc_ring_t;
  * @retval RBIPC_ERR_NOMEM  if virtual memory allocation or mmap fails.
  * @retval RBIPC_ERR_SYS    if an underlying kernel syscall fails.
  *
+ * @see rbipc_modes
  * @see rbipc_create
  * @see rbipc_create_anon
  * @see rbipc_destroy

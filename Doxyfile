@@ -7,11 +7,11 @@ CREATE_SUBDIRS         = NO
 OUTPUT_LANGUAGE        = English
 
 # Input configuration
-INPUT                  = include src README.md TECHNICAL_REPORT.md
+INPUT                  = include src README.md TECHNICAL_REPORT.md docs/ARCHITECTURE_MODES.md
 USE_MDFILE_AS_MAINPAGE = README.md
 RECURSIVE              = YES
 FILE_PATTERNS          = *.h *.c *.md
-EXCLUDE_PATTERNS       = */build/* */bin/* */.git/* docs/*
+EXCLUDE_PATTERNS       = */build/* */bin/* */.git/* docs/html/*
 FILTER_PATTERNS        = *.md="python3 scripts/doxygen_md_filter.py"
 
 # Extraction options

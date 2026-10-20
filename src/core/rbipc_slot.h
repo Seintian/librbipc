@@ -190,8 +190,9 @@ void rbipc_slot_mark_acquired(rbipc_slot_t *slot, pid_t pid,
  * clears consumer/producer fields, and advances slot sequence to make it
  * vacant.
  *
- * @param[in,out] slot   Direct pointer to slot descriptor.
- * @param[in]     ticket Producer ticket attempting to claim this slot.
+ * @param[in,out] slot      Direct pointer to slot descriptor.
+ * @param[in]     ticket    Producer ticket attempting to claim this slot.
+ * @param[in]     is_packed True if ring buffer utilizes Tier 3 64-bit packed descriptors.
  *
  * @return true if slot was recovered from dead consumer; false otherwise.
  */

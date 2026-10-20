@@ -302,13 +302,14 @@ Starting with `librbipc`, **anonymous shared memory (`memfd_create`) is the defa
 - **Elimination of Attack Vectors:** Untrusted or rogue local processes cannot discover, inspect, attach to, truncate, or unlink the ring buffer without an explicit capability transfer across a UNIX domain socket (`SCM_RIGHTS`) or inheritance across `fork()`.
 - **Hardware Memory Sealing:** Rings are sealed with `fcntl(F_ADD_SEALS, F_SEAL_SHRINK | F_SEAL_GROW)` immediately upon creation, eliminating malicious or accidental truncation attacks that would trigger `SIGBUS`.
 
-### 2. The 3 Tiers of Performance & Trust Optimization
+### 2. The 4 Tiers of Performance & Trust Optimization
 
-| Tier | Flag | Key Characteristics | Target Workloads & Throughput |
-| :--- | :--- | :--- | :--- |
-| **Tier 1 (Zero-Trust Default)** | `0` (or `RBIPC_SHM_ANON`) | Full PID tracking, crash auditing (`pidfd_open`), poisoned slot healing, and lease enforcement. Redundant un-reservation CAS operations are safely elided because anonymous descriptor isolation prevents concurrent rogue un-reservations. | Untrusted, multi-tenant, or adversarial processes.<br>**~1.0M msgs/s** (135 MB/s) single-slot;<br>**22.5M msgs/s** (3.1 GB/s) B-Queue batch-32. |
-| **Tier 2 (Trusted Mode)** | `RBIPC_FLAG_TRUSTED` | Bypasses per-slot PID registration (`slot->pid = 0`) and consumer state lag validation. Fast-path synchronization relies purely on monotonic 64-bit Vyukov sequence turns (`slot->sequence`). | Cooperating, trusted processes on the same host.<br>**~4.5M msgs/s** (618 MB/s) single-slot (+350% over baseline). |
-| **Tier 3 (Packed Mode)** | `RBIPC_FLAG_PACKED` | Fuses sequence turn, payload length, and lifecycle state into a single 64-bit word (`uint64_t`). Enables **single-store atomic publication** without a secondary write to `slot->len`. | Ultra-low latency small messages (≤ 4,095 B).<br>**~4.0M msgs/s** (544 MB/s) single-slot;<br>**20.9M msgs/s** (2.9 GB/s) B-Queue batch-32. |
+| Tier | Flag | Core Microarchitectural Mechanism | Target Workloads & Contexts | Paired Functions & Features | Peak Throughput & Latency |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| **Tier 1 (Zero-Trust Default)** | `0` (or `RBIPC_SHM_ANON`) | Full PID ownership tracking, 6-state machine verification, monotonic lease enforcement, and `pidfd_open(2)` dead-peer crash recovery. | Multi-tenant systems, untrusted processes, microservices crossing security boundaries, long-running daemons. | `rbipc_set_lease_timeout`, `rbipc_revoke_expired_leases`, `rbipc_abort_write`, `rbipc_stat --audit` | **10.65M msgs/s** (650 MB/s) single-slot streaming;<br>**30.38M msgs/s** B-Queue batch-32. |
+| **Tier 2 (Trusted Mode)** | `RBIPC_FLAG_TRUSTED` | Bypasses PID registration and consumer state checks. Pure Vyukov sequence turn synchronization (2 stores on write, 1 store on release). | Cooperating trusted processes, HFT matching engines, intra-process actor threads, large payloads (> 4 KiB). | `rbipc_reserve_write`, `rbipc_commit_write`, `rbipc_write_stream`, `RBIPC_WAIT_ZERO_SPIN`, `RBIPC_WAIT_ADAPTIVE` | **15.16M msgs/s** (925 MB/s) single-slot streaming;<br>**97 ns** half-RTT p50 latency. |
+| **Tier 3 (Packed Mode)** | `RBIPC_FLAG_PACKED` | 64-bit composite descriptor (48b turn, 12b len, 4b state). Enables single-store publication and single-load tear-free multi-subscriber reads. | 1-to-N Multicast / PubSub, high-rate telemetry, financial tick streams (payloads $\le 4,095$ B), SIMD vector scanning. | `rbipc_publish`, `rbipc_publish_batch`, `rbipc_sub_poll`, `rbipc_sub_poll_batch`, AVX2 vector sequence scanning | **514.7M slots/s** AVX2 scan throughput;<br>**5.07M msgs/s** zero-copy PubSub multicast (+82.9% over standard). |
+| **Combined Tier 2+3 (Trusted & Packed)** | `RBIPC_FLAG_TRUSTED \| RBIPC_FLAG_PACKED` | Fuses trusted zero-metadata bypass with 64-bit atomic composite descriptors. Exactly 1 store on commit, 1 on release, zero redundant zeroing writes. | Peak-throughput small-message pipelines ($\le 4,095$ B), financial matching engines, vector packet processing (VPP). | `rbipc_reserve_write_batch`, `rbipc_commit_write_batch`, CPU core pinning (`pthread_setaffinity_np`) | **11.37M msgs/s** (87.9 ns) pinned streaming;<br>**35.34M msgs/s** (28.3 ns, 2.15 GB/s) B-Queue batch-32! |
 
 ---
 
@@ -358,12 +359,18 @@ Is this correct? **Yes, as a logical / virtual pointer exchange rate; No, as a p
   - On-package High Bandwidth Memory (HBM3e / GPUs): ~1.2 to 3.0 TB/s (on-die silicon interposers only).
 - **The Practical Consequence:** If an application actually performs memory copies (`memcpy`) or byte-by-byte processing on the entire 1 MiB or 16 MiB payload, the memory bus saturates immediately, and actual data throughput collapses from virtual Terabytes/s to physical DRAM bus bandwidth (~20–70 GB/s). For actual payload data streaming, `librbipc` provides cache-bypassing non-temporal stores (`rbipc_write_stream`), achieving up to **19.8 GB/s** by avoiding Read-For-Ownership (RFO) cache pollution.
 
-### 4. Application Selection Guide
+### 4. Application Selection Guide & Feature Pairing Directory
 
-- **Use Tier 3 Packed Mode (`RBIPC_FLAG_PACKED`):**
-  When payloads are $\le 4,095$ bytes (financial tick streams, telemetry metrics, audio frames, RPC commands, sensor samples). Maximizes instruction throughput and minimizes cache pollution through single-store 64-bit publication and SIMD-shifted vector scanning.
-- **Use Standard Mode (Tier 1 Default or Tier 2 `RBIPC_FLAG_TRUSTED`):**
-  When payloads exceed 4,095 bytes (video frames, machine learning tensors, large database pages, bulk file buffers up to 4 GiB). Provides a full 32-bit `slot->len` field and unlocks multi-terabyte virtual zero-copy pointer exchanges.
+| Operational Requirement | Recommended Configuration | Paired API Functions & CLI Tools | Why This Combination? |
+| :--- | :--- | :--- | :--- |
+| **Untrusted / Multi-Tenant Microservices** | **Tier 1 Zero-Trust** (`0` \| `RBIPC_SHM_ANON`) + `RBIPC_WAIT_ADAPTIVE` | `rbipc_create_anon()`, `rbipc_send_fd()`, `rbipc_set_lease_timeout()`, `rbipc_revoke_expired_leases()`, `rbipc_abort_write()` | Eliminates `/dev/shm` discovery attack surface. Enforces lease timeouts and automatically detects/poisons crashed peer slots via `pidfd_open(2)`. |
+| **Low-Latency HFT Gateway $\to$ Matching Engine** | **Tier 2 Trusted** (`RBIPC_FLAG_TRUSTED` \| `RBIPC_SHM_NAMED`) + `RBIPC_WAIT_ZERO_SPIN` | `rbipc_reserve_write()`, `rbipc_commit_write()`, `rbipc_read_acquire()`, `rbipc_read_release()`, CPU pinning | Bypasses PID and lease checks entirely. Achieves 15.16M msgs/s streaming throughput and 97 ns latency on pinned dedicated cores. |
+| **1-to-N Market Data / Telemetry Fanout** | **Tier 3 Packed** (`RBIPC_FLAG_PACKED`) + Multicast PubSub | `rbipc_publish()`, `rbipc_publish_batch()`, `rbipc_sub_create_ex()`, `rbipc_sub_poll_batch()`, AVX2 scanning | Single 64-bit atomic load guarantees tear-free multicast reads across lock-free concurrent subscribers. Delivers 5.07M msgs/s (+82.9% speedup). |
+| **Peak Small-Message Ingestion ($\le 4\text{ KiB}$)** | **Combined Tier 2+3** (`RBIPC_FLAG_TRUSTED` \| `RBIPC_FLAG_PACKED`) | `rbipc_reserve_write_batch()`, `rbipc_commit_write_batch()`, B-Queue batch-32/64 | Combines trusted zero-metadata bypass with 1-store publication and 1-store release. Delivers **35.34M msgs/s** and **28.3 ns** latency. |
+| **Bulk Streaming / Video / ML Tensors ($> 4\text{ KiB}$)** | **Tier 2** (`RBIPC_FLAG_TRUSTED` \| `RBIPC_FLAG_HUGETLB`) | `rbipc_write_stream()`, `rbipc_stream_copy()`, Option B 2MB THP alignment | Unlocks 32-bit length fields, avoids TLB miss stalls on multi-megabyte buffers (up to 4.51x speedup), and transfers at up to 19.8 GB/s via AVX2 non-temporal stores. |
+| **Battery / Edge / Quiescent Daemons** | **Tier 1 or Tier 2** + `RBIPC_WAIT_ZERO_SPIN` | `rbipc_set_wait_policy()`, `rbipc_read_acquire_timeout()`, `bin/rbipc_stat --watch` | Drops CPU utilization to **0.13% - 0.3%** when idle via kernel `futex` sleep, preventing core burn. |
+
+For the complete architectural monograph, microarchitectural cache analyses, and end-to-end C23 implementation patterns, see **[`docs/ARCHITECTURE_MODES.md`](docs/ARCHITECTURE_MODES.md)**.
 
 ---
 

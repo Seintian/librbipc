@@ -27,11 +27,12 @@
 /**
  * @brief Portable scalar fallback loop for scanning slot sequence progression.
  *
- * @param[in] slots  Slot descriptor array.
- * @param[in] mask   Ring capacity mask.
- * @param[in] t      Starting ticket.
- * @param[in] count  Maximum slots to inspect.
- * @param[in] offset Sequence offset (0 for vacant, 1 for ready).
+ * @param[in] slots     Slot descriptor array.
+ * @param[in] mask      Ring capacity mask.
+ * @param[in] t         Starting ticket.
+ * @param[in] count     Maximum slots to inspect.
+ * @param[in] offset    Sequence offset (0 for vacant, 1 for ready).
+ * @param[in] is_packed True if 64-bit packed sequence/len/state descriptors.
  * @return Number of contiguous matching slots.
  */
 RBIPC_INTERNAL uint32_t rbipc_simd_scan_scalar(const rbipc_slot_t *slots, uint32_t mask,
