@@ -1,0 +1,413 @@
+{
+  "timestamp": 1792500992,
+  "hardware": {
+    "profile": "laptop",
+    "cpu": "Intel(R) Core(TM) i5-6300U CPU @ 2.40GHz",
+    "cores": 2,
+    "threads": 4,
+    "hostname": "CHRIS-LAPTOP",
+    "kernel": "Linux 7.2.9-2-cachyos x86_64"
+  },
+  "module1_latency_hierarchy": [
+    {
+      "mode": "Tier 1 Zero-Trust (Default / Robust)",
+      "flags": 0,
+      "min_ns": 183,
+      "p25_ns": 227,
+      "p50_ns": 240,
+      "p75_ns": 264,
+      "p90_ns": 290,
+      "p99_ns": 413,
+      "p99_9_ns": 11898,
+      "max_ns": 1018334,
+      "mean_ns": 471.74,
+      "reduction_pct": 0.00
+    },
+    {
+      "mode": "Tier 2 Trusted Mode (Pure Vyukov)",
+      "flags": 64,
+      "min_ns": 186,
+      "p25_ns": 218,
+      "p50_ns": 226,
+      "p75_ns": 235,
+      "p90_ns": 259,
+      "p99_ns": 357,
+      "p99_9_ns": 5430,
+      "max_ns": 444451,
+      "mean_ns": 288.94,
+      "reduction_pct": 5.83
+    },
+    {
+      "mode": "Tier 3 Packed Descriptor Mode",
+      "flags": 128,
+      "min_ns": 182,
+      "p25_ns": 228,
+      "p50_ns": 237,
+      "p75_ns": 249,
+      "p90_ns": 281,
+      "p99_ns": 361,
+      "p99_9_ns": 6150,
+      "max_ns": 406483,
+      "mean_ns": 280.31,
+      "reduction_pct": 1.25
+    },
+    {
+      "mode": "Combined Tier 2+3 (Trusted & Packed)",
+      "flags": 192,
+      "min_ns": 184,
+      "p25_ns": 218,
+      "p50_ns": 227,
+      "p75_ns": 246,
+      "p90_ns": 261,
+      "p99_ns": 368,
+      "p99_9_ns": 7429,
+      "max_ns": 889868,
+      "mean_ns": 350.88,
+      "reduction_pct": 5.42
+    }
+  ],
+  "module2_streaming_throughput": [
+    {
+      "mode": "Tier 1 Zero-Trust",
+      "flags": 0,
+      "pinned": false,
+      "msgs_per_sec": 9753221.55,
+      "mb_per_sec": 595.29,
+      "avg_latency_ns": 102.53
+    },
+    {
+      "mode": "Tier 1 Zero-Trust",
+      "flags": 0,
+      "pinned": true,
+      "msgs_per_sec": 9919193.78,
+      "mb_per_sec": 605.42,
+      "avg_latency_ns": 100.81
+    },
+    {
+      "mode": "Tier 2 Trusted",
+      "flags": 64,
+      "pinned": false,
+      "msgs_per_sec": 9994285.77,
+      "mb_per_sec": 610.00,
+      "avg_latency_ns": 100.06
+    },
+    {
+      "mode": "Tier 2 Trusted",
+      "flags": 64,
+      "pinned": true,
+      "msgs_per_sec": 10898234.09,
+      "mb_per_sec": 665.18,
+      "avg_latency_ns": 91.76
+    },
+    {
+      "mode": "Tier 3 Packed",
+      "flags": 128,
+      "pinned": false,
+      "msgs_per_sec": 9743226.52,
+      "mb_per_sec": 594.68,
+      "avg_latency_ns": 102.64
+    },
+    {
+      "mode": "Tier 3 Packed",
+      "flags": 128,
+      "pinned": true,
+      "msgs_per_sec": 9410964.88,
+      "mb_per_sec": 574.40,
+      "avg_latency_ns": 106.26
+    },
+    {
+      "mode": "Tier 2+3 Combined",
+      "flags": 192,
+      "pinned": false,
+      "msgs_per_sec": 10252385.54,
+      "mb_per_sec": 625.76,
+      "avg_latency_ns": 97.54
+    },
+    {
+      "mode": "Tier 2+3 Combined",
+      "flags": 192,
+      "pinned": true,
+      "msgs_per_sec": 7434581.63,
+      "mb_per_sec": 453.77,
+      "avg_latency_ns": 134.51
+    }
+  ],
+  "module3_batch_scaling": [
+    {
+      "batch_size": 1,
+      "tier1_msgs_sec": 9236876.77,
+      "tier1_mb_sec": 563.77,
+      "tier1_latency_ns": 108.26,
+      "tier1_speedup_vs_b1": 1.00,
+      "tier23_msgs_sec": 9610011.33,
+      "tier23_mb_sec": 586.55,
+      "tier23_latency_ns": 104.06,
+      "tier23_speedup_vs_b1": 1.00
+    },
+    {
+      "batch_size": 4,
+      "tier1_msgs_sec": 7809835.02,
+      "tier1_mb_sec": 476.67,
+      "tier1_latency_ns": 128.04,
+      "tier1_speedup_vs_b1": 0.85,
+      "tier23_msgs_sec": 5871450.42,
+      "tier23_mb_sec": 358.36,
+      "tier23_latency_ns": 170.32,
+      "tier23_speedup_vs_b1": 0.61
+    },
+    {
+      "batch_size": 16,
+      "tier1_msgs_sec": 27174359.06,
+      "tier1_mb_sec": 1658.59,
+      "tier1_latency_ns": 36.80,
+      "tier1_speedup_vs_b1": 2.94,
+      "tier23_msgs_sec": 16577339.12,
+      "tier23_mb_sec": 1011.80,
+      "tier23_latency_ns": 60.32,
+      "tier23_speedup_vs_b1": 1.73
+    },
+    {
+      "batch_size": 32,
+      "tier1_msgs_sec": 20891500.49,
+      "tier1_mb_sec": 1275.12,
+      "tier1_latency_ns": 47.87,
+      "tier1_speedup_vs_b1": 2.26,
+      "tier23_msgs_sec": 35089016.98,
+      "tier23_mb_sec": 2141.66,
+      "tier23_latency_ns": 28.50,
+      "tier23_speedup_vs_b1": 3.65
+    },
+    {
+      "batch_size": 64,
+      "tier1_msgs_sec": 38434400.82,
+      "tier1_mb_sec": 2345.85,
+      "tier1_latency_ns": 26.02,
+      "tier1_speedup_vs_b1": 4.16,
+      "tier23_msgs_sec": 38942529.63,
+      "tier23_mb_sec": 2376.86,
+      "tier23_latency_ns": 25.68,
+      "tier23_speedup_vs_b1": 4.05
+    },
+    {
+      "batch_size": 128,
+      "tier1_msgs_sec": 38564960.79,
+      "tier1_mb_sec": 2353.82,
+      "tier1_latency_ns": 25.93,
+      "tier1_speedup_vs_b1": 4.18,
+      "tier23_msgs_sec": 26525453.64,
+      "tier23_mb_sec": 1618.99,
+      "tier23_latency_ns": 37.70,
+      "tier23_speedup_vs_b1": 2.76
+    }
+  ],
+  "module4_shm_lifecycle": {
+    "named": {"ops_sec": 13899.74, "latency_us": 71.94},
+    "anonymous": {"ops_sec": 15246.51, "latency_us": 65.59},
+    "speedup": 1.10
+  },
+  "module5_pubsub_multicast": [
+    {
+      "mode": "Standard Copy (Std Ring)",
+      "fanout": 1,
+      "pub_msgs_sec": 10556086.17,
+      "effective_msgs_sec": 10556086.17,
+      "effective_mb_sec": 644.29
+    },
+    {
+      "mode": "Standard Copy (Std Ring)",
+      "fanout": 2,
+      "pub_msgs_sec": 7936588.56,
+      "effective_msgs_sec": 15873177.12,
+      "effective_mb_sec": 968.82
+    },
+    {
+      "mode": "Standard Copy (Std Ring)",
+      "fanout": 4,
+      "pub_msgs_sec": 6410175.05,
+      "effective_msgs_sec": 25640700.20,
+      "effective_mb_sec": 1564.98
+    },
+    {
+      "mode": "Standard Copy (Std Ring)",
+      "fanout": 8,
+      "pub_msgs_sec": 228735.03,
+      "effective_msgs_sec": 1829880.22,
+      "effective_mb_sec": 111.69
+    },
+    {
+      "mode": "Standard Copy (Packed Ring)",
+      "fanout": 1,
+      "pub_msgs_sec": 9435188.84,
+      "effective_msgs_sec": 9435188.84,
+      "effective_mb_sec": 575.88
+    },
+    {
+      "mode": "Standard Copy (Packed Ring)",
+      "fanout": 2,
+      "pub_msgs_sec": 11899831.97,
+      "effective_msgs_sec": 23799663.95,
+      "effective_mb_sec": 1452.62
+    },
+    {
+      "mode": "Standard Copy (Packed Ring)",
+      "fanout": 4,
+      "pub_msgs_sec": 292607.10,
+      "effective_msgs_sec": 1170428.42,
+      "effective_mb_sec": 71.44
+    },
+    {
+      "mode": "Standard Copy (Packed Ring)",
+      "fanout": 8,
+      "pub_msgs_sec": 216535.16,
+      "effective_msgs_sec": 1732281.29,
+      "effective_mb_sec": 105.73
+    },
+    {
+      "mode": "Zero-Copy (Std Ring)",
+      "fanout": 1,
+      "pub_msgs_sec": 1522609.49,
+      "effective_msgs_sec": 1522609.49,
+      "effective_mb_sec": 92.93
+    },
+    {
+      "mode": "Zero-Copy (Std Ring)",
+      "fanout": 2,
+      "pub_msgs_sec": 1090828.30,
+      "effective_msgs_sec": 2181656.60,
+      "effective_mb_sec": 133.16
+    },
+    {
+      "mode": "Zero-Copy (Std Ring)",
+      "fanout": 4,
+      "pub_msgs_sec": 7383701.90,
+      "effective_msgs_sec": 29534807.58,
+      "effective_mb_sec": 1802.66
+    },
+    {
+      "mode": "Zero-Copy (Std Ring)",
+      "fanout": 8,
+      "pub_msgs_sec": 245181.45,
+      "effective_msgs_sec": 1961451.59,
+      "effective_mb_sec": 119.72
+    },
+    {
+      "mode": "Zero-Copy (Packed Ring)",
+      "fanout": 1,
+      "pub_msgs_sec": 2347109.41,
+      "effective_msgs_sec": 2347109.41,
+      "effective_mb_sec": 143.26
+    },
+    {
+      "mode": "Zero-Copy (Packed Ring)",
+      "fanout": 2,
+      "pub_msgs_sec": 607777.23,
+      "effective_msgs_sec": 1215554.47,
+      "effective_mb_sec": 74.19
+    },
+    {
+      "mode": "Zero-Copy (Packed Ring)",
+      "fanout": 4,
+      "pub_msgs_sec": 715927.17,
+      "effective_msgs_sec": 2863708.69,
+      "effective_mb_sec": 174.79
+    },
+    {
+      "mode": "Zero-Copy (Packed Ring)",
+      "fanout": 8,
+      "pub_msgs_sec": 252435.66,
+      "effective_msgs_sec": 2019485.30,
+      "effective_mb_sec": 123.26
+    }
+  ],
+  "module6_simd_scanning": {
+    "standard_64bit": [
+      {"engine": "Scalar Baseline", "mslots_sec": 308.24, "speedup": 1.00},
+      {"engine": "SSE4.1 (128-bit)", "mslots_sec": 194.81, "speedup": 0.63},
+      {"engine": "AVX1 Fallback (256-bit)", "mslots_sec": 217.69, "speedup": 0.71},
+      {"engine": "AVX2 Vectorized (256-bit)", "mslots_sec": 303.47, "speedup": 0.98}
+    ],
+    "tier3_packed": [
+      {"engine": "Scalar Baseline", "mslots_sec": 574.16, "speedup": 1.00},
+      {"engine": "SSE4.1 (128-bit)", "mslots_sec": 438.03, "speedup": 0.76},
+      {"engine": "AVX1 Fallback (256-bit)", "mslots_sec": 297.47, "speedup": 0.52},
+      {"engine": "AVX2 Vectorized (256-bit)", "mslots_sec": 448.12, "speedup": 0.78}
+    ]
+  },
+  "module7_primitives": {
+    "multi_fd": {
+      "count_1": {"ops_sec": 189637.27, "latency_us": 5.27},
+      "count_2": {"ops_sec": 154174.56, "latency_us": 6.49},
+      "count_4": {"ops_sec": 107898.67, "latency_us": 9.27},
+      "count_4_seq": {"ops_sec": 47070.06, "latency_us": 21.24},
+      "speedup": 2.29
+    },
+    "futex2": {
+      "memoized": {"ops_sec": 186639382.48, "latency_ns": 5.36},
+      "raw_syscall": {"ops_sec": 667958.82, "latency_ns": 1497.10},
+      "speedup": 279.42
+    },
+    "hugetlb_available": false
+  },
+  "module8_dynamic_hugepages": [
+    {
+      "label": "Small Queue (64 KB)",
+      "capacity": 1024,
+      "slot_size": 64,
+      "buffer_mb": 0.06,
+      "thp_msgs_sec": 10168933.96,
+      "thp_mb_sec": 620.66,
+      "thp_lat_ns": 98.34,
+      "thp_pmd_mapped_kb": 0,
+      "std_msgs_sec": 10660587.57,
+      "std_mb_sec": 650.67,
+      "std_lat_ns": 93.80,
+      "speedup_factor": 0.95,
+      "latency_reduction_pct": 0.00
+    },
+    {
+      "label": "Medium Ring (4 MB)",
+      "capacity": 1024,
+      "slot_size": 4096,
+      "buffer_mb": 4.00,
+      "thp_msgs_sec": 10380992.28,
+      "thp_mb_sec": 633.61,
+      "thp_lat_ns": 96.33,
+      "thp_pmd_mapped_kb": 6144,
+      "std_msgs_sec": 10004989.49,
+      "std_mb_sec": 610.66,
+      "std_lat_ns": 99.95,
+      "speedup_factor": 1.04,
+      "latency_reduction_pct": 3.62
+    },
+    {
+      "label": "Large Ring (16 MB)",
+      "capacity": 4096,
+      "slot_size": 4096,
+      "buffer_mb": 16.00,
+      "thp_msgs_sec": 9960280.39,
+      "thp_mb_sec": 607.93,
+      "thp_lat_ns": 100.40,
+      "thp_pmd_mapped_kb": 18432,
+      "std_msgs_sec": 5190144.04,
+      "std_mb_sec": 316.78,
+      "std_lat_ns": 192.67,
+      "speedup_factor": 1.92,
+      "latency_reduction_pct": 47.89
+    },
+    {
+      "label": "Very Large Ring (32 MB)",
+      "capacity": 8192,
+      "slot_size": 4096,
+      "buffer_mb": 32.00,
+      "thp_msgs_sec": 11265433.79,
+      "thp_mb_sec": 687.59,
+      "thp_lat_ns": 88.77,
+      "thp_pmd_mapped_kb": 34816,
+      "std_msgs_sec": 5475056.41,
+      "std_mb_sec": 334.17,
+      "std_lat_ns": 182.65,
+      "speedup_factor": 2.06,
+      "latency_reduction_pct": 51.40
+    }
+  ]
+}

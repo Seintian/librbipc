@@ -1,20 +1,20 @@
 {
   "adaptive_vs_zerospin": {
-    "zerospin": {"msgs_per_sec": 350986.06, "p50_ns": 2491, "p90_ns": 2843, "p99_ns": 10485, "max_ns": 557075},
-    "adaptive": {"msgs_per_sec": 7987346.13, "p50_ns": 95, "p90_ns": 98, "p99_ns": 105, "max_ns": 65407}
+    "zerospin": {"msgs_per_sec": 341687.05, "p50_ns": 2517, "p90_ns": 2990, "p99_ns": 10482, "max_ns": 632119},
+    "adaptive": {"msgs_per_sec": 3750296.27, "p50_ns": 102, "p90_ns": 265, "p99_ns": 397, "max_ns": 474460}
   },
   "streaming_stores": [
-    {"size": 65536, "std_mb_s": 7554.97, "stream_mb_s": 23892.31, "speedup_pct": 216.25},
-    {"size": 262144, "std_mb_s": 7566.31, "stream_mb_s": 21286.58, "speedup_pct": 181.33},
-    {"size": 1048576, "std_mb_s": 6915.22, "stream_mb_s": 20306.17, "speedup_pct": 193.64},
-    {"size": 4194304, "std_mb_s": 7424.47, "stream_mb_s": 11241.53, "speedup_pct": 51.41}
+    {"size": 65536, "std_mb_s": 12938.24, "stream_mb_s": 19644.53, "speedup_pct": 51.83},
+    {"size": 262144, "std_mb_s": 11919.89, "stream_mb_s": 21024.46, "speedup_pct": 76.38},
+    {"size": 1048576, "std_mb_s": 9145.23, "stream_mb_s": 22893.87, "speedup_pct": 150.34},
+    {"size": 4194304, "std_mb_s": 11385.13, "stream_mb_s": 11854.06, "speedup_pct": 4.12}
   ],
   "pubsub": [
-    {"subs": 1, "publish_msgs_s": 10409566.47, "publish_mb_s": 79.42, "delivered_msgs_s": 10409566.47},
-    {"subs": 2, "publish_msgs_s": 2898925.32, "publish_mb_s": 22.12, "delivered_msgs_s": 5797850.63},
-    {"subs": 4, "publish_msgs_s": 505795.31, "publish_mb_s": 3.86, "delivered_msgs_s": 2023181.25}
+    {"subs": 1, "publish_msgs_s": 768390.67, "publish_mb_s": 5.86, "delivered_msgs_s": 768390.67},
+    {"subs": 2, "publish_msgs_s": 601887.68, "publish_mb_s": 4.59, "delivered_msgs_s": 1203775.36},
+    {"subs": 4, "publish_msgs_s": 257922.35, "publish_mb_s": 1.97, "delivered_msgs_s": 1031689.42}
   ],
-  "reactor": {"events_per_sec": 192098.67, "avg_latency_ns": 5205.66},
-  "simd_scanning": {"scalar_ns": 48.36, "simd_ns": 57.03, "speedup_pct": -17.93},
-  "lease_overhead": {"no_lease_msgs_s": 12883710.39, "with_lease_msgs_s": 10923371.85, "overhead_pct": 17.95}
+  "reactor": {"events_per_sec": 187286.11, "avg_latency_ns": 5339.42},
+  "simd_scanning": {"scalar_ns": 83.68, "simd_ns": 71.28, "speedup_pct": 14.82},
+  "lease_overhead": {"no_lease_msgs_s": 14454628.60, "with_lease_msgs_s": 10861054.16, "overhead_pct": 33.09}
 }
