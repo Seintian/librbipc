@@ -84,6 +84,6 @@ int main(void) {
     test_round_up_pow2();
     test_align_up();
     test_seq_diff();
-    printf("[test_unit_math] All tests passed!\n");
+    printf("[test_unit_math] All tests passed successfully.\n");
     return 0;
 }

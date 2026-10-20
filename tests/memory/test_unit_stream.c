@@ -62,7 +62,7 @@ int main(void) {
 
     test_stream_ring_integration();
 
-    printf("[test_unit_stream] All tests passed!\n");
+    printf("[test_unit_stream] All tests passed successfully.\n");
     return 0;
 }
 

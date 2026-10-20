@@ -277,6 +277,6 @@ int main(void) {
     test_consumer_crash_recovery();
     test_ticket_hole_crash_recovery();
 
-    printf("[test_e2e_crash] Dead-peer crash recovery test passed!\n");
+    printf("[test_e2e_crash] Dead-peer crash recovery test passed successfully.\n");
     return 0;
 }

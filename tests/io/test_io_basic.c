@@ -75,7 +75,7 @@ static void test_nonblock_and_timeout(void) {
         assert(rc == RBIPC_OK);
     }
 
-    /* Ring is now full! Next write should fail with RBIPC_ERR_FULL or timeout */
+    /* Ring is now full. Next write should fail with RBIPC_ERR_FULL or timeout */
     assert(rbipc_reserve_write_nonblock(ring, 64, &write_buf, &write_ticket) == RBIPC_ERR_FULL);
     assert(rbipc_reserve_write_timeout(ring, 64, 10 * RBIPC_NSEC_PER_MSEC, &write_buf, &write_ticket) == RBIPC_ERR_TIMEOUT);
 
@@ -221,7 +221,7 @@ static void test_convenience_copy_io(void) {
     assert(rbipc_read_timeout(ring, buf, sizeof(buf), &out_len, 1000000ULL) == RBIPC_ERR_TIMEOUT);
 
     /* 3. Successful write and read */
-    const char *test_msg = "Hello rbipc convenience!";
+    const char *test_msg = "rbipc_io_convenience_payload";
     uint32_t msg_len = (uint32_t)strlen(test_msg) + 1;
     rc = rbipc_write(ring, test_msg, msg_len);
     assert(rc == RBIPC_OK);
@@ -286,6 +286,6 @@ int main(void) {
     test_circular_wrap();
     test_stream_operations();
     test_convenience_copy_io();
-    printf("[test_io_basic] All tests passed!\n");
+    printf("[test_io_basic] All tests passed successfully.\n");
     return 0;
 }

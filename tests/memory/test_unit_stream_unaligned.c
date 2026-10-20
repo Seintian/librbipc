@@ -117,6 +117,6 @@ int main(void) {
     test_streaming_defensive_nulls();
     test_streaming_exhaustive_sizes();
     test_write_stream_lifecycle();
-    printf("[test_unit_stream_unaligned] All tests passed!\n");
+    printf("[test_unit_stream_unaligned] All tests passed successfully.\n");
     return 0;
 }

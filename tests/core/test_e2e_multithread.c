@@ -108,6 +108,6 @@ int main(void) {
     assert(atomic_load(&g_consumed_count) == TOTAL_MSGS);
 
     rbipc_detach(ring);
-    printf("[test_e2e_multithread] MPMC concurrency test passed successfully!\n");
+    printf("[test_e2e_multithread] MPMC concurrency test passed successfully.\n");
     return 0;
 }

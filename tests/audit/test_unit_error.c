@@ -56,6 +56,6 @@ int main(void) {
     /* NULL / zero size buffer safety */
     assert(rbipc_error_format(RBIPC_ERR_SYS, 0, NULL, 0) == NULL);
 
-    printf("[test_unit_error] All tests passed!\n");
+    printf("[test_unit_error] All tests passed successfully.\n");
     return 0;
 }

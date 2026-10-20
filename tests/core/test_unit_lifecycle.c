@@ -395,6 +395,6 @@ int main(void) {
   test_corrupted_shm_detection();
   test_shm_creation_flags_and_collision();
   test_decoupled_participant_roles();
-  printf("[test_unit_lifecycle] All tests passed!\n");
+  printf("[test_unit_lifecycle] All tests passed successfully.\n");
   return 0;
 }

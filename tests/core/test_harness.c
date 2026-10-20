@@ -106,7 +106,7 @@ static void run_consumer(int expected_iterations) {
         const test_msg_t *msg = (const test_msg_t *)buf;
 
         if (msg->seq_id != expected_seq) {
-            fprintf(stderr, "[Consumer] Ordering violation! Expected %lu, got %lu\n",
+            fprintf(stderr, "[Consumer] Ordering violation: expected %lu, got %lu\n",
                     expected_seq, msg->seq_id);
             exit(1);
         }
@@ -160,6 +160,6 @@ int main(void) {
     rbipc_detach(creator_ring);
     rbipc_destroy(TEST_SHM_NAME);
 
-    printf("Master verification harness completed successfully!\n");
+    printf("Master verification harness completed successfully.\n");
     return 0;
 }

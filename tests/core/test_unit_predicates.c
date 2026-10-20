@@ -240,6 +240,6 @@ int main(void) {
     test_sequence_and_slot_predicates();
     test_header_and_sync_predicates();
     test_crc32c_and_endianness();
-    printf("[test_unit_predicates] All tests passed!\n");
+    printf("[test_unit_predicates] All tests passed successfully.\n");
     return 0;
 }

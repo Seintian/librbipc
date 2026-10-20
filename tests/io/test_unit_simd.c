@@ -55,6 +55,6 @@ int main(void) {
     assert(rbipc_simd_scan_ready_slots(NULL, mask, 0, 10) == 0);
     assert(rbipc_simd_scan_ready_slots(slots, mask, 0, 0) == 0);
 
-    printf("[test_unit_simd] All tests passed!\n");
+    printf("[test_unit_simd] All tests passed successfully.\n");
     return 0;
 }

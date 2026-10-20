@@ -67,6 +67,6 @@ int main(void) {
     pthread_join(p_th, NULL);
     rbipc_detach(ring2);
 
-    printf("[test_e2e_shutdown] All tests passed!\n");
+    printf("[test_e2e_shutdown] All tests passed successfully.\n");
     return 0;
 }

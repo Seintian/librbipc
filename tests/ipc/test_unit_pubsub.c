@@ -447,6 +447,6 @@ int main(void) {
     test_pubsub_concurrent_wait_wakeup_and_shutdown();
     test_pubsub_packed_multicast();
     test_pubsub_zero_copy_and_abort();
-    printf("[test_unit_pubsub] All tests passed!\n");
+    printf("[test_unit_pubsub] All tests passed successfully.\n");
     return 0;
 }

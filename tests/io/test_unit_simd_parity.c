@@ -213,6 +213,6 @@ int main(void) {
 #if defined(__x86_64__) || defined(_M_X64)
     test_simd_avx_parity();
 #endif
-    printf("[test_unit_simd_parity] All tests passed!\n");
+    printf("[test_unit_simd_parity] All tests passed successfully.\n");
     return 0;
 }

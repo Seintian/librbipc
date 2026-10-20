@@ -366,6 +366,6 @@ int main(void) {
     test_audit_recovery_counters();
     test_slot_stats_histogram();
     test_slot_stats_histogram_packed();
-    printf("[test_unit_telemetry] All telemetry unit tests passed successfully!\n");
+    printf("[test_unit_telemetry] All telemetry unit tests passed successfully.\n");
     return 0;
 }

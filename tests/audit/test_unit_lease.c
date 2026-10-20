@@ -94,7 +94,7 @@ static void test_lease_revocation_proactive(void) {
         assert(rc == RBIPC_OK);
     }
 
-    /* Ticket 16 maps to index (16 & 15) == 0 (slot 0). Must be vacant and claimable! */
+    /* Ticket 16 maps to index (16 & 15) == 0 (slot 0). Must be vacant and claimable. */
     void *next_buf = NULL;
     uint64_t next_ticket = 0;
     rc = rbipc_reserve_write(ring, 32, &next_buf, &next_ticket);
@@ -142,7 +142,7 @@ static void test_lease_auto_recovery_on_write(void) {
 
     /* Ring is full (slot 0 acquired by stalled consumer, slot 1 committed).
      * Producer attempts to reserve write for ticket 2 (which needs slot 0).
-     * Producer's backoff must auto-revoke slot 0's expired lease and claim the slot! */
+     * Producer backoff must auto-revoke slot 0 expired lease and claim the slot. */
     uint64_t t2 = 0;
     rc = rbipc_reserve_write(ring, 32, &wbuf, &t2);
     assert(rc == RBIPC_OK);
@@ -162,6 +162,6 @@ int main(void) {
     test_lease_getter_setter();
     test_lease_revocation_proactive();
     test_lease_auto_recovery_on_write();
-    printf("[test_unit_lease] All tests passed!\n");
+    printf("[test_unit_lease] All tests passed successfully.\n");
     return 0;
 }

@@ -202,6 +202,6 @@ int main(void) {
     test_ipc_peer_credentials_and_auth();
     test_ipc_multi_fds();
     test_ipc_auto_eventfd_binding();
-    printf("[test_unit_ipc] All tests passed!\n");
+    printf("[test_unit_ipc] All tests passed successfully.\n");
     return 0;
 }

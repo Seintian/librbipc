@@ -498,6 +498,6 @@ int main(void) {
     test_futex2_waitv();
     test_futex_wake_op();
     test_futex2_slot_waiting();
-    printf("[test_unit_sync] All tests passed!\n");
+    printf("[test_unit_sync] All tests passed successfully.\n");
     return 0;
 }

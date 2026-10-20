@@ -101,7 +101,7 @@ static void test_reactor_epoll_integration(void) {
     uint64_t ticket = 0;
     rc = rbipc_reserve_write(ring, 14, &buf, &ticket);
     assert(rc == RBIPC_OK);
-    memcpy(buf, "Hello Reactor!", 14);
+    memcpy(buf, "rbipc_reactor_payload", 14);
     rc = rbipc_commit_write(ring, ticket, 14);
     assert(rc == RBIPC_OK);
 
@@ -247,6 +247,6 @@ int main(void) {
     test_reactor_eventfd_lifecycle();
     test_reactor_epoll_integration();
     test_reactor_external_eventfd_and_negative_paths();
-    printf("[test_unit_reactor] All tests passed!\n");
+    printf("[test_unit_reactor] All tests passed successfully.\n");
     return 0;
 }

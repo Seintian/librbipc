@@ -38,13 +38,13 @@ static void test_vmem_double_map(void) {
     assert(rc == RBIPC_OK);
     assert(data_map != NULL);
 
-    /* Verify mirroring property!
-     * Writing bytes at the start of buffer 1 must immediately be reflected at buffer 2!
+    /* Verify mirroring property.
+     * Writing bytes at the start of buffer 1 must immediately be reflected at buffer 2.
      */
     char *buf1 = (char *)data_map;
     char *buf2 = (char *)data_map + data_size;
 
-    const char *test_str = "Double-Mapping-Magic-12345";
+    const char *test_str = "Double-Mapping-Mirror-12345";
     size_t test_len = strlen(test_str) + 1;
 
     memcpy(buf1, test_str, test_len);
@@ -93,6 +93,6 @@ int main(void) {
     test_vmem_ctrl_map();
     test_vmem_data_map();
     test_vmem_double_map();
-    printf("[test_unit_vmem] All tests passed!\n");
+    printf("[test_unit_vmem] All tests passed successfully.\n");
     return 0;
 }

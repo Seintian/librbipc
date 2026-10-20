@@ -142,6 +142,6 @@ int main(void) {
     printf("[test_unit_latency] Running latency percentile and regression tests...\n");
     test_synthetic_percentiles();
     test_regression_violation_detection();
-    printf("[test_unit_latency] All tests passed!\n");
+    printf("[test_unit_latency] All tests passed successfully.\n");
     return 0;
 }

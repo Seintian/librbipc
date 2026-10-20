@@ -140,7 +140,7 @@ int main(void) {
 
     /* Now wrap around full capacity (cap=4): write slots 3, 4, 5.
      * Slot 5 maps to slot index 1 (the aborted slot).
-     * If rbipc_read did NOT release the poisoned slot, writing slot 5 would deadlock! */
+     * If rbipc_read did not release the poisoned slot, writing slot 5 would deadlock. */
     assert(rbipc_write(wrap_ring, "M3", 3) == RBIPC_OK);
     assert(rbipc_write(wrap_ring, "M4", 3) == RBIPC_OK);
     assert(rbipc_write(wrap_ring, "M5_RECYCLED", 12) == RBIPC_OK);
@@ -155,6 +155,6 @@ int main(void) {
     rbipc_detach(wrap_ring);
 
     rbipc_detach(ring);
-    printf("[test_io_abort] All tests passed!\n");
+    printf("[test_io_abort] All tests passed successfully.\n");
     return 0;
 }

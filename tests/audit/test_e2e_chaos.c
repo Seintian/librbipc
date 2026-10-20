@@ -209,6 +209,6 @@ int main(void) {
     rbipc_destroy(CHAOS_RING);
 
     assert(chaos_injections > 0);
-    printf("[test_e2e_chaos] Chaos resilience test passed!\n");
+    printf("[test_e2e_chaos] Chaos resilience test passed successfully.\n");
     return 0;
 }

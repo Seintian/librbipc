@@ -238,7 +238,7 @@ extern "C" {
   0x0020U /**< Explicitly select named POSIX shared memory. */
 
 #define RBIPC_FLAG_TRUSTED                                                     \
-  0x0040U /**< Tier 2: Ultra-low-latency trusted mode (pure Vyukov sequence    \
+  0x0040U /**< Tier 2: Low-latency trusted mode (pure Vyukov sequence    \
              turns, bypasses PID tracking and state lag checks). */
 #define RBIPC_FLAG_PACKED                                                      \
   0x0080U /**< Tier 3: 64-bit packed sequence/len/state descriptors for       \

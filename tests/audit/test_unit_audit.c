@@ -107,6 +107,6 @@ int main(void) {
     assert(rbipc_slot_unpack_seq(h_seq) == 6);
     assert(rbipc_slot_unpack_state(h_seq) == RBIPC_SLOT_POISONED);
 
-    printf("[test_unit_audit] All tests passed!\n");
+    printf("[test_unit_audit] All tests passed successfully.\n");
     return 0;
 }

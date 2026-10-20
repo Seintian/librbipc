@@ -293,6 +293,6 @@ int main(void) {
     test_batch_roundtrip();
     test_batch_nonblock_and_timeout();
     test_batch_vector_scanning();
-    printf("[test_io_batch] All tests passed!\n");
+    printf("[test_io_batch] All tests passed successfully.\n");
     return 0;
 }

@@ -182,6 +182,6 @@ int main(void) {
     test_telemetry_and_policy_validation();
     test_reactor_validation();
     test_strerror_coverage();
-    printf("[test_unit_validation] All tests passed!\n");
+    printf("[test_unit_validation] All tests passed successfully.\n");
     return 0;
 }

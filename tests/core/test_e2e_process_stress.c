@@ -156,7 +156,7 @@ static void run_consumer_process(proc_coordination_t *coord) {
             uint8_t prev = atomic_exchange_explicit(
                 &coord->received[msg->producer_id][msg->seq], 1, memory_order_relaxed);
             if (prev != 0) {
-                /* Duplicate message received! */
+                /* Duplicate message received */
                 atomic_fetch_add(&coord->error_count, 1);
             }
         }
@@ -257,6 +257,6 @@ int main(void) {
     test_process_stress_round(RBIPC_WAIT_ZERO_SPIN, "RBIPC_WAIT_ZERO_SPIN");
     test_process_stress_round(RBIPC_WAIT_ADAPTIVE, "RBIPC_WAIT_ADAPTIVE");
 
-    printf("[test_e2e_process_stress] All multi-process stress tests passed successfully!\n");
+    printf("[test_e2e_process_stress] All multi-process stress tests passed successfully.\n");
     return 0;
 }

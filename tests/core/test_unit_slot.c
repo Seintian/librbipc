@@ -92,6 +92,6 @@ int main(void) {
     printf("[test_unit_slot] Running tests...\n");
     test_slot_state_lifecycle();
     test_peer_liveness();
-    printf("[test_unit_slot] All tests passed!\n");
+    printf("[test_unit_slot] All tests passed successfully.\n");
     return 0;
 }
