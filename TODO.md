@@ -3,6 +3,7 @@
 ## 1. Executive Summary & Architectural Overview
 
 This document provides the definitive technical specification and evolution log of the `librbipc` shared-memory IPC engine. It synthesizes:
+
 1. **Architectural Analysis of Core Commits**: Deep microarchitectural and concurrency examination of anonymous shared memory, the 3-tier trust hierarchy, AVX sequence turn scanning, multi-FD transmission, and lock-free multicast distribution.
 2. **Defect Rectification & Root-Cause Analysis**: Documenting critical concurrency, serialization, and telemetry bug repairs verified across automated test harnesses.
 3. **Architectural Evaluation Benchmark Suite Specification** ([`benchmarks/bench_architecture_suite.c`](benchmarks/bench_architecture_suite.c)): Formal blueprint of the 8-module evaluation suite measuring latency hierarchies, cache saturation, B-Queue vector scaling, memory lifecycles, and Transparent HugePage throughput.
@@ -16,6 +17,7 @@ This document provides the definitive technical specification and evolution log 
 Evaluation benchmarks and telemetry profiles are structured across two primary hardware environments:
 
 ### Reference Profile: `home_pc` (Desktop Reference Architecture)
+
 - **CPU**: Intel Core i5-10400F @ 2.90 GHz (Comet Lake, 6 physical cores, 12 logical threads; 10 vCPUs assigned to WSL2).
 - **Caches**: 32 KiB L1d/L1i per core, 256 KiB L2 per core, 12 MiB shared L3 cache.
 - **Vector Instruction Sets**: AVX2, AVX, SSE4.2, SSE4.1, SSSE3, BMI1, BMI2, POPCNT, CLFLUSHOPT. (Hardware does not support AVX-512).
@@ -25,6 +27,7 @@ Evaluation benchmarks and telemetry profiles are structured across two primary h
   - HugeTLB 2MB supported by architecture; `nr_hugepages` statically zero in guest instance.
 
 ### Reference Profile: `laptop` / `laptop_powersave` (Mobile Architecture)
+
 - **CPU**: Intel Core i5-6300U @ 2.40 GHz (Skylake Mobile, 2 physical cores, 4 logical threads).
 - **Caches**: 32 KiB L1d/L1i per core, 256 KiB L2 per core, 3 MiB shared L3 cache.
 - **OS Kernel**: Linux `7.2.9-2-cachyos` x86_64 (Preempt Dynamic).
@@ -95,44 +98,52 @@ All 30 test binaries pass 100% cleanly without warnings under `-std=c23 -Wall -W
 The evaluation suite comprehensively quantifies performance gains across 8 dedicated modules:
 
 ### Module 1: 3-Tier Latency Hierarchy (Half-RTT Ping-Pong)
+
 - **Setup**: Pinned producer (CPU 2) and consumer (CPU 3) ping-ponging 64-byte messages across two ring buffers (`SHM_LAT_A` and `SHM_LAT_B`).
 - **Iterations**: 50,000 rounds (plus 500 warmup rounds).
 - **Modes**: Tier 1 Zero-Trust, Tier 2 Trusted, Tier 3 Packed, Combined Tier 2+3.
 - **Metrics**: Min, P25, P50, P75, P90, P99, P99.9, Max, Mean (in ns, half-RTT).
 
 ### Module 2: Streaming 1P-1C Throughput & Cache Saturation
+
 - **Setup**: Unidirectional streaming of 200,000 messages (64-byte payload).
 - **Execution**: Evaluated both Pinned (CPU 2 $\to$ CPU 3) and Unpinned across all 4 modes.
 - **Metrics**: Throughput (msgs/sec), Bandwidth (MB/sec), Latency per message (ns/msg).
 
 ### Module 3: B-Queue Vector Batching Scaling
+
 - **Setup**: Batching via `rbipc_write_batch` and `rbipc_read_acquire_batch`.
 - **Batch Sizes**: 1, 4, 16, 32, 64, 128 (500,000 messages total per batch size).
 - **Modes**: Tier 1 Zero-Trust vs Combined Tier 2+3.
 - **Metrics**: Throughput (msgs/sec), Bandwidth (MB/sec), Latency (ns/msg), Speedup factor vs batch 1.
 
 ### Module 4: Anonymous Shared Memory vs Named POSIX Shm Lifecycle
+
 - **Setup**: 2,000 cycles of create, attach, detach, and destroy.
 - **Modes**: Anonymous (`memfd_create` + SCM_RIGHTS FD transfer) vs Named POSIX (`/dev/shm`).
 - **Metrics**: Operations/sec, average latency per lifecycle cycle in microseconds (μs), speedup factor.
 
 ### Module 5: Multicast PubSub Zero-Copy vs Standard Copy
+
 - **Setup**: 50,000 messages published to 1-to-N subscribers across fanouts: 1, 2, 4, 8.
 - **Modes**: Standard Copy vs Zero-Copy on Standard and Tier 3 Packed rings.
 - **Metrics**: Publisher msgs/sec, Effective delivery msgs/sec (`fanout * pub_msgs_sec`), Effective bandwidth (MB/sec).
 
 ### Module 6: SIMD Sequence Scanning Engines
+
 - **Setup**: 2,500,000 scanning iterations (10,000,000 slots total) on a 256-slot sequence array.
 - **Engines**: Scalar, SSE4.1, AVX1 fallback, AVX2.
 - **Evaluation**: Standard 64-bit sequences and Tier 3 packed sequences (16-bit shift).
 - **Metrics**: Million slots scanned / second (Mslots/sec), Speedup vs scalar.
 
 ### Module 7: Multi-FD Transmission, Futex2 Memoization, & HugeTLB
+
 - **Multi-FD Transmission**: Transfer 1 FD, 2 FDs, 4 FDs in a single `rbipc_ipc_send_fds` call vs 4 sequential socket calls (5,000 iterations).
 - **Futex2 Memoization**: 500,000 checks of `rbipc_futex2_has_u64()` vs raw `syscall(__NR_futex_waitv)`.
 - **HugeTLB 2MB**: Capability probing via `rbipc_shm_hugetlb_available()`.
 
 ### Module 8: Zero-Config Dynamic HugePages vs Standard 4KB Paging
+
 - **Setup**: Evaluates Standard 4KB paging vs Dynamic 2MB THP alignment across 64KB, 4MB, 16MB, and 32MB buffer sizes.
 - **Metrics**: Throughput, latency, PMD mapped kilobytes (`ShmemPmdMapped`), and speedup factors.
 
@@ -141,9 +152,11 @@ The evaluation suite comprehensively quantifies performance gains across 8 dedic
 ## 6. Zero-Configuration Dynamic Transparent HugePages (THP) Specification
 
 ### Objective & Architecture
+
 Ensures `librbipc` automatically unlocks 2MB HugePage performance on any unprivileged host without requiring `sudo`, static pool pre-allocation (`vm.nr_hugepages`), or administrator intervention.
 
-### Implementation Architecture:
+### Implementation Architecture
+
 1. [`src/memory/rbipc_vmem.c`](src/memory/rbipc_vmem.c):
    - Injects `#ifdef MADV_HUGEPAGE` advisories in `rbipc_vmem_map_data()`, `rbipc_vmem_map_ctrl()`, and `rbipc_vmem_bind_mirror_halves()` when mapping regions $\ge 2\text{ MB}$.
    - Fails softly as POSIX no-op on non-Linux or legacy kernels without degrading standard 4KB paging.
