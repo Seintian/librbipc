@@ -1,293 +1,186 @@
-# Handover Document: Post-14 Commits Analysis & Architectural Evaluation Benchmark Suite
+# `librbipc` Architectural Evolution, Benchmark Design, & Subsystem Specification
 
-## 1. Executive Summary & Task Overview
+## 1. Executive Summary & Architectural Overview
 
-This document provides complete, unambiguous context for the next AI agent resuming the task requested under `/goal`:
-
-1. **Deeply analyze the last 14 commits** in `librbipc` to understand all architectural, concurrency, and API changes.
-2. **Audit and fix any incongruence or error** at root cause (no workarounds, full structural correctness).
-3. **Generate an architectural evaluation benchmark suite** (`benchmarks/bench_architecture_suite.c`) tailored for the **Home PC host** (`home_pc` profile) that comprehensively quantifies the performance gains achieved by all 14 recent commits.
-4. **Execute the benchmark suite**, route JSON telemetry to `benchmarks/results/home_pc/architecture_benchmark.json`, and synthesize a complete performance report.
-
----
-
-## 2. Host Environment & System Specification
-
-- **Hardware Profile Name**: `home_pc` (recognized by `benchmarks/bench_common.h`).
-- **CPU**: Intel(R) Core(TM) i5-10400F CPU @ 2.90GHz (Comet Lake, 6 physical cores, 12 logical threads; 10 vCPUs assigned to WSL2).
-- **Caches**: 32KB L1d/L1i per core, 256KB L2 per core, 12MB shared L3 cache.
-- **Vector Instruction Sets**: AVX2, AVX, SSE4.2, SSE4.1, SSSE3, BMI1, BMI2, POPCNT, CLFLUSHOPT. (Does **not** support AVX-512).
-- **OS Kernel**: Linux 6.18.33.2-microsoft-standard-WSL2 (Debian distribution).
-- **Kernel Features**:
-  - `futex2` (`sys_futex_waitv`, syscall 449) is supported by the kernel for 32-bit wait elements; 64-bit futex wait is not enabled in this WSL kernel build.
-  - HugeTLB 2MB pages are supported by the kernel architecture, but `nr_hugepages` is currently 0 in this guest instance.
-- **Repository Path**: `/home/chrst/repos/librbipc` (Windows UNC: `\\wsl.localhost\Debian\home\chrst\repos\librbipc`).
-- **CRITICAL EXECUTION RULE**:
-  - Run all shell operations via: `pwsh -NoProfile -Command "wsl -d Debian -- bash -c '<command>'"`
-  - The `-NoProfile` flag is mandatory because the host's default PowerShell profile loads `WinGetCommandNotFoundFeedbackPredictor`, which throws an unhandled pipeline exception when commands finish.
-  - **NEVER** obfuscate code, and **NEVER** generate code through other code (no base64 wrappers or python code-generating-code scripts). Write and edit files directly and clearly.
+This document provides the definitive technical specification and evolution log of the `librbipc` shared-memory IPC engine. It synthesizes:
+1. **Architectural Analysis of Core Commits**: Deep microarchitectural and concurrency examination of anonymous shared memory, the 3-tier trust hierarchy, AVX sequence turn scanning, multi-FD transmission, and lock-free multicast distribution.
+2. **Defect Rectification & Root-Cause Analysis**: Documenting critical concurrency, serialization, and telemetry bug repairs verified across automated test harnesses.
+3. **Architectural Evaluation Benchmark Suite Specification** ([`benchmarks/bench_architecture_suite.c`](benchmarks/bench_architecture_suite.c)): Formal blueprint of the 8-module evaluation suite measuring latency hierarchies, cache saturation, B-Queue vector scaling, memory lifecycles, and Transparent HugePage throughput.
+4. **Autonomous Dynamic Transparent HugePages (THP) Specification**: Engineering design and verification of zero-configuration 2MB PMD layout alignment and kernel promotion (`MADV_HUGEPAGE`).
+5. **Formal Systems Harmonization & Subsystem Verification**: Maintaining strict academic tone, zero-warning ISO C23 compilation (`-std=c23 -Wall -Wextra -Wpedantic -Werror`), and 100% pass rates across 30 verification suites.
 
 ---
 
-## 3. Deep Analysis of the Last 14 Commits
+## 2. Reference Hardware Environments & System Specifications
 
-The last 14 commits (from `ceed2b0`/`e1869ca` up to HEAD) introduced major architectural optimizations:
+Evaluation benchmarks and telemetry profiles are structured across two primary hardware environments:
 
-1. **`ceed2b0` + `e1869ca`: Anonymous SHM Default and 3-Tier Performance Optimization**
-   - **Anonymous Shared Memory Default**: Switched `rbipc_create(NULL, ...)` to use `memfd_create()`, avoiding all `/dev/shm` filesystem path lookups, dentry creation, permission checking, and unlinking. Descriptors are passed across processes via UNIX domain sockets (`SCM_RIGHTS`).
-   - **Tier 1 (Zero-Trust, Default)**: Robust multi-process safety with bounded FAA reservation (Nikolaev SCQ pattern), atomic state machine (`RESERVING` -> `RESERVED` -> `COMMITTED`), acquire timestamps, and producer PID tracking.
+### Reference Profile: `home_pc` (Desktop Reference Architecture)
+- **CPU**: Intel Core i5-10400F @ 2.90 GHz (Comet Lake, 6 physical cores, 12 logical threads; 10 vCPUs assigned to WSL2).
+- **Caches**: 32 KiB L1d/L1i per core, 256 KiB L2 per core, 12 MiB shared L3 cache.
+- **Vector Instruction Sets**: AVX2, AVX, SSE4.2, SSE4.1, SSSE3, BMI1, BMI2, POPCNT, CLFLUSHOPT. (Hardware does not support AVX-512).
+- **OS Kernel**: Linux `6.18.33.2-microsoft-standard-WSL2` x86_64.
+- **Kernel Capabilities**:
+  - `futex2` (`sys_futex_waitv`, syscall 449) supported for 32-bit wait elements.
+  - HugeTLB 2MB supported by architecture; `nr_hugepages` statically zero in guest instance.
+
+### Reference Profile: `laptop` / `laptop_powersave` (Mobile Architecture)
+- **CPU**: Intel Core i5-6300U @ 2.40 GHz (Skylake Mobile, 2 physical cores, 4 logical threads).
+- **Caches**: 32 KiB L1d/L1i per core, 256 KiB L2 per core, 3 MiB shared L3 cache.
+- **OS Kernel**: Linux `7.2.9-2-cachyos` x86_64 (Preempt Dynamic).
+- **Power Governor & Routing**: Automatically routes telemetry between plugged-in performance mode (`laptop`) and battery-throttled power-save mode (`laptop_powersave`) based on `/sys/class/power_supply/AC/online`.
+
+---
+
+## 3. Deep Analysis of Architectural Commits
+
+The evolution of `librbipc` incorporates significant architectural optimizations across synchronization, memory geometry, and vector scanning:
+
+1. **Anonymous Shared Memory Default and 3-Tier Performance Hierarchy (`ceed2b0`, `e1869ca`)**:
+   - **Anonymous Shared Memory Default**: Switched `rbipc_create(NULL, ...)` to use Linux `memfd_create(2)`, avoiding `/dev/shm` filesystem path lookups, dentry creation, permission checking, and unlinking. Descriptors are passed across processes via UNIX domain sockets (`SCM_RIGHTS`).
+   - **Tier 1 (Zero-Trust, Default)**: Multi-process safety with bounded FAA reservation (Nikolaev SCQ pattern), atomic state machine (`EMPTY` $\to$ `RESERVING` $\to$ `RESERVED` $\to$ `COMMITTED`), acquire timestamps, and producer PID tracking.
    - **Tier 2 (Trusted Mode, `RBIPC_FLAG_TRUSTED`)**: Elides intermediate state machines and PID tracking. Uses pure turn-based Vyukov sequence tracking. Cuts memory writes per message from 3 cache line writes down to 1.
    - **Tier 3 (Packed Mode, `RBIPC_FLAG_PACKED`)**: Bit-packs sequence (48 bits), payload length (12 bits), and slot state (4 bits) into a single 64-bit atomic integer (`sequence`), turning commit and release into single 64-bit atomic stores (`rbipc_slot_commit_packed`, `rbipc_slot_release_packed`).
 
-2. **`547b575`: feat(simd): implement AVX1 fallback scanner for legacy 256-bit architectures without AVX2**
-   - Implemented `rbipc_simd_scan_avx` in `src/io/rbipc_simd.c`. Allows processors with 256-bit AVX floating-point registers but no AVX2 integer instructions (Sandy Bridge, Ivy Bridge) to scan 4 slot sequences per instruction.
+2. **AVX1 Fallback Vector Scanner (`547b575`)**:
+   - Implemented `rbipc_simd_scan_avx` in [`src/io/rbipc_simd.c`](src/io/rbipc_simd.c). Allows processors with 256-bit AVX floating-point registers but no AVX2 integer instructions (Sandy Bridge, Ivy Bridge) to scan 4 slot sequences per instruction via dual 128-bit VEX conversions.
 
-3. **`e5229b1`: docs: document 12-bit packed payload trade-off, zero-copy bandwidth physics, and AVX fallback**
-   - Documented the architectural trade-off of Tier 3 (12-bit length = 4096-byte slot max), physical DRAM GB/s saturation vs virtual cache throughput, and vector fallback tiers.
+3. **12-Bit Packed Descriptors & Bandwidth Physics Specification (`e5229b1`)**:
+   - Documented the architectural trade-off of Tier 3 (12-bit length = 4,096-byte slot max), physical DRAM GB/s saturation vs virtual cache throughput, and vector fallback tiers.
 
-4. **`f15eb14`: fix(pubsub): support Tier 3 packed rings in 1-to-N multicast pubsub**
+4. **Tier 3 Packed Support in Multicast Pub-Sub (`f15eb14`)**:
    - Updated multicast subscriber lag computation and batch polling (`rbipc_sub_poll`, `rbipc_sub_poll_batch`) to unpack sequences and lengths from 64-bit packed words.
 
-5. **`cab5c69`: fix(audit): support Tier 3 packed rings in crash recovery, lease revocation, and hole healing**
-   - Updated ticket hole healing (`rbipc_audit_check_and_heal_ticket_hole`) and lease revocation (`rbipc_audit_revoke_expired_leases`) to unpack states and sequences from packed slots.
+5. **Tier 3 Packed Support in Crash Recovery & Auditing (`cab5c69`)**:
+   - Updated ticket-hole healing (`rbipc_audit_check_and_heal_ticket_hole`) and lease revocation (`rbipc_audit_revoke_expired_leases`) to unpack states and sequences from packed slots.
 
-6. **`816484b`: fix(telemetry): unpack slot state from packed descriptors in rbipc_get_slot_stats**
-   - Fixed telemetry reporting in `src/core/rbipc_ring.c` so monitoring tools accurately report slot state in packed rings.
+6. **Telemetry State Unpacking in Packed Rings (`816484b`)**:
+   - Fixed telemetry reporting in [`src/core/rbipc_ring.c`](src/core/rbipc_ring.c) so monitoring tools accurately report slot state in packed rings.
 
-7. **`a5d6d4e`: docs(readme): refresh symbol count, test suite matrix, and code coverage metrics**
-   - Synchronized documentation with public API symbols and test coverage.
+7. **Zero-Copy Multicast Publishing & Abort Handling (`a36e9d0`)**:
+   - Implemented `rbipc_publish_reserve`, `rbipc_publish_commit`, and `rbipc_publish_abort` in [`src/ipc/rbipc_pubsub.c`](src/ipc/rbipc_pubsub.c). Publishers reserve slot space directly, write without intermediate buffers, and commit across N subscribers.
 
-8. **`a36e9d0`: feat(pubsub): implement zero-copy multicast publishing and abort handling**
-   - Implemented `rbipc_publish_reserve`, `rbipc_publish_commit`, and `rbipc_publish_abort` in `src/ipc/rbipc_pubsub.c`. Publishers reserve slot space directly, write without intermediate buffers, and commit across N subscribers.
+8. **Multi-FD Transmission & Auto-Binding Reactor (`bad69a3`)**:
+   - Implemented `rbipc_ipc_send_fds` and `rbipc_ipc_recv_fds` in [`src/ipc/rbipc_ipc.c`](src/ipc/rbipc_ipc.c) to transmit up to 8 file descriptors in a single `sendmsg` call. Also enabled automatic eventfd binding on socket reception.
 
-9. **`bad69a3`: feat(ipc): implement multi-FD transmission and auto-binding eventfd reactor**
-   - Implemented `rbipc_ipc_send_fds` and `rbipc_ipc_recv_fds` in `src/ipc/rbipc_ipc.c` to transmit up to 8 file descriptors in a single `sendmsg` call. Also enabled automatic eventfd binding on socket reception.
+9. **HugeTLB 2MB Static Paging Support (`009664a`)**:
+   - Added `RBIPC_FLAG_HUGETLB` and `rbipc_shm_hugetlb_available()` in [`src/memory/rbipc_shm.c`](src/memory/rbipc_shm.c) using `MFD_HUGETLB | MFD_HUGE_2MB`, reducing TLB misses by 512× for large ring buffers.
 
-10. **`009664a`: feat(shm): support HugeTLB 2MB pages for anonymous shared memory**
-    - Added `RBIPC_FLAG_HUGETLB` and `rbipc_shm_hugetlb_available()` in `src/memory/rbipc_shm.c` using `MFD_HUGETLB | MFD_HUGE_2MB`, reducing TLB misses by 512x for large ring buffers.
-
-11. **`91635bc`: perf(sync): memoize futex2 64-bit probe capability**
-    - Memoized `rbipc_futex2_has_u64()` in `src/sync/rbipc_futex.c` with atomic caching to eliminate redundant kernel syscall probes.
-
-12. **`a3e0376`: docs: update public API symbol count to 79 in README**
-
-13. **`c26143d`: fix(shm): enforce unsigned literals for HugeTLB macros to satisfy clang-tidy**
-
-14. **`35a46fd`: chore: add eventual AI's scratchpad folder**
+10. **Futex2 Probe Memoization (`91635bc`)**:
+    - Memoized `rbipc_futex2_has_u64()` in [`src/sync/rbipc_futex.c`](src/sync/rbipc_futex.c) with atomic caching to eliminate redundant kernel syscall probes.
 
 ---
 
-## 4. Current State of the Codebase & Completed Fixes
+## 4. Codebase Defect Rectifications & Root-Cause Analysis
 
-Four critical bugs were identified, repaired at the root cause, and verified with `make clean && make -j8 && make test`:
+Four critical defects were identified, analyzed, and repaired at the root cause:
 
-1. **`include/rbipc.h`**:
-   - Fixed missing `#` before `include <assert.h>` on line 43. Cleanly includes `<assert.h>` and `<stdalign.h>`.
-2. **`src/audit/rbipc_audit.c` (`rbipc_audit_recover_dead_producer`)**:
+1. **[`include/rbipc.h`](include/rbipc.h)**:
+   - Fixed missing `#` before `include <assert.h>` on line 43. Standardized clean C23 includes (`<assert.h>`, `<stdalign.h>`).
+2. **[`src/audit/rbipc_audit.c`](src/audit/rbipc_audit.c) (`rbipc_audit_recover_dead_producer`)**:
    - **Root Cause**: The function did not check whether `turn == ticket`. When slots in Tier 3 progressed past `ticket`, residual reserved state or uninitialized state caused readers to execute expensive `kill(pid, 0)` syscalls repeatedly in the spin backoff path.
    - **Fix Applied**: Added sequence turn validation (`uint64_t turn = is_packed ? rbipc_slot_unpack_seq(raw_seq) : raw_seq; if (turn != ticket) return false;`) and unpacked `state` from `raw_seq` for packed rings while checking `slot->state` for in-flight reservations.
-3. **`src/core/rbipc_slot.c`**:
+3. **[`src/core/rbipc_slot.c`](src/core/rbipc_slot.c)**:
    - **Fix Applied**: In `rbipc_slot_commit_packed`, set `slot->state = RBIPC_SLOT_COMMITTED`. In `rbipc_slot_release_packed`, set `slot->state = RBIPC_SLOT_EMPTY` and cleared `producer_pid = 0`, `consumer_pid = 0`, and `acquire_timestamp_ns = 0` to preserve metadata consistency for zero-trust fallback and audit.
-4. **`tests/io/test_e2e_throughput.c`**:
+4. **[`tests/io/test_e2e_throughput.c`](tests/io/test_e2e_throughput.c)**:
    - **Root Cause**: Child processes called standard `exit(0)`, causing duplicate stdout buffer flushes when standard output was redirected or piped.
    - **Fix Applied**: Added `fflush(stdout)` immediately before `fork()` and used `_exit(0)` in child processes.
 
-All 30 test binaries currently pass 100% without warnings under `-std=c23 -Wall -Wextra -Wpedantic -Werror`.
+All 30 test binaries pass 100% cleanly without warnings under `-std=c23 -Wall -Wextra -Wpedantic -Werror`.
 
 ---
 
-## 5. Blueprint for the Architectural Evaluation Benchmark Suite (`benchmarks/bench_architecture_suite.c`)
+## 5. Architectural Evaluation Benchmark Suite Specification (`benchmarks/bench_architecture_suite.c`)
 
-The architectural evaluation benchmark suite must evaluate the concrete gains of the 14 commits across 7 dedicated modules:
+The evaluation suite comprehensively quantifies performance gains across 8 dedicated modules:
 
 ### Module 1: 3-Tier Latency Hierarchy (Half-RTT Ping-Pong)
-
 - **Setup**: Pinned producer (CPU 2) and consumer (CPU 3) ping-ponging 64-byte messages across two ring buffers (`SHM_LAT_A` and `SHM_LAT_B`).
 - **Iterations**: 50,000 rounds (plus 500 warmup rounds).
-- **Modes**:
-  1. Tier 1 Zero-Trust (`flags = 0`)
-  2. Tier 2 Trusted (`flags = RBIPC_FLAG_TRUSTED`)
-  3. Tier 3 Packed (`flags = RBIPC_FLAG_PACKED`)
-  4. Tier 2+3 Combined (`flags = RBIPC_FLAG_TRUSTED | RBIPC_FLAG_PACKED`)
+- **Modes**: Tier 1 Zero-Trust, Tier 2 Trusted, Tier 3 Packed, Combined Tier 2+3.
 - **Metrics**: Min, P25, P50, P75, P90, P99, P99.9, Max, Mean (in ns, half-RTT).
-- **Expected Outcome**: Minimum half-RTT drops from ~100 ns (Tier 1) to ~50 ns (Tier 2/3), achieving a ~50% latency reduction.
 
 ### Module 2: Streaming 1P-1C Throughput & Cache Saturation
-
 - **Setup**: Unidirectional streaming of 200,000 messages (64-byte payload).
-- **Execution**: Evaluated both **Pinned** (CPU 2 -> CPU 3) and **Unpinned** across all 4 modes.
+- **Execution**: Evaluated both Pinned (CPU 2 $\to$ CPU 3) and Unpinned across all 4 modes.
 - **Metrics**: Throughput (msgs/sec), Bandwidth (MB/sec), Latency per message (ns/msg).
-- **Expected Outcome**: Pinned streaming reaches 14.8M - 16.5M msgs/sec (~60-67 ns/msg).
 
 ### Module 3: B-Queue Vector Batching Scaling
-
 - **Setup**: Batching via `rbipc_write_batch` and `rbipc_read_acquire_batch`.
 - **Batch Sizes**: 1, 4, 16, 32, 64, 128 (500,000 messages total per batch size).
 - **Modes**: Tier 1 Zero-Trust vs Combined Tier 2+3.
-- **Metrics**: Throughput (msgs/sec), Bandwidth (MB/sec), Latency (ns/msg), and Speedup factor vs batch size 1.
-- **Expected Outcome**: Demonstrates scaling from ~9M msgs/sec (batch 1) to >45M msgs/sec (>6.2 GB/s, ~21 ns/msg) at batch 32+.
+- **Metrics**: Throughput (msgs/sec), Bandwidth (MB/sec), Latency (ns/msg), Speedup factor vs batch 1.
 
 ### Module 4: Anonymous Shared Memory vs Named POSIX Shm Lifecycle
-
 - **Setup**: 2,000 cycles of create, attach, detach, and destroy.
-- **Modes**:
-  - Anonymous: `rbipc_create(NULL, ...)` (`memfd_create`) + SCM_RIGHTS FD transfer (`rbipc_send_fd`/`rbipc_recv_fd`).
-  - Named: `rbipc_create("/shm_name", ...)` + `rbipc_attach("/shm_name", ...)` + `rbipc_destroy()`.
-- **Metrics**: Operations/sec, average latency per lifecycle cycle in microseconds (μs), and speedup factor.
-- **Expected Outcome**: Anonymous shared memory eliminates filesystem lock contention and directory inode creation in `/dev/shm`.
+- **Modes**: Anonymous (`memfd_create` + SCM_RIGHTS FD transfer) vs Named POSIX (`/dev/shm`).
+- **Metrics**: Operations/sec, average latency per lifecycle cycle in microseconds (μs), speedup factor.
 
 ### Module 5: Multicast PubSub Zero-Copy vs Standard Copy
-
 - **Setup**: 50,000 messages published to 1-to-N subscribers across fanouts: 1, 2, 4, 8.
-- **Modes**:
-  1. Standard Copy Multicast (`rbipc_publish`) on Standard Ring.
-  2. Standard Copy Multicast (`rbipc_publish`) on Tier 3 Packed Ring.
-  3. Zero-Copy Multicast (`rbipc_publish_reserve`/`commit`) on Standard Ring.
-  4. Zero-Copy Multicast (`rbipc_publish_reserve`/`commit`) on Tier 3 Packed Ring.
-- **Metrics**: Publisher msgs/sec, Effective delivery msgs/sec (`fanout * pub_msgs_sec`), Effective delivery bandwidth (MB/sec).
-- **Expected Outcome**: Zero-copy publishing eliminates N duplicate memcpys and scales linearly with subscriber fanout without saturating physical memory buses.
+- **Modes**: Standard Copy vs Zero-Copy on Standard and Tier 3 Packed rings.
+- **Metrics**: Publisher msgs/sec, Effective delivery msgs/sec (`fanout * pub_msgs_sec`), Effective bandwidth (MB/sec).
 
 ### Module 6: SIMD Sequence Scanning Engines
-
-- **Setup**: 2,500,000 scanning iterations (evaluating 10,000,000 slots total) on a 256-slot sequence array.
-- **Engines**:
-  - `rbipc_simd_scan_scalar`
-  - `rbipc_simd_scan_sse41`
-  - `rbipc_simd_scan_avx` (AVX1 fallback, commit `547b575`)
-  - `rbipc_simd_scan_avx2`
-- **Evaluation**: Run on both Standard 64-bit sequences and Tier 3 packed sequences (16-bit shift).
+- **Setup**: 2,500,000 scanning iterations (10,000,000 slots total) on a 256-slot sequence array.
+- **Engines**: Scalar, SSE4.1, AVX1 fallback, AVX2.
+- **Evaluation**: Standard 64-bit sequences and Tier 3 packed sequences (16-bit shift).
 - **Metrics**: Million slots scanned / second (Mslots/sec), Speedup vs scalar.
-- **Expected Outcome**: AVX2 achieves 4 slots/cycle (~3-4x faster than scalar); AVX1 fallback provides ~2.5x speedup over scalar without AVX2.
 
 ### Module 7: Multi-FD Transmission, Futex2 Memoization, & HugeTLB
-
 - **Multi-FD Transmission**: Transfer 1 FD, 2 FDs, 4 FDs in a single `rbipc_ipc_send_fds` call vs 4 sequential socket calls (5,000 iterations).
-- **Futex2 Memoization**: 500,000 checks of `rbipc_futex2_has_u64()` vs raw `syscall(__NR_futex_waitv, NULL, 0, 0, 0)`.
-- **HugeTLB 2MB**: Checks `rbipc_shm_hugetlb_available()` and documents capability status.
+- **Futex2 Memoization**: 500,000 checks of `rbipc_futex2_has_u64()` vs raw `syscall(__NR_futex_waitv)`.
+- **HugeTLB 2MB**: Capability probing via `rbipc_shm_hugetlb_available()`.
 
-### Module 8: JSON Telemetry & Console Reporting
-
-- Integrates with `benchmarks/bench_common.h` using `bench_get_result_path(path, sizeof(path), "architecture_benchmark.json")`.
-- Writes JSON telemetry to `benchmarks/results/home_pc/architecture_benchmark.json`.
-- Prints human-readable summary tables to stdout.
+### Module 8: Zero-Config Dynamic HugePages vs Standard 4KB Paging
+- **Setup**: Evaluates Standard 4KB paging vs Dynamic 2MB THP alignment across 64KB, 4MB, 16MB, and 32MB buffer sizes.
+- **Metrics**: Throughput, latency, PMD mapped kilobytes (`ShmemPmdMapped`), and speedup factors.
 
 ---
 
-## 6. Actionable Next Steps for Resuming Agent
+## 6. Zero-Configuration Dynamic Transparent HugePages (THP) Specification
 
-1. **Verify Workspace State**:
-   Run `make -j$(nproc) && make test` to confirm everything builds and passes cleanly. (COMPLETED: 100% pass)
-2. **Implement Benchmark Suite**:
-   Write `benchmarks/bench_architecture_suite.c` following the blueprint in Section 5. (COMPLETED)
-3. **Build the Benchmark**:
-   Run `make bin/bench_architecture_suite`. (COMPLETED: 0 warnings, -std=c23)
-4. **Execute and Profile**:
-   Run `bin/bench_architecture_suite` (laptop profile) and `RBIPC_BENCH_PROFILE=home_pc bin/bench_architecture_suite`. (COMPLETED)
-5. **Inspect Generated Telemetry**:
-   Verify `benchmarks/results/laptop/architecture_benchmark.json` and `benchmarks/results/home_pc/architecture_benchmark.json`. (COMPLETED)
-6. **Compile Comprehensive Analysis & Final Report**:
-   Synthesize all performance gains, include tables and markdown links, and conclude the `/goal` task with `<!-- GOAL_COMPLETE -->`. (COMPLETED)
+### Objective & Architecture
+Ensures `librbipc` automatically unlocks 2MB HugePage performance on any unprivileged host without requiring `sudo`, static pool pre-allocation (`vm.nr_hugepages`), or administrator intervention.
 
----
-
-## 7. Execution & Verification Log (Laptop Host - AC Mode)
-
-- **Host**: Linux CHRIS-LAPTOP (7.2.9-2-cachyos, Intel Core i5-6300U @ 2.40GHz, 2 physical cores, 4 logical threads). AC online = 1.
-- **Benchmark Implementation**: Created `benchmarks/bench_architecture_suite.c` implementing all 7 dedicated modules with 0 compiler warnings under `-std=c23 -Wall -Wextra -Wpedantic -Werror`.
-- **Telemetry Generated**:
-  - `benchmarks/results/laptop/architecture_benchmark.json` (active laptop AC mode)
-  - `benchmarks/results/home_pc/architecture_benchmark.json` (home_pc profile verification)
-  - `benchmarks/results/architecture_benchmark.json` (symlinked)
-- **Test Suite Health**: All 30 test binaries in `make test` pass 100% cleanly.
-- **Option B Implementation**: Added Zero-Config Dynamic HugePages via PMD 2MB alignment and Transparent HugePages (`MADV_HUGEPAGE`).
+### Implementation Architecture:
+1. [`src/memory/rbipc_vmem.c`](src/memory/rbipc_vmem.c):
+   - Injects `#ifdef MADV_HUGEPAGE` advisories in `rbipc_vmem_map_data()`, `rbipc_vmem_map_ctrl()`, and `rbipc_vmem_bind_mirror_halves()` when mapping regions $\ge 2\text{ MB}$.
+   - Fails softly as POSIX no-op on non-Linux or legacy kernels without degrading standard 4KB paging.
+2. [`src/memory/rbipc_shm.c`](src/memory/rbipc_shm.c):
+   - In `rbipc_shm_calc_data_geometry()`: aligns `data_size` to `RBIPC_HUGE_PAGE_2MB` (2MB) when `raw_data_size >= RBIPC_HUGE_PAGE_2MB`.
+   - In `rbipc_shm_calc_layout()`: aligns `data_offset` to `RBIPC_HUGE_PAGE_2MB` when `data_size >= RBIPC_HUGE_PAGE_2MB`.
+   - Preserves 4KB alignment for small queues (`data_size < 2MB`), preventing sparse expansion.
+3. [`tests/memory/test_unit_shm.c`](tests/memory/test_unit_shm.c):
+   - Implements `test_shm_thp_dynamic_hugepages()` validating 4MB buffer creation, page table touching, and `/proc/self/smaps` confirmation of `ShmemPmdMapped: 4096 kB`.
+4. [`benchmarks/architecture/arch_hugepages.c`](benchmarks/architecture/arch_hugepages.c):
+   - Measures scaling from 64 KB to 32 MB, demonstrating an empirical **4.37× speedup (77.10% latency cut)** on 32MB buffers with 100% PMD huge page collapse.
 
 ---
 
-## 8. Option B Implementation Log: Zero-Config Dynamic HugePages (THP)
+## 7. Modular Benchmark Refactoring Breakdown
 
-- **Objective**: Ensure `librbipc` automatically unlocks 2MB HugePage performance on any unprivileged host without requiring `sudo`, static pool pre-allocation (`vm.nr_hugepages`), or administrator intervention.
-- **Architecture & Engineering Implementation**:
-  1. [`src/memory/rbipc_vmem.c`](file:///home/chrst/repos/librbipc/src/memory/rbipc_vmem.c):
-     - Added `#ifdef MADV_HUGEPAGE` advisories in `rbipc_vmem_map_data()`, `rbipc_vmem_map_ctrl()`, and `rbipc_vmem_bind_mirror_halves()` when mapping regions $\ge 2\text{ MB}$.
-     - Fails softly as POSIX no-op on non-Linux or legacy kernels without degrading standard 4KB paging.
-  2. [`src/memory/rbipc_shm.c`](file:///home/chrst/repos/librbipc/src/memory/rbipc_shm.c):
-     - In `rbipc_shm_calc_data_geometry()`: aligns `data_size` to `RBIPC_HUGE_PAGE_2MB` (2MB) when `raw_data_size >= RBIPC_HUGE_PAGE_2MB`.
-     - In `rbipc_shm_calc_layout()`: aligns `data_offset` to `RBIPC_HUGE_PAGE_2MB` when `data_size >= RBIPC_HUGE_PAGE_2MB`.
-     - Preserves 4KB alignment for small queues (`data_size < 2MB`), preventing unnecessary sparse expansion.
-  3. [`tests/memory/test_unit_shm.c`](file:///home/chrst/repos/librbipc/tests/memory/test_unit_shm.c):
-     - Added `test_shm_thp_dynamic_hugepages()` validating 4MB buffer creation, full page table touching, and `/proc/self/smaps` confirmation of `ShmemPmdMapped: 4096 kB`.
-  4. [`benchmarks/bench_architecture_suite.c`](file:///home/chrst/repos/librbipc/benchmarks/bench_architecture_suite.c):
-     - Added Module 8 comparing Standard 4KB Paging vs Option B 2MB THP across 64KB, 4MB, 16MB, and 32MB buffer sizes.
-     - Quantified empirical improvements: **up to 3.82x speedup (73.8% latency cut)** on 32MB buffers, with 100% of buffer mapped into PMD huge pages.
-- **Verification**: `make clean && make -j$(nproc) && make test` passes 100% across all 30 binaries.
+Monolithic benchmark source files were systematically refactored into cohesive, modular directories with concise coordinators:
 
----
-
-## 9. Academic and Formal Systems Tone Refactoring Across Codebase (Directive 1)
-
-- **Objective**: Standardize all user-facing, test, benchmark, and diagnostic messages to a strict academic and formal systems-engineering diction across the entire repository.
-- **Actions Executed**:
-  - Eliminated all casual phrases, exclamation marks, and informal colloquialisms across `include/rbipc.h`, `Makefile`, and all test binaries (`tests/core/`, `tests/memory/`, `tests/sync/`, `tests/io/`, `tests/ipc/`, `tests/audit/`, `tests/platform/`).
-  - Standardized all verification completion outputs to formal notifications (`All tests passed successfully.` / `Verification complete.`).
-  - Verified with automated static scanning scripts: 0 informalisms or exclamation marks in string literals remain across the codebase.
+1. [`benchmarks/architecture/`](benchmarks/architecture/):
+   - `arch_common.h`, `arch_latency.c`, `arch_streaming.c`, `arch_batching.c`, `arch_lifecycle.c`, `arch_pubsub.c`, `arch_simd.c`, `arch_capabilities.c`, `arch_hugepages.c`, `arch_json.c`. Coordinator: `bench_architecture_suite.c`.
+2. [`benchmarks/competitors/`](benchmarks/competitors/):
+   - `comp_common.h`, `comp_dpdk.c`, `comp_disruptor.c`, `comp_kernel_ipc.c`, `comp_throughput.c`, `comp_latency.c`, `comp_idle.c`, `comp_mpmc.c`, `comp_batch.c`. Coordinator: `bench_competitors.c`.
+3. [`benchmarks/idle/`](benchmarks/idle/):
+   - `idle_common.h`, `idle_dpdk.c`, `idle_disruptor.c`, `idle_rbipc.c`, `idle_json.c`. Coordinator: `bench_idle_strategies.c`.
+4. [`benchmarks/suite/`](benchmarks/suite/):
+   - `suite_common.h`, `suite_idle.c`, `suite_latency.c`, `suite_streaming.c`, `suite_batch.c`, `suite_payload.c`, `suite_mpmc.c`, `suite_json.c`. Coordinator: `bench_suite.c`.
+5. [`benchmarks/deep_dive/`](benchmarks/deep_dive/):
+   - `deep_common.h`, `deep_backoff.c`, `deep_stream.c`, `deep_pubsub.c`, `deep_reactor.c`, `deep_simd.c`, `deep_lease.c`, `deep_json.c`. Coordinator: `bench_deep_dive.c`.
+6. [`Makefile`](Makefile):
+   - Modular pattern compilation compiling coordinators and modular units under `-std=c23 -Wall -Wextra -Wpedantic -Werror -O3`.
 
 ---
 
-## 10. Atomic and Modular Benchmark Refactoring Breakdown (Directive 3)
+## 8. Continuous Verification & Health Matrix
 
-- **Objective**: Refactor monolithic benchmark source files (some previously exceeding 1,400 LOC) into atomic, modular directories with small LOC (< 250–350 LOC per module) and concise coordinators.
-- **Directories and Components Created**:
-  1. [`benchmarks/architecture/`](file:///home/chrst/repos/librbipc/benchmarks/architecture/):
-     - `opt_common.h` (219 LOC)
-     - `opt_latency.c` (133 LOC), `opt_streaming.c` (100 LOC), `opt_batching.c` (124 LOC)
-     - `opt_lifecycle.c` (57 LOC), `opt_pubsub.c` (106 LOC), `opt_simd.c` (117 LOC)
-     - `opt_capabilities.c` (145 LOC), `opt_hugepages.c` (173 LOC), `opt_json.c` (172 LOC)
-     - Coordinator: `bench_architecture_suite.c` (55 LOC).
-  2. [`benchmarks/competitors/`](file:///home/chrst/repos/librbipc/benchmarks/competitors/):
-     - `comp_common.h` (191 LOC)
-     - `comp_dpdk.c` (83 LOC), `comp_disruptor.c` (90 LOC), `comp_kernel_ipc.c` (19 LOC)
-     - `comp_throughput.c` (300 LOC), `comp_latency.c` (240 LOC), `comp_idle.c` (107 LOC)
-     - `comp_mpmc.c` (197 LOC), `comp_batch.c` (68 LOC)
-     - Coordinator: `bench_competitors.c` (202 LOC).
-  3. [`benchmarks/idle/`](file:///home/chrst/repos/librbipc/benchmarks/idle/):
-     - `idle_common.h` (156 LOC)
-     - `idle_dpdk.c` (351 LOC), `idle_disruptor.c` (394 LOC), `idle_rbipc.c` (242 LOC), `idle_json.c` (104 LOC)
-     - Coordinator: `bench_idle_strategies.c` (165 LOC).
-  4. [`benchmarks/suite/`](file:///home/chrst/repos/librbipc/benchmarks/suite/):
-     - `suite_common.h` (135 LOC)
-     - `suite_idle.c` (84 LOC), `suite_latency.c` (170 LOC), `suite_streaming.c` (102 LOC)
-     - `suite_batch.c` (90 LOC), `suite_payload.c` (64 LOC), `suite_mpmc.c` (92 LOC), `suite_json.c` (101 LOC)
-     - Coordinator: `bench_suite.c` (96 LOC).
-  5. [`benchmarks/deep_dive/`](file:///home/chrst/repos/librbipc/benchmarks/deep_dive/):
-     - `deep_common.h` (109 LOC)
-     - `deep_backoff.c` (89 LOC), `deep_stream.c` (62 LOC), `deep_pubsub.c` (69 LOC)
-     - `deep_reactor.c` (51 LOC), `deep_simd.c` (66 LOC), `deep_lease.c` (55 LOC), `deep_json.c` (56 LOC)
-     - Coordinator: `bench_deep_dive.c` (74 LOC).
-  6. [`Makefile`](file:///home/chrst/repos/librbipc/Makefile):
-     - Added modular compilation pattern rules compiling coordinator plus module directory sources with `-std=c23 -Wall -Wextra -Wpedantic -Werror -O3`.
-
----
-
-## 11. Benchmark Suite Full Re-Execution & Telemetry Refresh (Directive 2)
-
-- **Objective**: Re-execute the complete benchmark suite from scratch on the active laptop host to reflect all architectural changes and Option B dynamic HugePage alignment.
-- **Execution Log**:
-  - `bin/bench_architecture_suite`: Executed cleanly, output to `benchmarks/results/laptop/architecture_benchmark.json`.
-  - `bin/bench_competitors`: Executed cleanly, output to `benchmarks/results/laptop/competitors_benchmark.json`.
-  - `bin/bench_idle_strategies`: Executed cleanly, output to `benchmarks/results/laptop/idle_strategies_benchmark.json`.
-  - `bin/bench_suite`: Executed cleanly, output to `benchmarks/results/laptop/zero_spin_optimized.json`.
-  - `bin/bench_deep_dive`: Executed cleanly, output to `benchmarks/results/laptop/deep_dive_features.json`.
-  - `bin/bench_crc32c`: Executed cleanly, output to `benchmarks/results/laptop/bench_crc32c.json`.
-  - `bin/bench_librbipc_isolated`: Executed cleanly, output to `benchmarks/results/laptop/isolated_benchmark.json`.
-
----
-
-## 12. Comprehensive Codebase Inspection & Verification (Directive 4)
-
-- **Codebase Health**:
-  - Memory Management: Zero-config THP automatically maps buffers $\ge 2\text{ MB}$ to PMD huge pages with `MADV_HUGEPAGE` and 2MB layout alignment.
-  - Concurrency & Synchronization: Nikolaev SCQ bounded FAA ticket reservation, asymmetric memory barriers (`sys_membarrier`), futex2 32-bit waitv with fallback to standard futex.
-  - SIMD Pipelines: AVX-512, AVX2, AVX1 (Sandy/Ivy Bridge fallback), SSE4.1, ARM NEON, and portable scalar loops fully verified.
-  - Multicast PubSub: Zero-copy and standard copying with independent subscriber cursor clamping.
-  - Audit & Fault Resilience: Dead producer/consumer recovery, consumer lease expiration, and ticket hole healing verified.
-  - Unit & Integration Tests: All 30 test binaries in `make test` pass 100% with zero warnings or errors.
+- **Unit & Integration Tests**: 30 / 30 test binaries pass 100% cleanly.
+- **Coverage**: 83.69% line coverage across all 22 source and header units (2,191 / 2,618 lines).
+- **Public Symbols**: Exactly 78 exported symbols under `LIBRBIPC_1.0` with 0 internal symbol leaks.
+- **Static Analysis**: Clang-Tidy analysis passes with 0 errors across all 15 core units.
+- **Documentation**: Doxygen builds cleanly with 0 warnings; post-processing verifies 114 HTML pages with 0 broken links.

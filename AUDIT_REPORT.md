@@ -115,7 +115,7 @@ This report documents the exhaustive, root-to-leaf engineering inspection and fo
    Anonymous shared memory is the default backing (`RBIPC_SHM_ANON`). Segments are created via Linux `memfd_create(2)` and sealed with `F_ADD_SEALS` (`F_SEAL_SHRINK | F_SEAL_GROW`). Descriptors are exchanged over `AF_UNIX` sockets, leaving zero footprint in `/dev/shm` and preventing truncations.
 2. **Double-Mapped Virtual Mirroring:**
    `rbipc_vmem_bind_mirror_halves` reserves $2 \times \text{data\_size}$ contiguous address space and maps the identical underlying physical pages twice with `MAP_FIXED`. Unaligned and cross-boundary reads and writes dereference contiguously without wrap-around modulo branch arithmetic.
-3. **Zero-Config Dynamic 2MB Transparent HugePages (Option B):**
+3. **Zero-Config Dynamic 2MB Transparent HugePages (THP):**
    When `data_size >= 2MB`, `rbipc_shm_calc_data_geometry` and `rbipc_shm_calc_layout` enforce 2MB PMD alignment (`RBIPC_HUGE_PAGE_2MB = 2097152 B`) on `data_offset` and `data_size`.
    `rbipc_vmem_map_data` advises the kernel via `madvise(MADV_HUGEPAGE)`.
    *Audit Check:* Confirmed via `tests/memory/test_unit_shm.c` that 4MB buffers automatically achieve `ShmemPmdMapped: 4096 kB` in `/proc/self/smaps` without requiring root privileges.
@@ -235,10 +235,10 @@ During the codebase-wide study, the following 7 incongruences and defects were i
   - `benchmarks/suite/`: Core streaming, batching, and MPMC workloads.
   - `benchmarks/deep_dive/`: Hardware backoff, streaming stores, reactor, leases.
 
-### Incongruence 7: Zero-Config Dynamic 2MB Transparent HugePage Alignment (Option B)
+### Incongruence 7: Zero-Config Dynamic 2MB Transparent HugePage Alignment
 
 - **Defect:** Large ring buffers suffered from TLB thrashing under standard 4KB paging, while static HugeTLB required root privileges (`sudo sysctl vm.nr_hugepages`).
-- **Remediation:** Implemented Option B Dynamic HugePages in `src/memory/rbipc_shm.c` and `src/memory/rbipc_vmem.c`. Enforces 2MB layout alignment on offsets and sizes $\ge 2\text{ MB}$ and issues `MADV_HUGEPAGE`, achieving up to **4.37× throughput speedup** and **77.10% latency reduction** on 32MB buffers without administrator intervention.
+- **Remediation:** Implemented Zero-Config Dynamic HugePages in `src/memory/rbipc_shm.c` and `src/memory/rbipc_vmem.c`. Enforces 2MB layout alignment on offsets and sizes $\ge 2\text{ MB}$ and issues `MADV_HUGEPAGE`, achieving up to **4.37× throughput speedup** and **77.10% latency reduction** on 32MB buffers without administrator intervention.
 
 ---
 

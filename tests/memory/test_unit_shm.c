@@ -223,7 +223,7 @@ static void test_shm_hugetlb_support_and_fallback(void) {
 }
 
 static void test_shm_thp_dynamic_hugepages(void) {
-  /* Test zero-config Option B: 4MB buffer automatically collapses into 2MB THP hugepages */
+  /* Test zero-config Dynamic HugePages: 4MB buffer automatically collapses into 2MB THP hugepages */
   rbipc_ring_t *ring = NULL;
   int rc = rbipc_create(NULL, 1024, 4096, &ring);
   assert(rc == RBIPC_OK);

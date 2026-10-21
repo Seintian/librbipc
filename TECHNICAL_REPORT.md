@@ -303,11 +303,11 @@ Implemented via Linux `mmap(MAP_FIXED)`:
 
 ---
 
-### 2.4 Zero-Config Dynamic 2MB Transparent HugePages (Option B)
+### 2.4 Zero-Config Dynamic 2MB Transparent HugePages (THP)
 
 On high-bandwidth queues ($> 4\text{ MB}$ buffers), standard 4KB page translations induce massive Translation Lookaside Buffer (TLB) thrashing. A 32MB ring buffer requires 8,192 page table entries (PTEs) in L1/L2 TLBs.
 
-`librbipc` implements **Option B Zero-Config Dynamic HugePages**:
+`librbipc` implements **Zero-Config Dynamic Transparent HugePages (THP)**:
 
 1. When `data_size >= 2MB`, the shared memory layout calculator aligns `data_offset` and `data_size` to exact 2MB boundaries (`RBIPC_HUGE_PAGE_2MB = 2097152 B`).
 2. Virtual mappings issue `madvise(MADV_HUGEPAGE)` across the payload arena.
@@ -491,26 +491,26 @@ Non-temporal stores deliver **19.87 GB/s** of memory throughput, completely satu
 
 ---
 
-### 4.7 Zero-Config Dynamic 2MB THP Scaling (Option B)
+### 4.7 Zero-Config Dynamic 2MB THP Scaling
 
 Evaluating message throughput as ring buffer size scales from 64 KB up to 32 MB:
 
 ```txt
-Option B Dynamic 2MB THP Speedup vs. Standard 4KB Paging
+Dynamic 2MB THP Speedup vs. Standard 4KB Paging
 64 KB Ring  | [===] 0.96x (0 kB PMD mapped)
 4 MB Ring   | [====] 1.16x (6,144 kB PMD mapped, -13.9% latency)
 16 MB Ring  | [======] 1.86x (18,432 kB PMD mapped, -46.1% latency)
 32 MB Ring  | [==============>] 4.37x (34,816 kB PMD mapped, -77.1% latency!)
 ```
 
-| Buffer Size | Standard 4KB Paging (msgs/s) | Latency (ns) | Option B 2MB THP (msgs/s) | Latency (ns) | PMD Mapped | Speedup Factor | Latency Cut |
+| Buffer Size | Standard 4KB Paging (msgs/s) | Latency (ns) | Dynamic 2MB THP (msgs/s) | Latency (ns) | PMD Mapped | Speedup Factor | Latency Cut |
 | :---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
 | **64 KB** | 16,717,559.10 | 59.82 | 15,967,839.49 | 62.63 | 0 kB | 0.96× | 0.0% |
 | **4 MB** | 12,476,716.89 | 80.15 | 14,492,563.54 | 69.00 | 6,144 kB | **1.16×** | **-13.91%** |
 | **16 MB** | 7,066,843.65 | 141.51 | 13,113,369.67 | 76.26 | 18,432 kB | **1.86×** | **-46.11%** |
 | **32 MB** | 3,337,944.70 | 299.59 | **14,577,399.72** | **68.60** | **34,816 kB** | **4.37×** | **-77.10%** |
 
-On a 32MB queue, Standard 4KB paging suffers massive TLB page walk stalls, dropping throughput to 3.34M msgs/s. Option B 2MB THP maintains a constant **14.58M msgs/s**, yielding a **4.37× speedup (77.1% latency cut)**.
+On a 32MB queue, Standard 4KB paging suffers massive TLB page walk stalls, dropping throughput to 3.34M msgs/s. Dynamic 2MB THP maintains a constant **14.58M msgs/s**, yielding a **4.37× speedup (77.1% latency cut)**.
 
 ---
 

@@ -1,6 +1,6 @@
 /**
  * @file opt_hugepages.c
- * @brief Module 8: Option B Zero-Config Dynamic HugePages vs Standard 4KB Paging.
+ * @brief Module 8: Zero-Config Dynamic HugePages vs Standard 4KB Paging.
  */
 
 #include "arch_common.h"
@@ -30,7 +30,7 @@ static unsigned long get_smaps_pmd_mapped_kb(void) {
 
 void run_module8_dynamic_hugepages(uint64_t iterations,
                                    m8_dynamic_hugepages_result_t out_results[4]) {
-    arch_print_banner("Module 8: Option B Zero-Config Dynamic HugePages vs Standard 4KB Paging");
+    arch_print_banner("Module 8: Zero-Config Dynamic HugePages vs Standard 4KB Paging");
     printf("Evaluating memory latency, streaming bandwidth, and TLB efficiency across ring buffer sizes...\n\n");
 
     struct {
@@ -45,7 +45,7 @@ void run_module8_dynamic_hugepages(uint64_t iterations,
     };
 
     printf("%s%-26s %-16s %-16s %-16s %-10s%s\n",
-           COL_BOLD, "Buffer Configuration", "Standard 4KB", "Option B 2MB THP", "ShmemPmdMapped", "Speedup", COL_RESET);
+           COL_BOLD, "Buffer Configuration", "Standard 4KB", "Dynamic 2MB THP", "ShmemPmdMapped", "Speedup", COL_RESET);
     printf("----------------------------------------------------------------------------------------------------\n");
 
     for (int c = 0; c < 4; ++c) {
@@ -55,7 +55,7 @@ void run_module8_dynamic_hugepages(uint64_t iterations,
         uint64_t iters = (buf_mb >= 16.0) ? (iterations / 2) : iterations;
         if (iters < 50000ULL) iters = 50000ULL;
 
-        /* 1. Option B: Dynamic Transparent HugePages */
+        /* 1. Dynamic Transparent HugePages */
         rbipc_ring_t *ring_thp = NULL;
         int rc = rbipc_create(NULL, cap, slot_sz, &ring_thp);
         assert(rc == RBIPC_OK && ring_thp != NULL);
