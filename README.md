@@ -2,7 +2,7 @@
 
 [![Standard: ISO C23](https://img.shields.io/badge/C-C23-blue.svg)](https://en.cppreference.com/w/c/23)
 [![Platform: Linux](https://img.shields.io/badge/Platform-Linux-FCC624.svg)](https://www.kernel.org/)
-<a href="#test-coverage"><img src="https://img.shields.io/badge/Coverage-82.65%25-brightgreen.svg" alt="Coverage: 82.65%"/></a>
+<a href="#test-coverage"><img src="https://img.shields.io/badge/Coverage-83.69%25-brightgreen.svg" alt="Coverage: 83.69%"/></a>
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 
 `librbipc` is a zero-dependency, production-grade Inter-Process Communication (IPC) library written in ISO C23 for Linux. It implements a lock-free Multi-Producer / Multi-Consumer (MPMC) shared-memory ring buffer engineered for **sub-microsecond user-space fast paths**, **zero idle CPU consumption (0.13%)** via Dekker-synchronized Linux `sys_futex` suspension, **deterministic crash recovery** (`pidfd_open(2)`), **B-Queue scatter-gather vector batching** (**50.68M msgs/s**), **non-temporal cache-bypassing streaming stores** (**19.87 GB/s**), **asynchronous `eventfd`/`epoll` reactor signaling**, and **1-to-N lock-free multicast publish-subscribe**.
@@ -46,7 +46,7 @@ For the complete formal concurrency model, memory layout geometry, crash-recover
 | **Nikolaev SCQ Bounded FAA Ticket Leasing** | Concurrency | Unbounded writes (`timeout_ns == UINT64_MAX`) | **Wait-Free FAA**: Fast path claims tickets via hardware-pipelined `atomic_fetch_add` with cycle validation. | **CAS Loop Backoff**: Compare-and-swap reservation with exponential pause backoff for bounded timeouts. | **+241.0%** throughput under contention; **73× faster than Disruptor** at 4P-4C (0.73 Mops/s). |
 | **SIMD Sequence Turn Scanning** | CPU ISA | x86-64 AVX-512 / AVX2 / AVX / SSE4.1 or ARM64 NEON (`__ARM_NEON`) | **AVX-512 (8 turns) / AVX2 (4 turns) / AVX1 (4 turns via dual 128-bit VEX) / SSE4.1 (2 turns) / NEON (2 turns)**: Vectorized sequence turn scanner with software prefetch lookahead and logical shift support for Tier 3 packed descriptors. | **Scalar Loop**: Portable 64-bit scalar sequence loop checking each slot turn serially. | **50.68M msgs/s** vector batch throughput (6.53× speedup over scalar batch-1). |
 | **Non-Temporal Streaming Stores** | CPU ISA | Payloads ≥ 256 B on AVX-512, AVX2, or SSE2 | **Streaming Stores (`_mm512_stream_si512` / `_mm256_stream_si256` / `_mm_stream_si128`)**: Writes directly to DRAM write-combining buffers with 64-byte alignment preamble. | **Standard `memcpy`**: Cache-coherent memory copy for smaller payloads or non-x86 architectures. | **19,867.2 MB/s** throughput (+104.97% bandwidth over standard `memcpy`). |
-| **Strict ABI Encapsulation & Versioning** | ABI / Build | GNU Linker / ELF Shared Library | **`scripts/librbipc.sym` (`LIBRBIPC_1.0`) + `-fvisibility=hidden`**: Whitelists only 79 public API symbols, strictly eliminating leaked internal routines. | Standard shared library export table without version node. | Zero symbol namespace pollution; immutable backward ABI compatibility. |
+| **Strict ABI Encapsulation & Versioning** | ABI / Build | GNU Linker / ELF Shared Library | **`scripts/librbipc.sym` (`LIBRBIPC_1.0`) + `-fvisibility=hidden`**: Whitelists only 78 public API symbols, strictly eliminating leaked internal routines. | Standard shared library export table without version node. | Zero symbol namespace pollution; immutable backward ABI compatibility. |
 | **C23 Compile-Time Structure Invariants** | C23 Core | Standard C23 `-std=c23` compiler | **`static_assert` Invariants**: Compile-time mathematical verification of 64-byte slot sizing and cache-line isolation for all synchronization counters. | Runtime `assert()` / documentation convention. | Zero runtime false-sharing hazards; guaranteed single-cache-line turn updates. |
 | **Double-Mapped Virtual Memory** | VMem | Contiguous 2× `buffer_size` address space reservation via `mmap` | **2x Virtual Mirroring**: Dual consecutive virtual memory mappings of identical underlying physical ring buffer pages. | **Single Linear Mapping**: Standard single circular buffer with modulo boundary calculation. | Zero-copy contiguous buffer dereferencing across circular ring wrap-around. |
 | **Asynchronous Kernel Reactor** | Kernel | Linux `eventfd(2)` and `epoll(7)` | **Eventfd Reactor (`rbipc_reactor_t`)**: Non-blocking readiness notifications multiplexed into `epoll`, `poll`, or `io_uring`. | **Pure Shared Memory**: Ring operates purely through shared memory without kernel file descriptors. | Sub-microsecond event loop integration (874.8k events/s) for async event loops. |
@@ -261,33 +261,33 @@ make docs
 
 ## Test Coverage {#test-coverage}
 
-Verified across all 26 test suites via `make coverage` (`gcov` with `-O0 -g --coverage`):
+Verified across all 30 test suites via `make coverage` (`gcov` with `-O0 -g --coverage`):
 
 | Source File | Executable Lines | Covered Lines | Coverage % |
 | :--- | ---: | ---: | ---: |
 | [`src/audit/rbipc_error.c`](src/audit/rbipc_error.c) | 56 | 56 | **100.00%** |
 | [`src/io/rbipc_io.h`](src/io/rbipc_io.h) | 3 | 3 | **100.00%** |
 | [`src/memory/rbipc_stream.h`](src/memory/rbipc_stream.h) | 4 | 4 | **100.00%** |
-| [`src/core/rbipc_slot.h`](src/core/rbipc_slot.h) | 1 | 1 | **100.00%** |
+| [`src/core/rbipc_slot.h`](src/core/rbipc_slot.h) | 2 | 2 | **100.00%** |
 | [`src/core/rbipc_predicate.h`](src/core/rbipc_predicate.h) | 3 | 3 | **100.00%** |
 | [`src/platform/rbipc_math.h`](src/platform/rbipc_math.h) | 2 | 2 | **100.00%** |
-| [`src/ipc/rbipc_pubsub.c`](src/ipc/rbipc_pubsub.c) | 146 | 141 | **96.58%** |
 | [`src/io/rbipc_reactor.c`](src/io/rbipc_reactor.c) | 70 | 67 | **95.71%** |
-| [`src/audit/rbipc_audit.c`](src/audit/rbipc_audit.c) | 142 | 131 | **92.25%** |
-| [`src/core/rbipc_ring.c`](src/core/rbipc_ring.c) | 369 | 333 | **90.24%** |
-| [`src/io/rbipc_batch.c`](src/io/rbipc_batch.c) | 211 | 189 | 89.57% |
-| [`src/ipc/rbipc_ipc.c`](src/ipc/rbipc_ipc.c) | 103 | 91 | 88.35% |
-| [`src/io/rbipc_io.c`](src/io/rbipc_io.c) | 360 | 314 | 87.22% |
-| [`src/memory/rbipc_vmem.c`](src/memory/rbipc_vmem.c) | 53 | 46 | 86.79% |
+| [`src/audit/rbipc_audit.c`](src/audit/rbipc_audit.c) | 150 | 139 | **92.67%** |
+| [`src/ipc/rbipc_pubsub.c`](src/ipc/rbipc_pubsub.c) | 213 | 192 | **90.14%** |
+| [`src/io/rbipc_batch.c`](src/io/rbipc_batch.c) | 211 | 184 | 87.20% |
+| [`src/io/rbipc_io.c`](src/io/rbipc_io.c) | 367 | 320 | 87.19% |
+| [`src/core/rbipc_slot.c`](src/core/rbipc_slot.c) | 136 | 116 | 85.29% |
+| [`src/memory/rbipc_vmem.c`](src/memory/rbipc_vmem.c) | 60 | 51 | 85.00% |
 | [`src/sync/rbipc_futex.c`](src/sync/rbipc_futex.c) | 146 | 124 | 84.93% |
-| [`src/core/rbipc_slot.c`](src/core/rbipc_slot.c) | 131 | 111 | 84.73% |
-| [`src/memory/rbipc_shm.c`](src/memory/rbipc_shm.c) | 144 | 116 | 80.56% |
+| [`src/core/rbipc_ring.c`](src/core/rbipc_ring.c) | 413 | 348 | 84.26% |
+| [`src/ipc/rbipc_ipc.c`](src/ipc/rbipc_ipc.c) | 137 | 115 | 83.94% |
 | [`src/io/rbipc_simd.c`](src/io/rbipc_simd.c) | 152 | 122 | 80.26% |
-| [`src/sync/rbipc_sync.c`](src/sync/rbipc_sync.c) | 182 | 131 | 71.98% |
+| [`src/memory/rbipc_shm.c`](src/memory/rbipc_shm.c) | 189 | 142 | 75.13% |
+| [`src/sync/rbipc_sync.c`](src/sync/rbipc_sync.c) | 182 | 130 | 71.43% |
 | [`src/core/rbipc_internal.h`](src/core/rbipc_internal.h) | 10 | 7 | 70.00% |
 | [`src/platform/rbipc_arch.h`](src/platform/rbipc_arch.h) | 21 | 12 | 57.14% |
 | [`src/memory/rbipc_stream.c`](src/memory/rbipc_stream.c) | 91 | 52 | 57.14% |
-| **TOTAL LINE COVERAGE** | **2,400** | **2,056** | **85.67%** |
+| **TOTAL LINE COVERAGE** | **2,618** | **2,191** | **83.69%** |
 
 ---
 
@@ -349,7 +349,8 @@ A frequent observation in high-performance IPC benchmarks is data throughput fig
 
 Is this correct? **Yes, as a logical / virtual pointer exchange rate; No, as a physical hardware memory bus transfer rate.**
 
-#### The Physics of Zero-Copy Throughput:
+#### The Physics of Zero-Copy Throughput
+
 - **Logical / Virtual Zero-Copy Rate:** When using `rbipc_reserve_write()` and `rbipc_read_acquire()`, processes receive direct pointers to pre-allocated shared memory slots. Producer and consumer communicate by updating sequence counters. The payload data itself **never moves across the CPU interconnect**. If an application transmits 5.87 million messages/sec with 1 MiB zero-copy slot reservations, the ring buffer mediates access to:
   $$\text{Throughput}_{\text{logical}} = 5{,}870{,}000 \text{ msgs/s} \times 1 \text{ MiB} \approx 5.74 \text{ TB/s}$$
   For 16 MiB reservations at 9.86 million ops/sec, this reaches **154.1 TB/s**. This metric accurately reflects the *virtual zero-copy data capacity* coordinated by the ring buffer.

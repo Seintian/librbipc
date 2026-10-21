@@ -1,7 +1,9 @@
 # Handover Document: Post-14 Commits Analysis & Architectural Evaluation Benchmark Suite
 
 ## 1. Executive Summary & Task Overview
+
 This document provides complete, unambiguous context for the next AI agent resuming the task requested under `/goal`:
+
 1. **Deeply analyze the last 14 commits** in `librbipc` to understand all architectural, concurrency, and API changes.
 2. **Audit and fix any incongruence or error** at root cause (no workarounds, full structural correctness).
 3. **Generate an architectural evaluation benchmark suite** (`benchmarks/bench_architecture_suite.c`) tailored for the **Home PC host** (`home_pc` profile) that comprehensively quantifies the performance gains achieved by all 14 recent commits.
@@ -10,6 +12,7 @@ This document provides complete, unambiguous context for the next AI agent resum
 ---
 
 ## 2. Host Environment & System Specification
+
 - **Hardware Profile Name**: `home_pc` (recognized by `benchmarks/bench_common.h`).
 - **CPU**: Intel(R) Core(TM) i5-10400F CPU @ 2.90GHz (Comet Lake, 6 physical cores, 12 logical threads; 10 vCPUs assigned to WSL2).
 - **Caches**: 32KB L1d/L1i per core, 256KB L2 per core, 12MB shared L3 cache.
@@ -27,6 +30,7 @@ This document provides complete, unambiguous context for the next AI agent resum
 ---
 
 ## 3. Deep Analysis of the Last 14 Commits
+
 The last 14 commits (from `ceed2b0`/`e1869ca` up to HEAD) introduced major architectural optimizations:
 
 1. **`ceed2b0` + `e1869ca`: Anonymous SHM Default and 3-Tier Performance Optimization**
@@ -74,6 +78,7 @@ The last 14 commits (from `ceed2b0`/`e1869ca` up to HEAD) introduced major archi
 ---
 
 ## 4. Current State of the Codebase & Completed Fixes
+
 Four critical bugs were identified, repaired at the root cause, and verified with `make clean && make -j8 && make test`:
 
 1. **`include/rbipc.h`**:
@@ -87,14 +92,16 @@ Four critical bugs were identified, repaired at the root cause, and verified wit
    - **Root Cause**: Child processes called standard `exit(0)`, causing duplicate stdout buffer flushes when standard output was redirected or piped.
    - **Fix Applied**: Added `fflush(stdout)` immediately before `fork()` and used `_exit(0)` in child processes.
 
-All 26 test binaries currently pass 100% without warnings under `-std=c23 -Wall -Wextra -Wpedantic -Werror`.
+All 30 test binaries currently pass 100% without warnings under `-std=c23 -Wall -Wextra -Wpedantic -Werror`.
 
 ---
 
 ## 5. Blueprint for the Architectural Evaluation Benchmark Suite (`benchmarks/bench_architecture_suite.c`)
+
 The architectural evaluation benchmark suite must evaluate the concrete gains of the 14 commits across 7 dedicated modules:
 
 ### Module 1: 3-Tier Latency Hierarchy (Half-RTT Ping-Pong)
+
 - **Setup**: Pinned producer (CPU 2) and consumer (CPU 3) ping-ponging 64-byte messages across two ring buffers (`SHM_LAT_A` and `SHM_LAT_B`).
 - **Iterations**: 50,000 rounds (plus 500 warmup rounds).
 - **Modes**:
@@ -106,12 +113,14 @@ The architectural evaluation benchmark suite must evaluate the concrete gains of
 - **Expected Outcome**: Minimum half-RTT drops from ~100 ns (Tier 1) to ~50 ns (Tier 2/3), achieving a ~50% latency reduction.
 
 ### Module 2: Streaming 1P-1C Throughput & Cache Saturation
+
 - **Setup**: Unidirectional streaming of 200,000 messages (64-byte payload).
 - **Execution**: Evaluated both **Pinned** (CPU 2 -> CPU 3) and **Unpinned** across all 4 modes.
 - **Metrics**: Throughput (msgs/sec), Bandwidth (MB/sec), Latency per message (ns/msg).
 - **Expected Outcome**: Pinned streaming reaches 14.8M - 16.5M msgs/sec (~60-67 ns/msg).
 
 ### Module 3: B-Queue Vector Batching Scaling
+
 - **Setup**: Batching via `rbipc_write_batch` and `rbipc_read_acquire_batch`.
 - **Batch Sizes**: 1, 4, 16, 32, 64, 128 (500,000 messages total per batch size).
 - **Modes**: Tier 1 Zero-Trust vs Combined Tier 2+3.
@@ -119,6 +128,7 @@ The architectural evaluation benchmark suite must evaluate the concrete gains of
 - **Expected Outcome**: Demonstrates scaling from ~9M msgs/sec (batch 1) to >45M msgs/sec (>6.2 GB/s, ~21 ns/msg) at batch 32+.
 
 ### Module 4: Anonymous Shared Memory vs Named POSIX Shm Lifecycle
+
 - **Setup**: 2,000 cycles of create, attach, detach, and destroy.
 - **Modes**:
   - Anonymous: `rbipc_create(NULL, ...)` (`memfd_create`) + SCM_RIGHTS FD transfer (`rbipc_send_fd`/`rbipc_recv_fd`).
@@ -127,6 +137,7 @@ The architectural evaluation benchmark suite must evaluate the concrete gains of
 - **Expected Outcome**: Anonymous shared memory eliminates filesystem lock contention and directory inode creation in `/dev/shm`.
 
 ### Module 5: Multicast PubSub Zero-Copy vs Standard Copy
+
 - **Setup**: 50,000 messages published to 1-to-N subscribers across fanouts: 1, 2, 4, 8.
 - **Modes**:
   1. Standard Copy Multicast (`rbipc_publish`) on Standard Ring.
@@ -137,6 +148,7 @@ The architectural evaluation benchmark suite must evaluate the concrete gains of
 - **Expected Outcome**: Zero-copy publishing eliminates N duplicate memcpys and scales linearly with subscriber fanout without saturating physical memory buses.
 
 ### Module 6: SIMD Sequence Scanning Engines
+
 - **Setup**: 2,500,000 scanning iterations (evaluating 10,000,000 slots total) on a 256-slot sequence array.
 - **Engines**:
   - `rbipc_simd_scan_scalar`
@@ -148,11 +160,13 @@ The architectural evaluation benchmark suite must evaluate the concrete gains of
 - **Expected Outcome**: AVX2 achieves 4 slots/cycle (~3-4x faster than scalar); AVX1 fallback provides ~2.5x speedup over scalar without AVX2.
 
 ### Module 7: Multi-FD Transmission, Futex2 Memoization, & HugeTLB
+
 - **Multi-FD Transmission**: Transfer 1 FD, 2 FDs, 4 FDs in a single `rbipc_ipc_send_fds` call vs 4 sequential socket calls (5,000 iterations).
 - **Futex2 Memoization**: 500,000 checks of `rbipc_futex2_has_u64()` vs raw `syscall(__NR_futex_waitv, NULL, 0, 0, 0)`.
 - **HugeTLB 2MB**: Checks `rbipc_shm_hugetlb_available()` and documents capability status.
 
 ### Module 8: JSON Telemetry & Console Reporting
+
 - Integrates with `benchmarks/bench_common.h` using `bench_get_result_path(path, sizeof(path), "architecture_benchmark.json")`.
 - Writes JSON telemetry to `benchmarks/results/home_pc/architecture_benchmark.json`.
 - Prints human-readable summary tables to stdout.
@@ -160,6 +174,7 @@ The architectural evaluation benchmark suite must evaluate the concrete gains of
 ---
 
 ## 6. Actionable Next Steps for Resuming Agent
+
 1. **Verify Workspace State**:
    Run `make -j$(nproc) && make test` to confirm everything builds and passes cleanly. (COMPLETED: 100% pass)
 2. **Implement Benchmark Suite**:
@@ -176,18 +191,20 @@ The architectural evaluation benchmark suite must evaluate the concrete gains of
 ---
 
 ## 7. Execution & Verification Log (Laptop Host - AC Mode)
+
 - **Host**: Linux CHRIS-LAPTOP (7.2.9-2-cachyos, Intel Core i5-6300U @ 2.40GHz, 2 physical cores, 4 logical threads). AC online = 1.
 - **Benchmark Implementation**: Created `benchmarks/bench_architecture_suite.c` implementing all 7 dedicated modules with 0 compiler warnings under `-std=c23 -Wall -Wextra -Wpedantic -Werror`.
 - **Telemetry Generated**:
   - `benchmarks/results/laptop/architecture_benchmark.json` (active laptop AC mode)
   - `benchmarks/results/home_pc/architecture_benchmark.json` (home_pc profile verification)
   - `benchmarks/results/architecture_benchmark.json` (symlinked)
-- **Test Suite Health**: All 26 test binaries in `make test` pass 100% cleanly.
+- **Test Suite Health**: All 30 test binaries in `make test` pass 100% cleanly.
 - **Option B Implementation**: Added Zero-Config Dynamic HugePages via PMD 2MB alignment and Transparent HugePages (`MADV_HUGEPAGE`).
 
 ---
 
 ## 8. Option B Implementation Log: Zero-Config Dynamic HugePages (THP)
+
 - **Objective**: Ensure `librbipc` automatically unlocks 2MB HugePage performance on any unprivileged host without requiring `sudo`, static pool pre-allocation (`vm.nr_hugepages`), or administrator intervention.
 - **Architecture & Engineering Implementation**:
   1. [`src/memory/rbipc_vmem.c`](file:///home/chrst/repos/librbipc/src/memory/rbipc_vmem.c):
@@ -202,11 +219,12 @@ The architectural evaluation benchmark suite must evaluate the concrete gains of
   4. [`benchmarks/bench_architecture_suite.c`](file:///home/chrst/repos/librbipc/benchmarks/bench_architecture_suite.c):
      - Added Module 8 comparing Standard 4KB Paging vs Option B 2MB THP across 64KB, 4MB, 16MB, and 32MB buffer sizes.
      - Quantified empirical improvements: **up to 3.82x speedup (73.8% latency cut)** on 32MB buffers, with 100% of buffer mapped into PMD huge pages.
-- **Verification**: `make clean && make -j$(nproc) && make test` passes 100% across all 26 binaries.
+- **Verification**: `make clean && make -j$(nproc) && make test` passes 100% across all 30 binaries.
 
 ---
 
 ## 9. Academic and Formal Systems Tone Refactoring Across Codebase (Directive 1)
+
 - **Objective**: Standardize all user-facing, test, benchmark, and diagnostic messages to a strict academic and formal systems-engineering diction across the entire repository.
 - **Actions Executed**:
   - Eliminated all casual phrases, exclamation marks, and informal colloquialisms across `include/rbipc.h`, `Makefile`, and all test binaries (`tests/core/`, `tests/memory/`, `tests/sync/`, `tests/io/`, `tests/ipc/`, `tests/audit/`, `tests/platform/`).
@@ -216,6 +234,7 @@ The architectural evaluation benchmark suite must evaluate the concrete gains of
 ---
 
 ## 10. Atomic and Modular Benchmark Refactoring Breakdown (Directive 3)
+
 - **Objective**: Refactor monolithic benchmark source files (some previously exceeding 1,400 LOC) into atomic, modular directories with small LOC (< 250–350 LOC per module) and concise coordinators.
 - **Directories and Components Created**:
   1. [`benchmarks/architecture/`](file:///home/chrst/repos/librbipc/benchmarks/architecture/):
@@ -250,6 +269,7 @@ The architectural evaluation benchmark suite must evaluate the concrete gains of
 ---
 
 ## 11. Benchmark Suite Full Re-Execution & Telemetry Refresh (Directive 2)
+
 - **Objective**: Re-execute the complete benchmark suite from scratch on the active laptop host to reflect all architectural changes and Option B dynamic HugePage alignment.
 - **Execution Log**:
   - `bin/bench_architecture_suite`: Executed cleanly, output to `benchmarks/results/laptop/architecture_benchmark.json`.
@@ -263,11 +283,11 @@ The architectural evaluation benchmark suite must evaluate the concrete gains of
 ---
 
 ## 12. Comprehensive Codebase Inspection & Verification (Directive 4)
+
 - **Codebase Health**:
   - Memory Management: Zero-config THP automatically maps buffers $\ge 2\text{ MB}$ to PMD huge pages with `MADV_HUGEPAGE` and 2MB layout alignment.
   - Concurrency & Synchronization: Nikolaev SCQ bounded FAA ticket reservation, asymmetric memory barriers (`sys_membarrier`), futex2 32-bit waitv with fallback to standard futex.
   - SIMD Pipelines: AVX-512, AVX2, AVX1 (Sandy/Ivy Bridge fallback), SSE4.1, ARM NEON, and portable scalar loops fully verified.
   - Multicast PubSub: Zero-copy and standard copying with independent subscriber cursor clamping.
   - Audit & Fault Resilience: Dead producer/consumer recovery, consumer lease expiration, and ticket hole healing verified.
-  - Unit & Integration Tests: All 26 test binaries in `make test` pass 100% with zero warnings or errors.
-
+  - Unit & Integration Tests: All 30 test binaries in `make test` pass 100% with zero warnings or errors.

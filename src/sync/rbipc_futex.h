@@ -161,7 +161,7 @@ int rbipc_futex_wake(_Atomic uint32_t *uaddr, int count);
 /**
  * @brief Awaken waiting threads currently suspended on a 64-bit slot sequence word.
  *
- * @details Dispatches  with  targeting the appropriate 32-bit word
+ * @details Dispatches SYS_futex with FUTEX_WAKE targeting the appropriate 32-bit word
  * boundary of the 64-bit slot sequence based on target machine endianness.
  *
  * @param[in] slot_seq Direct pointer to 64-bit atomic sequence word in shared memory.
