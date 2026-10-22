@@ -13,18 +13,20 @@
 
 This report delivers an exhaustive, empirically validated performance evaluation and microarchitectural profile of `librbipc`, conducted directly on the host development machine operating under **AC Power Mode**.
 
-The evaluation was orchestrated by an automated telemetry and profiling harness ([`scripts/run_comprehensive_suite.py`](file:///home/chrst/repos/librbipc/scripts/run_comprehensive_suite.py)), concurrently monitoring hardware frequencies, package and core thermal dynamics, thermal throttling events, Linux hardware performance counters via `perf stat`, interactive SVG Flamegraphs via `flamegraph`, and cache-line contention / false sharing metrics via Linux `perf mem record` and `perf c2c report`.
+The evaluation was orchestrated by an automated telemetry and profiling harness ([`scripts/run_comprehensive_suite.py`](scripts/run_comprehensive_suite.py)), concurrently monitoring hardware frequencies, package and core thermal dynamics, thermal throttling events, Linux hardware performance counters via `perf stat`, interactive SVG Flamegraphs via `flamegraph`, and cache-line contention / false sharing metrics via Linux `perf mem record` and `perf c2c report`.
 
 ### Equalized Benchmarking Constraints
+
 To ensure uncompromising scientific integrity, all competitor IPC and queue systems (DPDK `rte_ring`, LMAX Disruptor, POSIX `mqueue`, UNIX Domain Sockets `AF_UNIX`, and `librbipc`) were benchmarked under **strictly identical constraints**:
+
 1. **Shared-Memory IPC Allocation:** Sized identically to 2,048–4,096 ring slots backed by Linux shared memory (`/dev/shm`).
 2. **Payload Value-Copy Semantics:** For value-passing benchmarks, all participants perform an identical 64-byte payload copy into shared memory.
 3. **Spin-Pause & Scheduling Backoff Equality:** All competitors execute identical CPU backoff logic (`bench_spin_pause`: 64 `_mm_pause` loops before `sched_yield`) to prevent artificial CPU starvation on the dual-core / hyper-threaded host machine.
 4. **Full-Capability Profiling:** `librbipc` was profiled both in its default **Tier 1 Zero-Trust Mode** (multi-tenant process isolation, slot PID tracking, crash forensics) and in its **Full-Capability Trusted Mode** (`RBIPC_FLAG_TRUSTED | RBIPC_FLAG_PACKED`, pure 8-byte descriptors and uninhibited Vyukov sequence turns matching DPDK/Disruptor in-process trust models).
 
-### Core Highlights of the Latest Changes:
+### Core Highlights of the Latest Changes
 
-```
+```txt
 +---------------------------------------------------------------------------------------------------------+
 |                                  KEY PERFORMANCE HIGHLIGHTS (AC MODE)                                   |
 +---------------------------------------------------------------------------------------------------------+
@@ -50,6 +52,7 @@ To ensure uncompromising scientific integrity, all competitor IPC and queue syst
 ## 2. Host Profiling Environment & Hardware Telemetry
 
 ### 2.1 System Specifications
+
 - **Host Machine:** Laptop (AC Power Supply connected, `online = 1`, battery capacity 80%, discharging halted).
 - **CPU Architecture:** Intel Core i5-6300U (Skylake microarchitecture, 14nm FinFET).
   - Cores / Threads: 2 Physical Cores, 4 SMT Threads.
@@ -64,9 +67,10 @@ To ensure uncompromising scientific integrity, all competitor IPC and queue syst
 - **Compiler Configuration:** GCC 15.2.1, standard C23 (`-std=c23`), `-O3`, `-fvisibility=hidden`, `-fPIC`, `-pthread`, `-D_GNU_SOURCE`.
 
 ### 2.2 Thermal & Clock Stability Under Continuous Load
+
 Throughout the execution of all benchmark modules, the background hardware monitor sampled clock frequencies and temperatures at 150ms intervals:
 
-```
+```txt
 +------------------------------------------------------------------------------------------------------------+
 | Workload Suite                          | Elapsed (s) | Mean Freq (MHz) | Peak Temp (°C) | Throttle Δ (Core)|
 +------------------------------------------------------------------------------------------------------------+
@@ -91,9 +95,10 @@ Operating in AC mode allowed the Intel Core i5-6300U to maintain a sustained all
 ## 3. Streaming Throughput & Latency Analysis
 
 ### 3.1 Streaming Throughput Gains
+
 The core streaming evaluation measures unthrottled point-to-point data transit across memory barriers in zero-spin mode:
 
-```
+```txt
 +-----------------------------------------------------------------------------------------------+
 | Metric                      | Pre-Oct 22 Baseline | Current Implementation | Delta (%)        |
 +-----------------------------+---------------------+------------------------+------------------+
@@ -104,14 +109,16 @@ The core streaming evaluation measures unthrottled point-to-point data transit a
 ```
 
 The 31.3% increase in sustained streaming throughput stems directly from:
+
 1. **CAS-Elision & Sequence Turn Optimization**: Removing redundant CAS loop retries on the single-producer fast-path.
 2. **Compiler Inlining & Hidden Visibility**: Eliminating PLT/GOT relocation indirection via `-fvisibility=hidden`.
 3. **Cache Line Alignment (`alignas(64)`)**: Total isolation of writer and reader cache lines, completely eliminating false sharing under line-rate streaming.
 
 ### 3.2 Half-RTT Latency Distribution (Resolved Anomaly)
+
 Under strictly equalized non-blocking spin polling (`rbipc_read_acquire_nonblock` + `bench_spin_pause`), the earlier futex syscall overhead was eliminated:
 
-```
+```txt
 +---------------------------------------------------------------------------------------------------------+
 | System Transport             | Min Lat (ns) | p50 Lat (ns) | p90 Lat (ns) | p99 Lat (ns) | p99.9 Lat (ns) |
 +------------------------------+--------------+--------------+--------------+--------------+----------------+
@@ -125,6 +132,7 @@ Under strictly equalized non-blocking spin polling (`rbipc_read_acquire_nonblock
 ```
 
 **Key Latency Finding:**  
+
 - **Hardware-Level Parity:** When evaluated under equalized user-space polling, `librbipc (Full-Capability Trusted)` achieves **112 ns minimum latency**, outperforming DPDK's `rte_ring` (**127 ns**) and matching LMAX Disruptor (**111 ns**).
 - **Kernel-Bypass Advantage:** `librbipc` is **20x to 26x faster** than POSIX `mqueue` and UNIX domain sockets at p50, and avoids the severe tail latency spikes ($>280\text{ }\mu\text{s}$) that plague kernel IPC mechanisms.
 
@@ -134,7 +142,7 @@ Under strictly equalized non-blocking spin polling (`rbipc_read_acquire_nonblock
 
 The B-Queue vector batching API (`rbipc_reserve_write_batch` and `rbipc_read_acquire_batch`) aggregates multiple message reservations into single atomic sequence increments, amortizing cache-coherency invalidate-and-ownership cycles:
 
-```
+```txt
 +---------------------------------------------------------------------------------------------------------+
 | Batch Size      | librbipc (Mops/s)  | DPDK rte_ring (Burst) | LMAX Disruptor (Batch) | Bandwidth (MB/s)|
 +-----------------+--------------------+-----------------------+------------------------+-----------------+
@@ -148,6 +156,7 @@ The B-Queue vector batching API (`rbipc_reserve_write_batch` and `rbipc_read_acq
 ```
 
 When evaluated in isolated pthread mode and E2E multi-process fork mode:
+
 - In isolated pthread mode: `bin/bench_librbipc_isolated --batch` reached **30.85 Mops/s** (**32.42 ns/op**).
 - In E2E fork mode: Combined Trusted & Packed Mode with Batch 32 reached **26.81 Mops/s (3,682.28 MB/s)** at **37.29 ns per message**.
 
@@ -157,7 +166,7 @@ When evaluated in isolated pthread mode and E2E multi-process fork mode:
 
 The newest in-tree innovations were evaluated using a realistic **multi-process fork model**, forcing cross-process address space transitions, true shared-memory page mappings, and operating system boundary traversal:
 
-```
+```txt
 +---------------------------------------------------------------------------------------------------------+
 | Architectural Execution Mode                       | Throughput (Mops/s) | Bandwidth (MB/s) | Latency   |
 +----------------------------------------------------+---------------------+------------------+-----------+
@@ -171,7 +180,8 @@ The newest in-tree innovations were evaluated using a realistic **multi-process 
 +---------------------------------------------------------------------------------------------------------+
 ```
 
-### Analysis of Architectural Modes:
+### Analysis of Architectural Modes
+
 1. **Tier 1 Zero-Trust (Default):** Delivers **3.35 M msgs/sec** cross-process with 298.80 ns average latency while validating turn ownership, magic boundaries, and crash-resilience.
 2. **Tier 2 Trusted Mode:** Boosts single-message throughput to **4.47 M msgs/sec** (+33.4%) and lowers latency to **223.54 ns** by eliding defensive checks in cooperating, co-located processes.
 3. **Nikolaev wCQ Wait-Free Helping Mode (`RBIPC_FLAG_WAIT_FREE`):**  
@@ -185,7 +195,7 @@ The newest in-tree innovations were evaluated using a realistic **multi-process 
 
 Using Linux `perf stat`, hardware performance counters were captured across critical workloads on the laptop CPU:
 
-```
+```txt
 +-------------------------------------------------------------------------------------------------------------+
 | Workload Profile                  | CPU Cycles   | Instructions | IPC  | Branch Miss % | Cache Miss % | Ctx |
 +-----------------------------------+--------------+--------------+------+---------------+--------------+-----+
@@ -196,7 +206,8 @@ Using Linux `perf stat`, hardware performance counters were captured across crit
 +-------------------------------------------------------------------------------------------------------------+
 ```
 
-### Key Hardware Counter Insights:
+### Key Hardware Counter Insights
+
 1. **Instructions Per Cycle (IPC):**
    - For single-message exchanges, IPC reaches **0.93–1.16**.
    - Under B-Queue vector batching, IPC jumps to **1.53**, reflecting dense superscalar execution and unrolled loop vectorization.
@@ -211,15 +222,15 @@ Using Linux `perf stat`, hardware performance counters were captured across crit
 
 ## 7. Specialized Profiling: Interactive SVG Flamegraphs
 
-To understand the exact distribution of CPU cycles across instruction pipelines, four interactive SVG Flamegraphs were generated using `/home/chrst/.cargo/bin/flamegraph` and archived in [`benchmarks/results/laptop/flamegraphs/`](file:///home/chrst/repos/librbipc/benchmarks/results/laptop/flamegraphs/):
+To understand the exact distribution of CPU cycles across instruction pipelines, four interactive SVG Flamegraphs were generated using `/home/chrst/.cargo/bin/flamegraph` and archived in [`benchmarks/results/laptop/flamegraphs/`](benchmarks/results/laptop/flamegraphs/):
 
-1. **`flamegraph_isolated_batch.svg`** ([View SVG](file:///home/chrst/repos/librbipc/benchmarks/results/laptop/flamegraphs/flamegraph_isolated_batch.svg)):
+1. **`flamegraph_isolated_batch.svg`** ([View SVG](benchmarks/results/laptop/flamegraphs/flamegraph_isolated_batch.svg)):
    - **Characteristics:** Dense, flat flame profile. Over 88% of execution time is concentrated in the unrolled batch transfer loop. Single atomic fetch-and-add operations advance tickets by 32 slots simultaneously, minimizing memory barrier stalls.
-2. **`flamegraph_isolated_copy.svg`** ([View SVG](file:///home/chrst/repos/librbipc/benchmarks/results/laptop/flamegraphs/flamegraph_isolated_copy.svg)):
+2. **`flamegraph_isolated_copy.svg`** ([View SVG](benchmarks/results/laptop/flamegraphs/flamegraph_isolated_copy.svg)):
    - **Characteristics:** Balanced distribution between `memcpy` (vector AVX copy of 64 bytes) and slot sequence acquisition (`atomic_store_explicit` / `atomic_load_explicit`).
-3. **`flamegraph_isolated_ptr.svg`** ([View SVG](file:///home/chrst/repos/librbipc/benchmarks/results/laptop/flamegraphs/flamegraph_isolated_ptr.svg)):
+3. **`flamegraph_isolated_ptr.svg`** ([View SVG](benchmarks/results/laptop/flamegraphs/flamegraph_isolated_ptr.svg)):
    - **Characteristics:** Pure atomic synchronization profile. Shows zero overhead from payload copying, with cycles distributed entirely across acquire/release memory orders.
-4. **`flamegraph_competitors.svg`** ([View SVG](file:///home/chrst/repos/librbipc/benchmarks/results/laptop/flamegraphs/flamegraph_competitors.svg)):
+4. **`flamegraph_competitors.svg`** ([View SVG](benchmarks/results/laptop/flamegraphs/flamegraph_competitors.svg)):
    - **Characteristics:** Side-by-side profile comparing `librbipc`, `rte_ring`, and `disruptor`. Highlights DPDK's CAS retry loop under contention vs `librbipc`'s sequence progression.
 
 ---
@@ -229,9 +240,10 @@ To understand the exact distribution of CPU cycles across instruction pipelines,
 Using Linux `perf mem record -t load,store` and `perf c2c report --stdio`, hardware memory trace events were captured to quantify cache line contention and false-sharing metrics.
 
 ### 8.1 Isolated B-Queue Vector Batching (`perf_c2c_batch.txt`)
-Detailed in [`benchmarks/results/laptop/perf_c2c_batch.txt`](file:///home/chrst/repos/librbipc/benchmarks/results/laptop/perf_c2c_batch.txt):
 
-```
+Detailed in [`benchmarks/results/laptop/perf_c2c_batch.txt`](benchmarks/results/laptop/perf_c2c_batch.txt):
+
+```txt
 =================================================
             Trace Event Information              
 =================================================
@@ -251,12 +263,15 @@ Detailed in [`benchmarks/results/laptop/perf_c2c_batch.txt`](file:///home/chrst/
 ```
 
 **Key Cache Insights:**
+
 - **96.6% Store L1D Hit Rate:** Out of 294 store operations recorded, 284 hit directly in the local L1 Data cache. Only 10 stores missed L1.
 - **Zero Locked Contention on Shared Lines:** `Locked Access on shared lines` registered exactly **0**, verifying that B-Queue batching does not execute lock-prefixed memory bus locking during slot transitions.
 - **Zero Remote HITM:** On the dual-core architecture, no remote cache interventions occurred.
 
 ### 8.2 Competitor Contention Profiling (`perf_c2c_competitors.txt`)
-Detailed in [`benchmarks/results/laptop/perf_c2c_competitors.txt`](file:///home/chrst/repos/librbipc/benchmarks/results/laptop/perf_c2c_competitors.txt):
+
+Detailed in [`benchmarks/results/laptop/perf_c2c_competitors.txt`](benchmarks/results/laptop/perf_c2c_competitors.txt):
+
 - Captured **130,789 total memory records**, isolating the exact Pareto distribution of shared cache line modifications across DPDK, Disruptor, and `librbipc`.
 - Verified that `librbipc`'s `alignas(64)` slot alignment completely isolates each ring slot to its own 64-byte boundary, preventing adjacent producer/consumer modifications from ping-ponging cache lines between CPU cores.
 
@@ -266,7 +281,7 @@ Detailed in [`benchmarks/results/laptop/perf_c2c_competitors.txt`](file:///home/
 
 `librbipc` was evaluated alongside standard IPC and inter-thread queue implementations under strictly equalized constraints (64B value-copy, shared memory, matching backoff):
 
-```
+```txt
 +---------------------------------------------------------------------------------------------------------+
 | Transport / Ring Mechanism     | Throughput (64B)    | Bandwidth (MB/s) | Latency (p50) | Idle CPU (%)  |
 +--------------------------------+---------------------+------------------+---------------+---------------+
@@ -285,7 +300,7 @@ Detailed in [`benchmarks/results/laptop/perf_c2c_competitors.txt`](file:///home/
 
 On a 2-core / 4-thread laptop host, running 4 Producers and 4 Consumers creates severe thread oversubscription, testing each queue's backoff and starvation resilience under real operating system thread contention:
 
-```
+```txt
 +---------------------------------------------------------------------------------------------------------+
 | Configuration   | librbipc ZeroTrust   | librbipc Trusted     | DPDK rte_ring        | LMAX Disruptor   |
 +-----------------+----------------------+----------------------+----------------------+------------------+
@@ -303,7 +318,7 @@ When CPU threads exceed physical cores (4P-2C and 4P-4C), DPDK and Disruptor suf
 
 ## 11. Idle CPU Power Consumption & Green Computing
 
-```
+```txt
 +---------------------------------------------------------------------------------------------------------+
 | Ring / Transport Mechanism     | Idle Consumer CPU Utilization | Mechanism                              |
 +--------------------------------+-------------------------------+----------------------------------------+
@@ -323,9 +338,10 @@ When CPU threads exceed physical cores (4P-2C and 4P-4C), DPDK and Disruptor suf
 ## 12. Subsystem Performance Deep Dives
 
 ### 12.1 Hardware-Accelerated CRC32C (SSE4.2 vs Table Fallback)
-[`benchmarks/bench_crc32c.c`](file:///home/chrst/repos/librbipc/benchmarks/bench_crc32c.c) benchmarked hardware SSE4.2 `crc32q`/`crc32b` instructions against the 256-entry table-based software fallback:
 
-```
+[`benchmarks/bench_crc32c.c`](benchmarks/bench_crc32c.c) benchmarked hardware SSE4.2 `crc32q`/`crc32b` instructions against the 256-entry table-based software fallback:
+
+```txt
 +---------------------------------------------------------------------------------------------------------+
 | Buffer Configuration          | Buffer Size | HW SSE4.2 Latency | SW Table Latency | Hardware Speedup   |
 +-------------------------------+-------------+-------------------+------------------+--------------------+
@@ -341,9 +357,10 @@ When CPU threads exceed physical cores (4P-2C and 4P-4C), DPDK and Disruptor suf
 Integrity checksumming on a 64-byte cache line completes in **7.81 ns** using hardware instructions, allowing wire-speed payload authentication without stalling ring progression.
 
 ### 12.2 Dynamic Transparent Hugepages (THP 2MB vs Standard 4KB)
-[`benchmarks/architecture/arch_hugepages.c`](file:///home/chrst/repos/librbipc/benchmarks/architecture/arch_hugepages.c) evaluated throughput and latency scaling across memory buffer sizes:
 
-```
+[`benchmarks/architecture/arch_hugepages.c`](benchmarks/architecture/arch_hugepages.c) evaluated throughput and latency scaling across memory buffer sizes:
+
+```txt
 +---------------------------------------------------------------------------------------------------------+
 | Ring Geometry                 | 4KB Standard Pages | 2MB Transparent Hugepages | Throughput Speedup     |
 +-------------------------------+--------------------+---------------------------+------------------------+
