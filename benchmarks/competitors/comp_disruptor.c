@@ -88,3 +88,55 @@ bool disruptor_consume_wp(disruptor_ring_t *d, int64_t max_seq, uintptr_t *out) 
     atomic_store_explicit(&d->cons_gating, next, memory_order_release);
     return true;
 }
+
+uint32_t disruptor_publish_batch(disruptor_ring_t *d, const uintptr_t *vals, uint32_t n) {
+    int64_t cur, next;
+    uint32_t spins = 0;
+    do {
+        cur = atomic_load_explicit(&d->prod_claim, memory_order_relaxed);
+        next = cur + (int64_t)n;
+        while (next - atomic_load_explicit(&d->cons_gating, memory_order_acquire) >= (int64_t)d->capacity) {
+            bench_spin_pause(&spins);
+        }
+    } while (!atomic_compare_exchange_weak_explicit(&d->prod_claim, &cur, next,
+                                                    memory_order_acq_rel, memory_order_relaxed));
+
+    for (uint32_t i = 0; i < n; i++) {
+        disruptor_slots(d)[(uint32_t)(cur + 1 + (int64_t)i) & d->mask] = vals[i];
+    }
+    spins = 0;
+    while (atomic_load_explicit(&d->prod_cursor, memory_order_acquire) != cur) {
+        bench_spin_pause(&spins);
+    }
+    atomic_store_explicit(&d->prod_cursor, next, memory_order_release);
+    return n;
+}
+
+uint32_t disruptor_consume_batch(disruptor_ring_t *d, int64_t max_seq, uintptr_t *out, uint32_t max_n) {
+    int64_t cur, next;
+    uint32_t to_consume = 0;
+    do {
+        cur = atomic_load_explicit(&d->work_sequence, memory_order_relaxed);
+        int64_t prod = atomic_load_explicit(&d->prod_cursor, memory_order_acquire);
+        if (cur >= prod) return 0;
+        int64_t avail = prod - cur;
+        to_consume = (avail < (int64_t)max_n) ? (uint32_t)avail : max_n;
+        next = cur + (int64_t)to_consume;
+        if (max_seq >= 0 && next > max_seq) {
+            to_consume = (uint32_t)(max_seq - cur);
+            next = max_seq;
+            if (to_consume == 0) return 0;
+        }
+    } while (!atomic_compare_exchange_weak_explicit(&d->work_sequence, &cur, next,
+                                                    memory_order_acq_rel, memory_order_relaxed));
+
+    for (uint32_t i = 0; i < to_consume; i++) {
+        out[i] = disruptor_slots(d)[(uint32_t)(cur + 1 + (int64_t)i) & d->mask];
+    }
+    uint32_t spins = 0;
+    while (atomic_load_explicit(&d->cons_gating, memory_order_acquire) != cur) {
+        bench_spin_pause(&spins);
+    }
+    atomic_store_explicit(&d->cons_gating, next, memory_order_release);
+    return to_consume;
+}

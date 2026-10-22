@@ -151,6 +151,8 @@ int main(int argc, char **argv) {
     uint64_t iters = 1000000ULL;
     uint32_t policy = RBIPC_WAIT_ADAPTIVE;
     bool use_fork = false;
+    bool trusted = false;
+    bool packed = false;
 
     for (int i = 1; i < argc; i++) {
         if (strcmp(argv[i], "--ptr") == 0) {
@@ -165,6 +167,10 @@ int main(int argc, char **argv) {
             policy = RBIPC_WAIT_ADAPTIVE;
         } else if (strcmp(argv[i], "--fork") == 0) {
             use_fork = true;
+        } else if (strcmp(argv[i], "--trusted") == 0) {
+            trusted = true;
+        } else if (strcmp(argv[i], "--packed") == 0) {
+            packed = true;
         } else if (strcmp(argv[i], "--iters") == 0 && i + 1 < argc) {
             iters = strtoull(argv[++i], NULL, 10);
         }
@@ -177,7 +183,7 @@ int main(int argc, char **argv) {
 
     printf("======================================================================\n");
     printf("   librbipc Isolated Profiling Harness\n");
-    printf("   Mode       : %s\n", mode_str);
+    printf("   Mode       : %s%s%s\n", mode_str, trusted ? " [TRUSTED]" : "", packed ? " [PACKED]" : "");
     printf("   Policy     : %s\n", pol_str);
     printf("   Iterations : %lu\n", (unsigned long)iters);
     printf("   Model      : %s\n", use_fork ? "Multi-Process (fork)" : "Multi-Thread (pthread)");
@@ -185,7 +191,10 @@ int main(int argc, char **argv) {
 
     rbipc_destroy(BENCH_SHM_NAME);
     rbipc_ring_t *rp = NULL, *rc = NULL;
-    int rc1 = rbipc_create(BENCH_SHM_NAME, RING_CAPACITY, 128, &rp);
+    uint32_t flags = RBIPC_SHM_NAMED;
+    if (trusted) flags |= RBIPC_FLAG_TRUSTED;
+    if (packed) flags |= RBIPC_FLAG_PACKED;
+    int rc1 = rbipc_create_ex(BENCH_SHM_NAME, RING_CAPACITY, 128, flags, 0660, &rp);
     int rc2 = rbipc_attach(BENCH_SHM_NAME, &rc);
     assert(rc1 == RBIPC_OK && rc2 == RBIPC_OK);
 

@@ -155,6 +155,8 @@ int rte_mp_enqueue(rte_ring_t *r, uintptr_t val);
 int rte_mc_dequeue(rte_ring_t *r, uintptr_t *out);
 void rte_enqueue_wait(rte_ring_t *r, uintptr_t v);
 void rte_dequeue_wait(rte_ring_t *r, uintptr_t *v);
+uint32_t rte_mp_enqueue_burst(rte_ring_t *r, const uintptr_t *vals, uint32_t n);
+uint32_t rte_mc_dequeue_burst(rte_ring_t *r, uintptr_t *out, uint32_t n);
 
 /* Disruptor interface */
 typedef struct disruptor_ring disruptor_ring_t;
@@ -163,26 +165,28 @@ void disruptor_free(disruptor_ring_t *d);
 void disruptor_publish_sp(disruptor_ring_t *d, int64_t seq, uintptr_t val);
 void disruptor_publish_mp(disruptor_ring_t *d, uintptr_t val);
 bool disruptor_consume_wp(disruptor_ring_t *d, int64_t max_seq, uintptr_t *out);
+uint32_t disruptor_publish_batch(disruptor_ring_t *d, const uintptr_t *vals, uint32_t n);
+uint32_t disruptor_consume_batch(disruptor_ring_t *d, int64_t max_seq, uintptr_t *out, uint32_t max_n);
 
 /* POSIX mqueue interface */
 mqd_t mq_make(const char *name, size_t msgsz, long maxmsg);
 
 /* Benchmark runners */
-result_t bench_rbipc_tput(size_t msgsz, uint64_t iters, transfer_semantic_t mode);
+result_t bench_rbipc_tput(size_t msgsz, uint64_t iters, transfer_semantic_t mode, uint32_t flags, const char *label);
 result_t bench_rte_tput(size_t msgsz, uint64_t iters, transfer_semantic_t mode);
 result_t bench_disruptor_tput(size_t msgsz, uint64_t iters, transfer_semantic_t mode);
 result_t bench_mq_tput(size_t msgsz, uint64_t iters);
 result_t bench_uds_tput(size_t msgsz, uint64_t iters);
 
-result_t bench_rbipc_lat(uint64_t iters);
+result_t bench_rbipc_lat(uint64_t iters, uint32_t flags, const char *label);
 result_t bench_rte_lat(uint64_t iters);
 result_t bench_disruptor_lat(uint64_t iters);
 result_t bench_mq_lat(uint64_t iters);
 result_t bench_uds_lat(uint64_t iters);
 
 double bench_rbi_mpmc(int np, int nc, uint64_t iters_p, rbipc_ring_t *ring, size_t msgsz);
-double bench_rte_mpmc(int np, int nc, uint64_t iters_p);
-double bench_disruptor_mpmc(int np, int nc, uint64_t iters_p);
+double bench_rte_mpmc(int np, int nc, uint64_t iters_p, size_t msgsz);
+double bench_disruptor_mpmc(int np, int nc, uint64_t iters_p, size_t msgsz);
 
 void run_bench_idle_cpu(FILE *json_fp);
 void run_bench_mpmc(FILE *json_fp, uint64_t mpmc_iters);

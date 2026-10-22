@@ -59,26 +59,28 @@ int main(void) {
     snprintf(hdr_buf, sizeof(hdr_buf), "BENCH 1: 1P-1C Throughput -- 64 B Payloads, %lu Iterations", (unsigned long)bench_iters);
     comp_print_hdr(hdr_buf);
 
-    result_t tput[5];
-    printf("  [1/5] librbipc ...\n");
-    tput[0] = bench_rbipc_tput(64, bench_iters, TRANSFER_VALUE_COPY);
-    printf("  [2/5] rte_ring (DPDK algorithm) ...\n");
-    tput[1] = bench_rte_tput(64, bench_iters, TRANSFER_VALUE_COPY);
-    printf("  [3/5] LMAX Disruptor (WorkProcessor) ...\n");
-    tput[2] = bench_disruptor_tput(64, bench_iters, TRANSFER_VALUE_COPY);
-    printf("  [4/5] POSIX mqueue ...\n");
-    tput[3] = bench_mq_tput(64, bench_iters);
-    printf("  [5/5] AF_UNIX SOCK_DGRAM ...\n");
-    tput[4] = bench_uds_tput(64, bench_iters);
+    result_t tput[6];
+    printf("  [1/6] librbipc (Zero-Trust Standard) ...\n");
+    tput[0] = bench_rbipc_tput(64, bench_iters, TRANSFER_VALUE_COPY, 0, "librbipc (Zero-Trust)");
+    printf("  [2/6] librbipc (Full-Capability Trusted) ...\n");
+    tput[1] = bench_rbipc_tput(64, bench_iters, TRANSFER_VALUE_COPY, RBIPC_FLAG_TRUSTED, "librbipc (Trusted)");
+    printf("  [3/6] rte_ring (DPDK algorithm) ...\n");
+    tput[2] = bench_rte_tput(64, bench_iters, TRANSFER_VALUE_COPY);
+    printf("  [4/6] LMAX Disruptor (WorkProcessor) ...\n");
+    tput[3] = bench_disruptor_tput(64, bench_iters, TRANSFER_VALUE_COPY);
+    printf("  [5/6] POSIX mqueue ...\n");
+    tput[4] = bench_mq_tput(64, bench_iters);
+    printf("  [6/6] AF_UNIX SOCK_DGRAM ...\n");
+    tput[5] = bench_uds_tput(64, bench_iters);
 
-    for (int i = 0; i < 5; i++) { printf("\n"); comp_print_result(&tput[i]); }
-    comp_print_table(tput, 5, "1P-1C Streaming Throughput");
+    for (int i = 0; i < 6; i++) { printf("\n"); comp_print_result(&tput[i]); }
+    comp_print_table(tput, 6, "1P-1C Streaming Throughput");
 
     if (json_fp) {
         fprintf(json_fp, "  \"throughput_64b\": [\n");
-        for (int i = 0; i < 5; i++) {
+        for (int i = 0; i < 6; i++) {
             fprintf(json_fp, "    {\"name\": \"%s\", \"ops_sec\": %.2f, \"mb_sec\": %.2f}%s\n",
-                    tput[i].name, tput[i].tput_ops, tput[i].tput_mbs, (i == 4 ? "" : ","));
+                    tput[i].name, tput[i].tput_ops, tput[i].tput_mbs, (i == 5 ? "" : ","));
         }
         fprintf(json_fp, "  ],\n");
     }
@@ -87,29 +89,31 @@ int main(void) {
     snprintf(hdr_buf, sizeof(hdr_buf), "BENCH 2: Half-RTT Ping-Pong Latency Distribution -- %lu Iterations", (unsigned long)lat_iters);
     comp_print_hdr(hdr_buf);
 
-    result_t lat[5];
-    printf("  [1/5] librbipc latency ...\n");
-    lat[0] = bench_rbipc_lat(lat_iters);
-    printf("  [2/5] rte_ring latency ...\n");
-    lat[1] = bench_rte_lat(lat_iters);
-    printf("  [3/5] LMAX Disruptor latency ...\n");
-    lat[2] = bench_disruptor_lat(lat_iters);
-    printf("  [4/5] POSIX mqueue latency ...\n");
-    lat[3] = bench_mq_lat(lat_iters);
-    printf("  [5/5] AF_UNIX DGRAM latency ...\n");
-    lat[4] = bench_uds_lat(lat_iters);
+    result_t lat[6];
+    printf("  [1/6] librbipc (Zero-Trust) latency ...\n");
+    lat[0] = bench_rbipc_lat(lat_iters, 0, "librbipc (Zero-Trust)");
+    printf("  [2/6] librbipc (Full-Capability Trusted) latency ...\n");
+    lat[1] = bench_rbipc_lat(lat_iters, RBIPC_FLAG_TRUSTED | RBIPC_FLAG_PACKED, "librbipc (Trusted)");
+    printf("  [3/6] rte_ring latency ...\n");
+    lat[2] = bench_rte_lat(lat_iters);
+    printf("  [4/6] LMAX Disruptor latency ...\n");
+    lat[3] = bench_disruptor_lat(lat_iters);
+    printf("  [5/6] POSIX mqueue latency ...\n");
+    lat[4] = bench_mq_lat(lat_iters);
+    printf("  [6/6] AF_UNIX DGRAM latency ...\n");
+    lat[5] = bench_uds_lat(lat_iters);
 
-    for (int i = 0; i < 5; i++) { printf("\n"); comp_print_result(&lat[i]); }
-    comp_print_table(lat, 5, "Half-RTT Latency Distribution");
+    for (int i = 0; i < 6; i++) { printf("\n"); comp_print_result(&lat[i]); }
+    comp_print_table(lat, 6, "Half-RTT Latency Distribution");
 
     if (json_fp) {
         fprintf(json_fp, "  \"latency_distribution\": [\n");
-        for (int i = 0; i < 5; i++) {
+        for (int i = 0; i < 6; i++) {
             fprintf(json_fp, "    {\"name\": \"%s\", \"min_ns\": %lu, \"p50_ns\": %lu, \"p90_ns\": %lu, \"p99_ns\": %lu, \"p999_ns\": %lu, \"max_ns\": %lu}%s\n",
                     lat[i].name, (unsigned long)lat[i].lat_min, (unsigned long)lat[i].lat_p50,
                     (unsigned long)lat[i].lat_p90, (unsigned long)lat[i].lat_p99,
                     (unsigned long)lat[i].lat_p999, (unsigned long)lat[i].lat_max,
-                    (i == 4 ? "" : ","));
+                    (i == 5 ? "" : ","));
         }
         fprintf(json_fp, "  ],\n");
     }
@@ -128,7 +132,7 @@ int main(void) {
     result_t val_rb[NPSIZES], val_rt[NPSIZES], val_ds[NPSIZES], val_mq[NPSIZES], val_ud[NPSIZES];
     for (int s = 0; s < NPSIZES; s++) {
         size_t sz = psizes[s].sz;
-        val_rb[s] = bench_rbipc_tput(sz, payload_iters, TRANSFER_VALUE_COPY);
+        val_rb[s] = bench_rbipc_tput(sz, payload_iters, TRANSFER_VALUE_COPY, RBIPC_FLAG_TRUSTED, "librbipc");
         val_rt[s] = bench_rte_tput(sz, payload_iters, TRANSFER_VALUE_COPY);
         val_ds[s] = bench_disruptor_tput(sz, payload_iters, TRANSFER_VALUE_COPY);
         val_mq[s] = (sz <= 8192) ? bench_mq_tput(sz, payload_iters) : (result_t){.name="POSIX mqueue", .tput_ops=0};
@@ -152,7 +156,7 @@ int main(void) {
     result_t ref_rb[NPSIZES], ref_rt[NPSIZES], ref_ds[NPSIZES];
     for (int s = 0; s < NPSIZES; s++) {
         size_t sz = psizes[s].sz;
-        ref_rb[s] = bench_rbipc_tput(sz, payload_iters, TRANSFER_REFERENCE_PASSING);
+        ref_rb[s] = bench_rbipc_tput(sz, payload_iters, TRANSFER_REFERENCE_PASSING, RBIPC_FLAG_TRUSTED | RBIPC_FLAG_PACKED, "librbipc");
         ref_rt[s] = bench_rte_tput(sz, payload_iters, TRANSFER_REFERENCE_PASSING);
         ref_ds[s] = bench_disruptor_tput(sz, payload_iters, TRANSFER_REFERENCE_PASSING);
 

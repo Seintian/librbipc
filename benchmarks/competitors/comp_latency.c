@@ -5,21 +5,21 @@
 
 #include "comp_common.h"
 
-result_t bench_rbipc_lat(uint64_t iters) {
+result_t bench_rbipc_lat(uint64_t iters, uint32_t flags, const char *label) {
     result_t r = {};
-    snprintf(r.name, sizeof(r.name), "librbipc");
+    snprintf(r.name, sizeof(r.name), "%s", label ? label : "librbipc");
     r.msgsz = 8; r.iters = iters;
     const char *sa = "/rbench_lat_a", *sb = "/rbench_lat_b";
     rbipc_ring_t *rp = NULL, *rc = NULL, *rp2 = NULL, *rc2 = NULL;
     rbipc_destroy(sa); rbipc_destroy(sb);
-    assert(rbipc_create_ex(sa, 256, 72, RBIPC_SHM_NAMED | RBIPC_FLAG_TRUSTED, 0660, &rp) == RBIPC_OK);
-    assert(rbipc_create_ex(sb, 256, 72, RBIPC_SHM_NAMED | RBIPC_FLAG_TRUSTED, 0660, &rp2) == RBIPC_OK);
+    assert(rbipc_create_ex(sa, 256, 72, RBIPC_SHM_NAMED | flags, 0660, &rp) == RBIPC_OK);
+    assert(rbipc_create_ex(sb, 256, 72, RBIPC_SHM_NAMED | flags, 0660, &rp2) == RBIPC_OK);
     assert(rbipc_attach(sa, &rc) == RBIPC_OK);
     assert(rbipc_attach(sb, &rc2) == RBIPC_OK);
-    rbipc_set_wait_policy(rp, RBIPC_WAIT_ADAPTIVE);
-    rbipc_set_wait_policy(rp2, RBIPC_WAIT_ADAPTIVE);
-    rbipc_set_wait_policy(rc, RBIPC_WAIT_ADAPTIVE);
-    rbipc_set_wait_policy(rc2, RBIPC_WAIT_ADAPTIVE);
+    rbipc_set_wait_policy(rp, RBIPC_WAIT_ZERO_SPIN);
+    rbipc_set_wait_policy(rp2, RBIPC_WAIT_ZERO_SPIN);
+    rbipc_set_wait_policy(rc, RBIPC_WAIT_ZERO_SPIN);
+    rbipc_set_wait_policy(rc2, RBIPC_WAIT_ZERO_SPIN);
 
     uint64_t *samp = malloc(iters * sizeof(uint64_t));
     assert(samp != NULL);
@@ -31,12 +31,17 @@ result_t bench_rbipc_lat(uint64_t iters) {
         close(sync_pipe[0]);
         ssize_t w = write(sync_pipe[1], "RDY", 3);
         (void)w;
+        uint32_t spins = 0;
         for (uint64_t n = 0; n < iters; n++) {
             const void *buf; uint64_t tk; uint32_t ln;
-            while (rbipc_read_acquire(rc, &buf, &ln, &tk) != RBIPC_OK) {}
+            while (rbipc_read_acquire_nonblock(rc, &buf, &ln, &tk) != RBIPC_OK) {
+                bench_spin_pause(&spins);
+            }
             rbipc_read_release(rc, tk);
             void *out; uint64_t t2;
-            while (rbipc_reserve_write(rp2, 8, &out, &t2) != RBIPC_OK) {}
+            while (rbipc_reserve_write_nonblock(rp2, 8, &out, &t2) != RBIPC_OK) {
+                bench_spin_pause(&spins);
+            }
             rbipc_commit_write(rp2, t2, 8);
         }
         close(sync_pipe[1]);
@@ -48,13 +53,18 @@ result_t bench_rbipc_lat(uint64_t iters) {
         (void)s;
         close(sync_pipe[0]);
 
+        uint32_t spins = 0;
         for (uint64_t i = 0; i < iters; i++) {
             uint64_t t0 = comp_get_ns();
             void *buf; uint64_t tk;
-            while (rbipc_reserve_write(rp, 8, &buf, &tk) != RBIPC_OK) {}
+            while (rbipc_reserve_write_nonblock(rp, 8, &buf, &tk) != RBIPC_OK) {
+                bench_spin_pause(&spins);
+            }
             rbipc_commit_write(rp, tk, 8);
             const void *rb; uint64_t rt; uint32_t rl;
-            while (rbipc_read_acquire(rc2, &rb, &rl, &rt) != RBIPC_OK) {}
+            while (rbipc_read_acquire_nonblock(rc2, &rb, &rl, &rt) != RBIPC_OK) {
+                bench_spin_pause(&spins);
+            }
             rbipc_read_release(rc2, rt);
             samp[i] = (comp_get_ns() - t0) / 2;
         }
@@ -122,20 +132,22 @@ result_t bench_disruptor_lat(uint64_t iters) {
     pid_t pid = fork();
     if (pid == 0) {
         uintptr_t v;
+        uint32_t spins = 0;
         for (uint64_t n = 0; n < iters; n++) {
             while (!disruptor_consume_wp(da, (int64_t)iters, &v)) {
-                __asm__ volatile("pause" ::: "memory");
+                bench_spin_pause(&spins);
             }
             disruptor_publish_sp(db, (int64_t)n, v);
         }
         _exit(0);
     } else {
         uintptr_t d = 0xABCD, rv;
+        uint32_t spins = 0;
         for (uint64_t i = 0; i < iters; i++) {
             uint64_t t0 = comp_get_ns();
             disruptor_publish_sp(da, (int64_t)i, d);
             while (!disruptor_consume_wp(db, (int64_t)iters, &rv)) {
-                __asm__ volatile("pause" ::: "memory");
+                bench_spin_pause(&spins);
             }
             samp[i] = (comp_get_ns() - t0) / 2;
         }

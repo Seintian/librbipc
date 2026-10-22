@@ -81,3 +81,49 @@ void rte_dequeue_wait(rte_ring_t *r, uintptr_t *v) {
     uint32_t spins = 0;
     while (rte_mc_dequeue(r, v) == -ENOENT) bench_spin_pause(&spins);
 }
+
+uint32_t rte_mp_enqueue_burst(rte_ring_t *r, const uintptr_t *vals, uint32_t n) {
+    uint32_t ph, pn, ct, free_entries;
+    for (;;) {
+        ph = atomic_load_explicit(&r->prod_head, memory_order_relaxed);
+        ct = atomic_load_explicit(&r->cons_tail, memory_order_acquire);
+        free_entries = r->mask + ct - ph;
+        if (free_entries == 0) return 0;
+        uint32_t to_enq = (n < free_entries) ? n : free_entries;
+        pn = ph + to_enq;
+        if (atomic_compare_exchange_weak_explicit(&r->prod_head, &ph, pn,
+                memory_order_acquire, memory_order_relaxed)) {
+            for (uint32_t i = 0; i < to_enq; i++) {
+                rte_slots(r)[(ph + i) & r->mask] = vals[i];
+            }
+            uint32_t tail_spins = 0;
+            while (atomic_load_explicit(&r->prod_tail, memory_order_relaxed) != ph)
+                bench_spin_pause(&tail_spins);
+            atomic_store_explicit(&r->prod_tail, pn, memory_order_release);
+            return to_enq;
+        }
+    }
+}
+
+uint32_t rte_mc_dequeue_burst(rte_ring_t *r, uintptr_t *out, uint32_t n) {
+    uint32_t ch, cn, pt, entries;
+    for (;;) {
+        ch = atomic_load_explicit(&r->cons_head, memory_order_relaxed);
+        pt = atomic_load_explicit(&r->prod_tail, memory_order_acquire);
+        entries = pt - ch;
+        if (entries == 0) return 0;
+        uint32_t to_deq = (n < entries) ? n : entries;
+        cn = ch + to_deq;
+        if (atomic_compare_exchange_weak_explicit(&r->cons_head, &ch, cn,
+                memory_order_acquire, memory_order_relaxed)) {
+            for (uint32_t i = 0; i < to_deq; i++) {
+                out[i] = rte_slots(r)[(ch + i) & r->mask];
+            }
+            uint32_t cons_spins = 0;
+            while (atomic_load_explicit(&r->cons_tail, memory_order_relaxed) != ch)
+                bench_spin_pause(&cons_spins);
+            atomic_store_explicit(&r->cons_tail, cn, memory_order_release);
+            return to_deq;
+        }
+    }
+}

@@ -5,9 +5,9 @@
 
 #include "comp_common.h"
 
-result_t bench_rbipc_tput(size_t msgsz, uint64_t iters, transfer_semantic_t mode) {
+result_t bench_rbipc_tput(size_t msgsz, uint64_t iters, transfer_semantic_t mode, uint32_t flags, const char *label) {
     result_t r = {};
-    snprintf(r.name, sizeof(r.name), "librbipc");
+    snprintf(r.name, sizeof(r.name), "%s", label ? label : "librbipc");
     r.msgsz = msgsz; r.iters = iters;
 
     const char *shm = "/rbench_rbipc_tput";
@@ -15,10 +15,10 @@ result_t bench_rbipc_tput(size_t msgsz, uint64_t iters, transfer_semantic_t mode
     uint32_t slot = (mode == TRANSFER_VALUE_COPY) ? (uint32_t)(msgsz + 64) : 64;
     uint32_t req_sz = (mode == TRANSFER_VALUE_COPY) ? (uint32_t)msgsz : (uint32_t)sizeof(uintptr_t);
     rbipc_destroy(shm);
-    if (rbipc_create_ex(shm, RING_CAPACITY, slot, RBIPC_SHM_NAMED | RBIPC_FLAG_TRUSTED, 0660, &rp) != RBIPC_OK ||
+    if (rbipc_create_ex(shm, RING_CAPACITY, slot, RBIPC_SHM_NAMED | flags, 0660, &rp) != RBIPC_OK ||
         rbipc_attach(shm, &rc) != RBIPC_OK) return r;
-    rbipc_set_wait_policy(rp, RBIPC_WAIT_ADAPTIVE);
-    rbipc_set_wait_policy(rc, RBIPC_WAIT_ADAPTIVE);
+    rbipc_set_wait_policy(rp, RBIPC_WAIT_ZERO_SPIN);
+    rbipc_set_wait_policy(rc, RBIPC_WAIT_ZERO_SPIN);
 
     int sync_pipe[2];
     assert(pipe(sync_pipe) == 0);
@@ -31,10 +31,14 @@ result_t bench_rbipc_tput(size_t msgsz, uint64_t iters, transfer_semantic_t mode
         close(sync_pipe[0]);
         uint64_t n = 0;
         const void *buf; uint64_t tk; uint32_t ln;
+        uint32_t spins = 0;
         while (n < iters) {
-            if (rbipc_read_acquire(rc, &buf, &ln, &tk) == RBIPC_OK) {
+            if (rbipc_read_acquire_nonblock(rc, &buf, &ln, &tk) == RBIPC_OK) {
                 rbipc_read_release(rc, tk);
                 n++;
+                spins = 0;
+            } else {
+                bench_spin_pause(&spins);
             }
         }
         char sig[4] = "OK";
@@ -48,8 +52,9 @@ result_t bench_rbipc_tput(size_t msgsz, uint64_t iters, transfer_semantic_t mode
         t0 = comp_get_ns();
         for (uint64_t i = 0; i < iters; i++) {
             void *buf; uint64_t tk;
+            uint32_t spins = 0;
             while (rbipc_reserve_write(rp, req_sz, &buf, &tk) != RBIPC_OK) {
-                __asm__ volatile("pause" ::: "memory");
+                bench_spin_pause(&spins);
             }
             if (mode == TRANSFER_VALUE_COPY) {
                 memcpy(buf, pay, msgsz);
