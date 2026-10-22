@@ -169,7 +169,7 @@ void run_rbipc_wake(rbipc_env_t *env, uint64_t *wake_samples) {
         int rres = rbipc_reserve_write(env->ring_ab_prod, MSG_PAYLOAD_SIZE, &wbuf, &wtick);
         (void)rres;
         rbipc_commit_write(env->ring_ab_prod, wtick, MSG_PAYLOAD_SIZE);
-        spins = 0;
+        uint32_t spins = 0;
         while (atomic_load_explicit(&recv_ts, memory_order_acquire) == 0) bench_spin_pause(&spins);
         uint64_t rts = atomic_load_explicit(&recv_ts, memory_order_acquire);
         wake_samples[i] = (rts > send_ts) ? (rts - send_ts) : 0;
