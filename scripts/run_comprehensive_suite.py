@@ -14,6 +14,7 @@ import os
 import json
 import sys
 import re
+import shutil
 
 class HardwareMonitor:
     def __init__(self, interval_sec=0.2):
@@ -193,6 +194,45 @@ def load_json(path):
         print(f"Error loading {path}: {e}")
         return None
 
+def generate_flamegraph(cmd, svg_path, label):
+    flamegraph_bin = os.path.expanduser("~/.cargo/bin/flamegraph")
+    if not (os.path.exists(flamegraph_bin) or shutil.which("flamegraph")):
+        print(f"[WARN] flamegraph binary not found; skipping SVG generation for {label}")
+        return
+    fg_exe = flamegraph_bin if os.path.exists(flamegraph_bin) else "flamegraph"
+    os.makedirs(os.path.dirname(svg_path), exist_ok=True)
+    print(f"\n[PROFILING] Generating Flamegraph SVG: {svg_path} ({label})")
+    try:
+        subprocess.run([fg_exe, "-o", svg_path, "--"] + cmd, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        print(f"  -> Generated: {svg_path}")
+    except Exception as e:
+        print(f"  -> Flamegraph generation error: {e}")
+    finally:
+        for f in glob.glob("perf.data*"):
+            try: os.remove(f)
+            except OSError: pass
+
+def generate_perf_c2c(cmd, report_path, label):
+    data_file = f"/tmp/perf_c2c_{int(time.time())}.data"
+    os.makedirs(os.path.dirname(report_path), exist_ok=True)
+    print(f"\n[PROFILING] Capturing perf c2c memory events: {label}")
+    try:
+        subprocess.run(["perf", "mem", "record", "-t", "load,store", "-o", data_file, "--"] + cmd,
+                       check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        with open(report_path, "w") as out_fp:
+            subprocess.run(["perf", "c2c", "report", "-i", data_file, "--stdio"],
+                           stdout=out_fp, stderr=subprocess.PIPE, check=True)
+        print(f"  -> Exported perf c2c report: {report_path}")
+    except Exception as e:
+        print(f"  -> perf c2c error: {e}")
+    finally:
+        if os.path.exists(data_file):
+            try: os.remove(data_file)
+            except OSError: pass
+        for f in glob.glob("perf.data*"):
+            try: os.remove(f)
+            except OSError: pass
+
 def main():
     print("="*80)
     print("  LIBRBIPC COMPREHENSIVE BENCHMARK & HARDWARE PROFILING SUITE")
@@ -247,6 +287,32 @@ def main():
     t, out = run_command_with_telemetry(["bin/io/test_e2e_throughput"], "E2E Architectural Modes (Fork Multi-Process)", capture_perf=True)
     telemetry_records.append(t)
     e2e_modes_output = out
+
+    # 9. Specialized Hardware Profiling (Flamegraphs & Cache-Line Contention perf c2c)
+    fg_dir = "benchmarks/results/laptop/flamegraphs"
+    os.makedirs(fg_dir, exist_ok=True)
+
+    # A. Interactive SVG Flamegraphs
+    generate_flamegraph(["bin/bench_librbipc_isolated", "--batch", "--iters", "3000000"],
+                        os.path.join(fg_dir, "flamegraph_isolated_batch.svg"),
+                        "Isolated B-Queue Batch 32")
+    generate_flamegraph(["bin/bench_librbipc_isolated", "--copy", "--iters", "2000000"],
+                        os.path.join(fg_dir, "flamegraph_isolated_copy.svg"),
+                        "Isolated 64B Copy Exchange")
+    generate_flamegraph(["bin/bench_librbipc_isolated", "--ptr", "--iters", "2000000"],
+                        os.path.join(fg_dir, "flamegraph_isolated_ptr.svg"),
+                        "Isolated 8B Pointer Exchange")
+    generate_flamegraph(["bin/bench_competitors"],
+                        os.path.join(fg_dir, "flamegraph_competitors.svg"),
+                        "Competitor Comparative Suite")
+
+    # B. Cache Contention & False Sharing Analysis (perf c2c)
+    generate_perf_c2c(["bin/bench_competitors"],
+                      "benchmarks/results/laptop/perf_c2c_competitors.txt",
+                      "Competitors Benchmark Suite")
+    generate_perf_c2c(["bin/bench_librbipc_isolated", "--batch", "--iters", "1000000"],
+                      "benchmarks/results/laptop/perf_c2c_batch.txt",
+                      "Isolated B-Queue Batching")
 
     # Parse e2e modes output
     mode_results = {}
@@ -335,27 +401,39 @@ def main():
             print(f"Batch Size {bsz:<19} | {ov:<15.2f} | {nv:<18.2f} | {delta:>+6.1f}% {flag}")
 
     # B. Competitor Comparison
-    old_comp = load_json(os.path.join(baseline_dir, "competitors_benchmark.json"))
     new_comp = load_json(os.path.join(current_dir, "competitors_benchmark.json"))
     if new_comp:
-        print("\n--- [4. Competitor Comparative Analysis (Throughput & Speedup)] ---")
-        print(f"{'Transport / IPC Mechanism':<30} | {'Throughput (Mops/s)':<20} | {'Latency (ns)':<15} | {'Speedup vs POSIX SHM':<20}")
-        print("-" * 90)
-        c_items = new_comp.get("competitors", [])
-        rbipc_th = 0.0
-        shm_th = 0.0
-        for item in c_items:
-            if "librbipc" in item.get("name", "").lower():
-                rbipc_th = item.get("throughput_mops", 0.0)
-            if "posix shared memory" in item.get("name", "").lower():
-                shm_th = item.get("throughput_mops", 0.0)
-
-        for item in c_items:
+        tput_items = new_comp.get("throughput_64b", [])
+        lat_map = {item.get("name", ""): item for item in new_comp.get("latency_distribution", [])}
+        print("\n--- [4. Competitor Comparative Analysis (Throughput & Latency Distribution)] ---")
+        print(f"{'Transport / IPC Mechanism':<30} | {'Throughput (Mops/s)':<20} | {'Min Lat (ns)':<13} | {'p50 Lat (ns)':<13} | {'p99 Lat (ns)':<13}")
+        print("-" * 96)
+        for item in tput_items:
             name = item.get("name", "")
-            th = item.get("throughput_mops", 0.0)
-            lat = item.get("latency_ns", 0.0)
-            ratio = f"{(th / shm_th):.2f}x" if shm_th > 0 else "1.00x"
-            print(f"{name:<30} | {th:<20.2f} | {lat:<15.1f} | {ratio:<20}")
+            th = item.get("ops_sec", 0.0) / 1e6
+            lat_item = lat_map.get(name, {})
+            min_lat = lat_item.get("min_ns", 0)
+            p50_lat = lat_item.get("p50_ns", 0)
+            p99_lat = lat_item.get("p99_ns", 0)
+            print(f"{name:<30} | {th:<20.2f} | {min_lat:<13} | {p50_lat:<13} | {p99_lat:<13}")
+
+        mpmc_items = new_comp.get("mpmc_scalability", [])
+        if mpmc_items:
+            print("\n--- [5. MPMC Multi-Threaded Scalability (Contention Robustness)] ---")
+            print(f"{'Config':<10} | {'librbipc ZeroTrust':<20} | {'librbipc Trusted':<18} | {'rte_ring (Mops/s)':<18} | {'Disruptor (Mops/s)':<18}")
+            print("-" * 92)
+            for m in mpmc_items:
+                cfg = m.get("config", "")
+                rbi_zt = m.get("librbipc_zero_trust", 0.0) / 1e6
+                rbi_tr = m.get("librbipc", 0.0) / 1e6
+                dpdk = m.get("rte_ring", 0.0) / 1e6
+                disr = m.get("disruptor", 0.0) / 1e6
+                print(f"{cfg:<10} | {rbi_zt:<20.2f} | {rbi_tr:<18.2f} | {dpdk:<18.2f} | {disr:<18.2f}")
+
+        idle_cpu = new_comp.get("idle_cpu", {})
+        if idle_cpu:
+            print("\n--- [6. Consumer Idle CPU Utilisation (Passive Sleep vs Busy-Spin)] ---")
+            print(f"librbipc (futex passive): {idle_cpu.get('librbipc', 0.0)}% CPU | DPDK (rte_ring): {idle_cpu.get('rte_ring', 0.0)}% CPU | Disruptor: {idle_cpu.get('disruptor', 0.0)}% CPU")
 
     # C. Architectural Modes Comparison
     if mode_results:
