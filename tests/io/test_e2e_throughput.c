@@ -270,6 +270,7 @@ int main(void) {
     run_bench_mode("Tier 2 Trusted Mode (Pure Vyukov Sequence)", RBIPC_FLAG_TRUSTED, BENCH_ITERATIONS);
     run_bench_mode("Tier 3 Packed Descriptor Mode", RBIPC_FLAG_PACKED, BENCH_ITERATIONS);
     run_bench_mode("Combined Tier 2 + Tier 3 (Trusted & Packed)", RBIPC_FLAG_TRUSTED | RBIPC_FLAG_PACKED, BENCH_ITERATIONS);
+    run_bench_mode("Nikolaev wCQ Bounded Wait-Free Helping Mode", RBIPC_FLAG_WAIT_FREE, BENCH_ITERATIONS);
 
     /* 2. B-Queue Batch Benchmarks */
     const int batch_iterations = 500000;

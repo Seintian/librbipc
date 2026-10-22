@@ -59,9 +59,17 @@ static void print_usage(const char *prog) {
     printf("  %s /my_ring --prometheus\n", prog);
 }
 
-static void print_json(const char *name, const rbipc_stats_t *s, const rbipc_slot_stats_t *ss) {
+static void print_json(const char *name, const rbipc_stats_t *s, const rbipc_slot_stats_t *ss, const rbipc_ring_t *ring) {
     printf("{\n");
     printf("  \"name\": \"%s\",\n", name);
+    printf("  \"modes\": {\n");
+    printf("    \"is_trusted\": %s,\n", rbipc_ring_is_trusted(ring) ? "true" : "false");
+    printf("    \"is_packed\": %s,\n", rbipc_ring_is_packed(ring) ? "true" : "false");
+    printf("    \"is_hugetlb\": %s,\n", rbipc_ring_is_hugetlb(ring) ? "true" : "false");
+    printf("    \"is_wait_free\": %s,\n", rbipc_ring_is_wait_free(ring) ? "true" : "false");
+    printf("    \"is_isolated\": %s,\n", rbipc_ring_is_isolated(ring) ? "true" : "false");
+    printf("    \"is_cxl\": %s\n", rbipc_ring_is_cxl(ring) ? "true" : "false");
+    printf("  },\n");
     printf("  \"geometry\": {\n");
     printf("    \"total_shm_size_bytes\": %lu,\n", (unsigned long)s->total_shm_size);
     printf("    \"data_size_bytes\": %lu,\n", (unsigned long)s->data_size);
@@ -109,7 +117,16 @@ static void print_json(const char *name, const rbipc_stats_t *s, const rbipc_slo
     printf("}\n");
 }
 
-static void print_prometheus(const char *name, const rbipc_stats_t *s, const rbipc_slot_stats_t *ss) {
+static void print_prometheus(const char *name, const rbipc_stats_t *s, const rbipc_slot_stats_t *ss, const rbipc_ring_t *ring) {
+    printf("# HELP rbipc_mode_active Boolean indicator of active architectural execution modes\n");
+    printf("# TYPE rbipc_mode_active gauge\n");
+    printf("rbipc_mode_active{ring=\"%s\",mode=\"trusted\"} %d\n", name, rbipc_ring_is_trusted(ring) ? 1 : 0);
+    printf("rbipc_mode_active{ring=\"%s\",mode=\"packed\"} %d\n", name, rbipc_ring_is_packed(ring) ? 1 : 0);
+    printf("rbipc_mode_active{ring=\"%s\",mode=\"hugetlb\"} %d\n", name, rbipc_ring_is_hugetlb(ring) ? 1 : 0);
+    printf("rbipc_mode_active{ring=\"%s\",mode=\"wait_free\"} %d\n", name, rbipc_ring_is_wait_free(ring) ? 1 : 0);
+    printf("rbipc_mode_active{ring=\"%s\",mode=\"isolated\"} %d\n", name, rbipc_ring_is_isolated(ring) ? 1 : 0);
+    printf("rbipc_mode_active{ring=\"%s\",mode=\"cxl\"} %d\n\n", name, rbipc_ring_is_cxl(ring) ? 1 : 0);
+
     printf("# HELP rbipc_total_shm_size_bytes Total file size in bytes of shared memory ring\n");
     printf("# TYPE rbipc_total_shm_size_bytes gauge\n");
     printf("rbipc_total_shm_size_bytes{ring=\"%s\"} %lu\n\n", name, (unsigned long)s->total_shm_size);
@@ -160,10 +177,19 @@ static void print_prometheus(const char *name, const rbipc_stats_t *s, const rbi
     }
 }
 
-static void print_human(const char *name, const rbipc_stats_t *s, const rbipc_slot_stats_t *ss) {
+static void print_human(const char *name, const rbipc_stats_t *s, const rbipc_slot_stats_t *ss, const rbipc_ring_t *ring) {
     printf("%s================================================================================%s\n", COL_CYAN, COL_RESET);
     printf(" %slibrbipc Telemetry Monitor%s | Object: %s%s%s\n", COL_BOLD, COL_RESET, COL_GREEN, name, COL_RESET);
     printf("%s================================================================================%s\n", COL_CYAN, COL_RESET);
+
+    printf("  %sArchitectural Execution Modes%s\n", COL_BOLD, COL_RESET);
+    printf("    Tier 2 Trusted Mode : %s\n", rbipc_ring_is_trusted(ring) ? COL_GREEN "ACTIVE (Pure Vyukov Sequence)" COL_RESET : "NO");
+    printf("    Tier 3 Packed Mode  : %s\n", rbipc_ring_is_packed(ring) ? COL_GREEN "ACTIVE (64-bit Descriptors)" COL_RESET : "NO");
+    printf("    HugeTLB Backing     : %s\n", rbipc_ring_is_hugetlb(ring) ? COL_GREEN "ACTIVE (2MB HugePages)" COL_RESET : "NO");
+    printf("    Wait-Free wCQ Engine: %s\n", rbipc_ring_is_wait_free(ring) ? COL_GREEN "ACTIVE (Nikolaev O(P) Helping)" COL_RESET : "NO");
+    printf("    Isolated Zero-Trust : %s\n", rbipc_ring_is_isolated(ring) ? COL_GREEN "ACTIVE (Intel MPK + mseal)" COL_RESET : "NO");
+    printf("    CXL Disaggregated   : %s\n", rbipc_ring_is_cxl(ring) ? COL_GREEN "ACTIVE (DAX + CLWB)" COL_RESET : "NO");
+    printf("\n");
 
     printf("  %sRing Geometry%s\n", COL_BOLD, COL_RESET);
     printf("    Capacity            : %s%u slots%s\n", COL_YELLOW, s->capacity, COL_RESET);
@@ -304,14 +330,14 @@ int main(int argc, char **argv) {
         }
 
         if (opt_json) {
-            print_json(shm_name, &stats, p_ss);
+            print_json(shm_name, &stats, p_ss, ring);
         } else if (opt_prometheus) {
-            print_prometheus(shm_name, &stats, p_ss);
+            print_prometheus(shm_name, &stats, p_ss, ring);
         } else {
             if (watch_sec > 0.0) {
                 printf("\033[H\033[J"); /* Clear screen */
             }
-            print_human(shm_name, &stats, p_ss);
+            print_human(shm_name, &stats, p_ss, ring);
         }
 
         if (watch_sec > 0.0 && g_running) {
