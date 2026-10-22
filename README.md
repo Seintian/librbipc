@@ -7,7 +7,7 @@
 
 `librbipc` is a zero-dependency, production-grade Inter-Process Communication (IPC) library written in ISO C23 for Linux. It implements a lock-free Multi-Producer / Multi-Consumer (MPMC) shared-memory ring buffer engineered for **sub-microsecond user-space fast paths**, **zero idle CPU consumption (0.13%)** via Dekker-synchronized Linux `sys_futex` suspension, **deterministic crash recovery** (`pidfd_open(2)`), **B-Queue scatter-gather vector batching** (**50.68M msgs/s**), **non-temporal cache-bypassing streaming stores** (**19.87 GB/s**), **asynchronous `eventfd`/`epoll` reactor signaling**, and **1-to-N lock-free multicast publish-subscribe**.
 
-For the complete formal concurrency model, memory layout geometry, crash-recovery state machines, and empirical comparisons against **DPDK `rte_ring`**, **LMAX Disruptor**, **Eclipse `iceoryx2`**, **POSIX `mqueue`**, and **`AF_UNIX`**, see **[`TECHNICAL_REPORT.md`](TECHNICAL_REPORT.md)**.
+For the complete formal concurrency model, memory layout geometry, crash-recovery state machines, and empirical comparisons against **DPDK `rte_ring`**, **LMAX Disruptor**, **Eclipse `iceoryx2`**, **POSIX `mqueue`**, and **`AF_UNIX`**, see **[`TECHNICAL_REPORT.md`](TECHNICAL_REPORT.md)**. For the frontier systems research synthesis, microarchitectural innovations (Intel DSA, UINTR, wCQ, MPK, CXL, and io_uring), and future integration blueprint, see **[`RESEARCH_REPORT.md`](RESEARCH_REPORT.md)**.
 
 ---
 
@@ -126,6 +126,7 @@ librbipc/
 │   └── postprocess_docs.py  # Doxygen HTML asset bundler and navigation post-processor
 ├── ARCHITECTURE_MODES.md    # Exhaustive execution modes, operational tiers, and C23 blueprints
 ├── AUDIT_REPORT.md          # Comprehensive engineering audit report, modularity, and verification
+├── RESEARCH_REPORT.md       # Cutting-edge systems research synthesis, microarchitectural innovations, and roadmap
 ├── TECHNICAL_REPORT.md      # Unified architectural monograph, formal proofs, and empirical evaluation
 ├── TODO.md                  # Next-generation synchronization hierarchy specification and roadmap
 ├── Doxyfile                 # Doxygen API and architectural documentation configuration
