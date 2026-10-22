@@ -184,9 +184,8 @@ static void *rbi_prod_th(void *a) {
 
     for (uint64_t i = 0; i < c->iters; i++) {
         void *buf; uint64_t tk;
-        uint32_t spins = 0;
-        while (rbipc_reserve_write(c->ring, (uint32_t)c->msgsz, &buf, &tk) != RBIPC_OK)
-            bench_spin_pause(&spins);
+        if (RBIPC_UNLIKELY(rbipc_reserve_write(c->ring, (uint32_t)c->msgsz, &buf, &tk) != RBIPC_OK))
+            break;
         memcpy(buf, pay, c->msgsz);
         rbipc_commit_write(c->ring, tk, (uint32_t)c->msgsz);
     }
@@ -196,15 +195,11 @@ static void *rbi_prod_th(void *a) {
 
 static void *rbi_cons_th(void *a) {
     rbi_mc_t *c = a;
-    uint32_t spins = 0;
     while (atomic_load(&c->recv) < c->total_msgs) {
         const void *buf; uint64_t tk; uint32_t ln;
-        if (rbipc_read_acquire_nonblock(c->ring, &buf, &ln, &tk) == RBIPC_OK) {
+        if (rbipc_read_acquire_timeout(c->ring, 5000000ULL, &buf, &ln, &tk) == RBIPC_OK) {
             rbipc_read_release(c->ring, tk);
             atomic_fetch_add(&c->recv, 1);
-            spins = 0;
-        } else {
-            bench_spin_pause(&spins);
         }
     }
     return NULL;

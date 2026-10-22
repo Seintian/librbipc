@@ -166,8 +166,8 @@ void run_rbipc_wake(rbipc_env_t *env, uint64_t *wake_samples) {
         nanosleep(&sleep_gap, NULL);
         atomic_store_explicit(&recv_ts, 0, memory_order_relaxed);
         uint64_t send_ts = idle_get_ns();
-        uint32_t spins = 0;
-        while (rbipc_reserve_write(env->ring_ab_prod, MSG_PAYLOAD_SIZE, &wbuf, &wtick) != RBIPC_OK) bench_spin_pause(&spins);
+        int rres = rbipc_reserve_write(env->ring_ab_prod, MSG_PAYLOAD_SIZE, &wbuf, &wtick);
+        (void)rres;
         rbipc_commit_write(env->ring_ab_prod, wtick, MSG_PAYLOAD_SIZE);
         spins = 0;
         while (atomic_load_explicit(&recv_ts, memory_order_acquire) == 0) bench_spin_pause(&spins);

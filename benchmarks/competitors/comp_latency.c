@@ -16,10 +16,11 @@ result_t bench_rbipc_lat(uint64_t iters, uint32_t flags, const char *label) {
     assert(rbipc_create_ex(sb, 256, 72, RBIPC_SHM_NAMED | flags, 0660, &rp2) == RBIPC_OK);
     assert(rbipc_attach(sa, &rc) == RBIPC_OK);
     assert(rbipc_attach(sb, &rc2) == RBIPC_OK);
-    rbipc_set_wait_policy(rp, RBIPC_WAIT_ZERO_SPIN);
-    rbipc_set_wait_policy(rp2, RBIPC_WAIT_ZERO_SPIN);
-    rbipc_set_wait_policy(rc, RBIPC_WAIT_ZERO_SPIN);
-    rbipc_set_wait_policy(rc2, RBIPC_WAIT_ZERO_SPIN);
+    uint32_t wait_pol = (flags & RBIPC_FLAG_TRUSTED) ? RBIPC_WAIT_ADAPTIVE : RBIPC_WAIT_ZERO_SPIN;
+    rbipc_set_wait_policy(rp, wait_pol);
+    rbipc_set_wait_policy(rp2, wait_pol);
+    rbipc_set_wait_policy(rc, wait_pol);
+    rbipc_set_wait_policy(rc2, wait_pol);
 
     uint64_t *samp = malloc(iters * sizeof(uint64_t));
     assert(samp != NULL);
@@ -31,17 +32,12 @@ result_t bench_rbipc_lat(uint64_t iters, uint32_t flags, const char *label) {
         close(sync_pipe[0]);
         ssize_t w = write(sync_pipe[1], "RDY", 3);
         (void)w;
-        uint32_t spins = 0;
         for (uint64_t n = 0; n < iters; n++) {
             const void *buf; uint64_t tk; uint32_t ln;
-            while (rbipc_read_acquire_nonblock(rc, &buf, &ln, &tk) != RBIPC_OK) {
-                bench_spin_pause(&spins);
-            }
+            if (RBIPC_UNLIKELY(rbipc_read_acquire(rc, &buf, &ln, &tk) != RBIPC_OK)) break;
             rbipc_read_release(rc, tk);
             void *out; uint64_t t2;
-            while (rbipc_reserve_write_nonblock(rp2, 8, &out, &t2) != RBIPC_OK) {
-                bench_spin_pause(&spins);
-            }
+            if (RBIPC_UNLIKELY(rbipc_reserve_write(rp2, 8, &out, &t2) != RBIPC_OK)) break;
             rbipc_commit_write(rp2, t2, 8);
         }
         close(sync_pipe[1]);
@@ -53,18 +49,13 @@ result_t bench_rbipc_lat(uint64_t iters, uint32_t flags, const char *label) {
         (void)s;
         close(sync_pipe[0]);
 
-        uint32_t spins = 0;
         for (uint64_t i = 0; i < iters; i++) {
             uint64_t t0 = comp_get_ns();
             void *buf; uint64_t tk;
-            while (rbipc_reserve_write_nonblock(rp, 8, &buf, &tk) != RBIPC_OK) {
-                bench_spin_pause(&spins);
-            }
+            if (RBIPC_UNLIKELY(rbipc_reserve_write(rp, 8, &buf, &tk) != RBIPC_OK)) break;
             rbipc_commit_write(rp, tk, 8);
             const void *rb; uint64_t rt; uint32_t rl;
-            while (rbipc_read_acquire_nonblock(rc2, &rb, &rl, &rt) != RBIPC_OK) {
-                bench_spin_pause(&spins);
-            }
+            if (RBIPC_UNLIKELY(rbipc_read_acquire(rc2, &rb, &rl, &rt) != RBIPC_OK)) break;
             rbipc_read_release(rc2, rt);
             samp[i] = (comp_get_ns() - t0) / 2;
         }

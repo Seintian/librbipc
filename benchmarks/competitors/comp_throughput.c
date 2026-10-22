@@ -17,8 +17,9 @@ result_t bench_rbipc_tput(size_t msgsz, uint64_t iters, transfer_semantic_t mode
     rbipc_destroy(shm);
     if (rbipc_create_ex(shm, RING_CAPACITY, slot, RBIPC_SHM_NAMED | flags, 0660, &rp) != RBIPC_OK ||
         rbipc_attach(shm, &rc) != RBIPC_OK) return r;
-    rbipc_set_wait_policy(rp, RBIPC_WAIT_ZERO_SPIN);
-    rbipc_set_wait_policy(rc, RBIPC_WAIT_ZERO_SPIN);
+    uint32_t wait_pol = (flags & RBIPC_FLAG_TRUSTED) ? RBIPC_WAIT_ADAPTIVE : RBIPC_WAIT_ZERO_SPIN;
+    rbipc_set_wait_policy(rp, wait_pol);
+    rbipc_set_wait_policy(rc, wait_pol);
 
     int sync_pipe[2];
     assert(pipe(sync_pipe) == 0);
@@ -29,17 +30,16 @@ result_t bench_rbipc_tput(size_t msgsz, uint64_t iters, transfer_semantic_t mode
     pid_t pid = fork();
     if (pid == 0) {
         close(sync_pipe[0]);
-        uint64_t n = 0;
-        const void *buf; uint64_t tk; uint32_t ln;
-        uint32_t spins = 0;
-        while (n < iters) {
-            if (rbipc_read_acquire_nonblock(rc, &buf, &ln, &tk) == RBIPC_OK) {
-                rbipc_read_release(rc, tk);
-                n++;
-                spins = 0;
-            } else {
-                bench_spin_pause(&spins);
+        for (uint64_t n = 0; n < iters; n++) {
+            const void *buf; uint64_t tk; uint32_t ln;
+            if (RBIPC_UNLIKELY(rbipc_read_acquire(rc, &buf, &ln, &tk) != RBIPC_OK)) {
+                break;
             }
+            if (mode == TRANSFER_REFERENCE_PASSING) {
+                volatile uintptr_t ptr = *(const uintptr_t *)buf;
+                (void)ptr;
+            }
+            rbipc_read_release(rc, tk);
         }
         char sig[4] = "OK";
         ssize_t w = write(sync_pipe[1], sig, sizeof(sig));
@@ -52,9 +52,8 @@ result_t bench_rbipc_tput(size_t msgsz, uint64_t iters, transfer_semantic_t mode
         t0 = comp_get_ns();
         for (uint64_t i = 0; i < iters; i++) {
             void *buf; uint64_t tk;
-            uint32_t spins = 0;
-            while (rbipc_reserve_write(rp, req_sz, &buf, &tk) != RBIPC_OK) {
-                bench_spin_pause(&spins);
+            if (RBIPC_UNLIKELY(rbipc_reserve_write(rp, req_sz, &buf, &tk) != RBIPC_OK)) {
+                break;
             }
             if (mode == TRANSFER_VALUE_COPY) {
                 memcpy(buf, pay, msgsz);

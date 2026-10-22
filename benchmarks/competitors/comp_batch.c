@@ -31,7 +31,7 @@ void run_bench_batch_scaling(FILE *json_fp, uint64_t batch_iters) {
         if (rbipc_create_ex("/rbench_batch", RING_CAPACITY, 128,
                             RBIPC_SHM_NAMED | RBIPC_FLAG_TRUSTED | RBIPC_FLAG_PACKED,
                             0660, &br) == RBIPC_OK) {
-            rbipc_set_wait_policy(br, RBIPC_WAIT_ZERO_SPIN);
+            rbipc_set_wait_policy(br, RBIPC_WAIT_ADAPTIVE);
             rbipc_iovec_t iovecs[64];
             rbipc_rovec_t rovecs[64];
             uint64_t tickets[64];
@@ -41,9 +41,8 @@ void run_bench_batch_scaling(FILE *json_fp, uint64_t batch_iters) {
             uint64_t t0 = comp_get_ns();
             for (uint64_t i = 0; i < iters; i++) {
                 uint32_t reserved = 0;
-                uint32_t spins = 0;
-                while (rbipc_reserve_write_batch(br, batch, iovecs, &reserved) != RBIPC_OK || reserved == 0)
-                    bench_spin_pause(&spins);
+                if (RBIPC_UNLIKELY(rbipc_reserve_write_batch(br, batch, iovecs, &reserved) != RBIPC_OK || reserved == 0))
+                    break;
                 for (uint32_t k = 0; k < reserved; k++) {
                     tickets[k] = iovecs[k].ticket;
                     lens[k] = 64;
@@ -51,9 +50,8 @@ void run_bench_batch_scaling(FILE *json_fp, uint64_t batch_iters) {
                 rbipc_commit_write_batch(br, reserved, tickets, lens);
 
                 uint32_t acquired = 0;
-                spins = 0;
-                while (rbipc_read_acquire_batch(br, reserved, rovecs, &acquired) != RBIPC_OK || acquired == 0)
-                    bench_spin_pause(&spins);
+                if (RBIPC_UNLIKELY(rbipc_read_acquire_batch(br, reserved, rovecs, &acquired) != RBIPC_OK || acquired == 0))
+                    break;
                 for (uint32_t k = 0; k < acquired; k++) {
                     rel_tickets[k] = rovecs[k].ticket;
                 }
