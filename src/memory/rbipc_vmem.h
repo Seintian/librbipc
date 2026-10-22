@@ -116,6 +116,17 @@ int rbipc_vmem_map_double(int fd, size_t offset, size_t data_size, void ** RBIPC
 RBIPC_INTERNAL RBIPC_LEAF
 void rbipc_vmem_unmap_double(void *data_map, size_t data_size);
 
+/**
+ * @brief Permanently seals a virtual memory area against permission changes,
+ * unmapping, or remapping using Linux 6.10+ mseal(2).
+ *
+ * @param[in] addr Base virtual address to seal (must be page-aligned).
+ * @param[in] len  Length of region in bytes (must be page-aligned).
+ * @return @ref RBIPC_OK on success, @ref RBIPC_ERR_SYS on kernel failure,
+ * or @ref RBIPC_ERR_INVAL for invalid parameters.
+ */
+RBIPC_INTERNAL RBIPC_NODISCARD
+int rbipc_vmem_seal(void *addr, size_t len);
 
 #endif /* RBIPC_VMEM_H */
 

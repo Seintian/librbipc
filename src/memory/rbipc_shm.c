@@ -113,20 +113,23 @@ rbipc_shm_calc_data_geometry(uint32_t capacity, size_t aligned_slot_size,
  *
  * @param[in]  capacity        Slot count.
  * @param[in]  page_size       System page size.
+ * @param[in]  flags           Operational flags (e.g. RBIPC_FLAG_WAIT_FREE).
  * @param[out] out_data_offset Pointer receiving page-aligned offset to ring
- * data buffer.
+ *                             data buffer.
  *
  * @return @ref RBIPC_OK on success, @ref RBIPC_ERR_OVERFLOW on overflow.
  */
 RBIPC_INLINE int
-rbipc_shm_calc_metadata_geometry(uint32_t capacity, size_t page_size,
-                                 size_t *RBIPC_RESTRICT out_data_offset) {
+rbipc_shm_calc_metadata_geometry_ex(uint32_t capacity, size_t page_size,
+                                    uint32_t flags,
+                                    size_t *RBIPC_RESTRICT out_data_offset) {
   if (sizeof(rbipc_slot_t) >
       (SIZE_MAX - sizeof(rbipc_shm_header_t)) / capacity) {
     return RBIPC_ERR_OVERFLOW;
   }
+  size_t help_bytes = (flags & RBIPC_FLAG_WAIT_FREE) ? (64 * 64) : 0;
   size_t header_and_slots =
-      sizeof(rbipc_shm_header_t) + ((size_t)capacity * sizeof(rbipc_slot_t));
+      sizeof(rbipc_shm_header_t) + ((size_t)capacity * sizeof(rbipc_slot_t)) + help_bytes;
   size_t data_offset = rbipc_align_up(header_and_slots, page_size);
   if (data_offset < header_and_slots) {
     return RBIPC_ERR_OVERFLOW;
@@ -142,6 +145,16 @@ RBIPC_LEAF
 int rbipc_shm_calc_layout(uint32_t capacity, uint32_t slot_size,
                           size_t page_size,
                           rbipc_layout_t *RBIPC_RESTRICT layout) {
+  return rbipc_shm_calc_layout_ex(capacity, slot_size, page_size, 0, layout);
+}
+
+/**
+ * @brief Extended layout calculator taking operational mode flags into account.
+ */
+RBIPC_LEAF
+int rbipc_shm_calc_layout_ex(uint32_t capacity, uint32_t slot_size,
+                             size_t page_size, uint32_t flags,
+                             rbipc_layout_t *RBIPC_RESTRICT layout) {
   if (RBIPC_UNLIKELY(!layout || !rbipc_is_power_of_two(capacity) ||
                      capacity < 2 || slot_size == 0 || page_size == 0)) {
     return RBIPC_ERR_INVAL;
@@ -164,7 +177,7 @@ int rbipc_shm_calc_layout(uint32_t capacity, uint32_t slot_size,
   }
 
   size_t data_offset = 0;
-  rc = rbipc_shm_calc_metadata_geometry(capacity, offset_align, &data_offset);
+  rc = rbipc_shm_calc_metadata_geometry_ex(capacity, offset_align, flags, &data_offset);
   if (RBIPC_UNLIKELY(rc != RBIPC_OK))
     return rc;
 

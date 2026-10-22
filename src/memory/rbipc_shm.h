@@ -61,6 +61,23 @@ rbipc_shm_calc_layout(uint32_t capacity, uint32_t slot_size, size_t page_size,
                       rbipc_layout_t *RBIPC_RESTRICT layout);
 
 /**
+ * @brief Extended layout calculator taking operational mode flags into account.
+ *
+ * @param[in]  capacity  Requested slot capacity (must be power of two).
+ * @param[in]  slot_size Requested payload byte capacity per slot.
+ * @param[in]  page_size Host virtual memory page size in bytes.
+ * @param[in]  flags     Operational mode flags (e.g. @ref RBIPC_FLAG_WAIT_FREE).
+ * @param[out] layout    Precomputed layout geometry descriptor to populate.
+ *
+ * @return @ref RBIPC_OK on success.
+ * @retval RBIPC_ERR_INVAL    if capacity is invalid, slot_size is zero, or page_size is invalid.
+ * @retval RBIPC_ERR_OVERFLOW if arithmetic multiplication overflows size_t.
+ */
+RBIPC_INTERNAL RBIPC_NODISCARD RBIPC_LEAF int
+rbipc_shm_calc_layout_ex(uint32_t capacity, uint32_t slot_size, size_t page_size,
+                         uint32_t flags, rbipc_layout_t *RBIPC_RESTRICT layout);
+
+/**
  * @brief Create and truncate a new shared memory file descriptor.
  *
  * @details If @p name is non-null, creates a named POSIX shared memory object

@@ -15,7 +15,16 @@
 #include "rbipc_attr.h"
 #include "rbipc_predicate.h"
 
+#include <errno.h>
 #include <sys/mman.h>
+#include <sys/syscall.h>
+#include <unistd.h>
+
+#ifndef SYS_mseal
+#if defined(__x86_64__) || defined(__aarch64__)
+#define SYS_mseal 462
+#endif
+#endif
 
 /**
  * @brief Maps the control header and slot descriptor metadata region.
@@ -181,4 +190,46 @@ void rbipc_vmem_unmap_double(void *data_map, size_t data_size) {
     if (data_map && data_size > 0) {
         munmap(data_map, 2 * data_size);
     }
+}
+
+/**
+ * @brief Checks whether the host Linux kernel supports mseal(2) (Linux 6.10+).
+ */
+bool rbipc_mseal_available(void) {
+#ifdef SYS_mseal
+    static int cached_supported = -1;
+    if (cached_supported != -1) {
+        return cached_supported == 1;
+    }
+    long ret = syscall(SYS_mseal, 0, 0, 0);
+    if (ret == 0 || (ret == -1 && errno == EINVAL)) {
+        cached_supported = 1;
+    } else {
+        cached_supported = 0;
+    }
+    return cached_supported == 1;
+#else
+    return false;
+#endif
+}
+
+/**
+ * @brief Permanently seals a virtual memory area against permission changes,
+ * unmapping, or remapping using Linux 6.10+ mseal(2).
+ */
+int rbipc_vmem_seal(void *addr, size_t len) {
+    if (RBIPC_UNLIKELY(!addr || len == 0)) {
+        return RBIPC_ERR_INVAL;
+    }
+#ifdef SYS_mseal
+    if (rbipc_mseal_available()) {
+        long ret = syscall(SYS_mseal, addr, len, 0);
+        if (ret != 0) {
+            return RBIPC_ERR_SYS;
+        }
+    }
+    return RBIPC_OK;
+#else
+    return RBIPC_OK;
+#endif
 }
