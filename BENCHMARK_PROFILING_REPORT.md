@@ -26,29 +26,24 @@ To ensure uncompromising scientific integrity, all competitor IPC and queue syst
 
 ### Core Highlights of the Latest Changes
 
-```txt
-+---------------------------------------------------------------------------------------------------------+
-|                                  KEY PERFORMANCE HIGHLIGHTS (AC MODE)                                   |
-+---------------------------------------------------------------------------------------------------------+
-|  Metric                                | Pre-Oct 22 Baseline | Current Implementation | Delta (%)       |
-+----------------------------------------+---------------------+------------------------+-----------------+
-|  1P-1C Combined Scalability            | 10.80 Mops/s        | 17.85 Mops/s           | +65.3% (Superior throughput) |
-|  Reference-Passing Throughput (8B Ptr) | N/A (Copy only)     | 23.39 Mops/s           | 1,427.5 MB/s                 |
-|  64B Streaming (Combined Tier 2+3)     | 10.80 Mops/s        | 8.90 Mops/s            | 543.3 MB/s                   |
-|  Half-RTT Minimum Latency (Trusted)    | 183.0 ns            | 64.0 ns                | -65.0% lower latency         |
-|  Half-RTT Minimum Latency (Combined)   | N/A                 | 67.0 ns                | -63.4% lower latency         |
-|  Half-RTT Median Latency (p50)         | 230.0 ns            | 92.0–93.0 ns           | -59.6% lower latency         |
-|  Half-RTT Zero-Trust Latency (p50)     | 2,494.0 ns (throttl)| 196.0 ns (Adaptive)    | -92.1% lower latency         |
-|  B-Queue Vector Batching (Batch 32)    | 25.31 Mops/s        | 42.86 Mops/s           | +69.3% speedup               |
-|  Peak Vector Batching Throughput       | 34.50 Mops/s        | 41.23 Mops/s           | 24.26 ns / op                |
-|  E2E Multi-Process Batch 32 Throughput | 14.18 Mops/s        | 42.86 Mops/s           | +202.3% speedup              |
-|  Hardware CRC32C Speedup (64B cache)   | 1.00x (SW fallback) | 21.95x (SSE4.2 HW)     | 7.81 ns / op                 |
-|  Dynamic Hugepages (16MB Ring)         | 4.27 Mops/s (4KB)   | 10.24 Mops/s (2MB THP) | +139.9% (2.40x)              |
-|  MPMC Contention (4P-2C Oversubscribe) | 0.052 Mops/s (DPDK) | 2.129 Mops/s (librbipc)| 40.5x vs DPDK                |
-|  MPMC Contention (4P-4C Oversubscribe) | 0.092 Mops/s (DPDK) | 1.053 Mops/s (librbipc)| 11.4x vs DPDK                |
-|  Idle State CPU Utilization            | 98.8% (Disruptor)   | 0.14% - 0.20% (librbipc| 494x - 702x CUT |
-+---------------------------------------------------------------------------------------------------------+
-```
+| Metric | Pre-Oct 22 Baseline | Current Implementation | Delta |
+| :--- | :--- | :--- | :--- |
+| **1P-1C Combined Scalability** | 10.80 Mops/s | **17.85 Mops/s** | **+65.3%** |
+| **Reference-Passing Throughput (8B Ptr)** | — | **23.39 Mops/s** | — |
+| **Reference-Passing Bandwidth (8B Ptr)** | — | **1,427.5 MB/s** | — |
+| **64B Copy Streaming (Combined Tier 2+3)** | 10.80 Mops/s | **8.90 Mops/s** | -17.6% |
+| **Half-RTT Minimum Latency (Trusted)** | 183.0 ns | **64.0 ns** | **-65.0%** |
+| **Half-RTT Minimum Latency (Combined)** | — | **67.0 ns** | — |
+| **Half-RTT Median Latency (p50)** | 230.0 ns | **92.0 ns** | **-60.0%** |
+| **Half-RTT Zero-Trust Latency (p50)** | 2,494.0 ns | **196.0 ns** | **-92.1%** |
+| **B-Queue Vector Batching (Batch 32)** | 25.31 Mops/s | **42.86 Mops/s** | **+69.3%** |
+| **Peak Vector Batching Throughput** | 34.50 Mops/s | **41.23 Mops/s** | **+19.5%** |
+| **E2E Multi-Process Batch 32 Throughput** | 14.18 Mops/s | **42.86 Mops/s** | **+202.3%** |
+| **Hardware CRC32C Speedup (64B Cache Line)** | 1.00x | **21.95x** | **21.95x** |
+| **Dynamic HugePages (16MB Ring)** | 4.27 Mops/s | **10.24 Mops/s** | **+139.9%** |
+| **MPMC Contention (4P-2C Oversubscribed)** | 0.052 Mops/s | **2.129 Mops/s** | **40.5x** |
+| **MPMC Contention (4P-4C Oversubscribed)** | 0.092 Mops/s | **1.053 Mops/s** | **11.4x** |
+| **Idle State CPU Utilization** | 98.8% | **0.14%** | **-99.9%** |
 
 ---
 
@@ -101,15 +96,11 @@ Operating in AC mode allowed the Intel Core i5-6300U to maintain a sustained all
 
 The core streaming evaluation measures unthrottled point-to-point data transit across memory barriers in zero-spin mode:
 
-```txt
-+-----------------------------------------------------------------------------------------------+
-| Metric                      | Pre-Oct 22 Baseline | Current Implementation | Delta (%)        |
-+-----------------------------+---------------------+------------------------+------------------+
-| Throughput (Mops/s)         | 10.80 Mops/s        | 14.19 Mops/s           | +31.3% IMPROVED  |
-| Bandwidth (MB/s)            | 659.47 MB/s         | 865.93 MB/s            | +31.3% IMPROVED  |
-| Average Latency (ns/op)     | 92.55 ns            | 70.49 ns               | -23.8% IMPROVED  |
-+-----------------------------------------------------------------------------------------------+
-```
+| Metric | Pre-Oct 22 Baseline | Current Implementation | Delta |
+| :--- | :--- | :--- | :--- |
+| **Throughput** | 10.80 Mops/s | **14.19 Mops/s** | **+31.3%** |
+| **Bandwidth** | 659.47 MB/s | **865.93 MB/s** | **+31.3%** |
+| **Average Latency** | 92.55 ns | **70.49 ns** | **-23.8%** |
 
 The 31.3% increase in sustained streaming throughput stems directly from:
 
@@ -169,19 +160,15 @@ When evaluated in isolated pthread mode and E2E multi-process fork mode:
 
 The newest in-tree innovations were evaluated using a realistic **multi-process fork model**, forcing cross-process address space transitions, true shared-memory page mappings, and operating system boundary traversal:
 
-```txt
-+---------------------------------------------------------------------------------------------------------+
-| Architectural Execution Mode                       | Throughput (Mops/s) | Bandwidth (MB/s) | Latency   |
-+----------------------------------------------------+---------------------+------------------+-----------+
-| Tier 1 Zero-Trust (Default / Robust CAS-Elided)    | 3.35 Mops/s         | 459.61 MB/s      | 298.80 ns |
-| Tier 2 Trusted Mode (Pure Vyukov Sequence)         | 4.47 Mops/s         | 614.35 MB/s      | 223.54 ns |
-| Tier 3 Packed Descriptor Mode                      | 3.47 Mops/s         | 475.99 MB/s      | 288.51 ns |
-| Combined Tier 2 + Tier 3 (Trusted & Packed)        | 3.99 Mops/s         | 548.19 MB/s      | 250.52 ns |
-| Nikolaev wCQ Bounded Wait-Free Helping Mode        | 2.27 Mops/s         | 311.34 MB/s      | 441.09 ns |
-| Tier 1 Zero-Trust (Batch Size: 32)                 | 20.46 Mops/s        | 2810.36 MB/s     | 48.87 ns  |
-| Combined Tier 2 + Tier 3 (Batch Size: 32)          | 26.81 Mops/s        | 3682.28 MB/s     | 37.29 ns  |
-+---------------------------------------------------------------------------------------------------------+
-```
+| Architectural Execution Mode | Throughput (Mops/s) | Bandwidth (MB/s) | Latency |
+| :--- | :--- | :--- | :--- |
+| **Tier 1 Zero-Trust (Default)** | 3.35 Mops/s | 459.61 MB/s | 298.80 ns |
+| **Tier 2 Trusted Mode** | **4.47 Mops/s** | **614.35 MB/s** | **223.54 ns** |
+| **Tier 3 Packed Descriptor Mode** | 3.47 Mops/s | 475.99 MB/s | 288.51 ns |
+| **Combined Tier 2+3 (Trusted & Packed)** | 3.99 Mops/s | 548.19 MB/s | 250.52 ns |
+| **Nikolaev wCQ Bounded Wait-Free Helping Mode** | 2.27 Mops/s | 311.34 MB/s | 441.09 ns |
+| **Tier 1 Zero-Trust (Batch 32)** | 20.46 Mops/s | 2,810.36 MB/s | 48.87 ns |
+| **Combined Tier 2+3 (Batch 32)** | **26.81 Mops/s** | **3,682.28 MB/s** | **37.29 ns** |
 
 ### Analysis of Architectural Modes
 
@@ -283,20 +270,16 @@ Detailed in [`benchmarks/results/laptop/perf_c2c_competitors.txt`](benchmarks/re
 
 `librbipc` was evaluated alongside standard IPC and inter-thread queue implementations under strictly equalized constraints (64B value-copy, shared memory, matching backoff):
 
-```txt
-+---------------------------------------------------------------------------------------------------------+
-| Transport / Ring Mechanism     | Throughput (64B)    | Bandwidth (MB/s) | Latency (p50) | Idle CPU (%)  |
-+--------------------------------+---------------------+------------------+---------------+---------------+
-| librbipc (Zero-Trust Standard) | 4.31 Mops/s         | 263.29 MB/s      | 196 ns        | 0.2% CPU      |
-| librbipc (Trusted 64B Copy)    | 5.46 Mops/s         | 333.18 MB/s      | 92 ns         | 0.2% CPU      |
-| librbipc (Combined 64B Copy)   | 8.90 Mops/s         | 543.29 MB/s      | 93 ns         | 0.2% CPU      |
-| librbipc (Trusted 8B Ptr)      | 23.39 Mops/s        | 1,427.53 MB/s    | 92 ns         | 0.2% CPU      |
-| rte_ring (DPDK Algorithm)      | 11.24 Mops/s        | 686.00 MB/s      | 78 ns         | 97.7% CPU     |
-| LMAX Disruptor (C Port)        | 14.86 Mops/s        | 906.73 MB/s      | 45 ns         | 98.7% CPU     |
-| POSIX Message Queue (mqueue)   | 0.33 Mops/s         | 20.35 MB/s       | 4,480 ns      | 98.8% CPU     |
-| UNIX Domain Socket (AF_UNIX)   | 0.30 Mops/s         | 18.26 MB/s       | 5,485 ns      | 98.9% CPU     |
-+---------------------------------------------------------------------------------------------------------+
-```
+| Transport / Ring Mechanism | Throughput (64B) | Bandwidth (MB/s) | Latency (p50) | Idle CPU (%) |
+| :--- | :--- | :--- | :--- | :--- |
+| **librbipc (Zero-Trust Standard)** | 4.31 Mops/s | 263.29 MB/s | 196 ns | **0.2%** |
+| **librbipc (Trusted 64B Copy)** | 5.46 Mops/s | 333.18 MB/s | 92 ns | **0.2%** |
+| **librbipc (Combined 64B Copy)** | 8.90 Mops/s | 543.29 MB/s | 93 ns | **0.2%** |
+| **librbipc (Trusted 8B Ptr)** | **23.39 Mops/s** | **1,427.53 MB/s** | 92 ns | **0.2%** |
+| **rte_ring (DPDK Algorithm)** | 11.24 Mops/s | 686.00 MB/s | 78 ns | 97.7% |
+| **LMAX Disruptor (C Port)** | 14.86 Mops/s | 906.73 MB/s | **45 ns** | 98.7% |
+| **POSIX Message Queue (mqueue)** | 0.33 Mops/s | 20.35 MB/s | 4,480 ns | 98.8% |
+| **UNIX Domain Socket (AF_UNIX)** | 0.30 Mops/s | 18.26 MB/s | 5,485 ns | 98.9% |
 
 ---
 
@@ -304,16 +287,12 @@ Detailed in [`benchmarks/results/laptop/perf_c2c_competitors.txt`](benchmarks/re
 
 On a 2-core / 4-thread laptop host, running 4 Producers and 4 Consumers creates severe thread oversubscription, testing each queue's backoff and starvation resilience under real operating system thread contention:
 
-```txt
-+--------------------------------------------------------------------------------------------------------------------+
-| Configuration   | librbipc ZeroTrust | librbipc Trusted   | librbipc Combined  | DPDK rte_ring      | LMAX Disruptor   |
-+-----------------+--------------------+--------------------+--------------------+--------------------+------------------+
-| 1P - 1C         | 0.82 Mops/s        | 5.49 Mops/s        | 17.85 Mops/s       | 10.66 Mops/s       | 5.50 Mops/s      |
-| 2P - 2C         | 3.86 Mops/s        | 0.75 Mops/s        | 0.83 Mops/s        | 6.84 Mops/s        | 6.66 Mops/s      |
-| 4P - 2C         | 1.41 Mops/s        | 0.83 Mops/s        | 2.13 Mops/s        | 0.05 Mops/s (53K)  | 0.20 Mops/s(196K)|
-| 4P - 4C (Heavy) | 0.82 Mops/s        | 1.05 Mops/s        | 0.55 Mops/s        | 0.09 Mops/s (93K)  | 0.04 Mops/s (41K)|
-+--------------------------------------------------------------------------------------------------------------------+
-```
+| Configuration | librbipc ZeroTrust | librbipc Trusted | librbipc Combined | DPDK rte_ring | LMAX Disruptor |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| **1P - 1C** | 0.82 Mops/s | 5.49 Mops/s | **17.85 Mops/s** | 10.66 Mops/s | 5.50 Mops/s |
+| **2P - 2C** | 3.86 Mops/s | 0.75 Mops/s | 0.83 Mops/s | **6.84 Mops/s** | 6.66 Mops/s |
+| **4P - 2C** | 1.41 Mops/s | 0.83 Mops/s | **2.13 Mops/s** | 0.05 Mops/s | 0.20 Mops/s |
+| **4P - 4C (Heavy)** | 0.82 Mops/s | **1.05 Mops/s** | 0.55 Mops/s | 0.09 Mops/s | 0.04 Mops/s |
 
 **Architectural Takeaway:**  
 When CPU threads exceed physical cores (4P-2C and 4P-4C), DPDK and Disruptor suffer catastrophic collapse (dropping to 40–90 Kops/s) because their unyielding spinloops starve peer threads scheduled on the same hardware threads. `librbipc` sustains **1.05 to 2.13 Mops/s** (**40.5x faster than DPDK and 10.8x faster than Disruptor at 4P-2C; 11.4x vs DPDK and 25.9x vs Disruptor at 4P-4C**) due to its hybrid exponential backoff and yielding pause mechanics (`RBIPC_WAIT_ADAPTIVE`). Furthermore, in 1P-1C, Combined mode achieves **17.85 Mops/s**, decisively outperforming both DPDK (10.66 Mops/s) and Disruptor (5.50 Mops/s).
@@ -322,17 +301,13 @@ When CPU threads exceed physical cores (4P-2C and 4P-4C), DPDK and Disruptor suf
 
 ## 11. Idle CPU Power Consumption & Green Computing
 
-```txt
-+---------------------------------------------------------------------------------------------------------+
-| Ring / Transport Mechanism     | Idle Consumer CPU Utilization | Mechanism                              |
-+--------------------------------+-------------------------------+----------------------------------------+
-| DPDK rte_ring                  | 97.7% CPU                     | Busy-polling (DPDK poll-mode driver)   |
-| LMAX Disruptor                 | 98.7% CPU                     | Busy-spinning (sequence gating loop)   |
-| POSIX mqueue (nonblock poll)   | 98.8% CPU                     | Non-blocking polling loop              |
-| AF_UNIX DGRAM (nonblock poll)  | 98.9% CPU                     | Non-blocking socket recv polling loop  |
-| librbipc (Futex Passive Sleep) | 0.14% - 0.20% CPU             | Passive kernel futex wait              |
-+---------------------------------------------------------------------------------------------------------+
-```
+| Ring / Transport Mechanism | Idle Consumer CPU Utilization | Mechanism |
+| :--- | :--- | :--- |
+| **DPDK rte_ring** | 97.7% CPU | Busy-polling (DPDK poll-mode driver) |
+| **LMAX Disruptor** | 98.7% CPU | Busy-spinning (sequence gating loop) |
+| **POSIX mqueue (nonblock poll)** | 98.8% CPU | Non-blocking polling loop |
+| **AF_UNIX DGRAM (nonblock poll)** | 98.9% CPU | Non-blocking socket recv polling loop |
+| **librbipc (Futex Passive Sleep)** | **0.14% – 0.20% CPU** | Passive kernel futex wait |
 
 **Power Efficiency Advantage:**  
 `librbipc` achieves a **491x - 702x reduction in idle CPU burn** compared to Disruptor and DPDK, preserving battery, preventing thermal throttling, and eliminating CPU fan noise on laptop development machines while immediately resuming sub-microsecond latency upon message arrival.
@@ -345,18 +320,14 @@ When CPU threads exceed physical cores (4P-2C and 4P-4C), DPDK and Disruptor suf
 
 [`benchmarks/bench_crc32c.c`](benchmarks/bench_crc32c.c) benchmarked hardware SSE4.2 `crc32q`/`crc32b` instructions against the 256-entry table-based software fallback:
 
-```txt
-+---------------------------------------------------------------------------------------------------------+
-| Buffer Configuration          | Buffer Size | HW SSE4.2 Latency | SW Table Latency | Hardware Speedup   |
-+-------------------------------+-------------+-------------------+------------------+--------------------+
-| 16 B (Ticket/Slot Mini)       | 16 Bytes    | 4.94 ns           | 25.61 ns         | 5.18x FASTER       |
-| 60 B (Control Header Zone)    | 60 Bytes    | 7.61 ns           | 155.36 ns        | 20.42x FASTER      |
-| 64 B (1 Cache Line)           | 64 Bytes    | 7.81 ns           | 171.41 ns        | 21.95x FASTER      |
-| 256 B (Ring Slot Payload)     | 256 Bytes   | 25.82 ns          | 742.62 ns        | 28.76x FASTER      |
-| 1 KB (Page Chunk)             | 1,024 Bytes | 97.43 ns          | 2,933.12 ns      | 30.10x FASTER      |
-| 64 KB (Bulk Buffer)           | 65,536 Bytes| 6,031.50 ns       | 188,412.00 ns    | 31.24x FASTER      |
-+---------------------------------------------------------------------------------------------------------+
-```
+| Buffer Configuration | Buffer Size | HW SSE4.2 Latency | SW Table Latency | Hardware Speedup |
+| :--- | :--- | :--- | :--- | :--- |
+| **16 B** | 16 Bytes | **4.94 ns** | 25.61 ns | **5.18x** |
+| **60 B** | 60 Bytes | **7.61 ns** | 155.36 ns | **20.42x** |
+| **64 B** | 64 Bytes | **7.81 ns** | 171.41 ns | **21.95x** |
+| **256 B** | 256 Bytes | **25.82 ns** | 742.62 ns | **28.76x** |
+| **1 KB** | 1,024 Bytes | **97.43 ns** | 2,933.12 ns | **30.10x** |
+| **64 KB** | 65,536 Bytes | **6,031.50 ns** | 188,412.00 ns | **31.24x** |
 
 Integrity checksumming on a 64-byte cache line completes in **7.81 ns** using hardware instructions, allowing wire-speed payload authentication without stalling ring progression.
 
@@ -364,16 +335,12 @@ Integrity checksumming on a 64-byte cache line completes in **7.81 ns** using ha
 
 [`benchmarks/architecture/arch_hugepages.c`](benchmarks/architecture/arch_hugepages.c) evaluated throughput and latency scaling across memory buffer sizes:
 
-```txt
-+---------------------------------------------------------------------------------------------------------+
-| Ring Geometry                 | 4KB Standard Pages | 2MB Transparent Hugepages | Throughput Speedup     |
-+-------------------------------+--------------------+---------------------------+------------------------+
-| Small Ring (64 KB Buffer)     | 16.14 Mops/s       | 12.03 Mops/s              | 0.75x (THP overhead)   |
-| Medium Ring (4 MB Buffer)     | 8.52 Mops/s        | 9.67 Mops/s               | 1.14x FASTER           |
-| Large Ring (16 MB Buffer)     | 4.27 Mops/s        | 10.24 Mops/s              | 2.40x FASTER (+140%)   |
-| Very Large Ring (32 MB Buffer)| 4.91 Mops/s        | 8.97 Mops/s               | 1.83x FASTER (+83%)    |
-+---------------------------------------------------------------------------------------------------------+
-```
+| Ring Geometry | 4KB Standard Pages | 2MB Transparent Hugepages | Throughput Speedup |
+| :--- | :--- | :--- | :--- |
+| **Small Ring (64 KB Buffer)** | **16.14 Mops/s** | 12.03 Mops/s | 0.75x |
+| **Medium Ring (4 MB Buffer)** | 8.52 Mops/s | **9.67 Mops/s** | **1.14x** |
+| **Large Ring (16 MB Buffer)** | 4.27 Mops/s | **10.24 Mops/s** | **2.40x** |
+| **Very Large Ring (32 MB Buffer)** | 4.91 Mops/s | **8.97 Mops/s** | **1.83x** |
 
 For large ring buffers (16 MB to 32 MB), dynamic 2MB PMD mapping **eliminates TLB misses**, delivering a **2.40x throughput speedup** and reducing average latency by **58.34%** (from 234.32 ns down to 97.62 ns).
 

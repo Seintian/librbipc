@@ -516,12 +516,12 @@ On a 32MB queue, Standard 4KB paging suffers massive TLB page walk stalls, dropp
 
 ### 4.8 Kernel Primitive Optimizations
 
-| Primitive / Feature | Optimized Implementation | Baseline Implementation | Measured Speedup |
-| :--- | :--- | :--- | ---: |
-| **Shared Memory Lifecycle** | `memfd_create` (Anonymous) | POSIX `shm_open` (Named `/dev/shm`) | **1.14×** (57.18 μs vs. 65.06 μs) |
-| **Descriptor Passing** | Multi-FD `rbipc_ipc_send_fds` (4 FDs) | 4 Sequential Socket Syscalls | **2.47×** (10.10 μs vs. 24.91 μs) |
-| **Futex2 Probe Cache** | Atomic Memoized `rbipc_futex2_has_u64()` | Raw `syscall(__NR_futex_waitv)` | **672.95×** (2.12 ns vs. 1,428.35 ns) |
-| **Castagnoli CRC32C** | Hardware SSE4.2 `_mm_crc32_u64` | Software Slice-by-8 Table | **3.89×** (15.2 GB/s vs. 3.9 GB/s) |
+| Primitive / Feature | Optimized Implementation | Baseline Implementation | Optimized Metric | Baseline Metric | Speedup |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| **Shared Memory Lifecycle** | `memfd_create` (Anonymous) | POSIX `shm_open` (Named `/dev/shm`) | 57.18 μs | 65.06 μs | **1.14×** |
+| **Descriptor Passing** | Multi-FD `rbipc_ipc_send_fds` (4 FDs) | 4 Sequential Socket Syscalls | 10.10 μs | 24.91 μs | **2.47×** |
+| **Futex2 Probe Cache** | Atomic Memoized `rbipc_futex2_has_u64()` | Raw `syscall(__NR_futex_waitv)` | 2.12 ns | 1,428.35 ns | **672.95×** |
+| **Castagnoli CRC32C** | Hardware SSE4.2 `_mm_crc32_u64` | Software Slice-by-8 Table | 15.2 GB/s | 3.9 GB/s | **3.89×** |
 
 ---
 
