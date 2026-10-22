@@ -471,15 +471,16 @@ def main():
         mpmc_items = new_comp.get("mpmc_scalability", [])
         if mpmc_items:
             print("\n--- [6. MPMC Multi-Threaded Scalability (Contention Robustness)] ---")
-            print(f"{'Config':<10} | {'librbipc ZeroTrust':<20} | {'librbipc Trusted':<18} | {'rte_ring (Mops/s)':<18} | {'Disruptor (Mops/s)':<18}")
-            print("-" * 92)
+            print(f"{'Config':<10} | {'librbipc ZeroTrust':<18} | {'librbipc Trusted':<18} | {'librbipc Combined':<18} | {'rte_ring (Mops/s)':<18} | {'Disruptor (Mops/s)':<18}")
+            print("-" * 112)
             for m in mpmc_items:
                 cfg = m.get("config", "")
                 rbi_zt = m.get("librbipc_zero_trust", 0.0) / 1e6
-                rbi_tr = m.get("librbipc", 0.0) / 1e6
+                rbi_tr = m.get("librbipc_trusted", m.get("librbipc", 0.0)) / 1e6
+                rbi_cb = m.get("librbipc_combined", m.get("librbipc", 0.0)) / 1e6
                 dpdk = m.get("rte_ring", 0.0) / 1e6
                 disr = m.get("disruptor", 0.0) / 1e6
-                print(f"{cfg:<10} | {rbi_zt:<20.2f} | {rbi_tr:<18.2f} | {dpdk:<18.2f} | {disr:<18.2f}")
+                print(f"{cfg:<10} | {rbi_zt:<18.2f} | {rbi_tr:<18.2f} | {rbi_cb:<18.2f} | {dpdk:<18.2f} | {disr:<18.2f}")
 
         idle_cpu = new_comp.get("idle_cpu", {})
         if idle_cpu:

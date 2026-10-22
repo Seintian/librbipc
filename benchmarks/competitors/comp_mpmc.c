@@ -171,9 +171,8 @@ double bench_disruptor_mpmc(int np, int nc, uint64_t iters_p, size_t msgsz) {
 typedef struct {
     rbipc_ring_t *ring;
     uint64_t      iters;
+    int           n_prod, n_cons;
     size_t        msgsz;
-    atomic_ullong recv;
-    uint64_t      total_msgs;
 } rbi_mc_t;
 
 static void *rbi_prod_th(void *a) {
@@ -195,12 +194,17 @@ static void *rbi_prod_th(void *a) {
 
 static void *rbi_cons_th(void *a) {
     rbi_mc_t *c = a;
-    while (atomic_load(&c->recv) < c->total_msgs) {
+    uint64_t tgt = (uint64_t)c->n_prod * c->iters / (uint64_t)c->n_cons;
+    char sink[64];
+    for (uint64_t n = 0; n < tgt; n++) {
         const void *buf; uint64_t tk; uint32_t ln;
-        if (rbipc_read_acquire_timeout(c->ring, 5000000ULL, &buf, &ln, &tk) == RBIPC_OK) {
-            rbipc_read_release(c->ring, tk);
-            atomic_fetch_add(&c->recv, 1);
+        if (RBIPC_UNLIKELY(rbipc_read_acquire(c->ring, &buf, &ln, &tk) != RBIPC_OK)) {
+            break;
         }
+        if (c->msgsz > 0 && buf) {
+            memcpy(sink, buf, c->msgsz > sizeof(sink) ? sizeof(sink) : c->msgsz);
+        }
+        rbipc_read_release(c->ring, tk);
     }
     return NULL;
 }
@@ -209,11 +213,10 @@ double bench_rbi_mpmc(int np, int nc, uint64_t iters_p, rbipc_ring_t *ring, size
     rbi_mc_t c = {
         .ring = ring,
         .iters = iters_p,
-        .msgsz = msgsz,
-        .total_msgs = (uint64_t)np * iters_p,
-        .recv = 0
+        .n_prod = np,
+        .n_cons = nc,
+        .msgsz = msgsz
     };
-    atomic_init(&c.recv, 0);
 
     pthread_t *pt = malloc((size_t)np * sizeof(pthread_t));
     pthread_t *ct = malloc((size_t)nc * sizeof(pthread_t));
@@ -240,46 +243,56 @@ void run_bench_mpmc(FILE *json_fp, uint64_t mpmc_iters) {
     cfg_t cfgs[] = { {1,1}, {2,2}, {4,2}, {4,4} };
     int ncfgs = (int)(sizeof(cfgs)/sizeof(cfgs[0]));
 
-    printf("\n  %s%-10s  %20s  %20s  %18s  %18s%s\n",
-           COL_BOLD, "Config", "librbipc ZeroTrust", "librbipc Trusted", "rte_ring (Mops/s)", "Disruptor (Mops/s)", COL_RESET);
-    printf("  %-10s  %20s  %20s  %18s  %18s\n",
-           "----------", "--------------------", "--------------------", "------------------", "------------------");
+    printf("\n  %s%-10s  %18s  %18s  %18s  %18s  %18s%s\n",
+           COL_BOLD, "Config", "librbipc ZeroTrust", "librbipc Trusted", "librbipc Combined", "rte_ring (Mops/s)", "Disruptor (Mops/s)", COL_RESET);
+    printf("  %-10s  %18s  %18s  %18s  %18s  %18s\n",
+           "----------", "------------------", "------------------", "------------------", "------------------", "------------------");
 
     if (json_fp) fprintf(json_fp, "  \"mpmc_scalability\": [\n");
 
     for (int i = 0; i < ncfgs; i++) {
-        /* A. librbipc Zero-Trust Standard */
+        /* A. librbipc Zero-Trust Standard (Tier 1) */
         rbipc_ring_t *r_zt = NULL;
         rbipc_destroy("/rbench_mpmc_zt");
         assert(rbipc_create_ex("/rbench_mpmc_zt", RING_CAPACITY, 128, RBIPC_SHM_NAMED, 0660, &r_zt) == RBIPC_OK);
-        rbipc_set_wait_policy(r_zt, RBIPC_WAIT_ZERO_SPIN);
+        rbipc_set_wait_policy(r_zt, RBIPC_WAIT_ADAPTIVE);
         double rbi_zt = bench_rbi_mpmc(cfgs[i].np, cfgs[i].nc, mpmc_iters, r_zt, 64);
         rbipc_detach(r_zt);
         rbipc_destroy("/rbench_mpmc_zt");
 
-        /* B. librbipc Full-Capability Trusted & Packed */
+        /* B. librbipc Pure Trusted Mode (Tier 2) */
         rbipc_ring_t *r_tr = NULL;
         rbipc_destroy("/rbench_mpmc_tr");
         assert(rbipc_create_ex("/rbench_mpmc_tr", RING_CAPACITY, 128,
-                               RBIPC_SHM_NAMED | RBIPC_FLAG_TRUSTED | RBIPC_FLAG_PACKED, 0660, &r_tr) == RBIPC_OK);
-        rbipc_set_wait_policy(r_tr, RBIPC_WAIT_ZERO_SPIN);
+                               RBIPC_SHM_NAMED | RBIPC_FLAG_TRUSTED, 0660, &r_tr) == RBIPC_OK);
+        rbipc_set_wait_policy(r_tr, RBIPC_WAIT_ADAPTIVE);
         double rbi_tr = bench_rbi_mpmc(cfgs[i].np, cfgs[i].nc, mpmc_iters, r_tr, 64);
         rbipc_detach(r_tr);
         rbipc_destroy("/rbench_mpmc_tr");
 
-        /* C. DPDK rte_ring with 64B copy */
+        /* C. librbipc Full-Capability Combined Mode (Tier 2+3: Trusted & Packed) */
+        rbipc_ring_t *r_cb = NULL;
+        rbipc_destroy("/rbench_mpmc_cb");
+        assert(rbipc_create_ex("/rbench_mpmc_cb", RING_CAPACITY, 128,
+                               RBIPC_SHM_NAMED | RBIPC_FLAG_TRUSTED | RBIPC_FLAG_PACKED, 0660, &r_cb) == RBIPC_OK);
+        rbipc_set_wait_policy(r_cb, RBIPC_WAIT_ADAPTIVE);
+        double rbi_cb = bench_rbi_mpmc(cfgs[i].np, cfgs[i].nc, mpmc_iters, r_cb, 64);
+        rbipc_detach(r_cb);
+        rbipc_destroy("/rbench_mpmc_cb");
+
+        /* D. DPDK rte_ring with 64B copy */
         double rte = bench_rte_mpmc(cfgs[i].np, cfgs[i].nc, mpmc_iters, 64);
 
-        /* D. LMAX Disruptor with 64B copy */
+        /* E. LMAX Disruptor with 64B copy */
         double dis = bench_disruptor_mpmc(cfgs[i].np, cfgs[i].nc, mpmc_iters, 64);
 
-        printf("  %dP-%-6dC  %20.2f  %20.2f  %18.2f  %18.2f\n",
+        printf("  %dP-%-6dC  %18.2f  %18.2f  %18.2f  %18.2f  %18.2f\n",
                cfgs[i].np, cfgs[i].nc,
-               rbi_zt / 1e6, rbi_tr / 1e6, rte / 1e6, dis / 1e6);
+               rbi_zt / 1e6, rbi_tr / 1e6, rbi_cb / 1e6, rte / 1e6, dis / 1e6);
 
         if (json_fp) {
-            fprintf(json_fp, "    {\"config\": \"%dP-%dC\", \"librbipc_zero_trust\": %.2f, \"librbipc\": %.2f, \"rte_ring\": %.2f, \"disruptor\": %.2f}%s\n",
-                    cfgs[i].np, cfgs[i].nc, rbi_zt, rbi_tr, rte, dis, (i == ncfgs - 1 ? "" : ","));
+            fprintf(json_fp, "    {\"config\": \"%dP-%dC\", \"librbipc_zero_trust\": %.2f, \"librbipc_trusted\": %.2f, \"librbipc_combined\": %.2f, \"librbipc\": %.2f, \"rte_ring\": %.2f, \"disruptor\": %.2f}%s\n",
+                    cfgs[i].np, cfgs[i].nc, rbi_zt, rbi_tr, rbi_cb, rbi_cb, rte, dis, (i == ncfgs - 1 ? "" : ","));
         }
     }
 
