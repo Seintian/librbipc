@@ -157,7 +157,7 @@ Combined Tier 2+3 represents the pinnacle of small-message IPC performance ($\le
 
 #### 2.4 Paired API Functions & Features
 
-- **B-Queue Batching**: `rbipc_reserve_write_batch()`, `rbipc_commit_write_batch()` (Batch sizes 16, 32, 64 achieve **35.34 Mops/s** and **28.3 ns latency**).
+- **B-Queue Batching**: `rbipc_reserve_write_batch()`, `rbipc_commit_write_batch()` (Batch sizes 16, 32, 64 achieve **42.86 Mops/s** [5,886 MB/s] and **23.3 ns latency**, with 1P-1C streaming reaching **17.85 Mops/s**).
 - **Core Pinning**: Isolate producer and consumer threads on dedicated CPU cores (`sched_setaffinity`).
 
 ---
@@ -448,7 +448,7 @@ void run_vector_batch_pipeline(const char *shm_name) {
 
 - While Tier 3 introduces a logical bit-shift (`seq >> 16`), modern out-of-order execution cores hide this latency when processing **batches**:
   - Independent slot descriptors evaluate simultaneously across CPU execution ports 0, 1, 5, and 6.
-  - In batch sizes $\ge 16$, Combined Tier 2+3 achieves **35.34 Mops/s**, outperforming all other modes.
+  - In batch sizes $\ge 16$, Combined Tier 2+3 achieves **42.86 Mops/s** (23.3 ns), outperforming all other modes.
 
 ### 6.3 When NOT to Use Each Mode (Anti-Pattern Matrix)
 

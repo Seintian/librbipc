@@ -290,8 +290,8 @@ extern "C" {
  *      - *Workload Contexts*: High-frequency tick matching engines, low-latency inter-thread actor queues,
  *        vector packet processing (VPP) pipelines requiring maximum operations per second.
  *      - *Paired Functions & Features*:
- *        - B-Queue Vector Batching (Batch Sizes 16, 32, 64): Reaches **35.34 Mops/s** (> 2.15 GB/s transfer rate)
- *          and **28.3 ns latency** on modern x86 cores.
+ *        - B-Queue Vector Batching (Batch Sizes 16, 32, 64): Reaches **42.86 Mops/s** (5.88 GB/s transfer rate,
+ *          23.3 ns latency) in batch-32 and **17.85 Mops/s** in 1P-1C streaming on modern x86 cores.
  *        - CPU Core Pinning: @c pthread_setaffinity_np / @c sched_setaffinity
  *        - AVX2 Vectorized Sequence Scanning: Up to **514.70 Mslots/s** scan throughput.
  *      - *Avoid When*: Payloads exceed 4,095 bytes or crash auditing is required.
