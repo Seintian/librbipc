@@ -51,8 +51,11 @@ void rbipc_sync_state_init(rbipc_sync_state_t *RBIPC_RESTRICT state,
   if (RBIPC_UNLIKELY(!state))
     return;
   state->hole_first_seen_ns = 0;
-  if (timeout_ns == UINT64_MAX) {
+  if (RBIPC_LIKELY(timeout_ns == UINT64_MAX)) {
     state->has_deadline = false;
+    state->deadline_ns = 0;
+  } else if (RBIPC_UNLIKELY(timeout_ns == 0)) {
+    state->has_deadline = true;
     state->deadline_ns = 0;
   } else {
     state->has_deadline = true;

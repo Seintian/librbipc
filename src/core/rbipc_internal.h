@@ -18,7 +18,6 @@
 #include "rbipc.h"
 #include "rbipc_attr.h"
 #include "rbipc_predicate.h"
-#include "rbipc_reactor.h"
 
 #include <limits.h>
 #include <stdbool.h>
@@ -80,13 +79,6 @@ struct rbipc_ring {
   struct rbipc_help_slot *help_slots; /**< Cooperative helper array for wait-free mode. */
   uint32_t help_slot_index; /**< Assigned index in cooperative helper array. */
 };
-
-/**
- * @brief Dispatch notification to bound eventfd if reactor waiters are present.
- */
-RBIPC_INLINE void rbipc_ring_signal_eventfd(const rbipc_ring_t *ring) {
-  rbipc_reactor_signal(ring);
-}
 
 /**
  * @brief Bounded, null-terminating string copy without insecure C runtime

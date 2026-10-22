@@ -15,8 +15,8 @@
 #define _GNU_SOURCE
 #endif
 
-#include "rbipc_reactor.h"
 #include "rbipc_internal.h"
+#include "rbipc_reactor.h"
 
 #include <errno.h>
 #include <sys/eventfd.h>
@@ -99,17 +99,6 @@ int rbipc_reactor_drain(const rbipc_ring_t *RBIPC_RESTRICT ring) {
   return (n == sizeof(val)) ? RBIPC_OK : RBIPC_ERR_SYS;
 }
 
-RBIPC_LEAF
-void rbipc_reactor_signal(const rbipc_ring_t *ring) {
-  if (RBIPC_UNLIKELY(ring && ring->event_fd >= 0)) {
-    if (ring->hdr && atomic_load_explicit(&ring->hdr->eventfd_waiters,
-                                          memory_order_relaxed) > 0) {
-      uint64_t val = 1;
-      ssize_t ret = write(ring->event_fd, &val, sizeof(val));
-      (void)ret;
-    }
-  }
-}
 
 RBIPC_LEAF
 void rbipc_reactor_cleanup(rbipc_ring_t *ring) {

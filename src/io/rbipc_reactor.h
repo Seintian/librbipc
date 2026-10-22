@@ -20,6 +20,10 @@
 
 #include "rbipc.h"
 #include "rbipc_attr.h"
+#include "rbipc_internal.h"
+
+#include <stdatomic.h>
+#include <unistd.h>
 
 /**
  * @brief Enable asynchronous eventfd signaling on the ring buffer instance.
@@ -75,8 +79,16 @@ int rbipc_reactor_drain(const rbipc_ring_t *RBIPC_RESTRICT ring);
  *
  * @param[in] ring Ring buffer handle.
  */
-RBIPC_INTERNAL RBIPC_LEAF
-void rbipc_reactor_signal(const rbipc_ring_t *ring);
+RBIPC_INLINE void rbipc_reactor_signal(const rbipc_ring_t *ring) {
+  if (RBIPC_UNLIKELY(ring && ring->event_fd >= 0)) {
+    if (ring->hdr && atomic_load_explicit(&ring->hdr->eventfd_waiters,
+                                          memory_order_relaxed) > 0) {
+      uint64_t val = 1;
+      ssize_t ret = write(ring->event_fd, &val, sizeof(val));
+      (void)ret;
+    }
+  }
+}
 
 /**
  * @brief Tear down and clean up reactor descriptors associated with a ring

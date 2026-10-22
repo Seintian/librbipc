@@ -196,6 +196,9 @@ static int rbipc_io_handle_write_backoff(
     const rbipc_ring_t *ring, rbipc_sync_state_t *RBIPC_RESTRICT sync_state,
     rbipc_shm_header_t *hdr, rbipc_slot_t *slot, uint64_t t_ticket,
     uint64_t timeout_ns, uint64_t *RBIPC_RESTRICT t) {
+  if (RBIPC_UNLIKELY(timeout_ns == 0)) {
+    return RBIPC_ERR_FULL;
+  }
   if (RBIPC_UNLIKELY(rbipc_ring_is_shutdown(hdr))) {
     return RBIPC_ERR_SHUTDOWN;
   }
@@ -207,10 +210,6 @@ static int rbipc_io_handle_write_backoff(
   if (RBIPC_LIKELY(rbipc_slot_is_vacant_any(initial_seq, t_ticket, ring->is_packed))) {
     *t = atomic_load_explicit(&hdr->write_ticket, memory_order_relaxed);
     return RBIPC_OK;
-  }
-
-  if (timeout_ns == 0) {
-    return RBIPC_ERR_FULL;
   }
 
   rbipc_io_slot_pred_ctx_t ctx = {
@@ -267,16 +266,16 @@ static int rbipc_io_handle_read_backoff(
     const rbipc_ring_t *ring, rbipc_sync_state_t *RBIPC_RESTRICT sync_state,
     rbipc_shm_header_t *hdr, rbipc_slot_t *slot, uint64_t t,
     uint64_t timeout_ns, uint64_t *RBIPC_RESTRICT out_next_t) {
+  if (RBIPC_UNLIKELY(timeout_ns == 0)) {
+    return RBIPC_ERR_EMPTY;
+  }
+
   if (!ring->is_trusted) {
     rbipc_audit_recover_dead_producer(hdr, slot, t);
   }
 
   if (RBIPC_UNLIKELY(rbipc_ring_is_drained_on_shutdown(hdr, t))) {
     return RBIPC_ERR_SHUTDOWN;
-  }
-
-  if (timeout_ns == 0) {
-    return RBIPC_ERR_EMPTY;
   }
 
   rbipc_io_slot_pred_ctx_t ctx = {
@@ -358,7 +357,7 @@ int rbipc_reserve_write_timeout(rbipc_ring_t *RBIPC_RESTRICT ring, uint32_t len,
 
   /* Bounded FAA Fast Path for Unbounded Blocking Writes (Nikolaev SCQ Pattern)
    */
-  if (timeout_ns == UINT64_MAX) {
+  if (RBIPC_LIKELY(timeout_ns == UINT64_MAX)) {
     for (;;) {
       if (RBIPC_UNLIKELY(rbipc_ring_is_shutdown(hdr))) {
         return RBIPC_ERR_SHUTDOWN;
@@ -571,7 +570,7 @@ int rbipc_read_acquire_timeout(rbipc_ring_t *RBIPC_RESTRICT ring,
 
   /* Bounded FAA Fast Path for Unbounded Blocking Reads (Nikolaev SCQ Pattern)
    */
-  if (timeout_ns == UINT64_MAX) {
+  if (RBIPC_LIKELY(timeout_ns == UINT64_MAX)) {
     for (;;) {
       uint64_t rt =
           atomic_load_explicit(&hdr->read_ticket, memory_order_relaxed);

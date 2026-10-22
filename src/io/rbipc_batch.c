@@ -231,9 +231,6 @@ int rbipc_reserve_write_batch_timeout(rbipc_ring_t *RBIPC_RESTRICT ring,
       return RBIPC_ERR_SHUTDOWN;
     }
 
-    if (!ring->is_trusted) {
-      rbipc_audit_recover_dead_consumer_range(hdr, slots, t, count);
-    }
     uint32_t avail =
         rbipc_simd_scan_vacant_slots_ex(slots, ring->cached_capacity_mask, t,
                                         count, ring->is_packed);
@@ -249,8 +246,16 @@ int rbipc_reserve_write_batch_timeout(rbipc_ring_t *RBIPC_RESTRICT ring,
       }
       rbipc_cpu_pause();
     } else {
-      if (timeout_ns == 0) {
+      if (RBIPC_UNLIKELY(timeout_ns == 0)) {
         return RBIPC_ERR_FULL;
+      }
+      if (!ring->is_trusted) {
+        rbipc_audit_recover_dead_consumer_range(hdr, slots, t, count);
+        avail = rbipc_simd_scan_vacant_slots_ex(
+            slots, ring->cached_capacity_mask, t, count, ring->is_packed);
+        if (avail > 0) {
+          continue;
+        }
       }
       if (ring && (ring->wait_policy & RBIPC_WAIT_ADAPTIVE)) {
         for (uint32_t spin = 0; spin < RBIPC_SPIN_COUNT_DEFAULT; ++spin) {
@@ -354,9 +359,6 @@ int rbipc_read_acquire_batch_timeout(rbipc_ring_t *RBIPC_RESTRICT ring,
       (rbipc_slot_t *)RBIPC_ASSUME_ALIGNED(ring->slots, RBIPC_CACHE_LINE);
 
   for (;;) {
-    if (!ring->is_trusted) {
-      rbipc_audit_recover_dead_producer_range(hdr, slots, t, count);
-    }
     uint32_t avail =
         rbipc_simd_scan_ready_slots_ex(slots, ring->cached_capacity_mask, t,
                                        count, ring->is_packed);
@@ -375,8 +377,16 @@ int rbipc_read_acquire_batch_timeout(rbipc_ring_t *RBIPC_RESTRICT ring,
       if (RBIPC_UNLIKELY(rbipc_ring_is_drained_on_shutdown(hdr, t))) {
         return RBIPC_ERR_SHUTDOWN;
       }
-      if (timeout_ns == 0) {
+      if (RBIPC_UNLIKELY(timeout_ns == 0)) {
         return RBIPC_ERR_EMPTY;
+      }
+      if (!ring->is_trusted) {
+        rbipc_audit_recover_dead_producer_range(hdr, slots, t, count);
+        avail = rbipc_simd_scan_ready_slots_ex(
+            slots, ring->cached_capacity_mask, t, count, ring->is_packed);
+        if (avail > 0) {
+          continue;
+        }
       }
       if (ring && (ring->wait_policy & RBIPC_WAIT_ADAPTIVE)) {
         for (uint32_t spin = 0; spin < RBIPC_SPIN_COUNT_DEFAULT; ++spin) {
