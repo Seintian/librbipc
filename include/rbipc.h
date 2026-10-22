@@ -331,6 +331,15 @@ extern "C" {
   0x0100U /**< Request HugeTLB (2MB huge pages) backing shared memory.        \
              Reduces TLB misses and page table walking overhead for large      \
              buffers. Falls back cleanly if hugepages are unavailable on host. */
+#define RBIPC_FLAG_WAIT_FREE                                                   \
+  0x0200U /**< Nikolaev wCQ bounded wait-free helping mode with deterministic  \
+             O(P) step bound, eliminating thread starvation and tail spikes. */
+#define RBIPC_FLAG_ISOLATED                                                    \
+  0x0400U /**< Tier 1 Zero-Trust isolated mode with hardware Intel MPK / PKU   \
+             domain protection and Linux 6.10+ mseal(2) memory sealing. */
+#define RBIPC_FLAG_CXL                                                         \
+  0x0800U /**< Compute Express Link (CXL) disaggregated fabric mode with       \
+             cache-line writeback (CLWB) across PCIe Gen5/Gen6 fabrics. */
 
 #define RBIPC_HUGE_PAGE_2MB (2ULL * 1024 * 1024)
 
@@ -341,6 +350,9 @@ extern "C" {
 #define RBIPC_MODE_TRUSTED RBIPC_FLAG_TRUSTED
 #define RBIPC_MODE_PACKED RBIPC_FLAG_PACKED
 #define RBIPC_CREATE_HUGETLB RBIPC_FLAG_HUGETLB
+#define RBIPC_MODE_WAIT_FREE RBIPC_FLAG_WAIT_FREE
+#define RBIPC_MODE_ISOLATED RBIPC_FLAG_ISOLATED
+#define RBIPC_MODE_CXL RBIPC_FLAG_CXL
 /** @} */
 
 /**
@@ -1855,6 +1867,156 @@ RBIPC_API RBIPC_NODISCARD RBIPC_LEAF int rbipc_revoke_expired_leases(rbipc_ring_
  */
 RBIPC_API RBIPC_RETURNS_NONNULL RBIPC_CONST RBIPC_COLD RBIPC_LEAF const char *
 rbipc_strerror(int err);
+
+/**
+ * @defgroup rbipc_nextgen Next-Generation Architectural Innovations & Hardware Accelerators
+ * @brief Public APIs for Wait-Free wCQ, Intel MPK/mseal, Intel DSA, UINTR, CXL, and io_uring.
+ * @{
+ */
+
+/**
+ * @brief Query whether ring operates in Bounded Wait-Free Helping mode (Nikolaev wCQ).
+ *
+ * @param[in] ring Ring buffer handle.
+ * @return true if wait-free helping is active, false otherwise.
+ */
+RBIPC_API RBIPC_NODISCARD RBIPC_PURE RBIPC_LEAF bool
+rbipc_ring_is_wait_free(const rbipc_ring_t *ring);
+
+/**
+ * @brief Query whether ring operates in Zero-Trust Isolated mode (Intel MPK / mseal).
+ *
+ * @param[in] ring Ring buffer handle.
+ * @return true if hardware MPK / mseal domain isolation is active, false otherwise.
+ */
+RBIPC_API RBIPC_NODISCARD RBIPC_PURE RBIPC_LEAF bool
+rbipc_ring_is_isolated(const rbipc_ring_t *ring);
+
+/**
+ * @brief Query whether ring buffer operates over a CXL disaggregated memory fabric.
+ *
+ * @param[in] ring Ring buffer handle.
+ * @return true if backed by a CXL DAX device, false otherwise.
+ */
+RBIPC_API RBIPC_NODISCARD RBIPC_PURE RBIPC_LEAF bool
+rbipc_ring_is_cxl(const rbipc_ring_t *ring);
+
+/**
+ * @brief Probe whether host CPU and OS kernel support Intel Memory Protection Keys (MPK/PKU).
+ *
+ * @return true if hardware protection keys are available and functional.
+ */
+RBIPC_API RBIPC_NODISCARD bool
+rbipc_mpk_available(void);
+
+/**
+ * @brief Probe whether host Linux kernel supports virtual memory sealing (SYS_mseal, Linux 6.10+).
+ *
+ * @return true if mseal system call is functional.
+ */
+RBIPC_API RBIPC_NODISCARD bool
+rbipc_mseal_available(void);
+
+/**
+ * @brief Probe whether host hardware supports Intel Data Streaming Accelerator (DSA).
+ *
+ * @return true if on-chip DSA accelerators and user work queues are accessible.
+ */
+RBIPC_API RBIPC_NODISCARD bool
+rbipc_dma_available(void);
+
+/**
+ * @brief Writes payload via asynchronous hardware DMA offload (Intel DSA) or streaming fallback.
+ *
+ * @param[in,out] ring Ring buffer handle.
+ * @param[in]     buf  Source payload buffer.
+ * @param[in]     len  Payload byte count.
+ * @return @ref RBIPC_OK on success, negative error code on failure.
+ */
+RBIPC_API RBIPC_NODISCARD int
+rbipc_write_dma(rbipc_ring_t *ring, const void *buf, size_t len);
+
+/**
+ * @brief Writes payload via asynchronous hardware DMA offload with bounded timeout.
+ *
+ * @param[in,out] ring       Ring buffer handle.
+ * @param[in]     buf        Source payload buffer.
+ * @param[in]     len        Payload byte count.
+ * @param[in]     timeout_ns Maximum deadline in nanoseconds.
+ * @return @ref RBIPC_OK on success, negative error code on failure.
+ */
+RBIPC_API RBIPC_NODISCARD int
+rbipc_write_dma_timeout(rbipc_ring_t *ring, const void *buf, size_t len, uint64_t timeout_ns);
+
+/**
+ * @brief Probe whether host CPU and kernel support user-space hardware interrupts (UINTR / SENDUIPI).
+ *
+ * @return true if user interrupts are supported.
+ */
+RBIPC_API RBIPC_NODISCARD bool
+rbipc_uintr_available(void);
+
+/**
+ * @brief Probe whether host system has accessible CXL memory devices or DAX mappings.
+ *
+ * @return true if CXL topology devices are detected.
+ */
+RBIPC_API RBIPC_NODISCARD bool
+rbipc_cxl_available(void);
+
+/**
+ * @brief Creates a shared memory ring mapped over a persistent CXL DAX device.
+ *
+ * @param[in]  dax_path  Path to CXL DAX device (/dev/daxX.Y), or NULL for auto-probe.
+ * @param[in]  capacity  Slot capacity (strictly a power of two).
+ * @param[in]  slot_size Payload byte capacity per slot.
+ * @param[in]  flags     Creation and role flags.
+ * @param[out] out_ring  Pointer receiving initialized ring handle.
+ * @return @ref RBIPC_OK on success, error code otherwise.
+ */
+RBIPC_API RBIPC_NODISCARD int
+rbipc_create_cxl(const char *dax_path, size_t capacity, size_t slot_size,
+                 uint32_t flags, rbipc_ring_t **out_ring);
+
+/**
+ * @brief Probe whether host Linux kernel supports the io_uring asynchronous subsystem.
+ *
+ * @return true if io_uring is functional.
+ */
+RBIPC_API RBIPC_NODISCARD bool
+rbipc_uring_available(void);
+
+/**
+ * @brief Pre-registers ring buffer memory slices with an existing Linux io_uring instance.
+ *
+ * @param[in] ring     Attached ring buffer handle.
+ * @param[in] uring_fd Open io_uring file descriptor.
+ * @return @ref RBIPC_OK on success, error code otherwise.
+ */
+RBIPC_API RBIPC_NODISCARD int
+rbipc_uring_register_ring(const rbipc_ring_t *ring, int uring_fd);
+
+/**
+ * @brief Creates an optimized io_uring instance pre-bound to the ring's fixed memory buffers.
+ *
+ * @param[in]  ring         Attached ring buffer handle (or NULL).
+ * @param[in]  entries      Submission queue entry count (power of two).
+ * @param[in]  flags        io_uring setup flags (e.g. IORING_SETUP_SQPOLL).
+ * @param[out] out_uring_fd Pointer receiving created io_uring file descriptor.
+ * @return @ref RBIPC_OK on success, error code otherwise.
+ */
+RBIPC_API RBIPC_NODISCARD int
+rbipc_uring_create(const rbipc_ring_t *ring, unsigned int entries,
+                   uint32_t flags, int *out_uring_fd);
+
+/**
+ * @brief Closes an io_uring instance created via rbipc_uring_create().
+ *
+ * @param[in] uring_fd Open io_uring file descriptor to close.
+ */
+RBIPC_API void
+rbipc_uring_destroy(int uring_fd);
+/** @} */
 
 #ifdef __cplusplus
 }

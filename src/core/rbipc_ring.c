@@ -32,6 +32,9 @@
 #include "rbipc_sync.h"
 #include "rbipc_vmem.h"
 
+#include "rbipc_cxl.h"
+#include "rbipc_mpk.h"
+#include "rbipc_waitfree.h"
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
@@ -80,7 +83,9 @@ rbipc_ring_init_header_fields(rbipc_shm_header_t *RBIPC_RESTRICT hdr,
                               uint32_t cap, uint32_t roles, uint32_t flags) {
   atomic_init(&hdr->magic, 0);
   hdr->version = htole32(RBIPC_VERSION);
-  hdr->flags = htole32(flags & (RBIPC_FLAG_TRUSTED | RBIPC_FLAG_PACKED | RBIPC_FLAG_HUGETLB));
+  hdr->flags = htole32(flags & (RBIPC_FLAG_TRUSTED | RBIPC_FLAG_PACKED |
+                                RBIPC_FLAG_HUGETLB | RBIPC_FLAG_WAIT_FREE |
+                                RBIPC_FLAG_ISOLATED | RBIPC_FLAG_CXL));
   hdr->total_shm_size = htole64((uint64_t)layout->total_shm_size);
   hdr->data_offset = htole64((uint64_t)layout->data_offset);
   hdr->data_size = htole64((uint64_t)layout->data_size);
@@ -196,6 +201,33 @@ rbipc_ring_t *rbipc_ring_alloc_handle(int fd, const char *RBIPC_RESTRICT name,
   ring->is_trusted = (hdr_flags & RBIPC_FLAG_TRUSTED) != 0;
   ring->is_packed = (hdr_flags & RBIPC_FLAG_PACKED) != 0;
   ring->is_hugetlb = (hdr_flags & RBIPC_FLAG_HUGETLB) != 0;
+  ring->is_wait_free = (hdr_flags & RBIPC_FLAG_WAIT_FREE) != 0;
+  ring->is_isolated = (hdr_flags & RBIPC_FLAG_ISOLATED) != 0;
+  ring->is_cxl = (hdr_flags & RBIPC_FLAG_CXL) != 0;
+  ring->data_pkey = -1;
+  ring->ctrl_pkey = -1;
+  ring->help_slot_index = UINT32_MAX;
+
+  if (ring->is_wait_free && ring->hdr && ring->slots) {
+    ring->help_slots = (rbipc_help_slot_t *)((char *)ring->slots +
+                                             ((size_t)ring->cached_capacity * sizeof(rbipc_slot_t)));
+    int wf_rc = rbipc_waitfree_register_peer(ring);
+    if (RBIPC_UNLIKELY(wf_rc != RBIPC_OK)) {
+      free(ring);
+      return NULL;
+    }
+  }
+
+  if (ring->is_isolated) {
+    int mpk_rc = rbipc_mpk_init(ring);
+    if (RBIPC_UNLIKELY(mpk_rc != RBIPC_OK)) {
+      if (ring->is_wait_free) {
+        rbipc_waitfree_unregister_peer(ring);
+      }
+      free(ring);
+      return NULL;
+    }
+  }
 
   rbipc_sync_init_process();
 
@@ -235,7 +267,8 @@ int rbipc_create_ex(const char *RBIPC_RESTRICT name, size_t capacity,
                          RBIPC_ROLE_CONSUMER | RBIPC_ROLE_MONITOR |
                          RBIPC_SHM_ANON | RBIPC_SHM_NAMED |
                          RBIPC_FLAG_TRUSTED | RBIPC_FLAG_PACKED |
-                         RBIPC_FLAG_HUGETLB;
+                         RBIPC_FLAG_HUGETLB | RBIPC_FLAG_WAIT_FREE |
+                         RBIPC_FLAG_ISOLATED | RBIPC_FLAG_CXL;
   if (RBIPC_UNLIKELY((flags & ~known_flags) != 0)) {
     return RBIPC_ERR_INVAL;
   }
@@ -264,7 +297,7 @@ int rbipc_create_ex(const char *RBIPC_RESTRICT name, size_t capacity,
       if (h_rc == RBIPC_OK) {
         huge_page = RBIPC_HUGE_PAGE_2MB;
         rbipc_layout_t h_layout;
-        h_rc = rbipc_shm_calc_layout(h_cap, slot_size, huge_page, &h_layout);
+        h_rc = rbipc_shm_calc_layout_ex(h_cap, slot_size, huge_page, flags, &h_layout);
         if (h_rc == RBIPC_OK) {
           int h_fd = -1;
           uint32_t shm_flags = (flags & (RBIPC_CREATE_OVERWRITE | RBIPC_SHM_ANON | RBIPC_SHM_NAMED)) | RBIPC_FLAG_HUGETLB;
@@ -279,6 +312,11 @@ int rbipc_create_ex(const char *RBIPC_RESTRICT name, size_t capacity,
               rbipc_ring_init_header_fields(hdr, &h_layout, h_cap, roles, flags);
               rbipc_slot_t *slots = (rbipc_slot_t *)((char *)ctrl_map + sizeof(rbipc_shm_header_t));
               rbipc_slot_init_table_ex(slots, h_cap, (flags & RBIPC_FLAG_PACKED) != 0);
+              if (flags & RBIPC_FLAG_WAIT_FREE) {
+                rbipc_help_slot_t *help_slots =
+                    (rbipc_help_slot_t *)((char *)slots + ((size_t)h_cap * sizeof(rbipc_slot_t)));
+                rbipc_waitfree_init_table(help_slots, RBIPC_HELP_MAX_PEERS);
+              }
               rbipc_ring_t *ring = rbipc_ring_alloc_handle(
                   h_fd, NULL, hdr, slots, ctrl_map, h_layout.data_offset, data_map,
                   h_layout.data_size, roles, true);
@@ -308,7 +346,7 @@ int rbipc_create_ex(const char *RBIPC_RESTRICT name, size_t capacity,
   }
 
   rbipc_layout_t layout;
-  rc = rbipc_shm_calc_layout(cap, slot_size, page_size, &layout);
+  rc = rbipc_shm_calc_layout_ex(cap, slot_size, page_size, flags, &layout);
   if (RBIPC_UNLIKELY(rc != RBIPC_OK)) {
     return rc;
   }
@@ -342,6 +380,12 @@ int rbipc_create_ex(const char *RBIPC_RESTRICT name, size_t capacity,
   rbipc_slot_t *slots =
       (rbipc_slot_t *)((char *)ctrl_map + sizeof(rbipc_shm_header_t));
   rbipc_slot_init_table_ex(slots, cap, (flags & RBIPC_FLAG_PACKED) != 0);
+
+  if (flags & RBIPC_FLAG_WAIT_FREE) {
+    rbipc_help_slot_t *help_slots =
+        (rbipc_help_slot_t *)((char *)slots + ((size_t)cap * sizeof(rbipc_slot_t)));
+    rbipc_waitfree_init_table(help_slots, RBIPC_HELP_MAX_PEERS);
+  }
 
   rbipc_ring_t *ring = rbipc_ring_alloc_handle(
       fd, effective_name, hdr, slots, ctrl_map, layout.data_offset, data_map,
@@ -403,7 +447,7 @@ int rbipc_ring_probe_and_validate_header(
 
   size_t effective_page_size =
       (hdr_flags & RBIPC_FLAG_HUGETLB) ? RBIPC_HUGE_PAGE_2MB : page_size;
-  rc = rbipc_shm_calc_layout(cap, slot_size, effective_page_size, out_layout);
+  rc = rbipc_shm_calc_layout_ex(cap, slot_size, effective_page_size, hdr_flags, out_layout);
   if (RBIPC_UNLIKELY(rc != RBIPC_OK || out_layout->data_offset != data_offset ||
                      out_layout->data_size != data_size)) {
     return RBIPC_ERR_INVAL;
@@ -516,6 +560,13 @@ int rbipc_detach(rbipc_ring_t *ring) {
 
   rbipc_reactor_cleanup(ring);
 
+  if (ring->is_wait_free) {
+    rbipc_waitfree_unregister_peer(ring);
+  }
+  if (ring->is_isolated) {
+    rbipc_mpk_destroy(ring);
+  }
+
   if (ring->hdr) {
     rbipc_ring_deregister_roles(ring->hdr, ring->roles);
   }
@@ -569,6 +620,16 @@ bool rbipc_ring_is_packed(const rbipc_ring_t *ring) {
 RBIPC_LEAF
 bool rbipc_ring_is_hugetlb(const rbipc_ring_t *ring) {
   return ring != NULL && ring->is_hugetlb;
+}
+
+RBIPC_LEAF
+bool rbipc_ring_is_wait_free(const rbipc_ring_t *ring) {
+  return ring != NULL && ring->is_wait_free;
+}
+
+RBIPC_LEAF
+bool rbipc_ring_is_isolated(const rbipc_ring_t *ring) {
+  return ring != NULL && ring->is_isolated;
 }
 
 RBIPC_LEAF

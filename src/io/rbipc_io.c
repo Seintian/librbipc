@@ -29,6 +29,9 @@
 #include "rbipc_reactor.h"
 #include "rbipc_slot.h"
 #include "rbipc_sync.h"
+#include "rbipc_waitfree.h"
+#include "rbipc_mpk.h"
+#include "rbipc_cxl.h"
 
 #include <string.h>
 
@@ -47,6 +50,9 @@ rbipc_io_complete_write_reservation(rbipc_ring_t *RBIPC_RESTRICT ring,
                                     uint64_t *RBIPC_RESTRICT ticket) {
   if (RBIPC_LIKELY(!ring->is_trusted)) {
     rbipc_slot_mark_reserved(slot, ring->cached_pid);
+  }
+  if (ring->is_isolated) {
+    rbipc_mpk_allow_write(ring);
   }
   *out_buf = rbipc_io_calc_slot_ptr(ring, t);
   *ticket = t;
@@ -479,6 +485,16 @@ int rbipc_commit_write(rbipc_ring_t *RBIPC_RESTRICT ring, uint64_t ticket,
     rbipc_slot_commit(slot, ticket, written_len);
   }
 
+  if (ring->is_cxl) {
+    rbipc_clwb(&slot->sequence);
+  }
+  if (ring->is_isolated) {
+    rbipc_mpk_deny_write(ring);
+  }
+  if (ring->is_wait_free) {
+    rbipc_waitfree_cooperative_help(ring);
+  }
+
   atomic_signal_fence(memory_order_seq_cst);
   if (RBIPC_UNLIKELY(rbipc_sync_has_waiters(&hdr->futex_waiters))) {
     rbipc_futex_wake_slot(&slot->sequence, 1);
@@ -505,6 +521,16 @@ int rbipc_abort_write(rbipc_ring_t *RBIPC_RESTRICT ring, uint64_t ticket) {
     aborted = rbipc_slot_poison_packed(slot, ticket);
   } else {
     aborted = rbipc_slot_poison(slot, ticket);
+  }
+
+  if (ring->is_cxl) {
+    rbipc_clwb(&slot->sequence);
+  }
+  if (ring->is_isolated) {
+    rbipc_mpk_deny_write(ring);
+  }
+  if (ring->is_wait_free) {
+    rbipc_waitfree_cooperative_help(ring);
   }
 
   if (aborted) {
@@ -676,6 +702,13 @@ int rbipc_read_release(rbipc_ring_t *RBIPC_RESTRICT ring, uint64_t ticket) {
             ? ring->cached_pid
             : 0;
     released = rbipc_slot_release_ex(slot, ticket, cap, expected_pid);
+  }
+
+  if (ring->is_cxl) {
+    rbipc_clwb(&slot->sequence);
+  }
+  if (ring->is_wait_free) {
+    rbipc_waitfree_cooperative_help(ring);
   }
 
   atomic_signal_fence(memory_order_seq_cst);

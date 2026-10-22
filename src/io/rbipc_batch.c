@@ -25,6 +25,9 @@
 #include "rbipc_simd.h"
 #include "rbipc_slot.h"
 #include "rbipc_sync.h"
+#include "rbipc_mpk.h"
+#include "rbipc_cxl.h"
+#include "rbipc_waitfree.h"
 
 /**
  * @brief Populate reserved iovec descriptors and initialize slot ownership.
@@ -46,6 +49,10 @@ rbipc_batch_populate_reserved(rbipc_ring_t *RBIPC_RESTRICT ring, uint64_t t,
 
     if (RBIPC_LIKELY(!ring->is_trusted)) {
       rbipc_slot_mark_reserved(slot, my_pid);
+    }
+
+    if (ring->is_isolated) {
+      rbipc_mpk_allow_write(ring);
     }
 
     iovecs[i].buf = rbipc_io_calc_slot_ptr(ring, ticket_i);
@@ -154,6 +161,9 @@ rbipc_batch_commit_slots(rbipc_ring_t *RBIPC_RESTRICT ring, uint32_t count,
     } else {
       rbipc_slot_commit(slot, ticket, written_lens[i]);
     }
+    if (ring->is_cxl) {
+      rbipc_clwb(&slot->sequence);
+    }
   }
 }
 
@@ -185,6 +195,9 @@ static int rbipc_batch_release_slots(rbipc_ring_t *RBIPC_RESTRICT ring,
       if (RBIPC_UNLIKELY(!rbipc_slot_release_ex(slot, ticket, cap, my_pid))) {
         rc = RBIPC_ERR_TIMEOUT;
       }
+    }
+    if (ring->is_cxl) {
+      rbipc_clwb(&slot->sequence);
     }
   }
   return rc;

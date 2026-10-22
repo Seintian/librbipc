@@ -72,6 +72,13 @@ struct rbipc_ring {
   bool is_trusted; /**< True if ring operates in Tier 2 trusted mode (pure Vyukov sequence turns). */
   bool is_packed;  /**< True if ring operates in Tier 3 64-bit packed descriptor mode. */
   bool is_hugetlb; /**< True if ring memory is backed by HugeTLB 2MB pages. */
+  bool is_wait_free; /**< True if ring operates in Bounded Wait-Free Helping mode (wCQ). */
+  bool is_isolated;  /**< True if ring operates with Intel MPK and mseal isolation. */
+  bool is_cxl;       /**< True if ring operates over a CXL DAX memory fabric. */
+  int data_pkey;     /**< Hardware protection key for data payload buffer (-1 if unused). */
+  int ctrl_pkey;     /**< Hardware protection key for control metadata (-1 if unused). */
+  struct rbipc_help_slot *help_slots; /**< Cooperative helper array for wait-free mode. */
+  uint32_t help_slot_index; /**< Assigned index in cooperative helper array. */
 };
 
 /**
