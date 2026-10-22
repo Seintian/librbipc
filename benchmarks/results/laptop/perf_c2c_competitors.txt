@@ -1,0 +1,643 @@
+=================================================
+            Trace Event Information              
+=================================================
+  Total records                     :      86796
+  Locked Load/Store Operations      :       3111
+  Load Operations                   :      15363
+  Loads - uncacheable               :          0
+  Loads - IO                        :          0
+  Loads - Miss                      :          2
+  Loads - no mapping                :        187
+  Load Fill Buffer Hit              :       4504
+  Load L1D hit                      :       5952
+  Load L2D hit                      :        831
+  Load LLC hit                      :       3814
+  Load Local HITM                   :       2124
+  Load Remote HITM                  :          0
+  Load Remote HIT                   :          0
+  Load Local DRAM                   :         73
+  Load Remote DRAM                  :          0
+  Load MESI State Exclusive         :          0
+  Load MESI State Shared            :         73
+  Load LLC Misses                   :         73
+  Load access blocked by data       :          0
+  Load access blocked by address    :          0
+  Load HIT Local Peer               :          0
+  Load HIT Remote Peer              :          0
+  LLC Misses to Local DRAM          :      100.0%
+  LLC Misses to Remote DRAM         :        0.0%
+  LLC Misses to Remote cache (HIT)  :        0.0%
+  LLC Misses to Remote cache (HITM) :        0.0%
+  Store Operations                  :      71433
+  Store - uncacheable               :          0
+  Store - no mapping                :          2
+  Store L1D Hit                     :      66520
+  Store L1D Miss                    :       4911
+  Store No available memory level   :          0
+  No Page Map Rejects               :        163
+  Unable to parse data source       :          0
+
+=================================================
+    Global Shared Cache Line Event Information   
+=================================================
+  Total Shared Cache Lines          :        396
+  Load HITs on shared lines         :       7958
+  Fill Buffer Hits on shared lines  :       2567
+  L1D hits on shared lines          :       2620
+  L2D hits on shared lines          :         27
+  LLC hits on shared lines          :       2741
+  Load hits on peer cache or nodes  :          0
+  Locked Access on shared lines     :       2389
+  Blocked Access on shared lines    :          0
+  Store HITs on shared lines        :      11416
+  Store L1D hits on shared lines    :      10311
+  Store No available memory level   :          0
+  Total Merged records              :      13540
+
+=================================================
+                 c2c details                     
+=================================================
+  Events                            : cpu/mem-loads,ldlat=30/Pu
+                                    : cpu/mem-stores/Pu
+  Cachelines sort on                : Total HITMs
+  Cacheline data grouping           : offset,iaddr
+
+=================================================
+           Shared Data Cache Line Table          
+=================================================
+#
+#        ----------- Cacheline ----------      Tot  ------- Load Hitm -------    Total    Total    Total  --------- Stores --------  ----- Core Load Hit -----  - LLC Load Hit --  - RMT Load Hit --  --- Load Dram ----
+# Index             Address  Node  PA cnt     Hitm    Total  LclHitm  RmtHitm  records    Loads   Stores    L1Hit   L1Miss      N/A       FB       L1       L2    LclHit  LclHitm    RmtHit  RmtHitm       Lcl       Rmt
+# .....  ..................  ....  ......  .......  .......  .......  .......  .......  .......  .......  .......  .......  .......  .......  .......  .......  ........  .......  ........  .......  ........  ........
+#
+      0      0x7f8e67c9c000   N/A       0    7.34%      156      156        0      423      216      207       46      161        0        5        2        3        50      156         0        0         0         0
+      1      0x7fffbcfc6080   N/A       0    6.07%      129      129        0     3612     2603     1009      886      123        0     1743      662        3        65      129         0        0         1         0
+      2      0x7f8e67c9c040   N/A       0    5.37%      114      114        0      367      203      164        4      160        0       19       17        1        52      114         0        0         0         0
+      3      0x7f8e67c9c040   N/A       0    5.08%      108      108        0      388      197      191       49      142        0       16       15        0        58      108         0        0         0         0
+      4      0x7f8e67c9c0c0   N/A       0    4.52%       96       96        0      572      262      310       60      250        0      116       21        0        29       96         0        0         0         0
+      5      0x7f8e67c9c0c0   N/A       0    4.43%       94       94        0      388      220      168        7      161        0      111        5        0        10       94         0        0         0         0
+      6      0x7f8e679bf080   N/A       0    4.33%       92       92        0      296      247       49       49        0        0        7      135        0        13       92         0        0         0         0
+      7      0x7f8e679bf180   N/A       0    3.77%       80       80        0      311      215       96       96        0        0       27       95        0        13       80         0        0         0         0
+      8      0x7f8e679bf080   N/A       0    3.77%       80       80        0      227      187       40       40        0        0        5       94        1         7       80         0        0         0         0
+      9      0x7f8e67c9c0c0   N/A       0    3.15%       67       67        0      300      215       85       47       38        0       97       31        0        20       67         0        0         0         0
+     10      0x7f8e679bf080   N/A       0    2.87%       61       61        0      178      147       31       31        0        0        6       74        0         6       61         0        0         0         0
+     11      0x7f8e679bf180   N/A       0    2.68%       57       57        0      243      189       54       54        0        0        7      114        0        11       57         0        0         0         0
+     12      0x7f8e679bf180   N/A       0    2.26%       48       48        0      161      128       33       33        0        0        0       67        0        13       48         0        0         0         0
+     13      0x7f8e679bf080   N/A       0    2.07%       44       44        0      228      182       46       46        0        0        4      130        0         4       44         0        0         0         0
+     14      0x7f8e679bf180   N/A       0    2.07%       44       44        0      201      128       73       73        0        0        5       72        0         7       44         0        0         0         0
+     15      0x7f8e67c9c080   N/A       0    1.79%       38       38        0     1422      168     1254     1254        0        0        8      103        0        19       38         0        0         0         0
+     16      0x7f8e679bf140   N/A       0    1.55%       33       33        0       34       34        0        0        0        0        0        0        0         1       33         0        0         0         0
+     17      0x7f8e67c9c040   N/A       0    1.37%       29       29        0       56       54        2        1        1        0       14        0        2         9       29         0        0         0         0
+     18      0x7f8e67c9c0c0   N/A       0    1.13%       24       24        0       82       82        0        0        0        0       50        0        0         8       24         0        0         0         0
+     19      0x7f8e679bf080   N/A       0    1.04%       22       22        0       62       49       13       13        0        0        2       21        0         4       22         0        0         0         0
+     20      0x7f8e67c9c040   N/A       0    0.99%       21       21        0     1331      268     1063     1063        0        0       69      160        0        18       21         0        0         0         0
+     21      0x7f8e67c9c000   N/A       0    0.94%       20       20        0       38       35        3        3        0        0        6        0        9         0       20         0        0         0         0
+     22      0x7f8e679bf140   N/A       0    0.94%       20       20        0       22       22        0        0        0        0        0        0        0         2       20         0        0         0         0
+     23      0x7f8e67c9c000   N/A       0    0.85%       18       18        0     1236      200     1036     1034        2        0        7      135        2        38       18         0        0         0         0
+     24      0x7f8e679bf040   N/A       0    0.80%       17       17        0      148      101       47       47        0        0       13       59        1        11       17         0        0         0         0
+     25      0x7f8e67c9c000   N/A       0    0.75%       16       16        0      118       53       65       17       48        0        5        3        0        29       16         0        0         0         0
+     26      0x7f8e679bf180   N/A       0    0.75%       16       16        0       47       29       18       18        0        0        1        8        0         4       16         0        0         0         0
+     27      0x7f8e6787e080   N/A       0    0.66%       14       14        0       55       52        3        3        0        0        1       37        0         0       14         0        0         0         0
+     28      0x7f8e6793f080   N/A       0    0.56%       12       12        0       57       52        5        5        0        0        2       38        0         0       12         0        0         0         0
+     29      0x7f8e679bf140   N/A       0    0.56%       12       12        0       13       13        0        0        0        0        0        0        0         1       12         0        0         0         0
+     30      0x7f8e679bf140   N/A       0    0.52%       11       11        0       11       11        0        0        0        0        0        0        0         0       11         0        0         0         0
+     31      0x7f8e679bf040   N/A       0    0.42%        9        9        0      159       95       64       64        0        0       12       68        0         6        9         0        0         0         0
+     32      0x7f8e67c9c000   N/A       0    0.38%        8        8        0     1381       80     1301     1300        1        0        2       42        0        28        8         0        0         0         0
+     33      0x7f8e67c9c000   N/A       0    0.38%        8        8        0        9        9        0        0        0        0        1        0        0         0        8         0        0         0         0
+     34      0x7f8e67c9c080   N/A       0    0.38%        8        8        0       24       22        2        2        0        0        1       11        0         2        8         0        0         0         0
+     35      0x7f8e67c9c0c0   N/A       0    0.38%        8        8        0       24       21        3        0        3        0        8        3        0         2        8         0        0         0         0
+     36      0x7f8e67c5c0c0   N/A       0    0.33%        7        7        0       22       22        0        0        0        0       12        2        0         1        7         0        0         0         0
+     37      0x7f8e67ca40c0   N/A       0    0.33%        7        7        0       13       13        0        0        0        0        6        0        0         0        7         0        0         0         0
+     38      0x7f8e67ca3000   N/A       0    0.33%        7        7        0        7        7        0        0        0        0        0        0        0         0        7         0        0         0         0
+     39      0x7f8e679bf080   N/A       0    0.33%        7        7        0       24       22        2        2        0        0        3       10        0         2        7         0        0         0         0
+     40      0x7f8e67c9c080   N/A       0    0.28%        6        6        0     1355       81     1274     1274        0        0        3       64        0         8        6         0        0         0         0
+     41      0x7f8e67200080   N/A       0    0.28%        6        6        0       12       12        0        0        0        0        1        4        0         1        6         0        0         0         0
+     42      0x7f8e679bf040   N/A       0    0.28%        6        6        0      167       81       86       86        0        0        9       62        0         4        6         0        0         0         0
+     43      0x7f8e67c9c0c0   N/A       0    0.24%        5        5        0       24       24        0        0        0        0       18        0        0         1        5         0        0         0         0
+     44      0x7f8e67ca3040   N/A       0    0.24%        5        5        0        8        8        0        0        0        0        1        0        0         2        5         0        0         0         0
+     45      0x7f8e673bc080   N/A       0    0.24%        5        5        0       11       11        0        0        0        0        0        6        0         0        5         0        0         0         0
+     46      0x7f8e67239180   N/A       0    0.24%        5        5        0        5        5        0        0        0        0        0        0        0         0        5         0        0         0         0
+     47      0x7f8e679bf180   N/A       0    0.24%        5        5        0       15       12        3        3        0        0        0        6        0         1        5         0        0         0         0
+     48      0x7f8e67c9c0c0   N/A       0    0.19%        4        4        0        9        9        0        0        0        0        5        0        0         0        4         0        0         0         0
+     49      0x7f8e67c9c0c0   N/A       0    0.19%        4        4        0       12       12        0        0        0        0        5        1        2         0        4         0        0         0         0
+     50      0x7f8e67c9c0c0   N/A       0    0.19%        4        4        0        8        8        0        0        0        0        3        1        0         0        4         0        0         0         0
+     51      0x7f8e67c9c000   N/A       0    0.19%        4        4        0        7        7        0        0        0        0        1        0        0         2        4         0        0         0         0
+     52      0x7f8e67c9c000   N/A       0    0.19%        4        4        0        4        4        0        0        0        0        0        0        0         0        4         0        0         0         0
+     53      0x7f8e67c5c000   N/A       0    0.19%        4        4        0        5        5        0        0        0        0        1        0        0         0        4         0        0         0         0
+     54      0x7f8e67ca40c0   N/A       0    0.19%        4        4        0       13       13        0        0        0        0        9        0        0         0        4         0        0         0         0
+     55      0x7f8e67c9c0c0   N/A       0    0.19%        4        4        0        8        8        0        0        0        0        3        1        0         0        4         0        0         0         0
+     56      0x7f8e679bf080   N/A       0    0.19%        4        4        0       14       14        0        0        0        0        0       10        0         0        4         0        0         0         0
+     57      0x7f8e66e00080   N/A       0    0.19%        4        4        0       32       32        0        0        0        0        1       27        0         0        4         0        0         0         0
+     58      0x7f8e679bf180   N/A       0    0.19%        4        4        0        5        4        1        1        0        0        0        0        0         0        4         0        0         0         0
+     59      0x7f8e67c9c000   N/A       0    0.14%        3        3        0        3        3        0        0        0        0        0        0        0         0        3         0        0         0         0
+     60      0x7f8e67c9c0c0   N/A       0    0.14%        3        3        0        9        9        0        0        0        0        6        0        0         0        3         0        0         0         0
+     61      0x7f8e67c5c0c0   N/A       0    0.14%        3        3        0       26       26        0        0        0        0       21        0        0         2        3         0        0         0         0
+     62      0x7f8e67ca4040   N/A       0    0.14%        3        3        0       10       10        0        0        0        0        3        0        0         4        3         0        0         0         0
+     63      0x7f8e67ca4000   N/A       0    0.14%        3        3        0        6        6        0        0        0        0        3        0        0         0        3         0        0         0         0
+     64      0x7f8e67c9c0c0   N/A       0    0.14%        3        3        0        6        6        0        0        0        0        3        0        0         0        3         0        0         0         0
+     65      0x7f8e67c9c000   N/A       0    0.14%        3        3        0        3        3        0        0        0        0        0        0        0         0        3         0        0         0         0
+     66      0x7f8e67c9c0c0   N/A       0    0.14%        3        3        0        6        6        0        0        0        0        3        0        0         0        3         0        0         0         0
+     67      0x7f8e67c9c080   N/A       0    0.14%        3        3        0      790      127      663      663        0        0       16       87        2        19        3         0        0         0         0
+     68      0x7f8e679bf140   N/A       0    0.14%        3        3        0        3        3        0        0        0        0        0        0        0         0        3         0        0         0         0
+     69      0x7f8e66a00080   N/A       0    0.14%        3        3        0        8        7        1        1        0        0        0        3        0         1        3         0        0         0         0
+     70      0x7f8e679bf080   N/A       0    0.14%        3        3        0        7        7        0        0        0        0        0        4        0         0        3         0        0         0         0
+
+=================================================
+      Shared Cache Line Distribution Pareto      
+=================================================
+#
+#        ----- HITM -----  ------- Store Refs ------  --------- Data address ---------                      ---------- cycles ----------    Total       cpu                                       Shared                                
+#   Num  RmtHitm  LclHitm   L1 Hit  L1 Miss      N/A              Offset  Node  PA cnt        Code address  rmt hitm  lcl hitm      load  records       cnt                    Symbol             Object               Source:Line  Node
+# .....  .......  .......  .......  .......  .......  ..................  ....  ......  ..................  ........  ........  ........  .......  ........  ........................  .................  ........................  ....
+#
+  ----------------------------------------------------------------------
+      0        0      156       46      161        0      0x7f8e67c9c000
+  ----------------------------------------------------------------------
+           0.00%   58.97%    0.00%    0.00%    0.00%                 0x0   N/A       0      0x55ccb032e74a         0        97        73      118         0  [.] disruptor_consume_wp  bench_competitors  disruptor_consume_wp+90   
+           0.00%   24.36%    0.00%    0.00%    0.00%                 0x0   N/A       0      0x55ccb032e6a2         0       100        72       51         0  [.] disruptor_publish_mp  bench_competitors  disruptor_publish_mp+130  
+           0.00%   12.18%    0.00%    0.00%    0.00%                 0x0   N/A       0      0x55ccb032e75f         0       105        57       26         0  [.] disruptor_consume_wp  bench_competitors  disruptor_consume_wp+111  
+           0.00%    4.49%    0.00%    0.00%    0.00%                 0x0   N/A       0      0x55ccb032e6b7         0       107        54       21         0  [.] disruptor_publish_mp  bench_competitors  disruptor_publish_mp+151  
+           0.00%    0.00%  100.00%  100.00%    0.00%                 0x0   N/A       0      0x55ccb032e6d0         0         0         0      207         0  [.] disruptor_publish_mp  bench_competitors  disruptor_publish_mp+176  
+
+  ----------------------------------------------------------------------
+      1        0      129      886      123        0      0x7fffbcfc6080
+  ----------------------------------------------------------------------
+           0.00%    0.00%    0.34%    0.00%    0.00%                 0x0   N/A       0      0x55ccb0337160         0         0         0        3         0  [.] rbipc_reserve_write_timeou  bench_competitors  rbipc_reserve_write_timeout+11  
+           0.00%    0.00%    0.11%    0.00%    0.00%                 0x8   N/A       0      0x55ccb032bafd         0         0         0        1         0  [.] rbipc_read_release          bench_competitors  rbipc_read_release+13           
+           0.00%    0.00%    0.11%    0.00%    0.00%                 0x8   N/A       0      0x55ccb03375c1         0         0         0        1         0  [.] rbipc_read_acquire_timeout  bench_competitors  rbipc_read_acquire_timeout+81   
+           0.00%    0.00%    0.23%    0.00%    0.00%                 0x8   N/A       0      0x7f8e67b0214b         0         0         0        2         0  [.] clock_gettime               libc.so.6          clock_gettime.c:42              
+           0.00%    6.98%    0.00%    0.00%    0.00%                0x10   N/A       0      0x55ccb0331e08         0       130        99       13         0  [.] rbi_cons_th                 bench_competitors  rbi_cons_th+120                 
+           0.00%    0.78%    0.00%    0.00%    0.00%                0x10   N/A       0      0x55ccb0331d35         0       103        80      156         0  [.] rbi_prod_th                 bench_competitors  rbi_prod_th+149                 
+           0.00%    0.78%    0.00%    0.00%    0.00%                0x10   N/A       0      0x55ccb0331dba         0       122        90      414         0  [.] rbi_cons_th                 bench_competitors  rbi_cons_th+42                  
+           0.00%    0.00%    0.11%    0.00%    0.00%                0x10   N/A       0      0x55ccb032b94d         0         0         0        1         0  [.] rbipc_commit_write          bench_competitors  rbipc_commit_write+13           
+           0.00%    0.00%    0.45%    0.00%    0.00%                0x10   N/A       0      0x55ccb033b2ab         0         0         0        4         0  [.] rbipc_sync_state_init       bench_competitors  rbipc_sync_state_init+43        
+           0.00%    0.78%    0.00%    0.00%    0.00%                0x18   N/A       0      0x55ccb0331d4a         0       140        56       42         0  [.] rbi_prod_th                 bench_competitors  rbi_prod_th+170                 
+           0.00%    0.00%    0.11%    0.00%    0.00%                0x18   N/A       0      0x55ccb032fdef         0         0         0        1         0  [.] bench_rbipc_lat             bench_competitors  bench_rbipc_lat+751             
+           0.00%    0.00%    1.35%    0.00%    0.00%                0x18   N/A       0      0x55ccb032fe1a         0         0         0       12         0  [.] bench_rbipc_lat             bench_competitors  bench_rbipc_lat+794             
+           0.00%    0.00%    0.11%    0.00%    0.00%                0x18   N/A       0      0x55ccb032fe38         0         0         0        1         0  [.] bench_rbipc_lat             bench_competitors  bench_rbipc_lat+824             
+           0.00%    0.00%    0.45%    0.00%    0.00%                0x18   N/A       0      0x55ccb032fe55         0         0         0        4         0  [.] bench_rbipc_lat             bench_competitors  bench_rbipc_lat+853             
+           0.00%    0.00%    0.11%    0.00%    0.00%                0x18   N/A       0      0x55ccb032fe64         0         0         0        1         0  [.] bench_rbipc_lat             bench_competitors  bench_rbipc_lat+868             
+           0.00%    0.00%    1.35%    0.00%    0.00%                0x18   N/A       0      0x55ccb033b2a7         0         0         0       12         0  [.] rbipc_sync_state_init       bench_competitors  rbipc_sync_state_init+39        
+           0.00%   82.17%    0.00%    0.00%    0.00%                0x20   N/A       0      0x55ccb0331d20         0       105        85      125         0  [.] rbi_prod_th                 bench_competitors  rbi_prod_th+128                 
+           0.00%    0.78%    0.00%    0.00%    0.00%                0x20   N/A       0      0x55ccb0331cf6         0        91        56       40         0  [.] rbi_prod_th                 bench_competitors  rbi_prod_th+86                  
+           0.00%    0.00%    1.24%    0.00%    0.00%                0x20   N/A       0      0x55ccb032eb6c         0         0         0       11         0  [.] rte_mp_enqueue              bench_competitors  rte_mp_enqueue+44               
+           0.00%    0.00%    0.68%    0.00%    0.00%                0x20   N/A       0      0x55ccb033b299         0         0         0        6         0  [.] rbipc_sync_state_init       bench_competitors  rbipc_sync_state_init+25        
+           0.00%    0.78%    0.00%    0.00%    0.00%                0x28   N/A       0      0x55ccb0331db0         0       100       114      580         0  [.] rbi_cons_th                 bench_competitors  rbi_cons_th+32                  
+           0.00%    0.78%   24.04%    0.00%    0.00%                0x28   N/A       0      0x55ccb0331e15         0       246       106      692         0  [.] rbi_cons_th                 bench_competitors  rbi_cons_th+133                 
+           0.00%    0.00%    1.24%    5.69%    0.00%                0x28   N/A       0      0x55ccb032eb44         0         0         0       18         0  [.] rte_mp_enqueue              bench_competitors  rte_mp_enqueue+4                
+           0.00%    0.00%    2.14%    0.00%    0.00%                0x28   N/A       0      0x55ccb0337100         0         0         0       19         0  [.] rbipc_reserve_write_timeou  bench_competitors  rbipc_reserve_write_timeout+16  
+           0.00%    0.00%    4.18%    0.00%    0.00%                0x28   N/A       0      0x55ccb03383ed         0         0         0       37         0  [.] rbipc_reactor_signal        bench_competitors  rbipc_reactor_signal+13         
+           0.00%    0.00%   18.85%    0.00%    0.00%                0x28   N/A       0      0x7f8e67debd98         0         0         0      167         0  [.] __vdso_clock_gettime        [vdso]             __vdso_clock_gettime+312        
+           0.00%    6.20%    0.00%    0.00%    0.00%                0x30   N/A       0      0x55ccb0331db4         0       100        88      408         0  [.] rbi_cons_th                 bench_competitors  rbi_cons_th+36                  
+           0.00%    0.00%    0.45%    0.00%    0.00%                0x30   N/A       0      0x55ccb032eb8d         0         0         0        4         0  [.] rte_mp_enqueue              bench_competitors  rte_mp_enqueue+77               
+           0.00%    0.00%    5.53%    1.63%    0.00%                0x38   N/A       0      0x55ccb032ba18         0         0         0       51         0  [.] rbipc_commit_write          bench_competitors  rbipc_commit_write+216          
+           0.00%    0.00%    0.23%    0.00%    0.00%                0x38   N/A       0      0x55ccb032ba88         0         0         0        2         0  [.] rbipc_commit_write          bench_competitors  rbipc_commit_write+328          
+           0.00%    0.00%   18.74%    0.00%    0.00%                0x38   N/A       0      0x55ccb032eb63         0         0         0      166         0  [.] rte_mp_enqueue              bench_competitors  rte_mp_enqueue+35               
+           0.00%    0.00%    0.11%    0.00%    0.00%                0x38   N/A       0      0x55ccb033711f         0         0         0        1         0  [.] rbipc_reserve_write_timeou  bench_competitors  rbipc_reserve_write_timeout+47  
+           0.00%    0.00%    0.11%    0.00%    0.00%                0x38   N/A       0      0x7f8e67debc6c         0         0         0        1         0  [.] __vdso_clock_gettime        [vdso]             __vdso_clock_gettime+12         
+           0.00%    0.00%   17.49%   92.68%    0.00%                0x38   N/A       0      0x7f8e67debd98         0         0         0      269         0  [.] __vdso_clock_gettime        [vdso]             __vdso_clock_gettime+312        
+           0.00%    0.00%    0.11%    0.00%    0.00%                0x39   N/A       0      0x7f8e67bb19db         0         0         0        1         0  [.] 0x00000000001b19db          libc.so.6          libc.so.6[1b19db]               
+
+  ----------------------------------------------------------------------
+      2        0      114        4      160        0      0x7f8e67c9c040
+  ----------------------------------------------------------------------
+           0.00%   51.75%    0.00%    0.00%    0.00%                 0x0   N/A       0      0x55ccb032ebaa         0        99        73      107         0  [.] rte_mp_enqueue  bench_competitors  rte_mp_enqueue+106  
+           0.00%   23.68%    0.00%    0.00%    0.00%                 0x0   N/A       0      0x55ccb032ebae         0        96        75       31         0  [.] rte_mp_enqueue  bench_competitors  rte_mp_enqueue+110  
+           0.00%    9.65%    0.00%    0.00%    0.00%                 0x0   N/A       0      0x55ccb032ebbd         0       108        64       15         0  [.] rte_mp_enqueue  bench_competitors  rte_mp_enqueue+125  
+           0.00%    7.89%    0.00%    0.00%    0.00%                 0x0   N/A       0      0x55ccb032ec16         0       109        58       34         0  [.] rte_mc_dequeue  bench_competitors  rte_mc_dequeue+6    
+           0.00%    6.14%    0.00%    0.00%    0.00%                 0x0   N/A       0      0x55ccb032ebc1         0       105        64       15         0  [.] rte_mp_enqueue  bench_competitors  rte_mp_enqueue+129  
+           0.00%    0.88%    0.00%    0.00%    0.00%                 0x0   N/A       0      0x55ccb032eca5         0       119         0        1         0  [.] rte_mc_dequeue  bench_competitors  rte_mc_dequeue+149  
+           0.00%    0.00%  100.00%  100.00%    0.00%                 0x0   N/A       0      0x55ccb032ebd2         0         0         0      164         0  [.] rte_mp_enqueue  bench_competitors  rte_mp_enqueue+146  
+
+  ----------------------------------------------------------------------
+      3        0      108       49      142        0      0x7f8e67c9c040
+  ----------------------------------------------------------------------
+           0.00%   51.85%    0.00%    0.00%    0.00%                 0x0   N/A       0      0x55ccb032ebaa         0        99        69      110         0  [.] rte_mp_enqueue  bench_competitors  rte_mp_enqueue+106  
+           0.00%   19.44%    0.00%    0.00%    0.00%                 0x0   N/A       0      0x55ccb032ebae         0        98        38       22         0  [.] rte_mp_enqueue  bench_competitors  rte_mp_enqueue+110  
+           0.00%   12.96%    0.00%    0.00%    0.00%                 0x0   N/A       0      0x55ccb032ebc1         0       109         0       14         0  [.] rte_mp_enqueue  bench_competitors  rte_mp_enqueue+129  
+           0.00%   12.04%    0.00%    0.00%    0.00%                 0x0   N/A       0      0x55ccb032ec16         0       103        69       46         0  [.] rte_mc_dequeue  bench_competitors  rte_mc_dequeue+6    
+           0.00%    3.70%    0.00%    0.00%    0.00%                 0x0   N/A       0      0x55ccb032ebbd         0       107        85        5         0  [.] rte_mp_enqueue  bench_competitors  rte_mp_enqueue+125  
+           0.00%    0.00%  100.00%  100.00%    0.00%                 0x0   N/A       0      0x55ccb032ebd2         0         0         0      191         0  [.] rte_mp_enqueue  bench_competitors  rte_mp_enqueue+146  
+
+  ----------------------------------------------------------------------
+      4        0       96       60      250        0      0x7f8e67c9c0c0
+  ----------------------------------------------------------------------
+           0.00%   47.92%    0.00%    0.00%    0.00%                 0x0   N/A       0      0x55ccb032e650         0       100        79       82         0  [.] disruptor_publish_mp  bench_competitors  disruptor_publish_mp+48   
+           0.00%   32.29%    0.00%    0.00%    0.00%                 0x0   N/A       0      0x55ccb032e792         0        98        74       55         0  [.] disruptor_consume_wp  bench_competitors  disruptor_consume_wp+162  
+           0.00%   13.54%    0.00%    0.00%    0.00%                 0x0   N/A       0      0x55ccb032e7a8         0       104        68       23         0  [.] disruptor_consume_wp  bench_competitors  disruptor_consume_wp+184  
+           0.00%    0.00%  100.00%  100.00%    0.00%                 0x0   N/A       0      0x55ccb032e7c5         0         0         0      310         0  [.] disruptor_consume_wp  bench_competitors  disruptor_consume_wp+213  
+           0.00%    4.17%    0.00%    0.00%    0.00%                 0x8   N/A       0      0x55ccb032e659         0       104        88       73         0  [.] disruptor_publish_mp  bench_competitors  disruptor_publish_mp+57   
+           0.00%    2.08%    0.00%    0.00%    0.00%                 0xc   N/A       0      0x55ccb032e68e         0        94       101        9         0  [.] disruptor_publish_mp  bench_competitors  disruptor_publish_mp+110  
+
+  ----------------------------------------------------------------------
+      5        0       94        7      161        0      0x7f8e67c9c0c0
+  ----------------------------------------------------------------------
+           0.00%   30.85%    0.00%    0.00%    0.00%                 0x0   N/A       0      0x55ccb032e792         0        95        85       75         0  [.] disruptor_consume_wp  bench_competitors  disruptor_consume_wp+162  
+           0.00%   25.53%    0.00%    0.00%    0.00%                 0x0   N/A       0      0x55ccb032e650         0        96        88       37         0  [.] disruptor_publish_mp  bench_competitors  disruptor_publish_mp+48   
+           0.00%    1.06%    0.00%    0.00%    0.00%                 0x0   N/A       0      0x55ccb032e7a8         0       109        83        2         0  [.] disruptor_consume_wp  bench_competitors  disruptor_consume_wp+184  
+           0.00%    0.00%  100.00%  100.00%    0.00%                 0x0   N/A       0      0x55ccb032e7c5         0         0         0      168         0  [.] disruptor_consume_wp  bench_competitors  disruptor_consume_wp+213  
+           0.00%    2.13%    0.00%    0.00%    0.00%                 0x8   N/A       0      0x55ccb032e659         0        88        98       30         0  [.] disruptor_publish_mp  bench_competitors  disruptor_publish_mp+57   
+           0.00%   39.36%    0.00%    0.00%    0.00%                 0xc   N/A       0      0x55ccb032e772         0        86        69       56         0  [.] disruptor_consume_wp  bench_competitors  disruptor_consume_wp+130  
+           0.00%    1.06%    0.00%    0.00%    0.00%                 0xc   N/A       0      0x55ccb032e68e         0       116        76       20         0  [.] disruptor_publish_mp  bench_competitors  disruptor_publish_mp+110  
+
+  ----------------------------------------------------------------------
+      6        0       92       49        0        0      0x7f8e679bf080
+  ----------------------------------------------------------------------
+           0.00%   67.39%    0.00%    0.00%    0.00%                 0x0   N/A       0      0x55ccb0337750         0       108        77       73         0  [.] rbipc_read_acquire_timeout  bench_competitors  rbipc_read_acquire_timeout+480  
+           0.00%   32.61%    0.00%    0.00%    0.00%                 0x0   N/A       0      0x55ccb03371b9         0       103        73       37         0  [.] rbipc_reserve_write_timeou  bench_competitors  rbipc_reserve_write_timeout+20  
+           0.00%    0.00%  100.00%    0.00%    0.00%                 0x0   N/A       0      0x55ccb03377a6         0         0       128      186         0  [.] rbipc_read_acquire_timeout  bench_competitors  rbipc_read_acquire_timeout+566  
+
+  ----------------------------------------------------------------------
+      7        0       80       96        0        0      0x7f8e679bf180
+  ----------------------------------------------------------------------
+           0.00%   61.25%    0.00%    0.00%    0.00%                 0x0   N/A       0      0x55ccb033c66d         0       102        59       74         0  [.] rbipc_sync_wake_one         bench_competitors  rbipc_sync_wake_one+45          
+           0.00%   38.75%    0.00%    0.00%    0.00%                 0x0   N/A       0      0x55ccb032bb8a         0       103        76       46         0  [.] rbipc_read_release          bench_competitors  rbipc_read_release+154          
+           0.00%    0.00%   81.25%    0.00%    0.00%                 0x0   N/A       0      0x55ccb033b3e9         0         0        61      104         0  [.] rbipc_sync_register_waiter  bench_competitors  rbipc_sync_register_waiter+9    
+           0.00%    0.00%    4.17%    0.00%    0.00%                 0x0   N/A       0      0x55ccb033b445         0         0       107       24         0  [.] rbipc_sync_deregister_wait  bench_competitors  rbipc_sync_deregister_waiter+5  
+           0.00%    0.00%   14.58%    0.00%    0.00%                 0x0   N/A       0      0x55ccb033b684         0         0       111       63         0  [.] rbipc_sync_wait_slot_regis  bench_competitors  rbipc_sync_wait_slot_registere  
+
+  ----------------------------------------------------------------------
+      8        0       80       40        0        0      0x7f8e679bf080
+  ----------------------------------------------------------------------
+           0.00%   65.00%    0.00%    0.00%    0.00%                 0x0   N/A       0      0x55ccb0337750         0       110        65       62         0  [.] rbipc_read_acquire_timeout  bench_competitors  rbipc_read_acquire_timeout+480  
+           0.00%   35.00%    0.00%    0.00%    0.00%                 0x0   N/A       0      0x55ccb03371b9         0       108        72       31         0  [.] rbipc_reserve_write_timeou  bench_competitors  rbipc_reserve_write_timeout+20  
+           0.00%    0.00%  100.00%    0.00%    0.00%                 0x0   N/A       0      0x55ccb03377a6         0         0       163      134         0  [.] rbipc_read_acquire_timeout  bench_competitors  rbipc_read_acquire_timeout+566  
+
+  ----------------------------------------------------------------------
+      9        0       67       47       38        0      0x7f8e67c9c0c0
+  ----------------------------------------------------------------------
+           0.00%   76.12%    0.00%    0.00%    0.00%                 0x0   N/A       0      0x55ccb032eb4f         0       107        79       86         0  [.] rte_mp_enqueue  bench_competitors  rte_mp_enqueue+15   
+           0.00%    0.00%  100.00%  100.00%    0.00%                 0x0   N/A       0      0x55ccb032ec92         0         0         0       85         0  [.] rte_mc_dequeue  bench_competitors  rte_mc_dequeue+130  
+           0.00%   14.93%    0.00%    0.00%    0.00%                 0x4   N/A       0      0x55ccb032eb55         0       110        96       68         0  [.] rte_mp_enqueue  bench_competitors  rte_mp_enqueue+21   
+           0.00%    8.96%    0.00%    0.00%    0.00%                 0x4   N/A       0      0x55ccb032eb87         0        99        84       35         0  [.] rte_mp_enqueue  bench_competitors  rte_mp_enqueue+71   
+
+  ----------------------------------------------------------------------
+     10        0       61       31        0        0      0x7f8e679bf080
+  ----------------------------------------------------------------------
+           0.00%   50.82%    0.00%    0.00%    0.00%                 0x0   N/A       0      0x55ccb03371b9         0       111        83       34         0  [.] rbipc_reserve_write_timeou  bench_competitors  rbipc_reserve_write_timeout+20  
+           0.00%   47.54%    0.00%    0.00%    0.00%                 0x0   N/A       0      0x55ccb0337750         0       108        72       38         0  [.] rbipc_read_acquire_timeout  bench_competitors  rbipc_read_acquire_timeout+480  
+           0.00%    1.64%  100.00%    0.00%    0.00%                 0x0   N/A       0      0x55ccb03377a6         0       350       153      106         0  [.] rbipc_read_acquire_timeout  bench_competitors  rbipc_read_acquire_timeout+566  
+
+  ----------------------------------------------------------------------
+     11        0       57       54        0        0      0x7f8e679bf180
+  ----------------------------------------------------------------------
+           0.00%   64.91%    0.00%    0.00%    0.00%                 0x0   N/A       0      0x55ccb033c66d         0       105        70       46         0  [.] rbipc_sync_wake_one         bench_competitors  rbipc_sync_wake_one+45          
+           0.00%   33.33%    0.00%    0.00%    0.00%                 0x0   N/A       0      0x55ccb032bb8a         0       100        78       26         0  [.] rbipc_read_release          bench_competitors  rbipc_read_release+154          
+           0.00%    1.75%   11.11%    0.00%    0.00%                 0x0   N/A       0      0x55ccb033b445         0       237       110       46         0  [.] rbipc_sync_deregister_wait  bench_competitors  rbipc_sync_deregister_waiter+5  
+           0.00%    0.00%   72.22%    0.00%    0.00%                 0x0   N/A       0      0x55ccb033b3e9         0         0        60       86         0  [.] rbipc_sync_register_waiter  bench_competitors  rbipc_sync_register_waiter+9    
+           0.00%    0.00%   16.67%    0.00%    0.00%                 0x0   N/A       0      0x55ccb033b684         0         0       110       39         0  [.] rbipc_sync_wait_slot_regis  bench_competitors  rbipc_sync_wait_slot_registere  
+
+  ----------------------------------------------------------------------
+     12        0       48       33        0        0      0x7f8e679bf180
+  ----------------------------------------------------------------------
+           0.00%   68.75%    0.00%    0.00%    0.00%                 0x0   N/A       0      0x55ccb033c66d         0       105        81       37         0  [.] rbipc_sync_wake_one         bench_competitors  rbipc_sync_wake_one+45          
+           0.00%   31.25%    0.00%    0.00%    0.00%                 0x0   N/A       0      0x55ccb032bb8a         0       103        76       23         0  [.] rbipc_read_release          bench_competitors  rbipc_read_release+154          
+           0.00%    0.00%   84.85%    0.00%    0.00%                 0x0   N/A       0      0x55ccb033b3e9         0         0        53       53         0  [.] rbipc_sync_register_waiter  bench_competitors  rbipc_sync_register_waiter+9    
+           0.00%    0.00%    6.06%    0.00%    0.00%                 0x0   N/A       0      0x55ccb033b445         0         0       108       25         0  [.] rbipc_sync_deregister_wait  bench_competitors  rbipc_sync_deregister_waiter+5  
+           0.00%    0.00%    9.09%    0.00%    0.00%                 0x0   N/A       0      0x55ccb033b684         0         0       102       23         0  [.] rbipc_sync_wait_slot_regis  bench_competitors  rbipc_sync_wait_slot_registere  
+
+  ----------------------------------------------------------------------
+     13        0       44       46        0        0      0x7f8e679bf080
+  ----------------------------------------------------------------------
+           0.00%   77.27%    0.00%    0.00%    0.00%                 0x0   N/A       0      0x55ccb03371b9         0       101       124       35         0  [.] rbipc_reserve_write_timeou  bench_competitors  rbipc_reserve_write_timeout+20  
+           0.00%   22.73%    0.00%    0.00%    0.00%                 0x0   N/A       0      0x55ccb0337750         0       115        66       21         0  [.] rbipc_read_acquire_timeout  bench_competitors  rbipc_read_acquire_timeout+480  
+           0.00%    0.00%  100.00%    0.00%    0.00%                 0x0   N/A       0      0x55ccb03377a6         0         0       106      172         0  [.] rbipc_read_acquire_timeout  bench_competitors  rbipc_read_acquire_timeout+566  
+
+  ----------------------------------------------------------------------
+     14        0       44       73        0        0      0x7f8e679bf180
+  ----------------------------------------------------------------------
+           0.00%   59.09%    0.00%    0.00%    0.00%                 0x0   N/A       0      0x55ccb033c66d         0       108        83       34         0  [.] rbipc_sync_wake_one         bench_competitors  rbipc_sync_wake_one+45          
+           0.00%   38.64%    0.00%    0.00%    0.00%                 0x0   N/A       0      0x55ccb032bb8a         0       117        80       23         0  [.] rbipc_read_release          bench_competitors  rbipc_read_release+154          
+           0.00%    2.27%   10.96%    0.00%    0.00%                 0x0   N/A       0      0x55ccb033b684         0       141       112       39         0  [.] rbipc_sync_wait_slot_regis  bench_competitors  rbipc_sync_wait_slot_registere  
+           0.00%    0.00%   78.08%    0.00%    0.00%                 0x0   N/A       0      0x55ccb033b3e9         0         0        62       78         0  [.] rbipc_sync_register_waiter  bench_competitors  rbipc_sync_register_waiter+9    
+           0.00%    0.00%   10.96%    0.00%    0.00%                 0x0   N/A       0      0x55ccb033b445         0         0        94       27         0  [.] rbipc_sync_deregister_wait  bench_competitors  rbipc_sync_deregister_waiter+5  
+
+  ----------------------------------------------------------------------
+     15        0       38     1254        0        0      0x7f8e67c9c080
+  ----------------------------------------------------------------------
+           0.00%   97.37%    0.00%    0.00%    0.00%                 0x0   N/A       0      0x55ccb032e71a         0        86        74       65         0  [.] disruptor_consume_wp  bench_competitors  disruptor_consume_wp+42  
+           0.00%    2.63%  100.00%    0.00%    0.00%                 0x0   N/A       0      0x55ccb032e732         0       288       134     1357         0  [.] disruptor_consume_wp  bench_competitors  disruptor_consume_wp+66  
+
+  ----------------------------------------------------------------------
+     16        0       33        0        0        0      0x7f8e679bf140
+  ----------------------------------------------------------------------
+           0.00%  100.00%    0.00%    0.00%    0.00%                 0x0   N/A       0      0x55ccb033ae8f         0       105        46       34         0  [.] rbipc_futex2_wait_slot_or_  bench_competitors  rbipc_futex2_wait_slot_or_prox  
+
+  ----------------------------------------------------------------------
+     17        0       29        1        1        0      0x7f8e67c9c040
+  ----------------------------------------------------------------------
+           0.00%  100.00%    0.00%    0.00%    0.00%                 0x0   N/A       0      0x55ccb032ec16         0       117        82       52         0  [.] rte_mc_dequeue  bench_competitors  rte_mc_dequeue+6    
+           0.00%    0.00%  100.00%  100.00%    0.00%                 0x0   N/A       0      0x55ccb032ebd2         0         0         0        2         0  [.] rte_mp_enqueue  bench_competitors  rte_mp_enqueue+146  
+
+  ----------------------------------------------------------------------
+     18        0       24        0        0        0      0x7f8e67c9c0c0
+  ----------------------------------------------------------------------
+           0.00%   66.67%    0.00%    0.00%    0.00%                 0x0   N/A       0      0x55ccb032eb4f         0       102        72       23         0  [.] rte_mp_enqueue  bench_competitors  rte_mp_enqueue+15  
+           0.00%   25.00%    0.00%    0.00%    0.00%                 0x4   N/A       0      0x55ccb032eb87         0        96        88       22         0  [.] rte_mp_enqueue  bench_competitors  rte_mp_enqueue+71  
+           0.00%    8.33%    0.00%    0.00%    0.00%                 0x4   N/A       0      0x55ccb032eb55         0        93       102       26         0  [.] rte_mp_enqueue  bench_competitors  rte_mp_enqueue+21  
+
+  ----------------------------------------------------------------------
+     19        0       22       13        0        0      0x7f8e679bf080
+  ----------------------------------------------------------------------
+           0.00%   86.36%    0.00%    0.00%    0.00%                 0x0   N/A       0      0x55ccb0337750         0       105        50       21         0  [.] rbipc_read_acquire_timeout  bench_competitors  rbipc_read_acquire_timeout+480  
+           0.00%   13.64%    0.00%    0.00%    0.00%                 0x0   N/A       0      0x55ccb03371b9         0        98        74        5         0  [.] rbipc_reserve_write_timeou  bench_competitors  rbipc_reserve_write_timeout+20  
+           0.00%    0.00%  100.00%    0.00%    0.00%                 0x0   N/A       0      0x55ccb03377a6         0         0       152       36         0  [.] rbipc_read_acquire_timeout  bench_competitors  rbipc_read_acquire_timeout+566  
+
+  ----------------------------------------------------------------------
+     20        0       21     1063        0        0      0x7f8e67c9c040
+  ----------------------------------------------------------------------
+           0.00%   71.43%    0.00%    0.00%    0.00%                 0x0   N/A       0      0x55ccb032e641         0       129       129      118         0  [.] disruptor_publish_mp  bench_competitors  disruptor_publish_mp+33  
+           0.00%   28.57%  100.00%    0.00%    0.00%                 0x0   N/A       0      0x55ccb032e683         0       511       134     1213         0  [.] disruptor_publish_mp  bench_competitors  disruptor_publish_mp+99  
+
+  ----------------------------------------------------------------------
+     21        0       20        3        0        0      0x7f8e67c9c000
+  ----------------------------------------------------------------------
+           0.00%   60.00%    0.00%    0.00%    0.00%                 0x0   N/A       0      0x55ccb032e75f         0       111        38       21         0  [.] disruptor_consume_wp  bench_competitors  disruptor_consume_wp+111  
+           0.00%   40.00%    0.00%    0.00%    0.00%                 0x0   N/A       0      0x55ccb032e74a         0       106        81       14         0  [.] disruptor_consume_wp  bench_competitors  disruptor_consume_wp+90   
+           0.00%    0.00%  100.00%    0.00%    0.00%                 0x0   N/A       0      0x55ccb032e609         0         0         0        3         0  [.] disruptor_publish_sp  bench_competitors  disruptor_publish_sp+105  
+
+  ----------------------------------------------------------------------
+     22        0       20        0        0        0      0x7f8e679bf140
+  ----------------------------------------------------------------------
+           0.00%  100.00%    0.00%    0.00%    0.00%                 0x0   N/A       0      0x55ccb033ae8f         0       100        70       22         0  [.] rbipc_futex2_wait_slot_or_  bench_competitors  rbipc_futex2_wait_slot_or_prox  
+
+  ----------------------------------------------------------------------
+     23        0       18     1034        2        0      0x7f8e67c9c000
+  ----------------------------------------------------------------------
+           0.00%   88.89%    0.00%    0.00%    0.00%                 0x0   N/A       0      0x55ccb032eb4c         0        80        82       46         0  [.] rte_mp_enqueue  bench_competitors  rte_mp_enqueue+12  
+           0.00%   11.11%  100.00%  100.00%    0.00%                 0x0   N/A       0      0x55ccb032eb75         0       240       108     1190         0  [.] rte_mp_enqueue  bench_competitors  rte_mp_enqueue+53  
+
+  ----------------------------------------------------------------------
+     24        0       17       47        0        0      0x7f8e679bf040
+  ----------------------------------------------------------------------
+           0.00%   76.47%    0.00%    0.00%    0.00%                 0x0   N/A       0      0x55ccb0336f85         0       104        72       22         0  [.] rbipc_io_handle_write_back  bench_competitors  rbipc_io_handle_write_backoff+  
+           0.00%   11.76%    0.00%    0.00%    0.00%                 0x0   N/A       0      0x55ccb03371aa         0       134        83       15         0  [.] rbipc_reserve_write_timeou  bench_competitors  rbipc_reserve_write_timeout+18  
+           0.00%    5.88%    0.00%    0.00%    0.00%                 0x0   N/A       0      0x55ccb0337035         0       115        36        2         0  [.] rbipc_io_handle_write_back  bench_competitors  rbipc_io_handle_write_backoff+  
+           0.00%    5.88%  100.00%    0.00%    0.00%                 0x0   N/A       0      0x55ccb03371cf         0       195       100      109         0  [.] rbipc_reserve_write_timeou  bench_competitors  rbipc_reserve_write_timeout+22  
+
+  ----------------------------------------------------------------------
+     25        0       16       17       48        0      0x7f8e67c9c000
+  ----------------------------------------------------------------------
+           0.00%   50.00%    0.00%    0.00%    0.00%                 0x0   N/A       0      0x55ccb032e6a2         0       103        78       28         0  [.] disruptor_publish_mp  bench_competitors  disruptor_publish_mp+130  
+           0.00%   31.25%    0.00%    0.00%    0.00%                 0x0   N/A       0      0x55ccb032e6b7         0       102        47        6         0  [.] disruptor_publish_mp  bench_competitors  disruptor_publish_mp+151  
+           0.00%   18.75%    0.00%    0.00%    0.00%                 0x0   N/A       0      0x55ccb032e74a         0       104        65       19         0  [.] disruptor_consume_wp  bench_competitors  disruptor_consume_wp+90   
+           0.00%    0.00%  100.00%  100.00%    0.00%                 0x0   N/A       0      0x55ccb032e6d0         0         0         0       65         0  [.] disruptor_publish_mp  bench_competitors  disruptor_publish_mp+176  
+
+  ----------------------------------------------------------------------
+     26        0       16       18        0        0      0x7f8e679bf180
+  ----------------------------------------------------------------------
+           0.00%   50.00%    0.00%    0.00%    0.00%                 0x0   N/A       0      0x55ccb032bb8a         0       107        83       12         0  [.] rbipc_read_release          bench_competitors  rbipc_read_release+154          
+           0.00%   50.00%    0.00%    0.00%    0.00%                 0x0   N/A       0      0x55ccb033c66d         0       100        88        9         0  [.] rbipc_sync_wake_one         bench_competitors  rbipc_sync_wake_one+45          
+           0.00%    0.00%   50.00%    0.00%    0.00%                 0x0   N/A       0      0x55ccb033b3e9         0         0        55       10         0  [.] rbipc_sync_register_waiter  bench_competitors  rbipc_sync_register_waiter+9    
+           0.00%    0.00%   22.22%    0.00%    0.00%                 0x0   N/A       0      0x55ccb033b445         0         0       104       10         0  [.] rbipc_sync_deregister_wait  bench_competitors  rbipc_sync_deregister_waiter+5  
+           0.00%    0.00%   27.78%    0.00%    0.00%                 0x0   N/A       0      0x55ccb033b684         0         0        93        6         0  [.] rbipc_sync_wait_slot_regis  bench_competitors  rbipc_sync_wait_slot_registere  
+
+  ----------------------------------------------------------------------
+     27        0       14        3        0        0      0x7f8e6787e080
+  ----------------------------------------------------------------------
+           0.00%  100.00%    0.00%    0.00%    0.00%                 0x0   N/A       0      0x55ccb03371b9         0       104         0       14         0  [.] rbipc_reserve_write_timeou  bench_competitors  rbipc_reserve_write_timeout+20  
+           0.00%    0.00%  100.00%    0.00%    0.00%                 0x0   N/A       0      0x55ccb03377a6         0         0        75       40         0  [.] rbipc_read_acquire_timeout  bench_competitors  rbipc_read_acquire_timeout+566  
+
+  ----------------------------------------------------------------------
+     28        0       12        5        0        0      0x7f8e6793f080
+  ----------------------------------------------------------------------
+           0.00%  100.00%    0.00%    0.00%    0.00%                 0x0   N/A       0      0x55ccb03371b9         0       100         0       12         0  [.] rbipc_reserve_write_timeou  bench_competitors  rbipc_reserve_write_timeout+20  
+           0.00%    0.00%  100.00%    0.00%    0.00%                 0x0   N/A       0      0x55ccb03377a6         0         0        74       43         0  [.] rbipc_read_acquire_timeout  bench_competitors  rbipc_read_acquire_timeout+566  
+
+  ----------------------------------------------------------------------
+     29        0       12        0        0        0      0x7f8e679bf140
+  ----------------------------------------------------------------------
+           0.00%  100.00%    0.00%    0.00%    0.00%                 0x0   N/A       0      0x55ccb033ae8f         0        97        73       13         0  [.] rbipc_futex2_wait_slot_or_  bench_competitors  rbipc_futex2_wait_slot_or_prox  
+
+  ----------------------------------------------------------------------
+     30        0       11        0        0        0      0x7f8e679bf140
+  ----------------------------------------------------------------------
+           0.00%  100.00%    0.00%    0.00%    0.00%                 0x0   N/A       0      0x55ccb033ae8f         0        96         0       11         0  [.] rbipc_futex2_wait_slot_or_  bench_competitors  rbipc_futex2_wait_slot_or_prox  
+
+  ----------------------------------------------------------------------
+     31        0        9       64        0        0      0x7f8e679bf040
+  ----------------------------------------------------------------------
+           0.00%   77.78%    0.00%    0.00%    0.00%                 0x0   N/A       0      0x55ccb0336f85         0       106        57       10         0  [.] rbipc_io_handle_write_back  bench_competitors  rbipc_io_handle_write_backoff+  
+           0.00%   11.11%    0.00%    0.00%    0.00%                 0x0   N/A       0      0x55ccb03371aa         0        99        88       14         0  [.] rbipc_reserve_write_timeou  bench_competitors  rbipc_reserve_write_timeout+18  
+           0.00%   11.11%  100.00%    0.00%    0.00%                 0x0   N/A       0      0x55ccb03371cf         0       291        96      133         0  [.] rbipc_reserve_write_timeou  bench_competitors  rbipc_reserve_write_timeout+22  
+
+  ----------------------------------------------------------------------
+     32        0        8     1300        1        0      0x7f8e67c9c000
+  ----------------------------------------------------------------------
+           0.00%   75.00%    0.00%    0.00%    0.00%                 0x0   N/A       0      0x55ccb032eb4c         0        79        81       13         0  [.] rte_mp_enqueue  bench_competitors  rte_mp_enqueue+12  
+           0.00%   25.00%  100.00%  100.00%    0.00%                 0x0   N/A       0      0x55ccb032eb75         0       256       134     1368         0  [.] rte_mp_enqueue  bench_competitors  rte_mp_enqueue+53  
+
+  ----------------------------------------------------------------------
+     33        0        8        0        0        0      0x7f8e67c9c000
+  ----------------------------------------------------------------------
+           0.00%  100.00%    0.00%    0.00%    0.00%                 0x0   N/A       0      0x55ccb032e74a         0       104        72        9         0  [.] disruptor_consume_wp  bench_competitors  disruptor_consume_wp+90  
+
+  ----------------------------------------------------------------------
+     34        0        8        2        0        0      0x7f8e67c9c080
+  ----------------------------------------------------------------------
+           0.00%  100.00%    0.00%    0.00%    0.00%                 0x0   N/A       0      0x55ccb032e71a         0       107        75       11         0  [.] disruptor_consume_wp  bench_competitors  disruptor_consume_wp+42  
+           0.00%    0.00%  100.00%    0.00%    0.00%                 0x0   N/A       0      0x55ccb032e732         0         0       183       13         0  [.] disruptor_consume_wp  bench_competitors  disruptor_consume_wp+66  
+
+  ----------------------------------------------------------------------
+     35        0        8        0        3        0      0x7f8e67c9c0c0
+  ----------------------------------------------------------------------
+           0.00%   50.00%    0.00%    0.00%    0.00%                 0x0   N/A       0      0x55ccb032e792         0       100        95        8         0  [.] disruptor_consume_wp  bench_competitors  disruptor_consume_wp+162  
+           0.00%   25.00%    0.00%    0.00%    0.00%                 0x0   N/A       0      0x55ccb032e650         0       100        38        4         0  [.] disruptor_publish_mp  bench_competitors  disruptor_publish_mp+48   
+           0.00%    0.00%    0.00%  100.00%    0.00%                 0x0   N/A       0      0x55ccb032e7c5         0         0         0        3         0  [.] disruptor_consume_wp  bench_competitors  disruptor_consume_wp+213  
+           0.00%   12.50%    0.00%    0.00%    0.00%                 0xc   N/A       0      0x55ccb032e68e         0       112        68        3         0  [.] disruptor_publish_mp  bench_competitors  disruptor_publish_mp+110  
+           0.00%   12.50%    0.00%    0.00%    0.00%                 0xc   N/A       0      0x55ccb032e772         0        93        71        5         0  [.] disruptor_consume_wp  bench_competitors  disruptor_consume_wp+130  
+
+  ----------------------------------------------------------------------
+     36        0        7        0        0        0      0x7f8e67c5c0c0
+  ----------------------------------------------------------------------
+           0.00%   28.57%    0.00%    0.00%    0.00%                 0x0   N/A       0      0x55ccb032eb4f         0        96        68        3         0  [.] rte_mp_enqueue  bench_competitors  rte_mp_enqueue+15  
+           0.00%   57.14%    0.00%    0.00%    0.00%                 0x4   N/A       0      0x55ccb032eb87         0        98        65        9         0  [.] rte_mp_enqueue  bench_competitors  rte_mp_enqueue+71  
+           0.00%   14.29%    0.00%    0.00%    0.00%                 0x4   N/A       0      0x55ccb032eb55         0        99        94        5         0  [.] rte_mp_enqueue  bench_competitors  rte_mp_enqueue+21  
+
+  ----------------------------------------------------------------------
+     37        0        7        0        0        0      0x7f8e67ca40c0
+  ----------------------------------------------------------------------
+           0.00%  100.00%    0.00%    0.00%    0.00%                 0x0   N/A       0      0x55ccb032e5c0         0       110       105        8         0  [.] disruptor_publish_sp  bench_competitors  disruptor_publish_sp+32  
+
+  ----------------------------------------------------------------------
+     38        0        7        0        0        0      0x7f8e67ca3000
+  ----------------------------------------------------------------------
+           0.00%  100.00%    0.00%    0.00%    0.00%                 0x0   N/A       0      0x55ccb032e74a         0        95         0        7         0  [.] disruptor_consume_wp  bench_competitors  disruptor_consume_wp+90  
+
+  ----------------------------------------------------------------------
+     39        0        7        2        0        0      0x7f8e679bf080
+  ----------------------------------------------------------------------
+           0.00%   57.14%    0.00%    0.00%    0.00%                 0x0   N/A       0      0x55ccb0337750         0        97        40        6         0  [.] rbipc_read_acquire_timeout  bench_competitors  rbipc_read_acquire_timeout+480  
+           0.00%   42.86%    0.00%    0.00%    0.00%                 0x0   N/A       0      0x55ccb03371b9         0       100        76        6         0  [.] rbipc_reserve_write_timeou  bench_competitors  rbipc_reserve_write_timeout+20  
+           0.00%    0.00%  100.00%    0.00%    0.00%                 0x0   N/A       0      0x55ccb03377a6         0         0       156       12         0  [.] rbipc_read_acquire_timeout  bench_competitors  rbipc_read_acquire_timeout+566  
+
+  ----------------------------------------------------------------------
+     40        0        6     1274        0        0      0x7f8e67c9c080
+  ----------------------------------------------------------------------
+           0.00%   83.33%    0.00%    0.00%    0.00%                 0x0   N/A       0      0x55ccb032e71a         0       162        50       13         0  [.] disruptor_consume_wp  bench_competitors  disruptor_consume_wp+42  
+           0.00%   16.67%  100.00%    0.00%    0.00%                 0x0   N/A       0      0x55ccb032e732         0       547        89     1342         0  [.] disruptor_consume_wp  bench_competitors  disruptor_consume_wp+66  
+
+  ----------------------------------------------------------------------
+     41        0        6        0        0        0      0x7f8e67200080
+  ----------------------------------------------------------------------
+           0.00%  100.00%    0.00%    0.00%    0.00%                 0x0   N/A       0      0x55ccb03371b9         0       117       122        7         0  [.] rbipc_reserve_write_timeou  bench_competitors  rbipc_reserve_write_timeout+20  
+
+  ----------------------------------------------------------------------
+     42        0        6       86        0        0      0x7f8e679bf040
+  ----------------------------------------------------------------------
+           0.00%   66.67%    0.00%    0.00%    0.00%                 0x0   N/A       0      0x55ccb0336f85         0       106        73        5         0  [.] rbipc_io_handle_write_back  bench_competitors  rbipc_io_handle_write_backoff+  
+           0.00%   33.33%    0.00%    0.00%    0.00%                 0x0   N/A       0      0x55ccb03371aa         0       112        81       12         0  [.] rbipc_reserve_write_timeou  bench_competitors  rbipc_reserve_write_timeout+18  
+           0.00%    0.00%  100.00%    0.00%    0.00%                 0x0   N/A       0      0x55ccb03371cf         0         0        99      150         0  [.] rbipc_reserve_write_timeou  bench_competitors  rbipc_reserve_write_timeout+22  
+
+  ----------------------------------------------------------------------
+     43        0        5        0        0        0      0x7f8e67c9c0c0
+  ----------------------------------------------------------------------
+           0.00%   80.00%    0.00%    0.00%    0.00%                 0x0   N/A       0      0x55ccb032e5c0         0       126       125        7         0  [.] disruptor_publish_sp  bench_competitors  disruptor_publish_sp+32   
+           0.00%   20.00%    0.00%    0.00%    0.00%                 0x8   N/A       0      0x55ccb032e5ca         0       124       133        9         0  [.] disruptor_publish_sp  bench_competitors  disruptor_publish_sp+42   
+
+  ----------------------------------------------------------------------
+     44        0        5        0        0        0      0x7f8e67ca3040
+  ----------------------------------------------------------------------
+           0.00%  100.00%    0.00%    0.00%    0.00%                 0x0   N/A       0      0x55ccb032ec16         0       101        80        8         0  [.] rte_mc_dequeue  bench_competitors  rte_mc_dequeue+6  
+
+  ----------------------------------------------------------------------
+     45        0        5        0        0        0      0x7f8e673bc080
+  ----------------------------------------------------------------------
+           0.00%  100.00%    0.00%    0.00%    0.00%                 0x0   N/A       0      0x55ccb03371b9         0       101         0        5         0  [.] rbipc_reserve_write_timeou  bench_competitors  rbipc_reserve_write_timeout+20  
+
+  ----------------------------------------------------------------------
+     46        0        5        0        0        0      0x7f8e67239180
+  ----------------------------------------------------------------------
+           0.00%   60.00%    0.00%    0.00%    0.00%                 0x0   N/A       0      0x55ccb032bb8a         0       130         0        3         0  [.] rbipc_read_release   bench_competitors  rbipc_read_release+154  
+           0.00%   20.00%    0.00%    0.00%    0.00%                 0x0   N/A       0      0x55ccb033c66d         0       103         0        1         0  [.] rbipc_sync_wake_one  bench_competitors  rbipc_sync_wake_one+45  
+           0.00%   20.00%    0.00%    0.00%    0.00%                 0x0   N/A       0      0x55ccb033c67b         0        93         0        1         0  [.] rbipc_sync_wake_one  bench_competitors  rbipc_sync_wake_one+59  
+
+  ----------------------------------------------------------------------
+     47        0        5        3        0        0      0x7f8e679bf180
+  ----------------------------------------------------------------------
+           0.00%   60.00%    0.00%    0.00%    0.00%                 0x0   N/A       0      0x55ccb032bb8a         0       101         0        3         0  [.] rbipc_read_release          bench_competitors  rbipc_read_release+154          
+           0.00%   40.00%    0.00%    0.00%    0.00%                 0x0   N/A       0      0x55ccb033c66d         0       100        80        3         0  [.] rbipc_sync_wake_one         bench_competitors  rbipc_sync_wake_one+45          
+           0.00%    0.00%   66.67%    0.00%    0.00%                 0x0   N/A       0      0x55ccb033b3e9         0         0        49        7         0  [.] rbipc_sync_register_waiter  bench_competitors  rbipc_sync_register_waiter+9    
+           0.00%    0.00%   33.33%    0.00%    0.00%                 0x0   N/A       0      0x55ccb033b445         0         0       105        2         0  [.] rbipc_sync_deregister_wait  bench_competitors  rbipc_sync_deregister_waiter+5  
+
+  ----------------------------------------------------------------------
+     48        0        4        0        0        0      0x7f8e67c9c0c0
+  ----------------------------------------------------------------------
+           0.00%  100.00%    0.00%    0.00%    0.00%                 0x0   N/A       0      0x55ccb032e5c0         0       159         0        4         0  [.] disruptor_publish_sp  bench_competitors  disruptor_publish_sp+32  
+
+  ----------------------------------------------------------------------
+     49        0        4        0        0        0      0x7f8e67c9c0c0
+  ----------------------------------------------------------------------
+           0.00%  100.00%    0.00%    0.00%    0.00%                 0x0   N/A       0      0x55ccb032eb4f         0       156        86        5         0  [.] rte_mp_enqueue  bench_competitors  rte_mp_enqueue+15  
+
+  ----------------------------------------------------------------------
+     50        0        4        0        0        0      0x7f8e67c9c0c0
+  ----------------------------------------------------------------------
+           0.00%   75.00%    0.00%    0.00%    0.00%                 0x0   N/A       0      0x55ccb032e5c0         0        91        84        4         0  [.] disruptor_publish_sp  bench_competitors  disruptor_publish_sp+32  
+           0.00%   25.00%    0.00%    0.00%    0.00%                 0x8   N/A       0      0x55ccb032e5ca         0        95        65        3         0  [.] disruptor_publish_sp  bench_competitors  disruptor_publish_sp+42  
+
+  ----------------------------------------------------------------------
+     51        0        4        0        0        0      0x7f8e67c9c000
+  ----------------------------------------------------------------------
+           0.00%  100.00%    0.00%    0.00%    0.00%                 0x0   N/A       0      0x55ccb032e74a         0        94        67        7         0  [.] disruptor_consume_wp  bench_competitors  disruptor_consume_wp+90  
+
+  ----------------------------------------------------------------------
+     52        0        4        0        0        0      0x7f8e67c9c000
+  ----------------------------------------------------------------------
+           0.00%  100.00%    0.00%    0.00%    0.00%                 0x0   N/A       0      0x55ccb032e74a         0       131         0        4         0  [.] disruptor_consume_wp  bench_competitors  disruptor_consume_wp+90  
+
+  ----------------------------------------------------------------------
+     53        0        4        0        0        0      0x7f8e67c5c000
+  ----------------------------------------------------------------------
+           0.00%  100.00%    0.00%    0.00%    0.00%                 0x0   N/A       0      0x55ccb032e74a         0       107        65        5         0  [.] disruptor_consume_wp  bench_competitors  disruptor_consume_wp+90  
+
+  ----------------------------------------------------------------------
+     54        0        4        0        0        0      0x7f8e67ca40c0
+  ----------------------------------------------------------------------
+           0.00%  100.00%    0.00%    0.00%    0.00%                 0x0   N/A       0      0x55ccb032eb4f         0        94         0        4         0  [.] rte_mp_enqueue  bench_competitors  rte_mp_enqueue+15  
+
+  ----------------------------------------------------------------------
+     55        0        4        0        0        0      0x7f8e67c9c0c0
+  ----------------------------------------------------------------------
+           0.00%   25.00%    0.00%    0.00%    0.00%                 0x0   N/A       0      0x55ccb032eb4f         0       117       115        2         0  [.] rte_mp_enqueue  bench_competitors  rte_mp_enqueue+15  
+           0.00%   75.00%    0.00%    0.00%    0.00%                 0x4   N/A       0      0x55ccb032eb87         0        93        42        4         0  [.] rte_mp_enqueue  bench_competitors  rte_mp_enqueue+71  
+
+  ----------------------------------------------------------------------
+     56        0        4        0        0        0      0x7f8e679bf080
+  ----------------------------------------------------------------------
+           0.00%  100.00%    0.00%    0.00%    0.00%                 0x0   N/A       0      0x55ccb03371b9         0       107         0        4         0  [.] rbipc_reserve_write_timeou  bench_competitors  rbipc_reserve_write_timeout+20  
+
+  ----------------------------------------------------------------------
+     57        0        4        0        0        0      0x7f8e66e00080
+  ----------------------------------------------------------------------
+           0.00%  100.00%    0.00%    0.00%    0.00%                 0x0   N/A       0      0x55ccb03371b9         0       112       124        5         0  [.] rbipc_reserve_write_timeou  bench_competitors  rbipc_reserve_write_timeout+20  
+
+  ----------------------------------------------------------------------
+     58        0        4        1        0        0      0x7f8e679bf180
+  ----------------------------------------------------------------------
+           0.00%   75.00%    0.00%    0.00%    0.00%                 0x0   N/A       0      0x55ccb032bb8a         0       103         0        3         0  [.] rbipc_read_release          bench_competitors  rbipc_read_release+154        
+           0.00%   25.00%    0.00%    0.00%    0.00%                 0x0   N/A       0      0x55ccb033c67b         0       110         0        1         0  [.] rbipc_sync_wake_one         bench_competitors  rbipc_sync_wake_one+59        
+           0.00%    0.00%  100.00%    0.00%    0.00%                 0x0   N/A       0      0x55ccb033b3e9         0         0         0        1         0  [.] rbipc_sync_register_waiter  bench_competitors  rbipc_sync_register_waiter+9  
+
+  ----------------------------------------------------------------------
+     59        0        3        0        0        0      0x7f8e67c9c000
+  ----------------------------------------------------------------------
+           0.00%  100.00%    0.00%    0.00%    0.00%                 0x0   N/A       0      0x55ccb032e74a         0        95         0        3         0  [.] disruptor_consume_wp  bench_competitors  disruptor_consume_wp+90  
+
+  ----------------------------------------------------------------------
+     60        0        3        0        0        0      0x7f8e67c9c0c0
+  ----------------------------------------------------------------------
+           0.00%  100.00%    0.00%    0.00%    0.00%                 0x0   N/A       0      0x55ccb032e5c0         0        97        72        6         0  [.] disruptor_publish_sp  bench_competitors  disruptor_publish_sp+32  
+
+  ----------------------------------------------------------------------
+     61        0        3        0        0        0      0x7f8e67c5c0c0
+  ----------------------------------------------------------------------
+           0.00%  100.00%    0.00%    0.00%    0.00%                 0x0   N/A       0      0x55ccb032e5c0         0       100        64        9         0  [.] disruptor_publish_sp  bench_competitors  disruptor_publish_sp+32  
+
+  ----------------------------------------------------------------------
+     62        0        3        0        0        0      0x7f8e67ca4040
+  ----------------------------------------------------------------------
+           0.00%  100.00%    0.00%    0.00%    0.00%                 0x0   N/A       0      0x55ccb032ec16         0       109        70       10         0  [.] rte_mc_dequeue  bench_competitors  rte_mc_dequeue+6  
+
+  ----------------------------------------------------------------------
+     63        0        3        0        0        0      0x7f8e67ca4000
+  ----------------------------------------------------------------------
+           0.00%  100.00%    0.00%    0.00%    0.00%                 0x0   N/A       0      0x55ccb032e74a         0       132        82        6         0  [.] disruptor_consume_wp  bench_competitors  disruptor_consume_wp+90  
+
+  ----------------------------------------------------------------------
+     64        0        3        0        0        0      0x7f8e67c9c0c0
+  ----------------------------------------------------------------------
+           0.00%  100.00%    0.00%    0.00%    0.00%                 0x0   N/A       0      0x55ccb032e5c0         0       110       122        4         0  [.] disruptor_publish_sp  bench_competitors  disruptor_publish_sp+32  
+
+  ----------------------------------------------------------------------
+     65        0        3        0        0        0      0x7f8e67c9c000
+  ----------------------------------------------------------------------
+           0.00%  100.00%    0.00%    0.00%    0.00%                 0x0   N/A       0      0x55ccb032e74a         0        94         0        3         0  [.] disruptor_consume_wp  bench_competitors  disruptor_consume_wp+90  
+
+  ----------------------------------------------------------------------
+     66        0        3        0        0        0      0x7f8e67c9c0c0
+  ----------------------------------------------------------------------
+           0.00%   66.67%    0.00%    0.00%    0.00%                 0x0   N/A       0      0x55ccb032e5c0         0        97        70        4         0  [.] disruptor_publish_sp  bench_competitors  disruptor_publish_sp+32  
+           0.00%   33.33%    0.00%    0.00%    0.00%                 0x8   N/A       0      0x55ccb032e5ca         0       126         0        1         0  [.] disruptor_publish_sp  bench_competitors  disruptor_publish_sp+42  
+
+  ----------------------------------------------------------------------
+     67        0        3      663        0        0      0x7f8e67c9c080
+  ----------------------------------------------------------------------
+           0.00%  100.00%    0.00%    0.00%    0.00%                 0x0   N/A       0      0x55ccb032ec10         0       102        63       43         0  [.] rte_mc_dequeue  bench_competitors  rte_mc_dequeue+0   
+           0.00%    0.00%  100.00%    0.00%    0.00%                 0x0   N/A       0      0x55ccb032ec34         0         0        86      747         0  [.] rte_mc_dequeue  bench_competitors  rte_mc_dequeue+36  
+
+  ----------------------------------------------------------------------
+     68        0        3        0        0        0      0x7f8e679bf140
+  ----------------------------------------------------------------------
+           0.00%  100.00%    0.00%    0.00%    0.00%                 0x0   N/A       0      0x55ccb033ae8f         0        96         0        3         0  [.] rbipc_futex2_wait_slot_or_  bench_competitors  rbipc_futex2_wait_slot_or_prox  
+
+  ----------------------------------------------------------------------
+     69        0        3        1        0        0      0x7f8e66a00080
+  ----------------------------------------------------------------------
+           0.00%  100.00%    0.00%    0.00%    0.00%                 0x0   N/A       0      0x55ccb03371b9         0       107        78        4         0  [.] rbipc_reserve_write_timeou  bench_competitors  rbipc_reserve_write_timeout+20  
+           0.00%    0.00%  100.00%    0.00%    0.00%                 0x0   N/A       0      0x55ccb03377a6         0         0        85        4         0  [.] rbipc_read_acquire_timeout  bench_competitors  rbipc_read_acquire_timeout+566  
+
+  ----------------------------------------------------------------------
+     70        0        3        0        0        0      0x7f8e679bf080
+  ----------------------------------------------------------------------
+           0.00%  100.00%    0.00%    0.00%    0.00%                 0x0   N/A       0      0x55ccb03371b9         0       107         0        3         0  [.] rbipc_reserve_write_timeou  bench_competitors  rbipc_reserve_write_timeout+20  
