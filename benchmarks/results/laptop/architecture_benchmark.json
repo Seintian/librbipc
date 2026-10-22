@@ -1,5 +1,5 @@
 {
-  "timestamp": 1792503789,
+  "timestamp": 1792658810,
   "hardware": {
     "profile": "laptop",
     "cpu": "Intel(R) Core(TM) i5-6300U CPU @ 2.40GHz",
@@ -12,58 +12,58 @@
     {
       "mode": "Tier 1 Zero-Trust (Default / Robust)",
       "flags": 0,
-      "min_ns": 177,
-      "p25_ns": 225,
-      "p50_ns": 235,
-      "p75_ns": 246,
-      "p90_ns": 263,
-      "p99_ns": 379,
-      "p99_9_ns": 4095,
-      "max_ns": 626575,
-      "mean_ns": 305.86,
+      "min_ns": 173,
+      "p25_ns": 224,
+      "p50_ns": 237,
+      "p75_ns": 259,
+      "p90_ns": 282,
+      "p99_ns": 403,
+      "p99_9_ns": 13792,
+      "max_ns": 830272,
+      "mean_ns": 432.28,
       "reduction_pct": 0.00
     },
     {
       "mode": "Tier 2 Trusted Mode (Pure Vyukov)",
       "flags": 64,
-      "min_ns": 185,
-      "p25_ns": 218,
-      "p50_ns": 227,
+      "min_ns": 183,
+      "p25_ns": 222,
+      "p50_ns": 230,
       "p75_ns": 239,
-      "p90_ns": 260,
-      "p99_ns": 341,
-      "p99_9_ns": 3926,
-      "max_ns": 435477,
-      "mean_ns": 260.85,
-      "reduction_pct": 3.40
+      "p90_ns": 264,
+      "p99_ns": 369,
+      "p99_9_ns": 6716,
+      "max_ns": 1042926,
+      "mean_ns": 354.79,
+      "reduction_pct": 2.95
     },
     {
       "mode": "Tier 3 Packed Descriptor Mode",
       "flags": 128,
-      "min_ns": 182,
-      "p25_ns": 230,
-      "p50_ns": 240,
-      "p75_ns": 252,
-      "p90_ns": 280,
-      "p99_ns": 378,
-      "p99_9_ns": 7833,
-      "max_ns": 595174,
-      "mean_ns": 303.20,
-      "reduction_pct": -2.13
+      "min_ns": 180,
+      "p25_ns": 231,
+      "p50_ns": 241,
+      "p75_ns": 255,
+      "p90_ns": 283,
+      "p99_ns": 384,
+      "p99_9_ns": 8305,
+      "max_ns": 648914,
+      "mean_ns": 368.39,
+      "reduction_pct": -1.69
     },
     {
       "mode": "Combined Tier 2+3 (Trusted & Packed)",
       "flags": 192,
       "min_ns": 180,
-      "p25_ns": 218,
-      "p50_ns": 225,
-      "p75_ns": 233,
-      "p90_ns": 257,
-      "p99_ns": 281,
-      "p99_9_ns": 3659,
-      "max_ns": 889152,
-      "mean_ns": 296.95,
-      "reduction_pct": 4.26
+      "p25_ns": 219,
+      "p50_ns": 229,
+      "p75_ns": 239,
+      "p90_ns": 262,
+      "p99_ns": 376,
+      "p99_9_ns": 7342,
+      "max_ns": 502534,
+      "mean_ns": 324.90,
+      "reduction_pct": 3.38
     }
   ],
   "module2_streaming_throughput": [
@@ -71,280 +71,280 @@
       "mode": "Tier 1 Zero-Trust",
       "flags": 0,
       "pinned": false,
-      "msgs_per_sec": 9947476.82,
-      "mb_per_sec": 607.15,
-      "avg_latency_ns": 100.53
+      "msgs_per_sec": 14606270.81,
+      "mb_per_sec": 891.50,
+      "avg_latency_ns": 68.46
     },
     {
       "mode": "Tier 1 Zero-Trust",
       "flags": 0,
       "pinned": true,
-      "msgs_per_sec": 10653214.07,
-      "mb_per_sec": 650.22,
-      "avg_latency_ns": 93.87
+      "msgs_per_sec": 6950495.00,
+      "mb_per_sec": 424.22,
+      "avg_latency_ns": 143.87
     },
     {
       "mode": "Tier 2 Trusted",
       "flags": 64,
       "pinned": false,
-      "msgs_per_sec": 5664803.81,
-      "mb_per_sec": 345.75,
-      "avg_latency_ns": 176.53
+      "msgs_per_sec": 9954116.50,
+      "mb_per_sec": 607.55,
+      "avg_latency_ns": 100.46
     },
     {
       "mode": "Tier 2 Trusted",
       "flags": 64,
       "pinned": true,
-      "msgs_per_sec": 10178388.99,
-      "mb_per_sec": 621.24,
-      "avg_latency_ns": 98.25
+      "msgs_per_sec": 7578697.19,
+      "mb_per_sec": 462.57,
+      "avg_latency_ns": 131.95
     },
     {
       "mode": "Tier 3 Packed",
       "flags": 128,
       "pinned": false,
-      "msgs_per_sec": 9638358.66,
-      "mb_per_sec": 588.28,
-      "avg_latency_ns": 103.75
+      "msgs_per_sec": 5629197.66,
+      "mb_per_sec": 343.58,
+      "avg_latency_ns": 177.65
     },
     {
       "mode": "Tier 3 Packed",
       "flags": 128,
       "pinned": true,
-      "msgs_per_sec": 8884368.92,
-      "mb_per_sec": 542.26,
-      "avg_latency_ns": 112.56
+      "msgs_per_sec": 6903213.09,
+      "mb_per_sec": 421.34,
+      "avg_latency_ns": 144.86
     },
     {
       "mode": "Tier 2+3 Combined",
       "flags": 192,
       "pinned": false,
-      "msgs_per_sec": 9112940.87,
-      "mb_per_sec": 556.21,
-      "avg_latency_ns": 109.73
+      "msgs_per_sec": 7021788.22,
+      "mb_per_sec": 428.58,
+      "avg_latency_ns": 142.41
     },
     {
       "mode": "Tier 2+3 Combined",
       "flags": 192,
       "pinned": true,
-      "msgs_per_sec": 11368053.11,
-      "mb_per_sec": 693.85,
-      "avg_latency_ns": 87.97
+      "msgs_per_sec": 6058583.41,
+      "mb_per_sec": 369.79,
+      "avg_latency_ns": 165.06
     }
   ],
   "module3_batch_scaling": [
     {
       "batch_size": 1,
-      "tier1_msgs_sec": 10990553.77,
-      "tier1_mb_sec": 670.81,
-      "tier1_latency_ns": 90.99,
+      "tier1_msgs_sec": 6387977.93,
+      "tier1_mb_sec": 389.89,
+      "tier1_latency_ns": 156.54,
       "tier1_speedup_vs_b1": 1.00,
-      "tier23_msgs_sec": 10209075.12,
-      "tier23_mb_sec": 623.11,
-      "tier23_latency_ns": 97.95,
+      "tier23_msgs_sec": 8713124.19,
+      "tier23_mb_sec": 531.81,
+      "tier23_latency_ns": 114.77,
       "tier23_speedup_vs_b1": 1.00
     },
     {
       "batch_size": 4,
-      "tier1_msgs_sec": 17258338.90,
-      "tier1_mb_sec": 1053.37,
-      "tier1_latency_ns": 57.94,
-      "tier1_speedup_vs_b1": 1.57,
-      "tier23_msgs_sec": 24777302.84,
-      "tier23_mb_sec": 1512.29,
-      "tier23_latency_ns": 40.36,
-      "tier23_speedup_vs_b1": 2.43
+      "tier1_msgs_sec": 18649365.92,
+      "tier1_mb_sec": 1138.27,
+      "tier1_latency_ns": 53.62,
+      "tier1_speedup_vs_b1": 2.92,
+      "tier23_msgs_sec": 15664999.60,
+      "tier23_mb_sec": 956.12,
+      "tier23_latency_ns": 63.84,
+      "tier23_speedup_vs_b1": 1.80
     },
     {
       "batch_size": 16,
-      "tier1_msgs_sec": 22685748.53,
-      "tier1_mb_sec": 1384.63,
-      "tier1_latency_ns": 44.08,
-      "tier1_speedup_vs_b1": 2.06,
-      "tier23_msgs_sec": 28426915.88,
-      "tier23_mb_sec": 1735.04,
-      "tier23_latency_ns": 35.18,
-      "tier23_speedup_vs_b1": 2.78
+      "tier1_msgs_sec": 28487742.98,
+      "tier1_mb_sec": 1738.75,
+      "tier1_latency_ns": 35.10,
+      "tier1_speedup_vs_b1": 4.46,
+      "tier23_msgs_sec": 28230813.32,
+      "tier23_mb_sec": 1723.07,
+      "tier23_latency_ns": 35.42,
+      "tier23_speedup_vs_b1": 3.24
     },
     {
       "batch_size": 32,
-      "tier1_msgs_sec": 30377394.16,
-      "tier1_mb_sec": 1854.09,
-      "tier1_latency_ns": 32.92,
-      "tier1_speedup_vs_b1": 2.76,
-      "tier23_msgs_sec": 35339392.81,
-      "tier23_mb_sec": 2156.95,
-      "tier23_latency_ns": 28.30,
-      "tier23_speedup_vs_b1": 3.46
+      "tier1_msgs_sec": 31903322.21,
+      "tier1_mb_sec": 1947.22,
+      "tier1_latency_ns": 31.34,
+      "tier1_speedup_vs_b1": 4.99,
+      "tier23_msgs_sec": 33216883.80,
+      "tier23_mb_sec": 2027.40,
+      "tier23_latency_ns": 30.11,
+      "tier23_speedup_vs_b1": 3.81
     },
     {
       "batch_size": 64,
-      "tier1_msgs_sec": 19274314.35,
-      "tier1_mb_sec": 1176.41,
-      "tier1_latency_ns": 51.88,
-      "tier1_speedup_vs_b1": 1.75,
-      "tier23_msgs_sec": 30046451.81,
-      "tier23_mb_sec": 1833.89,
-      "tier23_latency_ns": 33.28,
-      "tier23_speedup_vs_b1": 2.94
+      "tier1_msgs_sec": 34909202.21,
+      "tier1_mb_sec": 2130.69,
+      "tier1_latency_ns": 28.65,
+      "tier1_speedup_vs_b1": 5.46,
+      "tier23_msgs_sec": 36695833.74,
+      "tier23_mb_sec": 2239.74,
+      "tier23_latency_ns": 27.25,
+      "tier23_speedup_vs_b1": 4.21
     },
     {
       "batch_size": 128,
-      "tier1_msgs_sec": 27364523.31,
-      "tier1_mb_sec": 1670.20,
-      "tier1_latency_ns": 36.54,
-      "tier1_speedup_vs_b1": 2.49,
-      "tier23_msgs_sec": 30014042.37,
-      "tier23_mb_sec": 1831.91,
-      "tier23_latency_ns": 33.32,
-      "tier23_speedup_vs_b1": 2.94
+      "tier1_msgs_sec": 34568282.94,
+      "tier1_mb_sec": 2109.88,
+      "tier1_latency_ns": 28.93,
+      "tier1_speedup_vs_b1": 5.41,
+      "tier23_msgs_sec": 39562126.39,
+      "tier23_mb_sec": 2414.68,
+      "tier23_latency_ns": 25.28,
+      "tier23_speedup_vs_b1": 4.54
     }
   ],
   "module4_shm_lifecycle": {
-    "named": {"ops_sec": 15775.21, "latency_us": 63.39},
-    "anonymous": {"ops_sec": 17529.81, "latency_us": 57.05},
-    "speedup": 1.11
+    "named": {"ops_sec": 16084.29, "latency_us": 62.17},
+    "anonymous": {"ops_sec": 15204.76, "latency_us": 65.77},
+    "speedup": 0.95
   },
   "module5_pubsub_multicast": [
     {
       "mode": "Standard Copy (Std Ring)",
       "fanout": 1,
-      "pub_msgs_sec": 1773234.20,
-      "effective_msgs_sec": 1773234.20,
-      "effective_mb_sec": 108.23
+      "pub_msgs_sec": 3382256.09,
+      "effective_msgs_sec": 3382256.09,
+      "effective_mb_sec": 206.44
     },
     {
       "mode": "Standard Copy (Std Ring)",
       "fanout": 2,
-      "pub_msgs_sec": 416072.86,
-      "effective_msgs_sec": 832145.72,
-      "effective_mb_sec": 50.79
+      "pub_msgs_sec": 883097.08,
+      "effective_msgs_sec": 1766194.15,
+      "effective_mb_sec": 107.80
     },
     {
       "mode": "Standard Copy (Std Ring)",
       "fanout": 4,
-      "pub_msgs_sec": 318083.15,
-      "effective_msgs_sec": 1272332.61,
-      "effective_mb_sec": 77.66
+      "pub_msgs_sec": 292342.31,
+      "effective_msgs_sec": 1169369.24,
+      "effective_mb_sec": 71.37
     },
     {
       "mode": "Standard Copy (Std Ring)",
       "fanout": 8,
-      "pub_msgs_sec": 245277.26,
-      "effective_msgs_sec": 1962218.05,
-      "effective_mb_sec": 119.76
+      "pub_msgs_sec": 261228.78,
+      "effective_msgs_sec": 2089830.22,
+      "effective_mb_sec": 127.55
     },
     {
       "mode": "Standard Copy (Packed Ring)",
       "fanout": 1,
-      "pub_msgs_sec": 3040370.53,
-      "effective_msgs_sec": 3040370.53,
-      "effective_mb_sec": 185.57
+      "pub_msgs_sec": 2269882.39,
+      "effective_msgs_sec": 2269882.39,
+      "effective_mb_sec": 138.54
     },
     {
       "mode": "Standard Copy (Packed Ring)",
       "fanout": 2,
-      "pub_msgs_sec": 1020423.57,
-      "effective_msgs_sec": 2040847.15,
-      "effective_mb_sec": 124.56
+      "pub_msgs_sec": 2810831.44,
+      "effective_msgs_sec": 5621662.88,
+      "effective_mb_sec": 343.12
     },
     {
       "mode": "Standard Copy (Packed Ring)",
       "fanout": 4,
-      "pub_msgs_sec": 280040.77,
-      "effective_msgs_sec": 1120163.07,
-      "effective_mb_sec": 68.37
+      "pub_msgs_sec": 347762.42,
+      "effective_msgs_sec": 1391049.66,
+      "effective_mb_sec": 84.90
     },
     {
       "mode": "Standard Copy (Packed Ring)",
       "fanout": 8,
-      "pub_msgs_sec": 266735.42,
-      "effective_msgs_sec": 2133883.35,
-      "effective_mb_sec": 130.24
+      "pub_msgs_sec": 190794.98,
+      "effective_msgs_sec": 1526359.82,
+      "effective_mb_sec": 93.16
     },
     {
       "mode": "Zero-Copy (Std Ring)",
       "fanout": 1,
-      "pub_msgs_sec": 2773375.51,
-      "effective_msgs_sec": 2773375.51,
-      "effective_mb_sec": 169.27
+      "pub_msgs_sec": 7246048.11,
+      "effective_msgs_sec": 7246048.11,
+      "effective_mb_sec": 442.26
     },
     {
       "mode": "Zero-Copy (Std Ring)",
       "fanout": 2,
-      "pub_msgs_sec": 590174.02,
-      "effective_msgs_sec": 1180348.05,
-      "effective_mb_sec": 72.04
+      "pub_msgs_sec": 687189.85,
+      "effective_msgs_sec": 1374379.70,
+      "effective_mb_sec": 83.89
     },
     {
       "mode": "Zero-Copy (Std Ring)",
       "fanout": 4,
-      "pub_msgs_sec": 291360.25,
-      "effective_msgs_sec": 1165441.01,
-      "effective_mb_sec": 71.13
+      "pub_msgs_sec": 211600.59,
+      "effective_msgs_sec": 846402.36,
+      "effective_mb_sec": 51.66
     },
     {
       "mode": "Zero-Copy (Std Ring)",
       "fanout": 8,
-      "pub_msgs_sec": 259672.30,
-      "effective_msgs_sec": 2077378.42,
-      "effective_mb_sec": 126.79
+      "pub_msgs_sec": 201458.27,
+      "effective_msgs_sec": 1611666.12,
+      "effective_mb_sec": 98.37
     },
     {
       "mode": "Zero-Copy (Packed Ring)",
       "fanout": 1,
-      "pub_msgs_sec": 5073623.86,
-      "effective_msgs_sec": 5073623.86,
-      "effective_mb_sec": 309.67
+      "pub_msgs_sec": 5260692.01,
+      "effective_msgs_sec": 5260692.01,
+      "effective_mb_sec": 321.09
     },
     {
       "mode": "Zero-Copy (Packed Ring)",
       "fanout": 2,
-      "pub_msgs_sec": 889044.24,
-      "effective_msgs_sec": 1778088.48,
-      "effective_mb_sec": 108.53
+      "pub_msgs_sec": 479721.31,
+      "effective_msgs_sec": 959442.62,
+      "effective_mb_sec": 58.56
     },
     {
       "mode": "Zero-Copy (Packed Ring)",
       "fanout": 4,
-      "pub_msgs_sec": 280282.90,
-      "effective_msgs_sec": 1121131.59,
-      "effective_mb_sec": 68.43
+      "pub_msgs_sec": 272313.05,
+      "effective_msgs_sec": 1089252.20,
+      "effective_mb_sec": 66.48
     },
     {
       "mode": "Zero-Copy (Packed Ring)",
       "fanout": 8,
-      "pub_msgs_sec": 253165.59,
-      "effective_msgs_sec": 2025324.68,
-      "effective_mb_sec": 123.62
+      "pub_msgs_sec": 203496.75,
+      "effective_msgs_sec": 1627974.00,
+      "effective_mb_sec": 99.36
     }
   ],
   "module6_simd_scanning": {
     "standard_64bit": [
-      {"engine": "Scalar Baseline", "mslots_sec": 471.72, "speedup": 1.00},
-      {"engine": "SSE4.1 (128-bit)", "mslots_sec": 311.99, "speedup": 0.66},
-      {"engine": "AVX1 Fallback (256-bit)", "mslots_sec": 356.95, "speedup": 0.76},
-      {"engine": "AVX2 Vectorized (256-bit)", "mslots_sec": 410.97, "speedup": 0.87}
+      {"engine": "Scalar Baseline", "mslots_sec": 466.36, "speedup": 1.00},
+      {"engine": "SSE4.1 (128-bit)", "mslots_sec": 215.11, "speedup": 0.46},
+      {"engine": "AVX1 Fallback (256-bit)", "mslots_sec": 216.48, "speedup": 0.46},
+      {"engine": "AVX2 Vectorized (256-bit)", "mslots_sec": 251.90, "speedup": 0.54}
     ],
     "tier3_packed": [
-      {"engine": "Scalar Baseline", "mslots_sec": 451.13, "speedup": 1.00},
-      {"engine": "SSE4.1 (128-bit)", "mslots_sec": 281.52, "speedup": 0.62},
-      {"engine": "AVX1 Fallback (256-bit)", "mslots_sec": 431.21, "speedup": 0.96},
-      {"engine": "AVX2 Vectorized (256-bit)", "mslots_sec": 514.70, "speedup": 1.14}
+      {"engine": "Scalar Baseline", "mslots_sec": 585.39, "speedup": 1.00},
+      {"engine": "SSE4.1 (128-bit)", "mslots_sec": 428.44, "speedup": 0.73},
+      {"engine": "AVX1 Fallback (256-bit)", "mslots_sec": 387.32, "speedup": 0.66},
+      {"engine": "AVX2 Vectorized (256-bit)", "mslots_sec": 385.74, "speedup": 0.66}
     ]
   },
   "module7_primitives": {
     "multi_fd": {
-      "count_1": {"ops_sec": 173172.94, "latency_us": 5.77},
-      "count_2": {"ops_sec": 159118.57, "latency_us": 6.28},
-      "count_4": {"ops_sec": 110769.44, "latency_us": 9.03},
-      "count_4_seq": {"ops_sec": 46876.33, "latency_us": 21.33},
-      "speedup": 2.36
+      "count_1": {"ops_sec": 182300.53, "latency_us": 5.49},
+      "count_2": {"ops_sec": 128906.49, "latency_us": 7.76},
+      "count_4": {"ops_sec": 93212.29, "latency_us": 10.73},
+      "count_4_seq": {"ops_sec": 38631.38, "latency_us": 25.89},
+      "speedup": 2.41
     },
     "futex2": {
-      "memoized": {"ops_sec": 206794352.53, "latency_ns": 4.84},
-      "raw_syscall": {"ops_sec": 661329.70, "latency_ns": 1512.11},
-      "speedup": 312.69
+      "memoized": {"ops_sec": 228329790.42, "latency_ns": 4.38},
+      "raw_syscall": {"ops_sec": 626098.01, "latency_ns": 1597.19},
+      "speedup": 364.69
     },
     "hugetlb_available": false
   },
@@ -354,60 +354,60 @@
       "capacity": 1024,
       "slot_size": 64,
       "buffer_mb": 0.06,
-      "thp_msgs_sec": 11359252.72,
-      "thp_mb_sec": 693.31,
-      "thp_lat_ns": 88.03,
+      "thp_msgs_sec": 12034435.09,
+      "thp_mb_sec": 734.52,
+      "thp_lat_ns": 83.09,
       "thp_pmd_mapped_kb": 0,
-      "std_msgs_sec": 11160030.48,
-      "std_mb_sec": 681.15,
-      "std_lat_ns": 89.61,
-      "speedup_factor": 1.02,
-      "latency_reduction_pct": 1.75
+      "std_msgs_sec": 16140561.04,
+      "std_mb_sec": 985.14,
+      "std_lat_ns": 61.96,
+      "speedup_factor": 0.75,
+      "latency_reduction_pct": 0.00
     },
     {
       "label": "Medium Ring (4 MB)",
       "capacity": 1024,
       "slot_size": 4096,
       "buffer_mb": 4.00,
-      "thp_msgs_sec": 10091290.35,
-      "thp_mb_sec": 615.92,
-      "thp_lat_ns": 99.10,
+      "thp_msgs_sec": 9674964.25,
+      "thp_mb_sec": 590.51,
+      "thp_lat_ns": 103.36,
       "thp_pmd_mapped_kb": 6144,
-      "std_msgs_sec": 9089898.05,
-      "std_mb_sec": 554.80,
-      "std_lat_ns": 110.01,
-      "speedup_factor": 1.11,
-      "latency_reduction_pct": 9.92
+      "std_msgs_sec": 8517963.75,
+      "std_mb_sec": 519.90,
+      "std_lat_ns": 117.40,
+      "speedup_factor": 1.14,
+      "latency_reduction_pct": 11.96
     },
     {
       "label": "Large Ring (16 MB)",
       "capacity": 4096,
       "slot_size": 4096,
       "buffer_mb": 16.00,
-      "thp_msgs_sec": 12974756.06,
-      "thp_mb_sec": 791.92,
-      "thp_lat_ns": 77.07,
+      "thp_msgs_sec": 10243446.78,
+      "thp_mb_sec": 625.21,
+      "thp_lat_ns": 97.62,
       "thp_pmd_mapped_kb": 18432,
-      "std_msgs_sec": 4860023.07,
-      "std_mb_sec": 296.63,
-      "std_lat_ns": 205.76,
-      "speedup_factor": 2.67,
-      "latency_reduction_pct": 62.54
+      "std_msgs_sec": 4267671.06,
+      "std_mb_sec": 260.48,
+      "std_lat_ns": 234.32,
+      "speedup_factor": 2.40,
+      "latency_reduction_pct": 58.34
     },
     {
       "label": "Very Large Ring (32 MB)",
       "capacity": 8192,
       "slot_size": 4096,
       "buffer_mb": 32.00,
-      "thp_msgs_sec": 11554813.38,
-      "thp_mb_sec": 705.25,
-      "thp_lat_ns": 86.54,
+      "thp_msgs_sec": 8968292.15,
+      "thp_mb_sec": 547.38,
+      "thp_lat_ns": 111.50,
       "thp_pmd_mapped_kb": 34816,
-      "std_msgs_sec": 2559492.98,
-      "std_mb_sec": 156.22,
-      "std_lat_ns": 390.70,
-      "speedup_factor": 4.51,
-      "latency_reduction_pct": 77.85
+      "std_msgs_sec": 4909874.11,
+      "std_mb_sec": 299.67,
+      "std_lat_ns": 203.67,
+      "speedup_factor": 1.83,
+      "latency_reduction_pct": 45.25
     }
   ]
 }
