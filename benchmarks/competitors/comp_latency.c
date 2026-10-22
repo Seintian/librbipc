@@ -16,7 +16,7 @@ result_t bench_rbipc_lat(uint64_t iters, uint32_t flags, const char *label) {
     assert(rbipc_create_ex(sb, 256, 72, RBIPC_SHM_NAMED | flags, 0660, &rp2) == RBIPC_OK);
     assert(rbipc_attach(sa, &rc) == RBIPC_OK);
     assert(rbipc_attach(sb, &rc2) == RBIPC_OK);
-    uint32_t wait_pol = (flags & RBIPC_FLAG_TRUSTED) ? RBIPC_WAIT_ADAPTIVE : RBIPC_WAIT_ZERO_SPIN;
+    uint32_t wait_pol = RBIPC_WAIT_ADAPTIVE;
     rbipc_set_wait_policy(rp, wait_pol);
     rbipc_set_wait_policy(rp2, wait_pol);
     rbipc_set_wait_policy(rc, wait_pol);

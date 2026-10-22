@@ -1,25 +1,25 @@
 =================================================
             Trace Event Information              
 =================================================
-  Total records                     :        389
-  Locked Load/Store Operations      :          7
-  Load Operations                   :        178
+  Total records                     :        461
+  Locked Load/Store Operations      :         10
+  Load Operations                   :        184
   Loads - uncacheable               :          0
   Loads - IO                        :          0
   Loads - Miss                      :          0
   Loads - no mapping                :          0
-  Load Fill Buffer Hit              :         55
-  Load L1D hit                      :         77
-  Load L2D hit                      :          6
-  Load LLC hit                      :         39
-  Load Local HITM                   :         32
+  Load Fill Buffer Hit              :         59
+  Load L1D hit                      :         94
+  Load L2D hit                      :          1
+  Load LLC hit                      :         25
+  Load Local HITM                   :         19
   Load Remote HITM                  :          0
   Load Remote HIT                   :          0
-  Load Local DRAM                   :          1
+  Load Local DRAM                   :          5
   Load Remote DRAM                  :          0
   Load MESI State Exclusive         :          0
-  Load MESI State Shared            :          1
-  Load LLC Misses                   :          1
+  Load MESI State Shared            :          5
+  Load LLC Misses                   :          5
   Load access blocked by data       :          0
   Load access blocked by address    :          0
   Load HIT Local Peer               :          0
@@ -28,11 +28,11 @@
   LLC Misses to Remote DRAM         :        0.0%
   LLC Misses to Remote cache (HIT)  :        0.0%
   LLC Misses to Remote cache (HITM) :        0.0%
-  Store Operations                  :        211
+  Store Operations                  :        277
   Store - uncacheable               :          0
   Store - no mapping                :          0
-  Store L1D Hit                     :        193
-  Store L1D Miss                    :         18
+  Store L1D Hit                     :        268
+  Store L1D Miss                    :          9
   Store No available memory level   :          0
   No Page Map Rejects               :          0
   Unable to parse data source       :          0
@@ -40,19 +40,19 @@
 =================================================
     Global Shared Cache Line Event Information   
 =================================================
-  Total Shared Cache Lines          :         32
-  Load HITs on shared lines         :         33
-  Fill Buffer Hits on shared lines  :          1
+  Total Shared Cache Lines          :         18
+  Load HITs on shared lines         :         19
+  Fill Buffer Hits on shared lines  :          0
   L1D hits on shared lines          :          0
   L2D hits on shared lines          :          0
-  LLC hits on shared lines          :         32
+  LLC hits on shared lines          :         19
   Load hits on peer cache or nodes  :          0
   Locked Access on shared lines     :          0
   Blocked Access on shared lines    :          0
-  Store HITs on shared lines        :          1
-  Store L1D hits on shared lines    :          1
+  Store HITs on shared lines        :          2
+  Store L1D hits on shared lines    :          2
   Store No available memory level   :          0
-  Total Merged records              :         33
+  Total Merged records              :         21
 
 =================================================
                  c2c details                     
@@ -70,38 +70,24 @@
 # Index             Address  Node  PA cnt     Hitm    Total  LclHitm  RmtHitm  records    Loads   Stores    L1Hit   L1Miss      N/A       FB       L1       L2    LclHit  LclHitm    RmtHit  RmtHitm       Lcl       Rmt
 # .....  ..................  ....  ......  .......  .......  .......  .......  .......  .......  .......  .......  .......  .......  .......  .......  .......  ........  .......  ........  .......  ........  ........
 #
-      0      0x7fa3aa32d180   N/A       0    3.12%        1        1        0        1        1        0        0        0        0        0        0        0         0        1         0        0         0         0
-      1      0x7fa3aa32e080   N/A       0    3.12%        1        1        0        1        1        0        0        0        0        0        0        0         0        1         0        0         0         0
-      2      0x7fa3aa32e980   N/A       0    3.12%        1        1        0        1        1        0        0        0        0        0        0        0         0        1         0        0         0         0
-      3      0x7fa3aa32eb00   N/A       0    3.12%        1        1        0        1        1        0        0        0        0        0        0        0         0        1         0        0         0         0
-      4      0x7fa3aa330080   N/A       0    3.12%        1        1        0        1        1        0        0        0        0        0        0        0         0        1         0        0         0         0
-      5      0x7fa3aa331380   N/A       0    3.12%        1        1        0        1        1        0        0        0        0        0        0        0         0        1         0        0         0         0
-      6      0x7fa3aa332000   N/A       0    3.12%        1        1        0        1        1        0        0        0        0        0        0        0         0        1         0        0         0         0
-      7      0x7fa3aa332380   N/A       0    3.12%        1        1        0        1        1        0        0        0        0        0        0        0         0        1         0        0         0         0
-      8      0x7fa3aa2d2000   N/A       0    3.12%        1        1        0        1        1        0        0        0        0        0        0        0         0        1         0        0         0         0
-      9      0x7fa3aa333200   N/A       0    3.12%        1        1        0        1        1        0        0        0        0        0        0        0         0        1         0        0         0         0
-     10      0x7fa3aa2d3200   N/A       0    3.12%        1        1        0        1        1        0        0        0        0        0        0        0         0        1         0        0         0         0
-     11      0x7fa3aa334800   N/A       0    3.12%        1        1        0        1        1        0        0        0        0        0        0        0         0        1         0        0         0         0
-     12      0x7fa3aa335f80   N/A       0    3.12%        1        1        0        1        1        0        0        0        0        0        0        0         0        1         0        0         0         0
-     13      0x7fa3aa337c80   N/A       0    3.12%        1        1        0        1        1        0        0        0        0        0        0        0         0        1         0        0         0         0
-     14      0x7fa3aa338080   N/A       0    3.12%        1        1        0        1        1        0        0        0        0        0        0        0         0        1         0        0         0         0
-     15      0x7fa3aa2d9b40   N/A       0    3.12%        1        1        0        2        1        1        1        0        0        0        0        0         0        1         0        0         0         0
-     16      0x7fa3aa33b100   N/A       0    3.12%        1        1        0        1        1        0        0        0        0        0        0        0         0        1         0        0         0         0
-     17      0x7fa3aa33b380   N/A       0    3.12%        1        1        0        1        1        0        0        0        0        0        0        0         0        1         0        0         0         0
-     18      0x7fa3aa33c1c0   N/A       0    3.12%        1        1        0        1        1        0        0        0        0        0        0        0         0        1         0        0         0         0
-     19      0x7fa3aa33cc80   N/A       0    3.12%        1        1        0        1        1        0        0        0        0        0        0        0         0        1         0        0         0         0
-     20      0x7fa3aa33e000   N/A       0    3.12%        1        1        0        1        1        0        0        0        0        0        0        0         0        1         0        0         0         0
-     21      0x7fa3aa340180   N/A       0    3.12%        1        1        0        1        1        0        0        0        0        0        0        0         0        1         0        0         0         0
-     22      0x7fa3aa340e40   N/A       0    3.12%        1        1        0        1        1        0        0        0        0        0        0        0         0        1         0        0         0         0
-     23      0x7fa3aa341640   N/A       0    3.12%        1        1        0        1        1        0        0        0        0        0        0        0         0        1         0        0         0         0
-     24      0x7fa3aa342f00   N/A       0    3.12%        1        1        0        1        1        0        0        0        0        0        0        0         0        1         0        0         0         0
-     25      0x7fa3aa345b00   N/A       0    3.12%        1        1        0        2        2        0        0        0        0        1        0        0         0        1         0        0         0         0
-     26      0x7fa3aa348000   N/A       0    3.12%        1        1        0        1        1        0        0        0        0        0        0        0         0        1         0        0         0         0
-     27      0x7fa3aa2e7900   N/A       0    3.12%        1        1        0        1        1        0        0        0        0        0        0        0         0        1         0        0         0         0
-     28      0x7fa3aa348b40   N/A       0    3.12%        1        1        0        1        1        0        0        0        0        0        0        0         0        1         0        0         0         0
-     29      0x7fa3aa349440   N/A       0    3.12%        1        1        0        1        1        0        0        0        0        0        0        0         0        1         0        0         0         0
-     30      0x7fa3aa349600   N/A       0    3.12%        1        1        0        1        1        0        0        0        0        0        0        0         0        1         0        0         0         0
-     31      0x7fa3aa34aa00   N/A       0    3.12%        1        1        0        1        1        0        0        0        0        0        0        0         0        1         0        0         0         0
+      0      0x7efc93096280   N/A       0   10.53%        2        2        0        2        2        0        0        0        0        0        0        0         0        2         0        0         0         0
+      1      0x7efc930ddb00   N/A       0    5.26%        1        1        0        1        1        0        0        0        0        0        0        0         0        1         0        0         0         0
+      2      0x7efc930de5c0   N/A       0    5.26%        1        1        0        1        1        0        0        0        0        0        0        0         0        1         0        0         0         0
+      3      0x7efc9307ebc0   N/A       0    5.26%        1        1        0        1        1        0        0        0        0        0        0        0         0        1         0        0         0         0
+      4      0x7efc93080640   N/A       0    5.26%        1        1        0        2        1        1        1        0        0        0        0        0         0        1         0        0         0         0
+      5      0x7efc930e1b40   N/A       0    5.26%        1        1        0        1        1        0        0        0        0        0        0        0         0        1         0        0         0         0
+      6      0x7efc930811c0   N/A       0    5.26%        1        1        0        1        1        0        0        0        0        0        0        0         0        1         0        0         0         0
+      7      0x7efc930e51c0   N/A       0    5.26%        1        1        0        1        1        0        0        0        0        0        0        0         0        1         0        0         0         0
+      8      0x7efc93084e80   N/A       0    5.26%        1        1        0        1        1        0        0        0        0        0        0        0         0        1         0        0         0         0
+      9      0x7efc9308f280   N/A       0    5.26%        1        1        0        1        1        0        0        0        0        0        0        0         0        1         0        0         0         0
+     10      0x7efc9308f2c0   N/A       0    5.26%        1        1        0        2        1        1        1        0        0        0        0        0         0        1         0        0         0         0
+     11      0x7efc930f0bc0   N/A       0    5.26%        1        1        0        1        1        0        0        0        0        0        0        0         0        1         0        0         0         0
+     12      0x7efc93092280   N/A       0    5.26%        1        1        0        1        1        0        0        0        0        0        0        0         0        1         0        0         0         0
+     13      0x7efc930f4540   N/A       0    5.26%        1        1        0        1        1        0        0        0        0        0        0        0         0        1         0        0         0         0
+     14      0x7efc930956c0   N/A       0    5.26%        1        1        0        1        1        0        0        0        0        0        0        0         0        1         0        0         0         0
+     15      0x7efc930f9280   N/A       0    5.26%        1        1        0        1        1        0        0        0        0        0        0        0         0        1         0        0         0         0
+     16      0x7efc930f9480   N/A       0    5.26%        1        1        0        1        1        0        0        0        0        0        0        0         0        1         0        0         0         0
+     17      0x7efc9309c0c0   N/A       0    5.26%        1        1        0        1        1        0        0        0        0        0        0        0         0        1         0        0         0         0
 
 =================================================
       Shared Cache Line Distribution Pareto      
@@ -112,162 +98,93 @@
 # .....  .......  .......  .......  .......  .......  ..................  ....  ......  ..................  ........  ........  ........  .......  ........  ........................  .......................  ........................  ....
 #
   ----------------------------------------------------------------------
-      0        0        1        0        0        0      0x7fa3aa32d180
+      0        0        2        0        0        0      0x7efc93096280
   ----------------------------------------------------------------------
-           0.00%  100.00%    0.00%    0.00%    0.00%                 0x0   N/A       0      0x560451d17dd5         0       777         0        1         0  [.] rbipc_simd_scan_avx2  bench_librbipc_isolated  rbipc_simd_scan_avx2+277  
+           0.00%  100.00%    0.00%    0.00%    0.00%                 0x0   N/A       0      0x55dd4578ade1         0        98         0        2         0  [.] rbipc_simd_scan_avx2  bench_librbipc_isolated  rbipc_simd_scan_avx2+289  
 
   ----------------------------------------------------------------------
-      1        0        1        0        0        0      0x7fa3aa32e080
+      1        0        1        0        0        0      0x7efc930ddb00
   ----------------------------------------------------------------------
-           0.00%  100.00%    0.00%    0.00%    0.00%                 0x0   N/A       0      0x560451d17dee         0       152         0        1         0  [.] rbipc_simd_scan_avx2  bench_librbipc_isolated  rbipc_simd_scan_avx2+302  
+           0.00%  100.00%    0.00%    0.00%    0.00%                 0x0   N/A       0      0x55dd4578adee         0       288         0        1         0  [.] rbipc_simd_scan_avx2  bench_librbipc_isolated  rbipc_simd_scan_avx2+302  
 
   ----------------------------------------------------------------------
-      2        0        1        0        0        0      0x7fa3aa32e980
+      2        0        1        0        0        0      0x7efc930de5c0
   ----------------------------------------------------------------------
-           0.00%  100.00%    0.00%    0.00%    0.00%                 0x0   N/A       0      0x560451d17dd5         0       161         0        1         0  [.] rbipc_simd_scan_avx2  bench_librbipc_isolated  rbipc_simd_scan_avx2+277  
+           0.00%  100.00%    0.00%    0.00%    0.00%                 0x0   N/A       0      0x55dd4578adee         0       165         0        1         0  [.] rbipc_simd_scan_avx2  bench_librbipc_isolated  rbipc_simd_scan_avx2+302  
 
   ----------------------------------------------------------------------
-      3        0        1        0        0        0      0x7fa3aa32eb00
+      3        0        1        0        0        0      0x7efc9307ebc0
   ----------------------------------------------------------------------
-           0.00%  100.00%    0.00%    0.00%    0.00%                 0x0   N/A       0      0x560451d17dd5         0       328         0        1         0  [.] rbipc_simd_scan_avx2  bench_librbipc_isolated  rbipc_simd_scan_avx2+277  
+           0.00%  100.00%    0.00%    0.00%    0.00%                 0x0   N/A       0      0x55dd4578adee         0       191         0        1         0  [.] rbipc_simd_scan_avx2  bench_librbipc_isolated  rbipc_simd_scan_avx2+302  
 
   ----------------------------------------------------------------------
-      4        0        1        0        0        0      0x7fa3aa330080
+      4        0        1        1        0        0      0x7efc93080640
   ----------------------------------------------------------------------
-           0.00%  100.00%    0.00%    0.00%    0.00%                 0x0   N/A       0      0x560451d17dee         0       158         0        1         0  [.] rbipc_simd_scan_avx2  bench_librbipc_isolated  rbipc_simd_scan_avx2+302  
+           0.00%  100.00%    0.00%    0.00%    0.00%                 0x0   N/A       0      0x55dd4578add5         0        85         0        1         0  [.] rbipc_simd_scan_avx2  bench_librbipc_isolated  rbipc_simd_scan_avx2+277  
+           0.00%    0.00%  100.00%    0.00%    0.00%                0x14   N/A       0      0x55dd4578cd02         0         0         0        1         0  [.] consumer_fn           bench_librbipc_isolated  consumer_fn+2418          
 
   ----------------------------------------------------------------------
-      5        0        1        0        0        0      0x7fa3aa331380
+      5        0        1        0        0        0      0x7efc930e1b40
   ----------------------------------------------------------------------
-           0.00%  100.00%    0.00%    0.00%    0.00%                 0x0   N/A       0      0x560451d17dee         0       447         0        1         0  [.] rbipc_simd_scan_avx2  bench_librbipc_isolated  rbipc_simd_scan_avx2+302  
+           0.00%  100.00%    0.00%    0.00%    0.00%                 0x0   N/A       0      0x55dd4578ade1         0       204         0        1         0  [.] rbipc_simd_scan_avx2  bench_librbipc_isolated  rbipc_simd_scan_avx2+289  
 
   ----------------------------------------------------------------------
-      6        0        1        0        0        0      0x7fa3aa332000
+      6        0        1        0        0        0      0x7efc930811c0
   ----------------------------------------------------------------------
-           0.00%  100.00%    0.00%    0.00%    0.00%                 0x0   N/A       0      0x560451d17dd5         0       175         0        1         0  [.] rbipc_simd_scan_avx2  bench_librbipc_isolated  rbipc_simd_scan_avx2+277  
+           0.00%  100.00%    0.00%    0.00%    0.00%                 0x0   N/A       0      0x55dd4578adee         0        97         0        1         0  [.] rbipc_simd_scan_avx2  bench_librbipc_isolated  rbipc_simd_scan_avx2+302  
 
   ----------------------------------------------------------------------
-      7        0        1        0        0        0      0x7fa3aa332380
+      7        0        1        0        0        0      0x7efc930e51c0
   ----------------------------------------------------------------------
-           0.00%  100.00%    0.00%    0.00%    0.00%                 0x0   N/A       0      0x560451d17de1         0       358         0        1         0  [.] rbipc_simd_scan_avx2  bench_librbipc_isolated  rbipc_simd_scan_avx2+289  
+           0.00%  100.00%    0.00%    0.00%    0.00%                 0x0   N/A       0      0x55dd4578ade1         0       145         0        1         0  [.] rbipc_simd_scan_avx2  bench_librbipc_isolated  rbipc_simd_scan_avx2+289  
 
   ----------------------------------------------------------------------
-      8        0        1        0        0        0      0x7fa3aa2d2000
+      8        0        1        0        0        0      0x7efc93084e80
   ----------------------------------------------------------------------
-           0.00%  100.00%    0.00%    0.00%    0.00%                 0x0   N/A       0      0x560451d17dd5         0       135         0        1         0  [.] rbipc_simd_scan_avx2  bench_librbipc_isolated  rbipc_simd_scan_avx2+277  
+           0.00%  100.00%    0.00%    0.00%    0.00%                 0x0   N/A       0      0x55dd4578adee         0       115         0        1         0  [.] rbipc_simd_scan_avx2  bench_librbipc_isolated  rbipc_simd_scan_avx2+302  
 
   ----------------------------------------------------------------------
-      9        0        1        0        0        0      0x7fa3aa333200
+      9        0        1        0        0        0      0x7efc9308f280
   ----------------------------------------------------------------------
-           0.00%  100.00%    0.00%    0.00%    0.00%                 0x0   N/A       0      0x560451d17dd5         0       198         0        1         0  [.] rbipc_simd_scan_avx2  bench_librbipc_isolated  rbipc_simd_scan_avx2+277  
+           0.00%  100.00%    0.00%    0.00%    0.00%                 0x0   N/A       0      0x55dd4578ade1         0       147         0        1         0  [.] rbipc_simd_scan_avx2  bench_librbipc_isolated  rbipc_simd_scan_avx2+289  
 
   ----------------------------------------------------------------------
-     10        0        1        0        0        0      0x7fa3aa2d3200
+     10        0        1        1        0        0      0x7efc9308f2c0
   ----------------------------------------------------------------------
-           0.00%  100.00%    0.00%    0.00%    0.00%                 0x0   N/A       0      0x560451d17dee         0       147         0        1         0  [.] rbipc_simd_scan_avx2  bench_librbipc_isolated  rbipc_simd_scan_avx2+302  
+           0.00%  100.00%    0.00%    0.00%    0.00%                 0x0   N/A       0      0x55dd4578adee         0       100         0        1         0  [.] rbipc_simd_scan_avx2  bench_librbipc_isolated  rbipc_simd_scan_avx2+302  
+           0.00%    0.00%  100.00%    0.00%    0.00%                0x14   N/A       0      0x55dd4578cd02         0         0         0        1         0  [.] consumer_fn           bench_librbipc_isolated  consumer_fn+2418          
 
   ----------------------------------------------------------------------
-     11        0        1        0        0        0      0x7fa3aa334800
+     11        0        1        0        0        0      0x7efc930f0bc0
   ----------------------------------------------------------------------
-           0.00%  100.00%    0.00%    0.00%    0.00%                 0x0   N/A       0      0x560451d17dd5         0       135         0        1         0  [.] rbipc_simd_scan_avx2  bench_librbipc_isolated  rbipc_simd_scan_avx2+277  
+           0.00%  100.00%    0.00%    0.00%    0.00%                 0x0   N/A       0      0x55dd4578adee         0       160         0        1         0  [.] rbipc_simd_scan_avx2  bench_librbipc_isolated  rbipc_simd_scan_avx2+302  
 
   ----------------------------------------------------------------------
-     12        0        1        0        0        0      0x7fa3aa335f80
+     12        0        1        0        0        0      0x7efc93092280
   ----------------------------------------------------------------------
-           0.00%  100.00%    0.00%    0.00%    0.00%                 0x0   N/A       0      0x560451d17dd5         0       378         0        1         0  [.] rbipc_simd_scan_avx2  bench_librbipc_isolated  rbipc_simd_scan_avx2+277  
+           0.00%  100.00%    0.00%    0.00%    0.00%                 0x0   N/A       0      0x55dd4578ade1         0       119         0        1         0  [.] rbipc_simd_scan_avx2  bench_librbipc_isolated  rbipc_simd_scan_avx2+289  
 
   ----------------------------------------------------------------------
-     13        0        1        0        0        0      0x7fa3aa337c80
+     13        0        1        0        0        0      0x7efc930f4540
   ----------------------------------------------------------------------
-           0.00%  100.00%    0.00%    0.00%    0.00%                 0x0   N/A       0      0x560451d17dd5         0       156         0        1         0  [.] rbipc_simd_scan_avx2  bench_librbipc_isolated  rbipc_simd_scan_avx2+277  
+           0.00%  100.00%    0.00%    0.00%    0.00%                 0x0   N/A       0      0x55dd4578add5         0        40         0        1         0  [.] rbipc_simd_scan_avx2  bench_librbipc_isolated  rbipc_simd_scan_avx2+277  
 
   ----------------------------------------------------------------------
-     14        0        1        0        0        0      0x7fa3aa338080
+     14        0        1        0        0        0      0x7efc930956c0
   ----------------------------------------------------------------------
-           0.00%  100.00%    0.00%    0.00%    0.00%                 0x0   N/A       0      0x560451d17dee         0       141         0        1         0  [.] rbipc_simd_scan_avx2  bench_librbipc_isolated  rbipc_simd_scan_avx2+302  
+           0.00%  100.00%    0.00%    0.00%    0.00%                 0x0   N/A       0      0x55dd4578adee         0       110         0        1         0  [.] rbipc_simd_scan_avx2  bench_librbipc_isolated  rbipc_simd_scan_avx2+302  
 
   ----------------------------------------------------------------------
-     15        0        1        1        0        0      0x7fa3aa2d9b40
+     15        0        1        0        0        0      0x7efc930f9280
   ----------------------------------------------------------------------
-           0.00%  100.00%    0.00%    0.00%    0.00%                 0x0   N/A       0      0x560451d17de1         0       223         0        1         0  [.] rbipc_simd_scan_avx2  bench_librbipc_isolated  rbipc_simd_scan_avx2+289  
-           0.00%    0.00%  100.00%    0.00%    0.00%                0x14   N/A       0      0x560451d19bd1         0         0         0        1         0  [.] consumer_fn           bench_librbipc_isolated  consumer_fn+2113          
+           0.00%  100.00%    0.00%    0.00%    0.00%                 0x0   N/A       0      0x55dd4578ade1         0       104         0        1         0  [.] rbipc_simd_scan_avx2  bench_librbipc_isolated  rbipc_simd_scan_avx2+289  
 
   ----------------------------------------------------------------------
-     16        0        1        0        0        0      0x7fa3aa33b100
+     16        0        1        0        0        0      0x7efc930f9480
   ----------------------------------------------------------------------
-           0.00%  100.00%    0.00%    0.00%    0.00%                 0x0   N/A       0      0x560451d17dd5         0       432         0        1         0  [.] rbipc_simd_scan_avx2  bench_librbipc_isolated  rbipc_simd_scan_avx2+277  
+           0.00%  100.00%    0.00%    0.00%    0.00%                 0x0   N/A       0      0x55dd4578ade1         0        53         0        1         0  [.] rbipc_simd_scan_avx2  bench_librbipc_isolated  rbipc_simd_scan_avx2+289  
 
   ----------------------------------------------------------------------
-     17        0        1        0        0        0      0x7fa3aa33b380
+     17        0        1        0        0        0      0x7efc9309c0c0
   ----------------------------------------------------------------------
-           0.00%  100.00%    0.00%    0.00%    0.00%                 0x0   N/A       0      0x560451d17dee         0       469         0        1         0  [.] rbipc_simd_scan_avx2  bench_librbipc_isolated  rbipc_simd_scan_avx2+302  
-
-  ----------------------------------------------------------------------
-     18        0        1        0        0        0      0x7fa3aa33c1c0
-  ----------------------------------------------------------------------
-           0.00%  100.00%    0.00%    0.00%    0.00%                 0x0   N/A       0      0x560451d17de1         0       312         0        1         0  [.] rbipc_simd_scan_avx2  bench_librbipc_isolated  rbipc_simd_scan_avx2+289  
-
-  ----------------------------------------------------------------------
-     19        0        1        0        0        0      0x7fa3aa33cc80
-  ----------------------------------------------------------------------
-           0.00%  100.00%    0.00%    0.00%    0.00%                 0x0   N/A       0      0x560451d17dee         0       150         0        1         0  [.] rbipc_simd_scan_avx2  bench_librbipc_isolated  rbipc_simd_scan_avx2+302  
-
-  ----------------------------------------------------------------------
-     20        0        1        0        0        0      0x7fa3aa33e000
-  ----------------------------------------------------------------------
-           0.00%  100.00%    0.00%    0.00%    0.00%                 0x0   N/A       0      0x560451d17dee         0        86         0        1         0  [.] rbipc_simd_scan_avx2  bench_librbipc_isolated  rbipc_simd_scan_avx2+302  
-
-  ----------------------------------------------------------------------
-     21        0        1        0        0        0      0x7fa3aa340180
-  ----------------------------------------------------------------------
-           0.00%  100.00%    0.00%    0.00%    0.00%                 0x0   N/A       0      0x560451d17dee         0       212         0        1         0  [.] rbipc_simd_scan_avx2  bench_librbipc_isolated  rbipc_simd_scan_avx2+302  
-
-  ----------------------------------------------------------------------
-     22        0        1        0        0        0      0x7fa3aa340e40
-  ----------------------------------------------------------------------
-           0.00%  100.00%    0.00%    0.00%    0.00%                 0x0   N/A       0      0x560451d17dd5         0       402         0        1         0  [.] rbipc_simd_scan_avx2  bench_librbipc_isolated  rbipc_simd_scan_avx2+277  
-
-  ----------------------------------------------------------------------
-     23        0        1        0        0        0      0x7fa3aa341640
-  ----------------------------------------------------------------------
-           0.00%  100.00%    0.00%    0.00%    0.00%                 0x0   N/A       0      0x560451d17dd5         0       511         0        1         0  [.] rbipc_simd_scan_avx2  bench_librbipc_isolated  rbipc_simd_scan_avx2+277  
-
-  ----------------------------------------------------------------------
-     24        0        1        0        0        0      0x7fa3aa342f00
-  ----------------------------------------------------------------------
-           0.00%  100.00%    0.00%    0.00%    0.00%                 0x0   N/A       0      0x560451d17dee         0        99         0        1         0  [.] rbipc_simd_scan_avx2  bench_librbipc_isolated  rbipc_simd_scan_avx2+302  
-
-  ----------------------------------------------------------------------
-     25        0        1        0        0        0      0x7fa3aa345b00
-  ----------------------------------------------------------------------
-           0.00%  100.00%    0.00%    0.00%    0.00%                 0x0   N/A       0      0x560451d17dd5         0       468       226        2         0  [.] rbipc_simd_scan_avx2  bench_librbipc_isolated  rbipc_simd_scan_avx2+277  
-
-  ----------------------------------------------------------------------
-     26        0        1        0        0        0      0x7fa3aa348000
-  ----------------------------------------------------------------------
-           0.00%  100.00%    0.00%    0.00%    0.00%                 0x0   N/A       0      0x560451d17dee         0       212         0        1         0  [.] rbipc_simd_scan_avx2  bench_librbipc_isolated  rbipc_simd_scan_avx2+302  
-
-  ----------------------------------------------------------------------
-     27        0        1        0        0        0      0x7fa3aa2e7900
-  ----------------------------------------------------------------------
-           0.00%  100.00%    0.00%    0.00%    0.00%                 0x0   N/A       0      0x560451d17dee         0        75         0        1         0  [.] rbipc_simd_scan_avx2  bench_librbipc_isolated  rbipc_simd_scan_avx2+302  
-
-  ----------------------------------------------------------------------
-     28        0        1        0        0        0      0x7fa3aa348b40
-  ----------------------------------------------------------------------
-           0.00%  100.00%    0.00%    0.00%    0.00%                 0x0   N/A       0      0x560451d17de1         0       228         0        1         0  [.] rbipc_simd_scan_avx2  bench_librbipc_isolated  rbipc_simd_scan_avx2+289  
-
-  ----------------------------------------------------------------------
-     29        0        1        0        0        0      0x7fa3aa349440
-  ----------------------------------------------------------------------
-           0.00%  100.00%    0.00%    0.00%    0.00%                 0x0   N/A       0      0x560451d17dc8         0       267         0        1         0  [.] rbipc_simd_scan_avx2  bench_librbipc_isolated  rbipc_simd_scan_avx2+264  
-
-  ----------------------------------------------------------------------
-     30        0        1        0        0        0      0x7fa3aa349600
-  ----------------------------------------------------------------------
-           0.00%  100.00%    0.00%    0.00%    0.00%                 0x0   N/A       0      0x560451d17dee         0       228         0        1         0  [.] rbipc_simd_scan_avx2  bench_librbipc_isolated  rbipc_simd_scan_avx2+302  
-
-  ----------------------------------------------------------------------
-     31        0        1        0        0        0      0x7fa3aa34aa00
-  ----------------------------------------------------------------------
-           0.00%  100.00%    0.00%    0.00%    0.00%                 0x0   N/A       0      0x560451d17dee         0       504         0        1         0  [.] rbipc_simd_scan_avx2  bench_librbipc_isolated  rbipc_simd_scan_avx2+302  
+           0.00%  100.00%    0.00%    0.00%    0.00%                 0x0   N/A       0      0x55dd4578ade1         0       128         0        1         0  [.] rbipc_simd_scan_avx2  bench_librbipc_isolated  rbipc_simd_scan_avx2+289  

@@ -427,6 +427,8 @@ def main():
         def get_lat_item(tput_name):
             if "Zero-Trust" in tput_name:
                 return lat_map.get("librbipc (Zero-Trust)", {})
+            if "Combined" in tput_name:
+                return lat_map.get("librbipc (Combined)", {})
             if "librbipc" in tput_name and "Trusted" in tput_name:
                 return lat_map.get("librbipc (Trusted)", {})
             if "rte_ring" in tput_name:

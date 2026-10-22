@@ -17,7 +17,7 @@ result_t bench_rbipc_tput(size_t msgsz, uint64_t iters, transfer_semantic_t mode
     rbipc_destroy(shm);
     if (rbipc_create_ex(shm, RING_CAPACITY, slot, RBIPC_SHM_NAMED | flags, 0660, &rp) != RBIPC_OK ||
         rbipc_attach(shm, &rc) != RBIPC_OK) return r;
-    uint32_t wait_pol = (flags & RBIPC_FLAG_TRUSTED) ? RBIPC_WAIT_ADAPTIVE : RBIPC_WAIT_ZERO_SPIN;
+    uint32_t wait_pol = RBIPC_WAIT_ADAPTIVE;
     rbipc_set_wait_policy(rp, wait_pol);
     rbipc_set_wait_policy(rc, wait_pol);
 
