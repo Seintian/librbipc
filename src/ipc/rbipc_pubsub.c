@@ -15,12 +15,13 @@
 #define _GNU_SOURCE
 #endif
 
-#include "rbipc_pubsub.h"
-#include "rbipc_io.h"
-#include "rbipc_slot.h"
+#include "rbipc_arch.h"
 #include "rbipc_internal.h"
+#include "rbipc_io.h"
 #include "rbipc_predicate.h"
+#include "rbipc_pubsub.h"
 #include "rbipc_reactor.h"
+#include "rbipc_slot.h"
 #include "rbipc_stream.h"
 #include "rbipc_sync.h"
 
@@ -358,6 +359,13 @@ int rbipc_sub_poll_batch(rbipc_sub_t *sub, uint32_t max_count,
   return RBIPC_OK;
 }
 
+static bool rbipc_pubsub_pred_ready(void *arg) {
+  const rbipc_sub_t *sub = (const rbipc_sub_t *)arg;
+  const rbipc_shm_header_t *hdr = sub->ring->hdr;
+  uint64_t head = atomic_load_explicit(&hdr->write_ticket, memory_order_acquire);
+  return (sub->cursor < head) || rbipc_ring_is_shutdown(hdr);
+}
+
 RBIPC_LEAF
 int rbipc_sub_read(rbipc_sub_t *sub, uint64_t timeout_ns, const void **out_buf,
                    uint32_t *out_len, uint64_t *out_seq) {
@@ -380,15 +388,53 @@ int rbipc_sub_read(rbipc_sub_t *sub, uint64_t timeout_ns, const void **out_buf,
       return RBIPC_ERR_SHUTDOWN;
     }
 
-    if (timeout_ns == 0) {
+    if (RBIPC_UNLIKELY(timeout_ns == 0)) {
       return RBIPC_ERR_EMPTY;
     }
 
+    /* Phase 1: Micro-spin if adaptive wait policy is configured */
+    if (ring && (ring->wait_policy & RBIPC_WAIT_ADAPTIVE)) {
+      for (uint32_t spin = 0; spin < RBIPC_SPIN_COUNT_DEFAULT; ++spin) {
+        rbipc_cpu_pause();
+        rc = rbipc_sub_poll(sub, out_buf, out_len, out_seq);
+        if (rc == RBIPC_OK || rc == RBIPC_ERR_POISONED) {
+          return rc;
+        }
+        if (RBIPC_UNLIKELY(rbipc_ring_is_shutdown(hdr))) {
+          return RBIPC_ERR_SHUTDOWN;
+        }
+      }
+    }
+
+    /* Tier 1: Hardware-assisted monitor-wait (WAITPKG / WFET) */
+    if (ring && ((ring->wait_policy & RBIPC_WAIT_ADAPTIVE) ||
+                 (ring->wait_policy & RBIPC_WAIT_HW_MONITOR))) {
+      if (rbipc_cpu_has_waitpkg() || rbipc_cpu_has_wfxt()) {
+        uint32_t substate = (ring->wait_policy & RBIPC_WAIT_ADAPTIVE) ? 1 : 0;
+        int hw_rc = rbipc_sync_hardware_wait_substate(
+            &hdr->write_ticket, 5000ULL, rbipc_pubsub_pred_ready, sub,
+            substate);
+        (void)hw_rc;
+        rc = rbipc_sub_poll(sub, out_buf, out_len, out_seq);
+        if (rc == RBIPC_OK || rc == RBIPC_ERR_POISONED) {
+          return rc;
+        }
+        if (RBIPC_UNLIKELY(rbipc_ring_is_shutdown(hdr))) {
+          return RBIPC_ERR_SHUTDOWN;
+        }
+      }
+    }
+
+    /* Phase 2: Passive Futex Sleep with Dekker-style double-check */
     rbipc_sync_register_waiter(&hdr->futex_waiters);
     rc = rbipc_sub_poll(sub, out_buf, out_len, out_seq);
     if (rc == RBIPC_OK || rc == RBIPC_ERR_POISONED) {
       rbipc_sync_deregister_waiter(&hdr->futex_waiters);
       return rc;
+    }
+    if (RBIPC_UNLIKELY(rbipc_ring_is_shutdown(hdr))) {
+      rbipc_sync_deregister_waiter(&hdr->futex_waiters);
+      return RBIPC_ERR_SHUTDOWN;
     }
 
     int wait_rc = rbipc_sync_wait_registered_or_shutdown(

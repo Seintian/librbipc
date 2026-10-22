@@ -438,6 +438,44 @@ static void test_pubsub_zero_copy_and_abort(void) {
     rbipc_detach(ring);
 }
 
+static void test_pubsub_wait_policies(void) {
+    rbipc_ring_t *ring = NULL;
+    assert(rbipc_create(NULL, 16, 128, &ring) == RBIPC_OK);
+
+    rbipc_sub_t *sub = NULL;
+    assert(rbipc_sub_create(ring, &sub) == RBIPC_OK);
+
+    const uint32_t policies[] = {
+        RBIPC_WAIT_ZERO_SPIN,
+        RBIPC_WAIT_ADAPTIVE,
+        RBIPC_WAIT_HW_MONITOR
+    };
+
+    const void *buf = NULL;
+    uint32_t len = 0;
+    uint64_t seq = 0;
+
+    for (size_t p = 0; p < sizeof(policies)/sizeof(policies[0]); ++p) {
+        assert(rbipc_set_wait_policy(ring, policies[p]) == RBIPC_OK);
+        assert(rbipc_get_wait_policy(ring) == policies[p]);
+
+        /* Non-blocking read when empty */
+        assert(rbipc_sub_read(sub, 0, &buf, &len, &seq) == RBIPC_ERR_EMPTY);
+
+        /* Publish a message */
+        char msg[32];
+        snprintf(msg, sizeof(msg), "policy_msg_%zu", p);
+        assert(rbipc_publish(ring, msg, (uint32_t)strlen(msg) + 1) == RBIPC_OK);
+
+        /* Read with timeout under active policy */
+        assert(rbipc_sub_read(sub, 10000000ULL, &buf, &len, &seq) == RBIPC_OK);
+        assert(strcmp((const char *)buf, msg) == 0);
+    }
+
+    rbipc_sub_destroy(sub);
+    rbipc_detach(ring);
+}
+
 int main(void) {
     printf("[test_unit_pubsub] Running 1-to-N multicast publish-subscribe tests...\n");
     test_pubsub_basic_multicast();
@@ -447,6 +485,7 @@ int main(void) {
     test_pubsub_concurrent_wait_wakeup_and_shutdown();
     test_pubsub_packed_multicast();
     test_pubsub_zero_copy_and_abort();
+    test_pubsub_wait_policies();
     printf("[test_unit_pubsub] All tests passed successfully.\n");
     return 0;
 }

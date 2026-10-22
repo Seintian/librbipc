@@ -16,6 +16,7 @@
 #endif
 
 #include "rbipc_batch.h"
+#include "rbipc_arch.h"
 #include "rbipc_attr.h"
 #include "rbipc_audit.h"
 #include "rbipc_internal.h"
@@ -271,6 +272,24 @@ int rbipc_reserve_write_batch_timeout(rbipc_ring_t *RBIPC_RESTRICT ring,
           continue;
         }
       }
+
+      /* Tier 1: Hardware-assisted monitor-wait (WAITPKG / WFET) */
+      if (ring && ((ring->wait_policy & RBIPC_WAIT_ADAPTIVE) ||
+                   (ring->wait_policy & RBIPC_WAIT_HW_MONITOR))) {
+        if (rbipc_cpu_has_waitpkg() || rbipc_cpu_has_wfxt()) {
+          uint32_t substate = (ring->wait_policy & RBIPC_WAIT_ADAPTIVE) ? 1 : 0;
+          int hw_rc = rbipc_sync_hardware_wait_substate(
+              &slots[t & ring->cached_capacity_mask].sequence, 5000ULL, NULL,
+              NULL, substate);
+          (void)hw_rc;
+          avail = rbipc_simd_scan_vacant_slots_ex(
+              slots, ring->cached_capacity_mask, t, count, ring->is_packed);
+          if (avail > 0 || RBIPC_UNLIKELY(rbipc_ring_is_shutdown(hdr))) {
+            continue;
+          }
+        }
+      }
+
       rbipc_sync_register_waiter(&hdr->write_waiters);
       if (!ring->is_trusted) {
         rbipc_audit_recover_dead_consumer_range(hdr, slots, t, count);
@@ -401,6 +420,24 @@ int rbipc_read_acquire_batch_timeout(rbipc_ring_t *RBIPC_RESTRICT ring,
         }
         if (avail > 0) {
           continue;
+        }
+      }
+
+      /* Tier 1: Hardware-assisted monitor-wait (WAITPKG / WFET) */
+      if (ring && ((ring->wait_policy & RBIPC_WAIT_ADAPTIVE) ||
+                   (ring->wait_policy & RBIPC_WAIT_HW_MONITOR))) {
+        if (rbipc_cpu_has_waitpkg() || rbipc_cpu_has_wfxt()) {
+          uint32_t substate = (ring->wait_policy & RBIPC_WAIT_ADAPTIVE) ? 1 : 0;
+          int hw_rc = rbipc_sync_hardware_wait_substate(
+              &slots[t & ring->cached_capacity_mask].sequence, 5000ULL, NULL,
+              NULL, substate);
+          (void)hw_rc;
+          avail = rbipc_simd_scan_ready_slots_ex(
+              slots, ring->cached_capacity_mask, t, count, ring->is_packed);
+          if (avail > 0 ||
+              RBIPC_UNLIKELY(rbipc_ring_is_drained_on_shutdown(hdr, t))) {
+            continue;
+          }
         }
       }
 
