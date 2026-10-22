@@ -48,10 +48,12 @@ The following taxonomy maps the identified scientific breakthroughs against thes
 ### 2.1 The Microarchitectural Problem: CPU Load/Store Unit Saturation
 
 In the current `librbipc` implementation, memory copying of slot payloads is executed by host CPU vector units:
+
 - For small payloads ($< 256\text{ bytes}$), scalar or AVX registers execute fast in-register transfers.
 - For medium-to-large payloads ($1\text{ KiB} \le S \le 4\text{ MiB}$), [`src/io/rbipc_simd.c`](src/io/rbipc_simd.c) dispatches AVX2/AVX-512 non-temporal streaming stores (`_mm256_stream_si256` / `_mm512_stream_si512`) or unrolled vector loops.
 
 While non-temporal stores bypass cache allocation lines (avoiding L1/L2/L3 cache pollution), they inflict severe microarchitectural penalties at high line rates:
+
 1. **Load/Store Unit Port Contention**: Port 2, Port 3 (Load generation), Port 4, Port 7 (Store data/address) on Intel architectures are completely saturated by memory copy loops, stalling co-located application compute threads.
 2. **Instruction Pipeline Stalling**: Register renaming buffers, reorder buffers (ROB), and store buffer entries are consumed solely by moving bytes.
 3. **Linear CPU Burn**: Copying a 64 KiB buffer at 100,000 ops/sec requires sustained execution of millions of vector memory instructions, consuming 100% of a dedicated core's thermal and power budget.
@@ -60,7 +62,7 @@ While non-temporal stores bypass cache allocation lines (avoiding L1/L2/L3 cache
 
 The landmark USENIX ATC 2025 paper *ROCKET: Rethinking Inter-Process Communication with Memory Operation Offloading* [1] demonstrates that modern system-on-chip (SoC) accelerators—specifically **Intel Data Streaming Accelerator (DSA)** introduced in 4th Gen Xeon Scalable processors (Sapphire Rapids, Emerald Rapids, Granite Rapids)—can fundamentally disintermediate the CPU from shared-memory IPC data transit.
 
-```
+```txt
 +-----------------------------------------------------------------------------------+
 |                            CPU Core (User-Space Process)                          |
 |                                                                                   |
@@ -91,7 +93,8 @@ The landmark USENIX ATC 2025 paper *ROCKET: Rethinking Inter-Process Communicati
 +-----------------------------------------------------------------------------------+
 ```
 
-#### Microarchitectural Mechanics:
+#### Microarchitectural Mechanics
+
 1. **Direct User-Space Work Queue Submission (`ENQCMD` / `MOVDIR64B`)**:
    DSA exposes User-Mode Work Queues (UWQ) through the Linux `idxd` driver. A user process maps `/dev/dsa/wqX.Y` via `mmap(2)`. The producer writes a 64-byte descriptor to CPU registers and invokes the unprivileged `ENQCMD` (Enqueue Command) instruction.
    $$\text{ENQCMD}(\text{destination\_wq}, \&\text{descriptor})$$
@@ -123,10 +126,11 @@ typedef struct alignas(64) rbipc_dma_desc {
 } rbipc_dma_desc_t;
 ```
 
-#### Adaptive Offload Threshold ($\Theta_{\text{DMA}}$):
+#### Adaptive Offload Threshold ($\Theta_{\text{DMA}}$)
+
 Empirical research demonstrates that for transfers smaller than 2 KiB, the descriptor preparation and memory bus synchronization cost exceeds CPU vector copy throughput. `librbipc` will implement a dynamic threshold heuristic:
 
-$$\text{Strategy}(S) = \begin{cases} 
+$$\text{Strategy}(S) = \begin{cases}
 \text{Scalar In-Register Copy}, & S \le 256\text{ B} \\
 \text{AVX2 / AVX-512 Loop}, & 256\text{ B} < S < \Theta_{\text{DMA}} \\
 \text{Intel DSA Hardware Offload}, & S \ge \Theta_{\text{DMA}} \quad (\Theta_{\text{DMA}} \approx 4\text{ KiB})
@@ -334,19 +338,19 @@ int rbipc_mpk_init_protection(rbipc_t *ring) {
     /* Allocate two hardware protection keys */
     int ctrl_pkey = pkey_alloc(0, PKEY_DISABLE_WRITE);
     int data_pkey = pkey_alloc(0, PKEY_DISABLE_WRITE);
-    
+
     /* Tag Control Header with ctrl_pkey (Read-Only to untrusted clients) */
     pkey_mprotect(ring->ctrl_base, ring->ctrl_size, PROT_READ | PROT_WRITE, ctrl_pkey);
-    
+
     /* Tag Data Ring with data_pkey (Write-Protected by default) */
     pkey_mprotect(ring->data_base, ring->data_size, PROT_READ | PROT_WRITE, data_pkey);
-    
+
     /* Seal Virtual Memory Areas against tampering (Linux 6.10+) */
     #ifdef SYS_mseal
     syscall(SYS_mseal, ring->ctrl_base, ring->ctrl_size, 0);
     syscall(SYS_mseal, ring->data_base, ring->data_size, 0);
     #endif
-    
+
     return 0;
 }
 ```

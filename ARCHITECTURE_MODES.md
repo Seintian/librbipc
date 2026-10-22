@@ -164,7 +164,7 @@ Combined Tier 2+3 represents the pinnacle of small-message IPC performance ($\le
 
 ### 2.5 Bounded Wait-Free Helping Mode (`RBIPC_FLAG_WAIT_FREE`)
 
-#### Core Microarchitectural Mechanism
+#### 2.5.1 Core Microarchitectural Mechanism
 
 Wait-Free Helping Mode implements Nikolaev & Ravindran's bounded wait-free multi-producer multi-consumer queue algorithm (**`wCQ`**, ACM SPAA 2022). While standard lock-free algorithms guarantee *system-wide* progress (leaving individual preempted threads vulnerable to starvation), `RBIPC_FLAG_WAIT_FREE` provably guarantees that **every thread completes its operation in $\mathcal{O}(P)$ deterministic steps**, where $P$ is the number of active peers.
 
@@ -186,13 +186,13 @@ Wait-Free Helping Mode implements Nikolaev & Ravindran's bounded wait-free multi
 3. **Cooperative Helping Pass**: Concurrent active threads scan the announcement array before advancing their own reservations. Helper threads execute the pending operation, stage or publish the payload, advance the slot sequence turn (`slot->sequence`), and mark the announcement `RBIPC_HELP_COMPLETED`.
 4. **Deterministic Progress**: Guaranteed $\mathcal{O}(P)$ step bound eliminates starvation under noisy-neighbor thread scheduling and slashes $p99.999$ tail latency spikes.
 
-#### Operational Contexts
+#### 2.5.2 Operational Contexts
 
 - Hard and soft real-time systems where deadline adherence is mandatory.
 - Mixed-priority multi-tenant workloads where high-priority threads must not starve low-priority workers.
 - Virtualized and containerized environments with high CPU oversubscription and frequent vCPU preemption.
 
-#### Paired API Functions & Features
+#### 2.5.3 Paired API Functions & Features
 
 - `rbipc_ring_is_wait_free()`: Inspect whether wait-free helping is active on the ring.
 - Creation: `rbipc_create_ex(name, capacity, slot_size, RBIPC_FLAG_WAIT_FREE | ..., 0660, &ring)`.
@@ -201,7 +201,7 @@ Wait-Free Helping Mode implements Nikolaev & Ravindran's bounded wait-free multi
 
 ### 2.6 Zero-Trust Hardware Isolated Mode (`RBIPC_FLAG_ISOLATED`)
 
-#### Core Microarchitectural Mechanism
+#### 2.6.1 Core Microarchitectural Mechanism
 
 Hardware Isolated Mode integrates **Intel Memory Protection Keys (MPK / PKU)** with **Linux 6.10+ Virtual Memory Sealing (`mseal(2)`)** to deliver zero-overhead hardware sandboxing directly within user space.
 
@@ -209,12 +209,12 @@ Hardware Isolated Mode integrates **Intel Memory Protection Keys (MPK / PKU)** w
 2. **Zero System Call Overhead**: During normal execution, payload buffer memory is write-protected in hardware. When a writer reserves a slot, it executes the unprivileged `WRPKRU` instruction (**~20 CPU cycles**) to grant local thread write access, writes the payload, and immediately revokes write permissions via `WRPKRU` upon commit.
 3. **Linux 6.10+ Virtual Memory Sealing**: Control and data VMAs are permanently sealed via `SYS_mseal` (Linux syscall 462). The kernel enforces that `mprotect`, `mremap`, or `munmap` cannot alter permissions or remap memory mappings for the lifetime of the process.
 
-#### Operational Contexts
+#### 2.6.2 Operational Contexts
 
 - Adversarial Zero-Trust deployments running untrusted third-party plugins in-process.
 - Security-critical trading and defense applications vulnerable to memory-safety exploits or rowhammer corruption.
 
-#### Paired API Functions & Features
+#### 2.6.3 Paired API Functions & Features
 
 - `rbipc_mpk_available()`: Probe host CPU and kernel MPK support.
 - `rbipc_mseal_available()`: Probe kernel `SYS_mseal` availability.
@@ -224,7 +224,7 @@ Hardware Isolated Mode integrates **Intel Memory Protection Keys (MPK / PKU)** w
 
 ### 2.7 Compute Express Link (CXL 2.0+) Disaggregated Fabric Mode (`RBIPC_FLAG_CXL`)
 
-#### Core Microarchitectural Mechanism
+#### 2.7.1 Core Microarchitectural Mechanism
 
 CXL Mode configures `librbipc` to execute over **Compute Express Link (CXL 2.0/3.0/3.1) pooled and disaggregated memory devices** (`/dev/dax*`), enabling multi-host coherent shared memory across PCIe Gen5/Gen6 fabrics without network stack encapsulation.
 
@@ -232,12 +232,12 @@ CXL Mode configures `librbipc` to execute over **Compute Express Link (CXL 2.0/3
 2. **Explicit Cache-Line Writebacks (`CLWB`)**: Emits `clflushopt` / `CLWB` / `dc cvac` on committed sequence words and payload boundaries, forcing cache lines from local L1/L2 caches to the CXL device memory controller without full `SFENCE` pipeline flushes.
 3. **Back-Invalidate (BI) Snooping**: Relies on CXL.mem hardware cache-coherency to maintain consistent sequence turn ordering across independent host servers.
 
-#### Operational Contexts
+#### 2.7.2 Operational Contexts
 
 - Disaggregated rack architectures and blade servers sharing pooled CXL memory shelves.
 - Cross-server low-latency messaging achieving sub-200ns end-to-end delivery without RoCE/InfiniBand NICs.
 
-#### Paired API Functions & Features
+#### 2.7.3 Paired API Functions & Features
 
 - `rbipc_create_cxl()`: Create ring buffer mapped over physical CXL `/dev/dax*` device.
 - `rbipc_cxl_available()`: Detect presence of host CXL topology devices.
