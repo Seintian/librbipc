@@ -3,8 +3,10 @@ ifeq ($(origin CC),default)
 endif
 CC ?= gcc
 CSTD ?= $(shell echo '' | $(CC) -std=c23 -E -x c - >/dev/null 2>&1 && echo -std=c23 || (echo '' | $(CC) -std=c2x -E -x c - >/dev/null 2>&1 && echo -std=c2x || echo -std=c11))
-CFLAGS ?= $(CSTD) -Wall -Wextra -Wpedantic -Werror -O3 -fPIC -fvisibility=hidden -MMD -MP -Iinclude -Isrc -Isrc/core -Isrc/memory -Isrc/sync -Isrc/io -Isrc/ipc -Isrc/audit -Isrc/platform -pthread -D_GNU_SOURCE
-LDFLAGS ?= -pthread -lrt -lm
+CFLAGS ?= $(CSTD) -Wall -Wextra -Wpedantic -Werror -O3 -flto -fPIC -fvisibility=hidden -MMD -MP -Iinclude -Isrc -Isrc/core -Isrc/memory -Isrc/sync -Isrc/io -Isrc/ipc -Isrc/audit -Isrc/platform -pthread -D_GNU_SOURCE
+LDFLAGS ?= -flto -pthread -lrt -lm
+AR ?= $(shell which gcc-ar 2>/dev/null || echo ar)
+
 VERSION_MAJOR ?= 1
 VERSION_MINOR ?= 0
 VERSION_PATCH ?= 0
@@ -59,7 +61,7 @@ DEPS = $(OBJS:.o=.d)
 -include $(DEPS)
 
 $(STATIC_LIB): $(OBJS) | $(LIBDIR)
-	ar rcs $@ $^
+	$(AR) rcs $@ $^
 
 $(SHARED_LIB): $(OBJS) $(VERSION_SCRIPT) | $(LIBDIR)
 	$(CC) -shared $(CFLAGS) -o $@ $(OBJS) $(SO_LDFLAGS)
