@@ -6,12 +6,12 @@
     "mode": "B-Queue Vector Batch (32 items)",
     "policy": "ADAPTIVE",
     "model": "Multi-Thread (pthread)",
-    "iterations": 1000000
+    "iterations": 5000000
   },
   "result": {
-    "elapsed_seconds": 0.035716,
-    "latency_ns_per_op": 35.72,
-    "throughput_mops": 28.00,
-    "throughput_ops_sec": 27998531.42
+    "elapsed_seconds": 0.097309,
+    "latency_ns_per_op": 19.46,
+    "throughput_mops": 51.38,
+    "throughput_ops_sec": 51382724.00
   }
 }

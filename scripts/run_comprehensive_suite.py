@@ -292,6 +292,17 @@ def main():
     fg_dir = "benchmarks/results/laptop/flamegraphs"
     os.makedirs(fg_dir, exist_ok=True)
 
+    # Preserve clean benchmark JSONs before running flamegraph & perf c2c sampling
+    clean_comp_json = "benchmarks/results/laptop/competitors_benchmark.json"
+    clean_comp_backup = "benchmarks/results/laptop/competitors_benchmark.json.clean"
+    if os.path.exists(clean_comp_json):
+        shutil.copyfile(clean_comp_json, clean_comp_backup)
+
+    clean_iso_json = "benchmarks/results/laptop/isolated_benchmark.json"
+    clean_iso_backup = "benchmarks/results/laptop/isolated_benchmark.json.clean"
+    if os.path.exists(clean_iso_json):
+        shutil.copyfile(clean_iso_json, clean_iso_backup)
+
     # A. Interactive SVG Flamegraphs
     generate_flamegraph(["bin/bench_librbipc_isolated", "--batch", "--iters", "3000000"],
                         os.path.join(fg_dir, "flamegraph_isolated_batch.svg"),
@@ -313,6 +324,12 @@ def main():
     generate_perf_c2c(["bin/bench_librbipc_isolated", "--batch", "--iters", "1000000"],
                       "benchmarks/results/laptop/perf_c2c_batch.txt",
                       "Isolated B-Queue Batching")
+
+    # Restore clean benchmark JSONs to eliminate sampling interrupt distortion
+    if os.path.exists(clean_comp_backup):
+        shutil.move(clean_comp_backup, clean_comp_json)
+    if os.path.exists(clean_iso_backup):
+        shutil.move(clean_iso_backup, clean_iso_json)
 
     # Parse e2e modes output
     mode_results = {}
@@ -402,24 +419,58 @@ def main():
 
     # B. Competitor Comparison
     new_comp = load_json(os.path.join(current_dir, "competitors_benchmark.json"))
+    old_comp = load_json(os.path.join(baseline_dir, "competitors_benchmark.json"))
     if new_comp:
         tput_items = new_comp.get("throughput_64b", [])
         lat_map = {item.get("name", ""): item for item in new_comp.get("latency_distribution", [])}
-        print("\n--- [4. Competitor Comparative Analysis (Throughput & Latency Distribution)] ---")
-        print(f"{'Transport / IPC Mechanism':<30} | {'Throughput (Mops/s)':<20} | {'Min Lat (ns)':<13} | {'p50 Lat (ns)':<13} | {'p99 Lat (ns)':<13}")
-        print("-" * 96)
+
+        def get_lat_item(tput_name):
+            if "Zero-Trust" in tput_name:
+                return lat_map.get("librbipc (Zero-Trust)", {})
+            if "librbipc" in tput_name and "Trusted" in tput_name:
+                return lat_map.get("librbipc (Trusted)", {})
+            if "rte_ring" in tput_name:
+                return lat_map.get("rte_ring (DPDK alg)", {})
+            if "Disruptor" in tput_name:
+                return lat_map.get("LMAX Disruptor", {})
+            if "mqueue" in tput_name:
+                return lat_map.get("POSIX mqueue", {})
+            if "UNIX" in tput_name:
+                return lat_map.get("AF_UNIX DGRAM", {})
+            return lat_map.get(tput_name, {})
+
+        print("\n--- [4. Competitor Comparative Analysis (Throughput & Latency Summary)] ---")
+        print(f"{'Transport / IPC Mechanism':<35} | {'Throughput (Mops/s)':<20} | {'Min Lat (ns)':<13} | {'p50 Lat (ns)':<13} | {'p99 Lat (ns)':<13}")
+        print("-" * 101)
         for item in tput_items:
             name = item.get("name", "")
             th = item.get("ops_sec", 0.0) / 1e6
-            lat_item = lat_map.get(name, {})
+            lat_item = get_lat_item(name)
             min_lat = lat_item.get("min_ns", 0)
             p50_lat = lat_item.get("p50_ns", 0)
             p99_lat = lat_item.get("p99_ns", 0)
-            print(f"{name:<30} | {th:<20.2f} | {min_lat:<13} | {p50_lat:<13} | {p99_lat:<13}")
+            print(f"{name:<35} | {th:<20.2f} | {min_lat:<13} | {p50_lat:<13} | {p99_lat:<13}")
+
+        lat_items = new_comp.get("latency_distribution", [])
+        old_lat_map = {item.get("name", ""): item for item in (old_comp.get("latency_distribution", []) if old_comp else [])}
+        if lat_items:
+            print("\n--- [5. Competitor Half-RTT Ping-Pong Latency Distribution & Baseline Gains] ---")
+            print(f"{'Mechanism':<26} | {'Min (ns)':<9} | {'p50 (ns)':<9} | {'p90 (ns)':<9} | {'p99 (ns)':<9} | {'p99.9 (ns)':<11} | {'Max (ns)':<9} | {'p50 Gain vs Base':<18}")
+            print("-" * 115)
+            for item in lat_items:
+                name = item.get("name", "")
+                p50 = item.get("p50_ns", 0)
+                old_p50 = old_lat_map.get(name, {}).get("p50_ns", 0) if old_lat_map else 0
+                if old_p50 > 0:
+                    delta_p50 = ((p50 - old_p50) / old_p50) * 100.0
+                    gain_str = f"{delta_p50:>+6.1f}% {'✓ FASTER' if delta_p50 < 0 else '✗ SLOWER'}"
+                else:
+                    gain_str = "N/A"
+                print(f"{name:<26} | {item.get('min_ns', 0):<9} | {p50:<9} | {item.get('p90_ns', 0):<9} | {item.get('p99_ns', 0):<9} | {item.get('p999_ns', 0):<11} | {item.get('max_ns', 0):<9} | {gain_str:<18}")
 
         mpmc_items = new_comp.get("mpmc_scalability", [])
         if mpmc_items:
-            print("\n--- [5. MPMC Multi-Threaded Scalability (Contention Robustness)] ---")
+            print("\n--- [6. MPMC Multi-Threaded Scalability (Contention Robustness)] ---")
             print(f"{'Config':<10} | {'librbipc ZeroTrust':<20} | {'librbipc Trusted':<18} | {'rte_ring (Mops/s)':<18} | {'Disruptor (Mops/s)':<18}")
             print("-" * 92)
             for m in mpmc_items:
@@ -432,12 +483,12 @@ def main():
 
         idle_cpu = new_comp.get("idle_cpu", {})
         if idle_cpu:
-            print("\n--- [6. Consumer Idle CPU Utilisation (Passive Sleep vs Busy-Spin)] ---")
+            print("\n--- [7. Consumer Idle CPU Utilisation (Passive Sleep vs Busy-Spin)] ---")
             print(f"librbipc (futex passive): {idle_cpu.get('librbipc', 0.0)}% CPU | DPDK (rte_ring): {idle_cpu.get('rte_ring', 0.0)}% CPU | Disruptor: {idle_cpu.get('disruptor', 0.0)}% CPU")
 
     # C. Architectural Modes Comparison
     if mode_results:
-        print("\n--- [5. In-Tree Architectural Modes Evaluation (Multi-Process)] ---")
+        print("\n--- [8. In-Tree Architectural Modes Evaluation (Multi-Process)] ---")
         print(f"{'Architectural Mode':<45} | {'Throughput (Mops/s)':<20} | {'Bandwidth (MB/s)':<18} | {'Avg Latency (ns)':<15}")
         print("-" * 105)
         for m_name, data in mode_results.items():

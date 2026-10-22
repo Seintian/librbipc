@@ -23,3 +23,6 @@ compile_commands.json
 librbipc.pc
 *.d
 scratch/
+benchmarks/results/.*
+__pycache__/
+*.pyc

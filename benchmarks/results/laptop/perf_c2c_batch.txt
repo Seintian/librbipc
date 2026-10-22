@@ -1,18 +1,18 @@
 =================================================
             Trace Event Information              
 =================================================
-  Total records                     :        513
-  Locked Load/Store Operations      :          3
-  Load Operations                   :        219
+  Total records                     :        389
+  Locked Load/Store Operations      :          7
+  Load Operations                   :        178
   Loads - uncacheable               :          0
   Loads - IO                        :          0
   Loads - Miss                      :          0
   Loads - no mapping                :          0
-  Load Fill Buffer Hit              :         25
-  Load L1D hit                      :         69
-  Load L2D hit                      :          8
-  Load LLC hit                      :        116
-  Load Local HITM                   :         77
+  Load Fill Buffer Hit              :         55
+  Load L1D hit                      :         77
+  Load L2D hit                      :          6
+  Load LLC hit                      :         39
+  Load Local HITM                   :         32
   Load Remote HITM                  :          0
   Load Remote HIT                   :          0
   Load Local DRAM                   :          1
@@ -28,11 +28,11 @@
   LLC Misses to Remote DRAM         :        0.0%
   LLC Misses to Remote cache (HIT)  :        0.0%
   LLC Misses to Remote cache (HITM) :        0.0%
-  Store Operations                  :        294
+  Store Operations                  :        211
   Store - uncacheable               :          0
   Store - no mapping                :          0
-  Store L1D Hit                     :        284
-  Store L1D Miss                    :         10
+  Store L1D Hit                     :        193
+  Store L1D Miss                    :         18
   Store No available memory level   :          0
   No Page Map Rejects               :          0
   Unable to parse data source       :          0
@@ -40,19 +40,19 @@
 =================================================
     Global Shared Cache Line Event Information   
 =================================================
-  Total Shared Cache Lines          :         73
-  Load HITs on shared lines         :         80
-  Fill Buffer Hits on shared lines  :          2
+  Total Shared Cache Lines          :         32
+  Load HITs on shared lines         :         33
+  Fill Buffer Hits on shared lines  :          1
   L1D hits on shared lines          :          0
   L2D hits on shared lines          :          0
-  LLC hits on shared lines          :         78
+  LLC hits on shared lines          :         32
   Load hits on peer cache or nodes  :          0
   Locked Access on shared lines     :          0
   Blocked Access on shared lines    :          0
-  Store HITs on shared lines        :          3
-  Store L1D hits on shared lines    :          3
+  Store HITs on shared lines        :          1
+  Store L1D hits on shared lines    :          1
   Store No available memory level   :          0
-  Total Merged records              :         80
+  Total Merged records              :         33
 
 =================================================
                  c2c details                     
@@ -70,452 +70,204 @@
 # Index             Address  Node  PA cnt     Hitm    Total  LclHitm  RmtHitm  records    Loads   Stores    L1Hit   L1Miss      N/A       FB       L1       L2    LclHit  LclHitm    RmtHit  RmtHitm       Lcl       Rmt
 # .....  ..................  ....  ......  .......  .......  .......  .......  .......  .......  .......  .......  .......  .......  .......  .......  .......  ........  .......  ........  .......  ........  ........
 #
-      0      0x7fde12ce8300   N/A       0    2.60%        2        2        0        3        2        1        1        0        0        0        0        0         0        2         0        0         0         0
-      1      0x7fde12d49fc0   N/A       0    2.60%        2        2        0        2        2        0        0        0        0        0        0        0         0        2         0        0         0         0
-      2      0x7fde12cf60c0   N/A       0    2.60%        2        2        0        2        2        0        0        0        0        0        0        0         0        2         0        0         0         0
-      3      0x7fde12d60200   N/A       0    2.60%        2        2        0        2        2        0        0        0        0        0        0        0         0        2         0        0         0         0
-      4      0x7fde12d41580   N/A       0    1.30%        1        1        0        1        1        0        0        0        0        0        0        0         0        1         0        0         0         0
-      5      0x7fde12d41700   N/A       0    1.30%        1        1        0        1        1        0        0        0        0        0        0        0         0        1         0        0         0         0
-      6      0x7fde12d41880   N/A       0    1.30%        1        1        0        1        1        0        0        0        0        0        0        0         0        1         0        0         0         0
-      7      0x7fde12d420c0   N/A       0    1.30%        1        1        0        1        1        0        0        0        0        0        0        0         0        1         0        0         0         0
-      8      0x7fde12d43600   N/A       0    1.30%        1        1        0        1        1        0        0        0        0        0        0        0         0        1         0        0         0         0
-      9      0x7fde12ce2640   N/A       0    1.30%        1        1        0        1        1        0        0        0        0        0        0        0         0        1         0        0         0         0
-     10      0x7fde12d44480   N/A       0    1.30%        1        1        0        1        1        0        0        0        0        0        0        0         0        1         0        0         0         0
-     11      0x7fde12d45740   N/A       0    1.30%        1        1        0        1        1        0        0        0        0        0        0        0         0        1         0        0         0         0
-     12      0x7fde12d45cc0   N/A       0    1.30%        1        1        0        1        1        0        0        0        0        0        0        0         0        1         0        0         0         0
-     13      0x7fde12d45fc0   N/A       0    1.30%        1        1        0        1        1        0        0        0        0        0        0        0         0        1         0        0         0         0
-     14      0x7fde12d469c0   N/A       0    1.30%        1        1        0        1        1        0        0        0        0        0        0        0         0        1         0        0         0         0
-     15      0x7fde12d46ac0   N/A       0    1.30%        1        1        0        1        1        0        0        0        0        0        0        0         0        1         0        0         0         0
-     16      0x7fde12d46fc0   N/A       0    1.30%        1        1        0        1        1        0        0        0        0        0        0        0         0        1         0        0         0         0
-     17      0x7fde12d470c0   N/A       0    1.30%        1        1        0        1        1        0        0        0        0        0        0        0         0        1         0        0         0         0
-     18      0x7fde12d48140   N/A       0    1.30%        1        1        0        1        1        0        0        0        0        0        0        0         0        1         0        0         0         0
-     19      0x7fde12d481c0   N/A       0    1.30%        1        1        0        1        1        0        0        0        0        0        0        0         0        1         0        0         0         0
-     20      0x7fde12d48a80   N/A       0    1.30%        1        1        0        1        1        0        0        0        0        0        0        0         0        1         0        0         0         0
-     21      0x7fde12d49640   N/A       0    1.30%        1        1        0        1        1        0        0        0        0        0        0        0         0        1         0        0         0         0
-     22      0x7fde12d49740   N/A       0    1.30%        1        1        0        1        1        0        0        0        0        0        0        0         0        1         0        0         0         0
-     23      0x7fde12d49940   N/A       0    1.30%        1        1        0        1        1        0        0        0        0        0        0        0         0        1         0        0         0         0
-     24      0x7fde12cea140   N/A       0    1.30%        1        1        0        3        2        1        1        0        0        0        0        0         1        1         0        0         0         0
-     25      0x7fde12d4ba80   N/A       0    1.30%        1        1        0        1        1        0        0        0        0        0        0        0         0        1         0        0         0         0
-     26      0x7fde12d4c000   N/A       0    1.30%        1        1        0        1        1        0        0        0        0        0        0        0         0        1         0        0         0         0
-     27      0x7fde12d4c280   N/A       0    1.30%        1        1        0        1        1        0        0        0        0        0        0        0         0        1         0        0         0         0
-     28      0x7fde12d4c300   N/A       0    1.30%        1        1        0        1        1        0        0        0        0        0        0        0         0        1         0        0         0         0
-     29      0x7fde12cebe00   N/A       0    1.30%        1        1        0        2        1        1        1        0        0        0        0        0         0        1         0        0         0         0
-     30      0x7fde12d4d740   N/A       0    1.30%        1        1        0        1        1        0        0        0        0        0        0        0         0        1         0        0         0         0
-     31      0x7fde12d4df80   N/A       0    1.30%        1        1        0        1        1        0        0        0        0        0        0        0         0        1         0        0         0         0
-     32      0x7fde12d4e740   N/A       0    1.30%        1        1        0        1        1        0        0        0        0        0        0        0         0        1         0        0         0         0
-     33      0x7fde12d4f140   N/A       0    1.30%        1        1        0        1        1        0        0        0        0        0        0        0         0        1         0        0         0         0
-     34      0x7fde12d4f680   N/A       0    1.30%        1        1        0        1        1        0        0        0        0        0        0        0         0        1         0        0         0         0
-     35      0x7fde12d4ff80   N/A       0    1.30%        1        1        0        1        1        0        0        0        0        0        0        0         0        1         0        0         0         0
-     36      0x7fde12d50b00   N/A       0    1.30%        1        1        0        1        1        0        0        0        0        0        0        0         0        1         0        0         0         0
-     37      0x7fde12d51940   N/A       0    1.30%        1        1        0        1        1        0        0        0        0        0        0        0         0        1         0        0         0         0
-     38      0x7fde12d51a00   N/A       0    1.30%        1        1        0        2        2        0        0        0        0        1        0        0         0        1         0        0         0         0
-     39      0x7fde12d52740   N/A       0    1.30%        1        1        0        1        1        0        0        0        0        0        0        0         0        1         0        0         0         0
-     40      0x7fde12d52940   N/A       0    1.30%        1        1        0        1        1        0        0        0        0        0        0        0         0        1         0        0         0         0
-     41      0x7fde12d52f40   N/A       0    1.30%        1        1        0        1        1        0        0        0        0        0        0        0         0        1         0        0         0         0
-     42      0x7fde12d53a40   N/A       0    1.30%        1        1        0        1        1        0        0        0        0        0        0        0         0        1         0        0         0         0
-     43      0x7fde12d541c0   N/A       0    1.30%        1        1        0        1        1        0        0        0        0        0        0        0         0        1         0        0         0         0
-     44      0x7fde12d54f00   N/A       0    1.30%        1        1        0        1        1        0        0        0        0        0        0        0         0        1         0        0         0         0
-     45      0x7fde12d55640   N/A       0    1.30%        1        1        0        1        1        0        0        0        0        0        0        0         0        1         0        0         0         0
-     46      0x7fde12d55d00   N/A       0    1.30%        1        1        0        1        1        0        0        0        0        0        0        0         0        1         0        0         0         0
-     47      0x7fde12d56140   N/A       0    1.30%        1        1        0        1        1        0        0        0        0        0        0        0         0        1         0        0         0         0
-     48      0x7fde12d56240   N/A       0    1.30%        1        1        0        1        1        0        0        0        0        0        0        0         0        1         0        0         0         0
-     49      0x7fde12d56800   N/A       0    1.30%        1        1        0        1        1        0        0        0        0        0        0        0         0        1         0        0         0         0
-     50      0x7fde12d56b00   N/A       0    1.30%        1        1        0        1        1        0        0        0        0        0        0        0         0        1         0        0         0         0
-     51      0x7fde12d57040   N/A       0    1.30%        1        1        0        1        1        0        0        0        0        0        0        0         0        1         0        0         0         0
-     52      0x7fde12cf6100   N/A       0    1.30%        1        1        0        1        1        0        0        0        0        0        0        0         0        1         0        0         0         0
-     53      0x7fde12d572c0   N/A       0    1.30%        1        1        0        1        1        0        0        0        0        0        0        0         0        1         0        0         0         0
-     54      0x7fde12d57fc0   N/A       0    1.30%        1        1        0        1        1        0        0        0        0        0        0        0         0        1         0        0         0         0
-     55      0x7fde12d5a240   N/A       0    1.30%        1        1        0        1        1        0        0        0        0        0        0        0         0        1         0        0         0         0
-     56      0x7fde12d5aa80   N/A       0    1.30%        1        1        0        1        1        0        0        0        0        0        0        0         0        1         0        0         0         0
-     57      0x7fde12d5b280   N/A       0    1.30%        1        1        0        1        1        0        0        0        0        0        0        0         0        1         0        0         0         0
-     58      0x7fde12d5b680   N/A       0    1.30%        1        1        0        1        1        0        0        0        0        0        0        0         0        1         0        0         0         0
-     59      0x7fde12d5c640   N/A       0    1.30%        1        1        0        1        1        0        0        0        0        0        0        0         0        1         0        0         0         0
-     60      0x7fde12d5ca80   N/A       0    1.30%        1        1        0        1        1        0        0        0        0        0        0        0         0        1         0        0         0         0
-     61      0x7fde12d5cb00   N/A       0    1.30%        1        1        0        1        1        0        0        0        0        0        0        0         0        1         0        0         0         0
-     62      0x7fde12d5d000   N/A       0    1.30%        1        1        0        1        1        0        0        0        0        0        0        0         0        1         0        0         0         0
-     63      0x7fde12d5d240   N/A       0    1.30%        1        1        0        2        2        0        0        0        0        1        0        0         0        1         0        0         0         0
-     64      0x7fde12cfcf80   N/A       0    1.30%        1        1        0        1        1        0        0        0        0        0        0        0         0        1         0        0         0         0
-     65      0x7fde12d5e100   N/A       0    1.30%        1        1        0        1        1        0        0        0        0        0        0        0         0        1         0        0         0         0
-     66      0x7fde12d5e680   N/A       0    1.30%        1        1        0        1        1        0        0        0        0        0        0        0         0        1         0        0         0         0
-     67      0x7fde12d5f980   N/A       0    1.30%        1        1        0        1        1        0        0        0        0        0        0        0         0        1         0        0         0         0
-     68      0x7fde12d600c0   N/A       0    1.30%        1        1        0        1        1        0        0        0        0        0        0        0         0        1         0        0         0         0
-     69      0x7fde12d61000   N/A       0    1.30%        1        1        0        1        1        0        0        0        0        0        0        0         0        1         0        0         0         0
-     70      0x7fde12d61040   N/A       0    1.30%        1        1        0        1        1        0        0        0        0        0        0        0         0        1         0        0         0         0
-     71      0x7fde12d61200   N/A       0    1.30%        1        1        0        1        1        0        0        0        0        0        0        0         0        1         0        0         0         0
-     72      0x7fde12d61240   N/A       0    1.30%        1        1        0        1        1        0        0        0        0        0        0        0         0        1         0        0         0         0
+      0      0x7fa3aa32d180   N/A       0    3.12%        1        1        0        1        1        0        0        0        0        0        0        0         0        1         0        0         0         0
+      1      0x7fa3aa32e080   N/A       0    3.12%        1        1        0        1        1        0        0        0        0        0        0        0         0        1         0        0         0         0
+      2      0x7fa3aa32e980   N/A       0    3.12%        1        1        0        1        1        0        0        0        0        0        0        0         0        1         0        0         0         0
+      3      0x7fa3aa32eb00   N/A       0    3.12%        1        1        0        1        1        0        0        0        0        0        0        0         0        1         0        0         0         0
+      4      0x7fa3aa330080   N/A       0    3.12%        1        1        0        1        1        0        0        0        0        0        0        0         0        1         0        0         0         0
+      5      0x7fa3aa331380   N/A       0    3.12%        1        1        0        1        1        0        0        0        0        0        0        0         0        1         0        0         0         0
+      6      0x7fa3aa332000   N/A       0    3.12%        1        1        0        1        1        0        0        0        0        0        0        0         0        1         0        0         0         0
+      7      0x7fa3aa332380   N/A       0    3.12%        1        1        0        1        1        0        0        0        0        0        0        0         0        1         0        0         0         0
+      8      0x7fa3aa2d2000   N/A       0    3.12%        1        1        0        1        1        0        0        0        0        0        0        0         0        1         0        0         0         0
+      9      0x7fa3aa333200   N/A       0    3.12%        1        1        0        1        1        0        0        0        0        0        0        0         0        1         0        0         0         0
+     10      0x7fa3aa2d3200   N/A       0    3.12%        1        1        0        1        1        0        0        0        0        0        0        0         0        1         0        0         0         0
+     11      0x7fa3aa334800   N/A       0    3.12%        1        1        0        1        1        0        0        0        0        0        0        0         0        1         0        0         0         0
+     12      0x7fa3aa335f80   N/A       0    3.12%        1        1        0        1        1        0        0        0        0        0        0        0         0        1         0        0         0         0
+     13      0x7fa3aa337c80   N/A       0    3.12%        1        1        0        1        1        0        0        0        0        0        0        0         0        1         0        0         0         0
+     14      0x7fa3aa338080   N/A       0    3.12%        1        1        0        1        1        0        0        0        0        0        0        0         0        1         0        0         0         0
+     15      0x7fa3aa2d9b40   N/A       0    3.12%        1        1        0        2        1        1        1        0        0        0        0        0         0        1         0        0         0         0
+     16      0x7fa3aa33b100   N/A       0    3.12%        1        1        0        1        1        0        0        0        0        0        0        0         0        1         0        0         0         0
+     17      0x7fa3aa33b380   N/A       0    3.12%        1        1        0        1        1        0        0        0        0        0        0        0         0        1         0        0         0         0
+     18      0x7fa3aa33c1c0   N/A       0    3.12%        1        1        0        1        1        0        0        0        0        0        0        0         0        1         0        0         0         0
+     19      0x7fa3aa33cc80   N/A       0    3.12%        1        1        0        1        1        0        0        0        0        0        0        0         0        1         0        0         0         0
+     20      0x7fa3aa33e000   N/A       0    3.12%        1        1        0        1        1        0        0        0        0        0        0        0         0        1         0        0         0         0
+     21      0x7fa3aa340180   N/A       0    3.12%        1        1        0        1        1        0        0        0        0        0        0        0         0        1         0        0         0         0
+     22      0x7fa3aa340e40   N/A       0    3.12%        1        1        0        1        1        0        0        0        0        0        0        0         0        1         0        0         0         0
+     23      0x7fa3aa341640   N/A       0    3.12%        1        1        0        1        1        0        0        0        0        0        0        0         0        1         0        0         0         0
+     24      0x7fa3aa342f00   N/A       0    3.12%        1        1        0        1        1        0        0        0        0        0        0        0         0        1         0        0         0         0
+     25      0x7fa3aa345b00   N/A       0    3.12%        1        1        0        2        2        0        0        0        0        1        0        0         0        1         0        0         0         0
+     26      0x7fa3aa348000   N/A       0    3.12%        1        1        0        1        1        0        0        0        0        0        0        0         0        1         0        0         0         0
+     27      0x7fa3aa2e7900   N/A       0    3.12%        1        1        0        1        1        0        0        0        0        0        0        0         0        1         0        0         0         0
+     28      0x7fa3aa348b40   N/A       0    3.12%        1        1        0        1        1        0        0        0        0        0        0        0         0        1         0        0         0         0
+     29      0x7fa3aa349440   N/A       0    3.12%        1        1        0        1        1        0        0        0        0        0        0        0         0        1         0        0         0         0
+     30      0x7fa3aa349600   N/A       0    3.12%        1        1        0        1        1        0        0        0        0        0        0        0         0        1         0        0         0         0
+     31      0x7fa3aa34aa00   N/A       0    3.12%        1        1        0        1        1        0        0        0        0        0        0        0         0        1         0        0         0         0
 
 =================================================
       Shared Cache Line Distribution Pareto      
 =================================================
 #
-#        ----- HITM -----  ------- Store Refs ------  --------- Data address ---------                      ---------- cycles ----------    Total       cpu                                                   Shared                                      
-#   Num  RmtHitm  LclHitm   L1 Hit  L1 Miss      N/A              Offset  Node  PA cnt        Code address  rmt hitm  lcl hitm      load  records       cnt                          Symbol                   Object                     Source:Line  Node
-# .....  .......  .......  .......  .......  .......  ..................  ....  ......  ..................  ........  ........  ........  .......  ........  ..............................  .......................  ..............................  ....
+#        ----- HITM -----  ------- Store Refs ------  --------- Data address ---------                      ---------- cycles ----------    Total       cpu                                             Shared                                
+#   Num  RmtHitm  LclHitm   L1 Hit  L1 Miss      N/A              Offset  Node  PA cnt        Code address  rmt hitm  lcl hitm      load  records       cnt                    Symbol                   Object               Source:Line  Node
+# .....  .......  .......  .......  .......  .......  ..................  ....  ......  ..................  ........  ........  ........  .......  ........  ........................  .......................  ........................  ....
 #
   ----------------------------------------------------------------------
-      0        0        2        1        0        0      0x7fde12ce8300
+      0        0        1        0        0        0      0x7fa3aa32d180
   ----------------------------------------------------------------------
-           0.00%  100.00%    0.00%    0.00%    0.00%                 0x0   N/A       0      0x56129775b774         0       301         0        2         0  [.] rbipc_audit_recover_dead_p  bench_librbipc_isolated  rbipc_audit_recover_dead_produ  
-           0.00%    0.00%  100.00%    0.00%    0.00%                 0x8   N/A       0      0x561297754deb         0         0         0        1         0  [.] rbipc_slot_release_ex       bench_librbipc_isolated  rbipc_slot_release_ex+43        
+           0.00%  100.00%    0.00%    0.00%    0.00%                 0x0   N/A       0      0x560451d17dd5         0       777         0        1         0  [.] rbipc_simd_scan_avx2  bench_librbipc_isolated  rbipc_simd_scan_avx2+277  
 
   ----------------------------------------------------------------------
-      1        0        2        0        0        0      0x7fde12d49fc0
+      1        0        1        0        0        0      0x7fa3aa32e080
   ----------------------------------------------------------------------
-           0.00%  100.00%    0.00%    0.00%    0.00%                 0x0   N/A       0      0x56129775bce4         0       164         0        2         0  [.] rbipc_audit_recover_dead_c  bench_librbipc_isolated  rbipc_audit_recover_dead_consu  
+           0.00%  100.00%    0.00%    0.00%    0.00%                 0x0   N/A       0      0x560451d17dee         0       152         0        1         0  [.] rbipc_simd_scan_avx2  bench_librbipc_isolated  rbipc_simd_scan_avx2+302  
 
   ----------------------------------------------------------------------
-      2        0        2        0        0        0      0x7fde12cf60c0
+      2        0        1        0        0        0      0x7fa3aa32e980
   ----------------------------------------------------------------------
-           0.00%  100.00%    0.00%    0.00%    0.00%                 0x0   N/A       0      0x56129775b774         0       120         0        2         0  [.] rbipc_audit_recover_dead_p  bench_librbipc_isolated  rbipc_audit_recover_dead_produ  
+           0.00%  100.00%    0.00%    0.00%    0.00%                 0x0   N/A       0      0x560451d17dd5         0       161         0        1         0  [.] rbipc_simd_scan_avx2  bench_librbipc_isolated  rbipc_simd_scan_avx2+277  
 
   ----------------------------------------------------------------------
-      3        0        2        0        0        0      0x7fde12d60200
+      3        0        1        0        0        0      0x7fa3aa32eb00
   ----------------------------------------------------------------------
-           0.00%  100.00%    0.00%    0.00%    0.00%                 0x0   N/A       0      0x56129775bce4         0       244         0        2         0  [.] rbipc_audit_recover_dead_c  bench_librbipc_isolated  rbipc_audit_recover_dead_consu  
+           0.00%  100.00%    0.00%    0.00%    0.00%                 0x0   N/A       0      0x560451d17dd5         0       328         0        1         0  [.] rbipc_simd_scan_avx2  bench_librbipc_isolated  rbipc_simd_scan_avx2+277  
 
   ----------------------------------------------------------------------
-      4        0        1        0        0        0      0x7fde12d41580
+      4        0        1        0        0        0      0x7fa3aa330080
   ----------------------------------------------------------------------
-           0.00%  100.00%    0.00%    0.00%    0.00%                 0x0   N/A       0      0x56129775bce4         0       164         0        1         0  [.] rbipc_audit_recover_dead_c  bench_librbipc_isolated  rbipc_audit_recover_dead_consu  
+           0.00%  100.00%    0.00%    0.00%    0.00%                 0x0   N/A       0      0x560451d17dee         0       158         0        1         0  [.] rbipc_simd_scan_avx2  bench_librbipc_isolated  rbipc_simd_scan_avx2+302  
 
   ----------------------------------------------------------------------
-      5        0        1        0        0        0      0x7fde12d41700
+      5        0        1        0        0        0      0x7fa3aa331380
   ----------------------------------------------------------------------
-           0.00%  100.00%    0.00%    0.00%    0.00%                 0x0   N/A       0      0x56129775bce4         0        54         0        1         0  [.] rbipc_audit_recover_dead_c  bench_librbipc_isolated  rbipc_audit_recover_dead_consu  
+           0.00%  100.00%    0.00%    0.00%    0.00%                 0x0   N/A       0      0x560451d17dee         0       447         0        1         0  [.] rbipc_simd_scan_avx2  bench_librbipc_isolated  rbipc_simd_scan_avx2+302  
 
   ----------------------------------------------------------------------
-      6        0        1        0        0        0      0x7fde12d41880
+      6        0        1        0        0        0      0x7fa3aa332000
   ----------------------------------------------------------------------
-           0.00%  100.00%    0.00%    0.00%    0.00%                 0x0   N/A       0      0x56129775bce4         0       377         0        1         0  [.] rbipc_audit_recover_dead_c  bench_librbipc_isolated  rbipc_audit_recover_dead_consu  
+           0.00%  100.00%    0.00%    0.00%    0.00%                 0x0   N/A       0      0x560451d17dd5         0       175         0        1         0  [.] rbipc_simd_scan_avx2  bench_librbipc_isolated  rbipc_simd_scan_avx2+277  
 
   ----------------------------------------------------------------------
-      7        0        1        0        0        0      0x7fde12d420c0
+      7        0        1        0        0        0      0x7fa3aa332380
   ----------------------------------------------------------------------
-           0.00%  100.00%    0.00%    0.00%    0.00%                 0x0   N/A       0      0x56129775bce4         0       229         0        1         0  [.] rbipc_audit_recover_dead_c  bench_librbipc_isolated  rbipc_audit_recover_dead_consu  
+           0.00%  100.00%    0.00%    0.00%    0.00%                 0x0   N/A       0      0x560451d17de1         0       358         0        1         0  [.] rbipc_simd_scan_avx2  bench_librbipc_isolated  rbipc_simd_scan_avx2+289  
 
   ----------------------------------------------------------------------
-      8        0        1        0        0        0      0x7fde12d43600
+      8        0        1        0        0        0      0x7fa3aa2d2000
   ----------------------------------------------------------------------
-           0.00%  100.00%    0.00%    0.00%    0.00%                 0x0   N/A       0      0x56129775bce4         0        87         0        1         0  [.] rbipc_audit_recover_dead_c  bench_librbipc_isolated  rbipc_audit_recover_dead_consu  
+           0.00%  100.00%    0.00%    0.00%    0.00%                 0x0   N/A       0      0x560451d17dd5         0       135         0        1         0  [.] rbipc_simd_scan_avx2  bench_librbipc_isolated  rbipc_simd_scan_avx2+277  
 
   ----------------------------------------------------------------------
-      9        0        1        0        0        0      0x7fde12ce2640
+      9        0        1        0        0        0      0x7fa3aa333200
   ----------------------------------------------------------------------
-           0.00%  100.00%    0.00%    0.00%    0.00%                 0x0   N/A       0      0x56129775b774         0       135         0        1         0  [.] rbipc_audit_recover_dead_p  bench_librbipc_isolated  rbipc_audit_recover_dead_produ  
+           0.00%  100.00%    0.00%    0.00%    0.00%                 0x0   N/A       0      0x560451d17dd5         0       198         0        1         0  [.] rbipc_simd_scan_avx2  bench_librbipc_isolated  rbipc_simd_scan_avx2+277  
 
   ----------------------------------------------------------------------
-     10        0        1        0        0        0      0x7fde12d44480
+     10        0        1        0        0        0      0x7fa3aa2d3200
   ----------------------------------------------------------------------
-           0.00%  100.00%    0.00%    0.00%    0.00%                 0x0   N/A       0      0x56129775bce4         0       626         0        1         0  [.] rbipc_audit_recover_dead_c  bench_librbipc_isolated  rbipc_audit_recover_dead_consu  
+           0.00%  100.00%    0.00%    0.00%    0.00%                 0x0   N/A       0      0x560451d17dee         0       147         0        1         0  [.] rbipc_simd_scan_avx2  bench_librbipc_isolated  rbipc_simd_scan_avx2+302  
 
   ----------------------------------------------------------------------
-     11        0        1        0        0        0      0x7fde12d45740
+     11        0        1        0        0        0      0x7fa3aa334800
   ----------------------------------------------------------------------
-           0.00%  100.00%    0.00%    0.00%    0.00%                 0x0   N/A       0      0x56129775bce4         0       128         0        1         0  [.] rbipc_audit_recover_dead_c  bench_librbipc_isolated  rbipc_audit_recover_dead_consu  
+           0.00%  100.00%    0.00%    0.00%    0.00%                 0x0   N/A       0      0x560451d17dd5         0       135         0        1         0  [.] rbipc_simd_scan_avx2  bench_librbipc_isolated  rbipc_simd_scan_avx2+277  
 
   ----------------------------------------------------------------------
-     12        0        1        0        0        0      0x7fde12d45cc0
+     12        0        1        0        0        0      0x7fa3aa335f80
   ----------------------------------------------------------------------
-           0.00%  100.00%    0.00%    0.00%    0.00%                 0x0   N/A       0      0x56129775bce4         0       196         0        1         0  [.] rbipc_audit_recover_dead_c  bench_librbipc_isolated  rbipc_audit_recover_dead_consu  
+           0.00%  100.00%    0.00%    0.00%    0.00%                 0x0   N/A       0      0x560451d17dd5         0       378         0        1         0  [.] rbipc_simd_scan_avx2  bench_librbipc_isolated  rbipc_simd_scan_avx2+277  
 
   ----------------------------------------------------------------------
-     13        0        1        0        0        0      0x7fde12d45fc0
+     13        0        1        0        0        0      0x7fa3aa337c80
   ----------------------------------------------------------------------
-           0.00%  100.00%    0.00%    0.00%    0.00%                 0x0   N/A       0      0x56129775bce4         0        58         0        1         0  [.] rbipc_audit_recover_dead_c  bench_librbipc_isolated  rbipc_audit_recover_dead_consu  
+           0.00%  100.00%    0.00%    0.00%    0.00%                 0x0   N/A       0      0x560451d17dd5         0       156         0        1         0  [.] rbipc_simd_scan_avx2  bench_librbipc_isolated  rbipc_simd_scan_avx2+277  
 
   ----------------------------------------------------------------------
-     14        0        1        0        0        0      0x7fde12d469c0
+     14        0        1        0        0        0      0x7fa3aa338080
   ----------------------------------------------------------------------
-           0.00%  100.00%    0.00%    0.00%    0.00%                 0x0   N/A       0      0x56129775bce4         0        89         0        1         0  [.] rbipc_audit_recover_dead_c  bench_librbipc_isolated  rbipc_audit_recover_dead_consu  
+           0.00%  100.00%    0.00%    0.00%    0.00%                 0x0   N/A       0      0x560451d17dee         0       141         0        1         0  [.] rbipc_simd_scan_avx2  bench_librbipc_isolated  rbipc_simd_scan_avx2+302  
 
   ----------------------------------------------------------------------
-     15        0        1        0        0        0      0x7fde12d46ac0
+     15        0        1        1        0        0      0x7fa3aa2d9b40
   ----------------------------------------------------------------------
-           0.00%  100.00%    0.00%    0.00%    0.00%                 0x0   N/A       0      0x56129775bce4         0        54         0        1         0  [.] rbipc_audit_recover_dead_c  bench_librbipc_isolated  rbipc_audit_recover_dead_consu  
+           0.00%  100.00%    0.00%    0.00%    0.00%                 0x0   N/A       0      0x560451d17de1         0       223         0        1         0  [.] rbipc_simd_scan_avx2  bench_librbipc_isolated  rbipc_simd_scan_avx2+289  
+           0.00%    0.00%  100.00%    0.00%    0.00%                0x14   N/A       0      0x560451d19bd1         0         0         0        1         0  [.] consumer_fn           bench_librbipc_isolated  consumer_fn+2113          
 
   ----------------------------------------------------------------------
-     16        0        1        0        0        0      0x7fde12d46fc0
+     16        0        1        0        0        0      0x7fa3aa33b100
   ----------------------------------------------------------------------
-           0.00%  100.00%    0.00%    0.00%    0.00%                 0x0   N/A       0      0x56129775bce4         0        90         0        1         0  [.] rbipc_audit_recover_dead_c  bench_librbipc_isolated  rbipc_audit_recover_dead_consu  
+           0.00%  100.00%    0.00%    0.00%    0.00%                 0x0   N/A       0      0x560451d17dd5         0       432         0        1         0  [.] rbipc_simd_scan_avx2  bench_librbipc_isolated  rbipc_simd_scan_avx2+277  
 
   ----------------------------------------------------------------------
-     17        0        1        0        0        0      0x7fde12d470c0
+     17        0        1        0        0        0      0x7fa3aa33b380
   ----------------------------------------------------------------------
-           0.00%  100.00%    0.00%    0.00%    0.00%                 0x0   N/A       0      0x56129775bce4         0       175         0        1         0  [.] rbipc_audit_recover_dead_c  bench_librbipc_isolated  rbipc_audit_recover_dead_consu  
+           0.00%  100.00%    0.00%    0.00%    0.00%                 0x0   N/A       0      0x560451d17dee         0       469         0        1         0  [.] rbipc_simd_scan_avx2  bench_librbipc_isolated  rbipc_simd_scan_avx2+302  
 
   ----------------------------------------------------------------------
-     18        0        1        0        0        0      0x7fde12d48140
+     18        0        1        0        0        0      0x7fa3aa33c1c0
   ----------------------------------------------------------------------
-           0.00%  100.00%    0.00%    0.00%    0.00%                 0x0   N/A       0      0x56129775bce4         0       226         0        1         0  [.] rbipc_audit_recover_dead_c  bench_librbipc_isolated  rbipc_audit_recover_dead_consu  
+           0.00%  100.00%    0.00%    0.00%    0.00%                 0x0   N/A       0      0x560451d17de1         0       312         0        1         0  [.] rbipc_simd_scan_avx2  bench_librbipc_isolated  rbipc_simd_scan_avx2+289  
 
   ----------------------------------------------------------------------
-     19        0        1        0        0        0      0x7fde12d481c0
+     19        0        1        0        0        0      0x7fa3aa33cc80
   ----------------------------------------------------------------------
-           0.00%  100.00%    0.00%    0.00%    0.00%                 0x0   N/A       0      0x56129775bce4         0       310         0        1         0  [.] rbipc_audit_recover_dead_c  bench_librbipc_isolated  rbipc_audit_recover_dead_consu  
+           0.00%  100.00%    0.00%    0.00%    0.00%                 0x0   N/A       0      0x560451d17dee         0       150         0        1         0  [.] rbipc_simd_scan_avx2  bench_librbipc_isolated  rbipc_simd_scan_avx2+302  
 
   ----------------------------------------------------------------------
-     20        0        1        0        0        0      0x7fde12d48a80
+     20        0        1        0        0        0      0x7fa3aa33e000
   ----------------------------------------------------------------------
-           0.00%  100.00%    0.00%    0.00%    0.00%                 0x0   N/A       0      0x56129775bce4         0       193         0        1         0  [.] rbipc_audit_recover_dead_c  bench_librbipc_isolated  rbipc_audit_recover_dead_consu  
+           0.00%  100.00%    0.00%    0.00%    0.00%                 0x0   N/A       0      0x560451d17dee         0        86         0        1         0  [.] rbipc_simd_scan_avx2  bench_librbipc_isolated  rbipc_simd_scan_avx2+302  
 
   ----------------------------------------------------------------------
-     21        0        1        0        0        0      0x7fde12d49640
+     21        0        1        0        0        0      0x7fa3aa340180
   ----------------------------------------------------------------------
-           0.00%  100.00%    0.00%    0.00%    0.00%                 0x0   N/A       0      0x56129775bce4         0       393         0        1         0  [.] rbipc_audit_recover_dead_c  bench_librbipc_isolated  rbipc_audit_recover_dead_consu  
+           0.00%  100.00%    0.00%    0.00%    0.00%                 0x0   N/A       0      0x560451d17dee         0       212         0        1         0  [.] rbipc_simd_scan_avx2  bench_librbipc_isolated  rbipc_simd_scan_avx2+302  
 
   ----------------------------------------------------------------------
-     22        0        1        0        0        0      0x7fde12d49740
+     22        0        1        0        0        0      0x7fa3aa340e40
   ----------------------------------------------------------------------
-           0.00%  100.00%    0.00%    0.00%    0.00%                 0x0   N/A       0      0x56129775bce4         0       132         0        1         0  [.] rbipc_audit_recover_dead_c  bench_librbipc_isolated  rbipc_audit_recover_dead_consu  
+           0.00%  100.00%    0.00%    0.00%    0.00%                 0x0   N/A       0      0x560451d17dd5         0       402         0        1         0  [.] rbipc_simd_scan_avx2  bench_librbipc_isolated  rbipc_simd_scan_avx2+277  
 
   ----------------------------------------------------------------------
-     23        0        1        0        0        0      0x7fde12d49940
+     23        0        1        0        0        0      0x7fa3aa341640
   ----------------------------------------------------------------------
-           0.00%  100.00%    0.00%    0.00%    0.00%                 0x0   N/A       0      0x56129775bce4         0        80         0        1         0  [.] rbipc_audit_recover_dead_c  bench_librbipc_isolated  rbipc_audit_recover_dead_consu  
+           0.00%  100.00%    0.00%    0.00%    0.00%                 0x0   N/A       0      0x560451d17dd5         0       511         0        1         0  [.] rbipc_simd_scan_avx2  bench_librbipc_isolated  rbipc_simd_scan_avx2+277  
 
   ----------------------------------------------------------------------
-     24        0        1        1        0        0      0x7fde12cea140
+     24        0        1        0        0        0      0x7fa3aa342f00
   ----------------------------------------------------------------------
-           0.00%  100.00%    0.00%    0.00%    0.00%                 0x0   N/A       0      0x56129775bce4         0       421         0        1         0  [.] rbipc_audit_recover_dead_c  bench_librbipc_isolated  rbipc_audit_recover_dead_consu  
-           0.00%    0.00%  100.00%    0.00%    0.00%                0x14   N/A       0      0x561297754e00         0         0         0        1         0  [.] rbipc_slot_release_ex       bench_librbipc_isolated  rbipc_slot_release_ex+64        
+           0.00%  100.00%    0.00%    0.00%    0.00%                 0x0   N/A       0      0x560451d17dee         0        99         0        1         0  [.] rbipc_simd_scan_avx2  bench_librbipc_isolated  rbipc_simd_scan_avx2+302  
 
   ----------------------------------------------------------------------
-     25        0        1        0        0        0      0x7fde12d4ba80
+     25        0        1        0        0        0      0x7fa3aa345b00
   ----------------------------------------------------------------------
-           0.00%  100.00%    0.00%    0.00%    0.00%                 0x0   N/A       0      0x56129775bce4         0       284         0        1         0  [.] rbipc_audit_recover_dead_c  bench_librbipc_isolated  rbipc_audit_recover_dead_consu  
+           0.00%  100.00%    0.00%    0.00%    0.00%                 0x0   N/A       0      0x560451d17dd5         0       468       226        2         0  [.] rbipc_simd_scan_avx2  bench_librbipc_isolated  rbipc_simd_scan_avx2+277  
 
   ----------------------------------------------------------------------
-     26        0        1        0        0        0      0x7fde12d4c000
+     26        0        1        0        0        0      0x7fa3aa348000
   ----------------------------------------------------------------------
-           0.00%  100.00%    0.00%    0.00%    0.00%                 0x0   N/A       0      0x56129775bce4         0       164         0        1         0  [.] rbipc_audit_recover_dead_c  bench_librbipc_isolated  rbipc_audit_recover_dead_consu  
+           0.00%  100.00%    0.00%    0.00%    0.00%                 0x0   N/A       0      0x560451d17dee         0       212         0        1         0  [.] rbipc_simd_scan_avx2  bench_librbipc_isolated  rbipc_simd_scan_avx2+302  
 
   ----------------------------------------------------------------------
-     27        0        1        0        0        0      0x7fde12d4c280
+     27        0        1        0        0        0      0x7fa3aa2e7900
   ----------------------------------------------------------------------
-           0.00%  100.00%    0.00%    0.00%    0.00%                 0x0   N/A       0      0x56129775bce4         0       296         0        1         0  [.] rbipc_audit_recover_dead_c  bench_librbipc_isolated  rbipc_audit_recover_dead_consu  
+           0.00%  100.00%    0.00%    0.00%    0.00%                 0x0   N/A       0      0x560451d17dee         0        75         0        1         0  [.] rbipc_simd_scan_avx2  bench_librbipc_isolated  rbipc_simd_scan_avx2+302  
 
   ----------------------------------------------------------------------
-     28        0        1        0        0        0      0x7fde12d4c300
+     28        0        1        0        0        0      0x7fa3aa348b40
   ----------------------------------------------------------------------
-           0.00%  100.00%    0.00%    0.00%    0.00%                 0x0   N/A       0      0x56129775bce4         0       243         0        1         0  [.] rbipc_audit_recover_dead_c  bench_librbipc_isolated  rbipc_audit_recover_dead_consu  
+           0.00%  100.00%    0.00%    0.00%    0.00%                 0x0   N/A       0      0x560451d17de1         0       228         0        1         0  [.] rbipc_simd_scan_avx2  bench_librbipc_isolated  rbipc_simd_scan_avx2+289  
 
   ----------------------------------------------------------------------
-     29        0        1        1        0        0      0x7fde12cebe00
+     29        0        1        0        0        0      0x7fa3aa349440
   ----------------------------------------------------------------------
-           0.00%  100.00%    0.00%    0.00%    0.00%                 0x0   N/A       0      0x56129775bce4         0        86         0        1         0  [.] rbipc_audit_recover_dead_c  bench_librbipc_isolated  rbipc_audit_recover_dead_consu  
-           0.00%    0.00%  100.00%    0.00%    0.00%                 0x8   N/A       0      0x561297754deb         0         0         0        1         0  [.] rbipc_slot_release_ex       bench_librbipc_isolated  rbipc_slot_release_ex+43        
+           0.00%  100.00%    0.00%    0.00%    0.00%                 0x0   N/A       0      0x560451d17dc8         0       267         0        1         0  [.] rbipc_simd_scan_avx2  bench_librbipc_isolated  rbipc_simd_scan_avx2+264  
 
   ----------------------------------------------------------------------
-     30        0        1        0        0        0      0x7fde12d4d740
+     30        0        1        0        0        0      0x7fa3aa349600
   ----------------------------------------------------------------------
-           0.00%  100.00%    0.00%    0.00%    0.00%                 0x0   N/A       0      0x56129775bce4         0       131         0        1         0  [.] rbipc_audit_recover_dead_c  bench_librbipc_isolated  rbipc_audit_recover_dead_consu  
+           0.00%  100.00%    0.00%    0.00%    0.00%                 0x0   N/A       0      0x560451d17dee         0       228         0        1         0  [.] rbipc_simd_scan_avx2  bench_librbipc_isolated  rbipc_simd_scan_avx2+302  
 
   ----------------------------------------------------------------------
-     31        0        1        0        0        0      0x7fde12d4df80
+     31        0        1        0        0        0      0x7fa3aa34aa00
   ----------------------------------------------------------------------
-           0.00%  100.00%    0.00%    0.00%    0.00%                 0x0   N/A       0      0x56129775bce4         0       260         0        1         0  [.] rbipc_audit_recover_dead_c  bench_librbipc_isolated  rbipc_audit_recover_dead_consu  
-
-  ----------------------------------------------------------------------
-     32        0        1        0        0        0      0x7fde12d4e740
-  ----------------------------------------------------------------------
-           0.00%  100.00%    0.00%    0.00%    0.00%                 0x0   N/A       0      0x56129775bce4         0       149         0        1         0  [.] rbipc_audit_recover_dead_c  bench_librbipc_isolated  rbipc_audit_recover_dead_consu  
-
-  ----------------------------------------------------------------------
-     33        0        1        0        0        0      0x7fde12d4f140
-  ----------------------------------------------------------------------
-           0.00%  100.00%    0.00%    0.00%    0.00%                 0x0   N/A       0      0x56129775bce4         0       146         0        1         0  [.] rbipc_audit_recover_dead_c  bench_librbipc_isolated  rbipc_audit_recover_dead_consu  
-
-  ----------------------------------------------------------------------
-     34        0        1        0        0        0      0x7fde12d4f680
-  ----------------------------------------------------------------------
-           0.00%  100.00%    0.00%    0.00%    0.00%                 0x0   N/A       0      0x56129775bce4         0       573         0        1         0  [.] rbipc_audit_recover_dead_c  bench_librbipc_isolated  rbipc_audit_recover_dead_consu  
-
-  ----------------------------------------------------------------------
-     35        0        1        0        0        0      0x7fde12d4ff80
-  ----------------------------------------------------------------------
-           0.00%  100.00%    0.00%    0.00%    0.00%                 0x0   N/A       0      0x56129775bce4         0        85         0        1         0  [.] rbipc_audit_recover_dead_c  bench_librbipc_isolated  rbipc_audit_recover_dead_consu  
-
-  ----------------------------------------------------------------------
-     36        0        1        0        0        0      0x7fde12d50b00
-  ----------------------------------------------------------------------
-           0.00%  100.00%    0.00%    0.00%    0.00%                 0x0   N/A       0      0x56129775bce4         0       223         0        1         0  [.] rbipc_audit_recover_dead_c  bench_librbipc_isolated  rbipc_audit_recover_dead_consu  
-
-  ----------------------------------------------------------------------
-     37        0        1        0        0        0      0x7fde12d51940
-  ----------------------------------------------------------------------
-           0.00%  100.00%    0.00%    0.00%    0.00%                 0x0   N/A       0      0x56129775bce4         0       160         0        1         0  [.] rbipc_audit_recover_dead_c  bench_librbipc_isolated  rbipc_audit_recover_dead_consu  
-
-  ----------------------------------------------------------------------
-     38        0        1        0        0        0      0x7fde12d51a00
-  ----------------------------------------------------------------------
-           0.00%  100.00%    0.00%    0.00%    0.00%                 0x0   N/A       0      0x56129775bce4         0       258         0        1         0  [.] rbipc_audit_recover_dead_c  bench_librbipc_isolated  rbipc_audit_recover_dead_consu  
-
-  ----------------------------------------------------------------------
-     39        0        1        0        0        0      0x7fde12d52740
-  ----------------------------------------------------------------------
-           0.00%  100.00%    0.00%    0.00%    0.00%                 0x0   N/A       0      0x56129775bce4         0       138         0        1         0  [.] rbipc_audit_recover_dead_c  bench_librbipc_isolated  rbipc_audit_recover_dead_consu  
-
-  ----------------------------------------------------------------------
-     40        0        1        0        0        0      0x7fde12d52940
-  ----------------------------------------------------------------------
-           0.00%  100.00%    0.00%    0.00%    0.00%                 0x0   N/A       0      0x56129775bce4         0       163         0        1         0  [.] rbipc_audit_recover_dead_c  bench_librbipc_isolated  rbipc_audit_recover_dead_consu  
-
-  ----------------------------------------------------------------------
-     41        0        1        0        0        0      0x7fde12d52f40
-  ----------------------------------------------------------------------
-           0.00%  100.00%    0.00%    0.00%    0.00%                 0x0   N/A       0      0x56129775bce4         0       381         0        1         0  [.] rbipc_audit_recover_dead_c  bench_librbipc_isolated  rbipc_audit_recover_dead_consu  
-
-  ----------------------------------------------------------------------
-     42        0        1        0        0        0      0x7fde12d53a40
-  ----------------------------------------------------------------------
-           0.00%  100.00%    0.00%    0.00%    0.00%                 0x0   N/A       0      0x56129775bce4         0        88         0        1         0  [.] rbipc_audit_recover_dead_c  bench_librbipc_isolated  rbipc_audit_recover_dead_consu  
-
-  ----------------------------------------------------------------------
-     43        0        1        0        0        0      0x7fde12d541c0
-  ----------------------------------------------------------------------
-           0.00%  100.00%    0.00%    0.00%    0.00%                 0x0   N/A       0      0x56129775bce4         0       307         0        1         0  [.] rbipc_audit_recover_dead_c  bench_librbipc_isolated  rbipc_audit_recover_dead_consu  
-
-  ----------------------------------------------------------------------
-     44        0        1        0        0        0      0x7fde12d54f00
-  ----------------------------------------------------------------------
-           0.00%  100.00%    0.00%    0.00%    0.00%                 0x0   N/A       0      0x56129775bce4         0       270         0        1         0  [.] rbipc_audit_recover_dead_c  bench_librbipc_isolated  rbipc_audit_recover_dead_consu  
-
-  ----------------------------------------------------------------------
-     45        0        1        0        0        0      0x7fde12d55640
-  ----------------------------------------------------------------------
-           0.00%  100.00%    0.00%    0.00%    0.00%                 0x0   N/A       0      0x56129775bce4         0       121         0        1         0  [.] rbipc_audit_recover_dead_c  bench_librbipc_isolated  rbipc_audit_recover_dead_consu  
-
-  ----------------------------------------------------------------------
-     46        0        1        0        0        0      0x7fde12d55d00
-  ----------------------------------------------------------------------
-           0.00%  100.00%    0.00%    0.00%    0.00%                 0x0   N/A       0      0x56129775bce4         0       177         0        1         0  [.] rbipc_audit_recover_dead_c  bench_librbipc_isolated  rbipc_audit_recover_dead_consu  
-
-  ----------------------------------------------------------------------
-     47        0        1        0        0        0      0x7fde12d56140
-  ----------------------------------------------------------------------
-           0.00%  100.00%    0.00%    0.00%    0.00%                 0x0   N/A       0      0x56129775bce4         0       201         0        1         0  [.] rbipc_audit_recover_dead_c  bench_librbipc_isolated  rbipc_audit_recover_dead_consu  
-
-  ----------------------------------------------------------------------
-     48        0        1        0        0        0      0x7fde12d56240
-  ----------------------------------------------------------------------
-           0.00%  100.00%    0.00%    0.00%    0.00%                 0x0   N/A       0      0x56129775bce4         0       141         0        1         0  [.] rbipc_audit_recover_dead_c  bench_librbipc_isolated  rbipc_audit_recover_dead_consu  
-
-  ----------------------------------------------------------------------
-     49        0        1        0        0        0      0x7fde12d56800
-  ----------------------------------------------------------------------
-           0.00%  100.00%    0.00%    0.00%    0.00%                 0x0   N/A       0      0x56129775bce4         0       155         0        1         0  [.] rbipc_audit_recover_dead_c  bench_librbipc_isolated  rbipc_audit_recover_dead_consu  
-
-  ----------------------------------------------------------------------
-     50        0        1        0        0        0      0x7fde12d56b00
-  ----------------------------------------------------------------------
-           0.00%  100.00%    0.00%    0.00%    0.00%                 0x0   N/A       0      0x56129775bce4         0        53         0        1         0  [.] rbipc_audit_recover_dead_c  bench_librbipc_isolated  rbipc_audit_recover_dead_consu  
-
-  ----------------------------------------------------------------------
-     51        0        1        0        0        0      0x7fde12d57040
-  ----------------------------------------------------------------------
-           0.00%  100.00%    0.00%    0.00%    0.00%                 0x0   N/A       0      0x56129775bce4         0       408         0        1         0  [.] rbipc_audit_recover_dead_c  bench_librbipc_isolated  rbipc_audit_recover_dead_consu  
-
-  ----------------------------------------------------------------------
-     52        0        1        0        0        0      0x7fde12cf6100
-  ----------------------------------------------------------------------
-           0.00%  100.00%    0.00%    0.00%    0.00%                 0x0   N/A       0      0x56129775b774         0       170         0        1         0  [.] rbipc_audit_recover_dead_p  bench_librbipc_isolated  rbipc_audit_recover_dead_produ  
-
-  ----------------------------------------------------------------------
-     53        0        1        0        0        0      0x7fde12d572c0
-  ----------------------------------------------------------------------
-           0.00%  100.00%    0.00%    0.00%    0.00%                 0x0   N/A       0      0x56129775bce4         0       248         0        1         0  [.] rbipc_audit_recover_dead_c  bench_librbipc_isolated  rbipc_audit_recover_dead_consu  
-
-  ----------------------------------------------------------------------
-     54        0        1        0        0        0      0x7fde12d57fc0
-  ----------------------------------------------------------------------
-           0.00%  100.00%    0.00%    0.00%    0.00%                 0x0   N/A       0      0x56129775bce4         0        80         0        1         0  [.] rbipc_audit_recover_dead_c  bench_librbipc_isolated  rbipc_audit_recover_dead_consu  
-
-  ----------------------------------------------------------------------
-     55        0        1        0        0        0      0x7fde12d5a240
-  ----------------------------------------------------------------------
-           0.00%  100.00%    0.00%    0.00%    0.00%                 0x0   N/A       0      0x56129775bce4         0       163         0        1         0  [.] rbipc_audit_recover_dead_c  bench_librbipc_isolated  rbipc_audit_recover_dead_consu  
-
-  ----------------------------------------------------------------------
-     56        0        1        0        0        0      0x7fde12d5aa80
-  ----------------------------------------------------------------------
-           0.00%  100.00%    0.00%    0.00%    0.00%                 0x0   N/A       0      0x56129775bce4         0       137         0        1         0  [.] rbipc_audit_recover_dead_c  bench_librbipc_isolated  rbipc_audit_recover_dead_consu  
-
-  ----------------------------------------------------------------------
-     57        0        1        0        0        0      0x7fde12d5b280
-  ----------------------------------------------------------------------
-           0.00%  100.00%    0.00%    0.00%    0.00%                 0x0   N/A       0      0x56129775bce4         0       224         0        1         0  [.] rbipc_audit_recover_dead_c  bench_librbipc_isolated  rbipc_audit_recover_dead_consu  
-
-  ----------------------------------------------------------------------
-     58        0        1        0        0        0      0x7fde12d5b680
-  ----------------------------------------------------------------------
-           0.00%  100.00%    0.00%    0.00%    0.00%                 0x0   N/A       0      0x56129775bce4         0       146         0        1         0  [.] rbipc_audit_recover_dead_c  bench_librbipc_isolated  rbipc_audit_recover_dead_consu  
-
-  ----------------------------------------------------------------------
-     59        0        1        0        0        0      0x7fde12d5c640
-  ----------------------------------------------------------------------
-           0.00%  100.00%    0.00%    0.00%    0.00%                 0x0   N/A       0      0x56129775bce4         0       127         0        1         0  [.] rbipc_audit_recover_dead_c  bench_librbipc_isolated  rbipc_audit_recover_dead_consu  
-
-  ----------------------------------------------------------------------
-     60        0        1        0        0        0      0x7fde12d5ca80
-  ----------------------------------------------------------------------
-           0.00%  100.00%    0.00%    0.00%    0.00%                 0x0   N/A       0      0x56129775bce4         0        55         0        1         0  [.] rbipc_audit_recover_dead_c  bench_librbipc_isolated  rbipc_audit_recover_dead_consu  
-
-  ----------------------------------------------------------------------
-     61        0        1        0        0        0      0x7fde12d5cb00
-  ----------------------------------------------------------------------
-           0.00%  100.00%    0.00%    0.00%    0.00%                 0x0   N/A       0      0x56129775bce4         0       187         0        1         0  [.] rbipc_audit_recover_dead_c  bench_librbipc_isolated  rbipc_audit_recover_dead_consu  
-
-  ----------------------------------------------------------------------
-     62        0        1        0        0        0      0x7fde12d5d000
-  ----------------------------------------------------------------------
-           0.00%  100.00%    0.00%    0.00%    0.00%                 0x0   N/A       0      0x56129775bce4         0       313         0        1         0  [.] rbipc_audit_recover_dead_c  bench_librbipc_isolated  rbipc_audit_recover_dead_consu  
-
-  ----------------------------------------------------------------------
-     63        0        1        0        0        0      0x7fde12d5d240
-  ----------------------------------------------------------------------
-           0.00%  100.00%    0.00%    0.00%    0.00%                 0x0   N/A       0      0x56129775bce4         0       183       363        2         0  [.] rbipc_audit_recover_dead_c  bench_librbipc_isolated  rbipc_audit_recover_dead_consu  
-
-  ----------------------------------------------------------------------
-     64        0        1        0        0        0      0x7fde12cfcf80
-  ----------------------------------------------------------------------
-           0.00%  100.00%    0.00%    0.00%    0.00%                 0x0   N/A       0      0x56129775b774         0       117         0        1         0  [.] rbipc_audit_recover_dead_p  bench_librbipc_isolated  rbipc_audit_recover_dead_produ  
-
-  ----------------------------------------------------------------------
-     65        0        1        0        0        0      0x7fde12d5e100
-  ----------------------------------------------------------------------
-           0.00%  100.00%    0.00%    0.00%    0.00%                 0x0   N/A       0      0x56129775bce4         0       251         0        1         0  [.] rbipc_audit_recover_dead_c  bench_librbipc_isolated  rbipc_audit_recover_dead_consu  
-
-  ----------------------------------------------------------------------
-     66        0        1        0        0        0      0x7fde12d5e680
-  ----------------------------------------------------------------------
-           0.00%  100.00%    0.00%    0.00%    0.00%                 0x0   N/A       0      0x56129775bce4         0       229         0        1         0  [.] rbipc_audit_recover_dead_c  bench_librbipc_isolated  rbipc_audit_recover_dead_consu  
-
-  ----------------------------------------------------------------------
-     67        0        1        0        0        0      0x7fde12d5f980
-  ----------------------------------------------------------------------
-           0.00%  100.00%    0.00%    0.00%    0.00%                 0x0   N/A       0      0x56129775bce4         0       112         0        1         0  [.] rbipc_audit_recover_dead_c  bench_librbipc_isolated  rbipc_audit_recover_dead_consu  
-
-  ----------------------------------------------------------------------
-     68        0        1        0        0        0      0x7fde12d600c0
-  ----------------------------------------------------------------------
-           0.00%  100.00%    0.00%    0.00%    0.00%                 0x0   N/A       0      0x56129775bce4         0       187         0        1         0  [.] rbipc_audit_recover_dead_c  bench_librbipc_isolated  rbipc_audit_recover_dead_consu  
-
-  ----------------------------------------------------------------------
-     69        0        1        0        0        0      0x7fde12d61000
-  ----------------------------------------------------------------------
-           0.00%  100.00%    0.00%    0.00%    0.00%                 0x0   N/A       0      0x56129775bce4         0       177         0        1         0  [.] rbipc_audit_recover_dead_c  bench_librbipc_isolated  rbipc_audit_recover_dead_consu  
-
-  ----------------------------------------------------------------------
-     70        0        1        0        0        0      0x7fde12d61040
-  ----------------------------------------------------------------------
-           0.00%  100.00%    0.00%    0.00%    0.00%                 0x0   N/A       0      0x56129775bce4         0       132         0        1         0  [.] rbipc_audit_recover_dead_c  bench_librbipc_isolated  rbipc_audit_recover_dead_consu  
-
-  ----------------------------------------------------------------------
-     71        0        1        0        0        0      0x7fde12d61200
-  ----------------------------------------------------------------------
-           0.00%  100.00%    0.00%    0.00%    0.00%                 0x0   N/A       0      0x56129775bce4         0       240         0        1         0  [.] rbipc_audit_recover_dead_c  bench_librbipc_isolated  rbipc_audit_recover_dead_consu  
-
-  ----------------------------------------------------------------------
-     72        0        1        0        0        0      0x7fde12d61240
-  ----------------------------------------------------------------------
-           0.00%  100.00%    0.00%    0.00%    0.00%                 0x0   N/A       0      0x56129775bce4         0       155         0        1         0  [.] rbipc_audit_recover_dead_c  bench_librbipc_isolated  rbipc_audit_recover_dead_consu  
+           0.00%  100.00%    0.00%    0.00%    0.00%                 0x0   N/A       0      0x560451d17dee         0       504         0        1         0  [.] rbipc_simd_scan_avx2  bench_librbipc_isolated  rbipc_simd_scan_avx2+302  
