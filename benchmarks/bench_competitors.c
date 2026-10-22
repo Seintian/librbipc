@@ -66,7 +66,7 @@ int main(void) {
     tput[1] = bench_rbipc_tput(64, bench_iters, TRANSFER_VALUE_COPY, RBIPC_FLAG_TRUSTED, "librbipc (Trusted 64B)");
     printf("  [3/8] librbipc (Combined 64B Copy) ...\n");
     tput[2] = bench_rbipc_tput(64, bench_iters, TRANSFER_VALUE_COPY, RBIPC_FLAG_TRUSTED | RBIPC_FLAG_PACKED, "librbipc (Combined 64B)");
-    printf("  [4/8] librbipc (Trusted 8B Ptr - Apples-to-Apples) ...\n");
+    printf("  [4/8] librbipc (Trusted 8B Ptr - Direct Reference Passing) ...\n");
     tput[3] = bench_rbipc_tput(64, bench_iters, TRANSFER_REFERENCE_PASSING, RBIPC_FLAG_TRUSTED | RBIPC_FLAG_PACKED, "librbipc (Trusted 8B Ptr)");
     printf("  [5/8] rte_ring (DPDK pointer passing) ...\n");
     tput[4] = bench_rte_tput(64, bench_iters, TRANSFER_VALUE_COPY);

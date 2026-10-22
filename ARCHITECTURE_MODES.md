@@ -142,7 +142,7 @@ Tier 3 unifies the monotonic sequence turn counter, message payload length, and 
 
 #### 2.4 Core Microarchitectural Mechanism
 
-Combined Tier 2+3 represents the pinnacle of small-message IPC performance ($\le 4,095$ bytes). It fuses Tier 2's zero-metadata overhead with Tier 3's 64-bit composite descriptor:
+Combined Tier 2+3 establishes the optimal operational regime for small-message IPC performance ($\le 4,095$ bytes). It fuses Tier 2's zero-metadata overhead with Tier 3's 64-bit composite descriptor:
 
 1. **Commit Fast-Path**: Exactly **1 atomic store** (`slot->sequence = packed`).
 2. **Release Fast-Path**: Exactly **1 atomic store** (`slot->sequence = next_packed`).

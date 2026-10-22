@@ -354,7 +354,7 @@ The 12-bit payload ceiling in Tier 3 represents a deliberate Pareto trade-off be
 
 1. **Single-Store Atomic Publication:** In standard mode (Tier 1 & Tier 2), each slot requires writing `slot->len` followed by an atomic store-release to `slot->sequence` (or `slot->state`). In Tier 3, a producer commits and publishes a message with a **single 64-bit atomic store** (`MOV` on x86-64, `STLR` on ARM64). This halves cache-line store-buffer traffic and eliminates pipeline stalls.
 2. **Shifted SIMD Vector Turn Scanning:** Advanced SIMD sequence scanners (AVX-512, AVX2, AVX1 fallback, SSE4.1, ARM64 NEON) inspect up to 8 slots per instruction by applying a single 16-bit logical right vector shift (`_mm256_srli_epi64(vec, 16)`) before testing sequence equality.
-3. **ABA Safety Margin Preservation:** If length were expanded to 20 bits (1 MiB payloads), the sequence turn counter would shrink to 40 bits ($1.09 \times 10^{12}$ turns), which wraps in just **~27 hours** at 10M msgs/s. Expanding length to 32 bits would reduce turn counters to 28 bits, wrapping in a disastrous **26 seconds**. The 48-bit / 12-bit split represents the optimal design point for low-latency messaging.
+3. **ABA Safety Margin Preservation:** If length were expanded to 20 bits (1 MiB payloads), the sequence turn counter would shrink to 40 bits ($1.09 \times 10^{12}$ turns), which wraps in just **~27 hours** at 10M msgs/s. Expanding length to 32 bits would reduce turn counters to 28 bits, wrapping within an unacceptably brief **26 seconds**. The 48-bit / 12-bit split represents the optimal design point for low-latency messaging.
 
 ### 3. Analysis: Can Zero-Copy IPC Deliver "Terabytes per Second"?
 
@@ -383,7 +383,7 @@ Is this correct? **Yes, as a logical / virtual pointer exchange rate; No, as a p
 | **1-to-N Market Data / Telemetry Fanout** | **Tier 3 Packed** (`RBIPC_FLAG_PACKED`) + Multicast PubSub | `rbipc_publish()`, `rbipc_publish_batch()`, `rbipc_sub_create_ex()`, `rbipc_sub_poll_batch()`, AVX2 scanning | Single 64-bit atomic load guarantees tear-free multicast reads across lock-free concurrent subscribers. Delivers 5.07M msgs/s (+82.9% speedup). |
 | **Peak Small-Message Ingestion ($\le 4\text{ KiB}$)** | **Combined Tier 2+3** (`RBIPC_FLAG_TRUSTED` \| `RBIPC_FLAG_PACKED`) | `rbipc_reserve_write_batch()`, `rbipc_commit_write_batch()`, B-Queue batch-32/64 | Combines trusted zero-metadata bypass with 1-store publication and 1-store release. Delivers **42.86M msgs/s** (5,886 MB/s, 23.3 ns) in batch-32, with **17.85M ops/s** 1P-1C streaming. |
 | **Bulk Streaming / Video / ML Tensors ($> 4\text{ KiB}$)** | **Tier 2** (`RBIPC_FLAG_TRUSTED` \| `RBIPC_FLAG_HUGETLB`) | `rbipc_write_stream()`, `rbipc_stream_copy()`, Dynamic 2MB THP alignment | Unlocks 32-bit length fields, avoids TLB miss stalls on multi-megabyte buffers (up to 4.51x speedup), and transfers at up to 19.8 GB/s via AVX2 non-temporal stores. |
-| **Battery / Edge / Quiescent Daemons** | **Tier 1 or Tier 2** + `RBIPC_WAIT_ZERO_SPIN` | `rbipc_set_wait_policy()`, `rbipc_read_acquire_timeout()`, `bin/rbipc_stat --watch` | Drops CPU utilization to **0.13% - 0.2%** when idle via kernel `futex` sleep, preventing core burn. |
+| **Battery / Edge / Quiescent Daemons** | **Tier 1 or Tier 2** + `RBIPC_WAIT_ZERO_SPIN` | `rbipc_set_wait_policy()`, `rbipc_read_acquire_timeout()`, `bin/rbipc_stat --watch` | Drops CPU utilization to **0.13% - 0.2%** when idle via kernel `futex` sleep, preventing continuous busy-polling CPU consumption. |
 
 For the complete architectural monograph, microarchitectural cache analyses, and end-to-end C23 implementation patterns, see **[`ARCHITECTURE_MODES.md`](ARCHITECTURE_MODES.md)**.
 
@@ -395,7 +395,7 @@ Measured on **Intel Core i5-10400F @ 2.90 GHz** (6C/12T desktop) and **Intel Cor
 
 | Benchmark Workload | Measured Performance | Key Architectural Takeaway |
 | :--- | :--- | :--- |
-| **Idle CPU Utilization** (2 s quiet window) | **0.13% – 0.20% CPU** (0 involuntary CS) | True kernel `FUTEX_WAIT` suspension vs. ~98–100% core burn in DPDK `rte_ring` / LMAX `BusySpin`. |
+| **Idle CPU Utilization** (2 s quiet window) | **0.13% – 0.20% CPU** (0 involuntary CS) | True kernel `FUTEX_WAIT` suspension vs. ~98–100% active polling CPU saturation in DPDK `rte_ring` / LMAX `BusySpin`. |
 | **B-Queue Vector Batch-128** (64 B payload) | **50,676,773 msgs/s** (3,093.1 MB/s, 19.73 ns/msg) | 6.53× speedup over single-slot mode by amortizing ticket CAS, AVX2 scan, and Dekker fence. |
 | **B-Queue Vector Batch-32** (64 B payload) | **41.82M – 42.86M msgs/s** (5,744 – 5,886 MB/s, 23.3 ns/msg) | Outperforms single-slot busy-spin DPDK `rte_ring` (11.24 Mops/s) by 3.8× while using 0.14% idle CPU. |
 | **1P-1C Scalability & Streaming** (64 B payload) | **8.90M msgs/s** (64B copy) / **17.85M msgs/s** (Combined 1P-1C) | Surpasses DPDK `rte_ring` (10.66 Mops/s) and LMAX Disruptor (5.50 Mops/s) in 1P-1C scalability. 26.7× faster than POSIX `mqueue` (333.5K ops/s). |

@@ -4,8 +4,8 @@
  * interfaces.
  *
  * @details Provides process-shared futex synchronization primitives for
- * suspending and waking threads across memory-mapped files without spinning or
- * burning CPU cycles.
+ * suspending and waking threads across memory-mapped files without active
+ * polling or unnecessary CPU cycle consumption.
  *
  * @author Seintian
  * @date 2026

@@ -22,22 +22,22 @@ This investigation presents an exhaustive, data-driven microarchitectural audit 
 | METRIC / WORKLOAD                      | PRE-OCT 22 BASELINE | PRE-FIX HARNESS        | POST-OPTIMIZATION VERIFIED  |
 +----------------------------------------+---------------------+------------------------+-----------------------------+
 | 1P-1C Combined Scalability (64B)       | 10.80 Mops/s        | 0.65 Mops/s (throttled)| 17.85 Mops/s (Surpasses all)|
-| Reference-Passing Throughput (8B Ptr)  | N/A (Copy only)     | N/A (Apples-to-Oranges)| 23.39 Mops/s (1,427.5 MB/s) |
+| Reference-Passing Throughput (8B Ptr)  | N/A (Copy only)     | N/A (Uncalibrated base)| 23.39 Mops/s (1,427.5 MB/s) |
 | 64B Copy Streaming (Combined Tier 2+3) | 10.80 Mops/s        | 7.70 Mops/s            | 8.90 Mops/s (543.3 MB/s)    |
-| Half-RTT Minimum Latency (Trusted)     | 183.0 ns            | 112.0 ns               | 64.0 ns (-65.0% LOWER!)     |
-| Half-RTT Minimum Latency (Combined)    | N/A                 | N/A                    | 67.0 ns (-63.4% LOWER!)     |
-| Half-RTT Median Latency (p50)          | 230.0 ns            | 208.0 ns               | 92.0–93.0 ns (-55.8% LOWER!)|
-| Half-RTT Zero-Trust Latency (p50)      | 2494.0 ns (zero-spin| 2494.0 ns              | 196.0 ns (-92.1% LOWER!)    |
+| Half-RTT Minimum Latency (Trusted)     | 183.0 ns            | 112.0 ns               | 64.0 ns (-65.0% latency cut)|
+| Half-RTT Minimum Latency (Combined)    | N/A                 | N/A                    | 67.0 ns (-63.4% latency cut)|
+| Half-RTT Median Latency (p50)          | 230.0 ns            | 208.0 ns               | 92.0–93.0 ns (-55.8% drop)  |
+| Half-RTT Zero-Trust Latency (p50)      | 2494.0 ns (zero-spin| 2494.0 ns              | 196.0 ns (-92.1% latency cut|
 | B-Queue Vector Batch 32 (Fork E2E)     | 14.18 Mops/s        | 26.81 Mops/s           | 42.86 Mops/s (5,886 MB/s)   |
 | Peak Vector Batch Throughput (pthread) | 25.31 Mops/s        | 32.07 Mops/s           | 41.23 Mops/s (24.26 ns/op)  |
-| Instructions Per Cycle (IPC - Batch)   | 0.93 IPC (Scalar)   | 1.53 IPC (Batch 32)    | 1.63 IPC (+75.3% DENSITY)   |
+| Instructions Per Cycle (IPC - Batch)   | 0.93 IPC (Scalar)   | 1.53 IPC (Batch 32)    | 1.63 IPC (+75.3% density)   |
 | Store L1D Cache Hit Rate (perf c2c)    | Unverified          | 96.6% Store Hit Rate   | 284 / 294 stores hit in L1D |
-| Locked Bus Instructions on Shared Lines| Unknown             | Exactly 0 Locked Ops   | Zero bus lock bus-choking   |
+| Locked Bus Instructions on Shared Lines| Unknown             | Exactly 0 Locked Ops   | Zero bus lock saturation    |
 | Hardware SSE4.2 CRC32C vs Software     | 1.00x (Table)       | 21.95x Speedup         | 7.81 ns / 64-byte line      |
-| 2MB Dynamic THP (32MB Ring) vs 4KB     | 3.47 Mops/s (288 ns)| 14.96 Mops/s (66.8 ns) | 4.31x FASTER (-76.8% lat)   |
+| 2MB Dynamic THP (32MB Ring) vs 4KB     | 3.47 Mops/s (288 ns)| 14.96 Mops/s (66.8 ns) | 4.31x speedup (-76.8% lat)  |
 | MPMC Oversubscribed (4P-2C Contention) | 0.052 Mops/s (DPDK) | 0.196 Mops/s (Disruptor| 2.13 Mops/s (40.5x vs DPDK)  |
 | MPMC Oversubscribed (4P-4C Contention) | 0.092 Mops/s (DPDK) | 0.040 Mops/s (Disruptor| 1.05 Mops/s (11.4x vs DPDK)  |
-| Idle Power CPU Consumption             | 98.8% (Disruptor)   | 0.14% - 0.20% CPU      | 494x - 705x ENERGY SAVINGS  |
+| Idle Power CPU Consumption             | 98.8% (Disruptor)   | 0.14% - 0.20% CPU      | 494x - 705x energy reduction|
 +--------------------------------------------------------------------------------------------------------------------+
 ```
 
@@ -191,7 +191,7 @@ pie title CPU Cycle Distribution in Competitor Profiling (flamegraph_competitors
 ```
 
 ### 5.1 `flamegraph_competitors.svg` Highlights
-- **20.24% in `clock_gettime` / 15.63% in `__vdso_clock_gettime`:** Over one-fifth of all CPU samples recorded during the competitor benchmarks were spent inside the Linux vDSO querying `clock_gettime`!
+- **20.24% in `clock_gettime` / 15.63% in `__vdso_clock_gettime`:** Over one-fifth of all CPU samples recorded during the competitor benchmarks were spent inside the Linux vDSO querying `clock_gettime`.
 - **9.58% in `__sched_yield`:** Yielding pause loops (`bench_spin_pause`) during non-blocking polling loops trigger context switch evaluation in the Linux scheduler.
 - **4.63% in `rbipc_sync_state_init`:** Redundant deadline timestamp calculation during single-item read/write reservations.
 
@@ -252,7 +252,7 @@ void rbipc_sync_state_init(rbipc_sync_state_t *state, uint64_t timeout_ns) {
 }
 ```
 Every invocation of `rbipc_reserve_write_nonblock`, `rbipc_read_acquire_nonblock`, `rbipc_reserve_write_timeout`, and `rbipc_read_acquire_timeout` executes `rbipc_sync_state_init(&sync_state, timeout_ns)` unconditionally before checking slot availability.
-When `timeout_ns == 0` (non-blocking), it calls `rbipc_clock_monotonic_ns()` (`clock_gettime(CLOCK_MONOTONIC, &ts)`), which costs **~15–25 ns** on Intel Skylake. In a 70 ns operation, **over 25% of the total latency is squandered simply querying the clock**!
+When `timeout_ns == 0` (non-blocking), it calls `rbipc_clock_monotonic_ns()` (`clock_gettime(CLOCK_MONOTONIC, &ts)`), which costs **~15–25 ns** on Intel Skylake. In a 70 ns operation, **over 25% of total execution latency was consumed solely by clock retrieval overhead**.
 Furthermore, for non-blocking operations, computing a deadline timestamp is completely redundant: if a slot is unavailable, the function returns `RBIPC_ERR_FULL` / `RBIPC_ERR_EMPTY` immediately without any deadline comparison.
 
 #### Optimization Blueprint
@@ -336,8 +336,8 @@ bool rbipc_audit_is_peer_alive(pid_t pid) {
   }
 }
 ```
-Whenever a producer or consumer hits a temporary slot contention, it executes `rbipc_audit_recover_dead_consumer` or `rbipc_audit_recover_dead_producer` **before even checking whether `timeout_ns == 0`**!
-If the slot was marked `RESERVED` by an active peer thread on the other core, `rbipc_audit_is_peer_alive` is triggered, issuing **3 kernel syscalls** (`SYS_pidfd_open`, `poll`, `close`), stalling the thread for **~3,500 to 5,000 ns**!
+Whenever a producer or consumer hits a temporary slot contention, it executes `rbipc_audit_recover_dead_consumer` or `rbipc_audit_recover_dead_producer` **prior to verifying whether `timeout_ns == 0`**.
+If the slot was marked `RESERVED` by an active peer thread on the other core, `rbipc_audit_is_peer_alive` is triggered, issuing **3 kernel syscalls** (`SYS_pidfd_open`, `poll`, `close`), introducing an avoidable latency penalty of **~3,500 to 5,000 ns**.
 
 #### Optimization Blueprint
 1. **Never audit during non-blocking (`timeout_ns == 0`) operations.** Non-blocking calls must immediately return `RBIPC_ERR_EMPTY` or `RBIPC_ERR_FULL`.
@@ -364,13 +364,13 @@ uint64_t s3 = atomic_load_explicit(&slots[idx + 3].sequence, memory_order_acquir
 __m256i vseq = _mm256_set_epi64x(s3, s2, s1, s0);
 ```
 Because sequences are not contiguous in memory, the AVX2 engine cannot perform a single 256-bit vector load (`_mm256_load_si256`). Instead, it must issue **4 scalar 64-bit loads**, followed by **3 vector lane insertions** (`vpinsrq`, `vinserti128`), vector comparison (`vpcmpeqq`), and movemask (`vmovmskpd`).
-The assembly and register shuffle overhead exceeds the cost of a simple scalar comparison loop!
+The assembly and register shuffle overhead exceeds the execution cost of a scalar comparison sequence.
 
 #### Optimization Blueprint (Structure-of-Arrays Sequence Table)
 Split the memory layout into a Structure-of-Arrays (SoA):
 - Store sequence numbers in a dedicated, contiguous array: `_Alignas(64) _Atomic uint64_t sequences[capacity]`.
 - Store auxiliary metadata (`len`, `pid`, `timestamp`) in a separate array or alongside the payload.
-With contiguous sequence words, an AVX2 scanner loads 4 sequences in a **single 1-cycle `_mm256_load_si256` instruction**, boosting vector scan rates to **>1.8 Gslots/sec**!
+With contiguous sequence words, an AVX2 scanner loads 4 sequences in a **single 1-cycle `_mm256_load_si256` instruction**, increasing vector scanning throughput to **>1.8 Gslots/sec**.
 
 ---
 
@@ -560,12 +560,12 @@ Deep inspection of the benchmark implementation exposed three compounding defect
 
 1. **Tier 2 Trusted Mode:** Provides a **+33.4% throughput gain** (4.47 Mops/s vs 3.35 Mops/s) and cuts latency to 223.54 ns by eliding defensive checks in cooperating processes.
 2. **Nikolaev wCQ Wait-Free Mode:** Delivers **2.27 Mops/s** with strict $O(N)$ wait-free progress guarantees, ensuring that preempted peer processes cannot stall the ring.
-3. **Vector Batching Super-Scaling:** In multi-process fork mode, Combined Tier 2+3 with Batch 32 reaches **26.81 Mops/s (3.68 GB/s)** at **37.29 ns/message**!
+3. **Vector Batching Throughput Scaling:** In multi-process fork mode, Combined Tier 2+3 with Batch 32 reaches **26.81 Mops/s (3.68 GB/s)** at **37.29 ns/message**.
 
 ### 7.2 Hardware CRC32C Integrity Acceleration
 
 [`benchmarks/bench_crc32c.c`](benchmarks/bench_crc32c.c) validated hardware SSE4.2 `crc32q`/`crc32b` instructions against the software table fallback:
-- **64-byte cache line checksum:** **7.81 ns** (Hardware) vs **171.41 ns** (Software) $\rightarrow$ **21.95x speedup**!
+- **64-byte cache line checksum:** **7.81 ns** (Hardware) vs **171.41 ns** (Software) $\rightarrow$ yielding a **21.95x hardware speedup factor**.
 - Wire-speed authentication is achieved without pipeline stalls.
 
 ### 7.3 Dynamic Transparent HugePages (2MB THP)
@@ -617,18 +617,18 @@ flowchart TD
 ## 9. Conclusion
 
 The microarchitectural and empirical profiling suite on the laptop host machine confirms that `librbipc` is fundamentally sound, highly efficient, and achieves state-of-the-art results:
-- **68 ns hardware minimum latency** and **92 ns median latency**, beating DPDK and POSIX IPC mechanisms.
+- **68 ns hardware minimum latency** and **92 ns median latency**, outperforming DPDK and POSIX IPC mechanisms.
 - **42.51 Mops/s (5,838 MB/s)** multi-process vector batching.
 - **7.8x higher throughput** under oversubscribed thread contention (4P-4C).
 - **329x idle energy reduction** over busy-spinning competitor engines.
 
-Addressing the identified optimizable overheads—primarily hot-path clock calls, cross-translation unit optimization via LTO, standardized multi-tier runtime waiting, eliminating benchmark yielding preemptions, and apples-to-apples reference comparisons—elevates `librbipc` to the absolute pinnacle of high-performance IPC architectures.
+Addressing the identified optimizable overheads—primarily hot-path clock calls, cross-translation unit optimization via LTO, standardized multi-tier runtime waiting, eliminating benchmark yielding preemptions, and controlled reference-passing comparisons—elevates `librbipc` to the frontier of high-performance IPC architectures.
 
 ---
 
 ## 10. Implementation & Verification Audit of Profiling Recommendations
 
-All recommendations, suggestions, and comments from this analysis report were translated into code, benchmark, and build system enhancements, delivered through 4 focused atomic commits.
+All recommendations, suggestions, and comments from this analysis report were translated into code, benchmark, and build system enhancements, delivered through 5 focused atomic commits.
 
 ### 10.1 Summary of Atomic Commits
 
@@ -651,8 +651,8 @@ All recommendations, suggestions, and comments from this analysis report were tr
    - Standardized hardware monitor-wait support across batch APIs in [`src/io/rbipc_batch.c`](src/io/rbipc_batch.c).
    - Added unit test coverage `test_pubsub_wait_policies` in [`tests/ipc/test_unit_pubsub.c`](tests/ipc/test_unit_pubsub.c).
 
-4. **Commit 4 (`9e62621`): `bench: eliminate ad-hoc spin loops and benchmark competitors apples-to-apples`**
-   - **Overhead 9 Resolved:** Added an apples-to-apples 8-byte pointer passing benchmark (`TRANSFER_REFERENCE_PASSING`) alongside the existing 64-byte value copy in [`benchmarks/bench_competitors.c`](benchmarks/bench_competitors.c).
+4. **Commit 4 (`9e62621`): `bench: eliminate ad-hoc spin loops and benchmark competitors in reference mode`**
+   - **Overhead 9 Resolved:** Added a direct reference-passing 8-byte pointer evaluation benchmark (`TRANSFER_REFERENCE_PASSING`) alongside the existing 64-byte value copy in [`benchmarks/bench_competitors.c`](benchmarks/bench_competitors.c).
    - Replaced ad-hoc `bench_spin_pause` while-loops across competitor benchmarks with direct calls to official public APIs (`rbipc_read_acquire`, `rbipc_reserve_write`, `rbipc_read_acquire_batch`, `rbipc_reserve_write_batch`).
    - Relaxed the competitor queue spin threshold before `sched_yield()` from 64 to 256 in [`benchmarks/bench_common.h`](benchmarks/bench_common.h).
 
@@ -673,24 +673,24 @@ All recommendations, suggestions, and comments from this analysis report were tr
 +------------------------------------------------------------------------------------------------------------------------+
 | Master Test Suite (`make test`)      | 26/26 Suites Passed       | 26/26 Suites Passed (100%)  | Complete Integrity    |
 | Static Analysis (`-Wall -Werror`)    | Clean                     | Clean                       | Zero Warnings         |
-| 1P-1C Combined Scalability           | 10.80 Mops/s              | 17.85 Mops/s                | +65.3% (Beats DPDK!)  |
+| 1P-1C Combined Scalability           | 10.80 Mops/s              | 17.85 Mops/s                | +65.3% (Outperforms)  |
 | Reference 8B Pointer Throughput      | Unmeasured (Copy only)    | 23.39 Mops/s (1,427.5 MB/s) | Exceeds DPDK & Disrupt|
-| Half-RTT Minimum Latency (Trusted)   | 183 ns (pre-Oct 22 base)  | 64 ns (Official API)        | -65.0% LOWER!         |
-| Half-RTT Minimum Latency (Combined)  | Unmeasured                | 67 ns (Official API)        | -63.4% LOWER!         |
-| Half-RTT Median Latency (p50)        | 208 ns (with sched_yield) | 92–93 ns (Trusted/Combined) | -55.8% (-116 ns drop!)|
+| Half-RTT Minimum Latency (Trusted)   | 183 ns (pre-Oct 22 base)  | 64 ns (Official API)        | -65.0% lower latency  |
+| Half-RTT Minimum Latency (Combined)  | Unmeasured                | 67 ns (Official API)        | -63.4% lower latency  |
+| Half-RTT Median Latency (p50)        | 208 ns (with sched_yield) | 92–93 ns (Trusted/Combined) | -55.8% (-116 ns delta)|
 | Half-RTT Zero-Trust Latency (p50)    | 2,494 ns (zero-spin trap) | 196 ns (Adaptive)           | -92.1% (-2298 ns drop)|
-| Half-RTT p99 Latency (Combined)      | 400 ns                    | 163 ns                      | -59.3% (-237 ns drop!)|
+| Half-RTT p99 Latency (Combined)      | 400 ns                    | 163 ns                      | -59.3% (-237 ns delta)|
 | 64B Copy Streaming (Combined Tier)   | 10.80 Mops/s              | 8.90 Mops/s (543.3 MB/s)    | High sustained rate   |
-| 64B Copy Streaming (Trusted Tier)    | 2.87 Mops/s               | 5.46 Mops/s (333.2 MB/s)    | +90.2% FASTER         |
-| 64B Copy Streaming (Zero-Trust Tier) | 2.15 Mops/s               | 4.31 Mops/s (263.3 MB/s)    | +100.5% FASTER        |
-| B-Queue Batch 32 (Zero-Trust E2E)    | 14.18 Mops/s              | 41.82 Mops/s (5,744 MB/s)   | +194.9% FASTER (23 ns)|
-| B-Queue Batch 32 (Combined E2E)      | 14.18 Mops/s              | 42.86 Mops/s (5,886 MB/s)   | +202.3% FASTER (23 ns)|
-| Peak Vector Batching (pthread)       | 25.31 Mops/s              | 41.23 Mops/s (24.26 ns/op)  | +62.9% FASTER         |
-| Instructions Per Cycle (IPC - Batch) | 0.93 IPC (Scalar)         | 1.63 IPC (Batch 32)         | +75.3% COMPUTE DENSITY|
+| 64B Copy Streaming (Trusted Tier)    | 2.87 Mops/s               | 5.46 Mops/s (333.2 MB/s)    | +90.2% throughput     |
+| 64B Copy Streaming (Zero-Trust Tier) | 2.15 Mops/s               | 4.31 Mops/s (263.3 MB/s)    | +100.5% throughput    |
+| B-Queue Batch 32 (Zero-Trust E2E)    | 14.18 Mops/s              | 41.82 Mops/s (5,744 MB/s)   | +194.9% throughput    |
+| B-Queue Batch 32 (Combined E2E)      | 14.18 Mops/s              | 42.86 Mops/s (5,886 MB/s)   | +202.3% throughput    |
+| Peak Vector Batching (pthread)       | 25.31 Mops/s              | 41.23 Mops/s (24.26 ns/op)  | +62.9% throughput     |
+| Instructions Per Cycle (IPC - Batch) | 0.93 IPC (Scalar)         | 1.63 IPC (Batch 32)         | +75.3% IPC density    |
 | Hardware CRC32C (256B Slot)          | 1.00x (Table SW)          | 33.25x - 40.02x Speedup     | 18.58 ns vs 743.48 ns |
-| Dynamic 2MB THP (32MB Ring) vs 4KB   | 3.22 Mops/s (311 ns)      | 13.46 Mops/s (74 ns)        | 4.18x FASTER (-76.2%) |
-| MPMC Oversubscribed (4P-2C)          | 0.05 Mops/s (DPDK)        | 2.13 Mops/s (librbipc)      | 40.5x FASTER THAN DPDK|
-| MPMC Oversubscribed (4P-4C)          | 0.09 Mops/s (DPDK)        | 1.05 Mops/s (librbipc)      | 11.4x FASTER THAN DPDK|
-| Consumer Idle CPU Energy             | 98.3% (DPDK / Disruptor)  | 0.14% - 0.20% CPU           | 491x - 702x REDUCTION  |
+| Dynamic 2MB THP (32MB Ring) vs 4KB   | 3.22 Mops/s (311 ns)      | 13.46 Mops/s (74 ns)        | 4.18x speedup (-76.2%) |
+| MPMC Oversubscribed (4P-2C)          | 0.05 Mops/s (DPDK)        | 2.13 Mops/s (librbipc)      | 40.5x speedup vs DPDK |
+| MPMC Oversubscribed (4P-4C)          | 0.09 Mops/s (DPDK)        | 1.05 Mops/s (librbipc)      | 11.4x speedup vs DPDK |
+| Consumer Idle CPU Energy             | 98.3% (DPDK / Disruptor)  | 0.14% - 0.20% CPU           | 491x - 702x reduction  |
 +------------------------------------------------------------------------------------------------------------------------+
 ```

@@ -3,7 +3,7 @@
  * @brief Standalone benchmarking harness for librbipc to enable high-resolution Linux perf profiling.
  *
  * Evaluates:
- * 1. Pointer-only / 8-byte value exchange (exact apples-to-apples comparison with DPDK and Disruptor)
+ * 1. Pointer-only / 8-byte value exchange (direct reference-passing comparison with DPDK and Disruptor)
  * 2. Full 64-byte payload memcpy exchange
  * 3. B-Queue vector batching (batch size 32)
  *

@@ -498,7 +498,7 @@ def main():
             print(f"{m_name:<45} | {data['msgs_per_sec']/1e6:<20.2f} | {data['mb_per_sec']:<18.2f} | {data['avg_latency_ns']:<15.2f}")
 
     print("\n" + "="*95)
-    print(" ALL BENCHMARKS & PROFILING RUNS SUCCESSFULLY COMPLETED!")
+    print(" COMPREHENSIVE BENCHMARK AND PROFILING SUITE COMPLETED.")
     print("="*95 + "\n")
 
 if __name__ == "__main__":

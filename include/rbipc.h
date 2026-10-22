@@ -284,7 +284,7 @@ extern "C" {
  *      - *Avoid When*: Payloads exceed @ref RBIPC_PACKED_MAX_LEN (4,095 bytes).
  *
  *    - **Combined Tier 2+3 (Trusted & Packed Mode, @ref RBIPC_FLAG_TRUSTED | @ref RBIPC_FLAG_PACKED)**:
- *      - *Core Concept*: The pinnacle of low-latency small-message communication (@f$ \le 4,095 @f$ bytes). Fuses
+ *      - *Core Concept*: Optimal configuration for low-latency small-message communication (@f$ \le 4,095 @f$ bytes). Fuses
  *        trusted zero-metadata overhead with 64-bit atomic composite descriptors. Exactly 1 store on commit,
  *        1 store on release, zero redundant metadata zeroing, and direct register unpacking.
  *      - *Workload Contexts*: High-frequency tick matching engines, low-latency inter-thread actor queues,
@@ -310,7 +310,7 @@ extern "C" {
  *    - **Zero-Spin (@ref RBIPC_WAIT_ZERO_SPIN)**: Immediate passive futex sleep. Paired with battery-powered
  *      devices, background jobs, and quiescent services (0.13% - 0.3% idle CPU).
  *    - **Hardware Monitor-Wait (@ref RBIPC_WAIT_HW_MONITOR)**: Intel WAITPKG (@c UMONITOR/@c UMWAIT) or ARM64
- *      FEAT_WFxT (@c WFET). Paired with pinned low-latency cores for 40–70 ns hardware wakeups without 100% core burn.
+ *      FEAT_WFxT (@c WFET). Paired with pinned low-latency cores for 40–70 ns hardware wakeups without continuous CPU busy-polling.
  * @{
  */
 

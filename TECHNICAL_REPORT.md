@@ -10,7 +10,7 @@
 
 ## Abstract
 
-Inter-Process Communication (IPC) on modern multi-core symmetric multiprocessing (SMP) systems faces a fundamental tension between **sub-microsecond message transit latencies** and **quiescent CPU energy consumption**. State-of-the-art lock-free circular queues—such as DPDK `rte_ring` and the LMAX Disruptor—achieve multi-million message throughput by burning 100% of physical CPU cores in user-space spin-loops. Conversely, kernel-mediated IPC mechanisms—such as POSIX message queues (`mq_overview(7)`) and UNIX domain datagram sockets (`unix(7)`)—conserve CPU cycles at rest through scheduler suspension but incur severe system call, scheduling, and context-switch latencies on every transaction.
+Inter-Process Communication (IPC) on modern multi-core symmetric multiprocessing (SMP) systems faces a fundamental tension between **sub-microsecond message transit latencies** and **quiescent CPU energy consumption**. State-of-the-art lock-free circular queues—such as DPDK `rte_ring` and the LMAX Disruptor—achieve multi-million message throughput by consuming 100% of physical CPU cores in active user-space spin-loops. Conversely, kernel-mediated IPC mechanisms—such as POSIX message queues (`mq_overview(7)`) and UNIX domain datagram sockets (`unix(7)`)—conserve CPU cycles at rest through scheduler suspension but incur severe system call, scheduling, and context-switch latencies on every transaction.
 
 `librbipc` resolves this tension by synthesizing:
 
@@ -144,7 +144,7 @@ The classical Dekker algorithm requires symmetric memory barriers (`MFENCE` or `
 ```txt
 Producer:                            Consumer:
 Payload write;                       Register waiter (atomic_fetch_add);
-MFENCE;  <--- Expensive!             MFENCE;
+MFENCE;  /* Store buffer drain */    MFENCE;
 if (waiters > 0) futex_wake();       if (slot->seq != ready) futex_wait();
 ```
 
@@ -156,7 +156,7 @@ On modern out-of-order CPUs, an `MFENCE` drains the CPU store buffer, stalling t
 Producer (Fast Path):                Consumer (Slow Path):
 Payload write;                       atomic_fetch_add(&hdr->futex_waiters, 1);
 atomic_store_explicit(release);      sys_membarrier(GLOBAL_EXPEDITED); // Broadcast IPI
-// ZERO hardware memory fences!      if (slot->sequence != ready) {
+/* Unfenced fast-path store */       if (slot->sequence != ready) {
 if (waiters > 0) futex_wake();           sys_futex(FUTEX_WAIT);
                                      }
                                      atomic_fetch_sub(&hdr->futex_waiters, 1);
@@ -408,7 +408,7 @@ AF_UNIX DGRAM   | [===] 1.38 Mops/s
 POSIX mqueue    | [=] 0.45 Mops/s
 ```
 
-| System | Throughput (msgs/sec) | Bandwidth (MB/sec) | Latency / msg (ns) | Idle CPU Burn |
+| System | Throughput (msgs/sec) | Bandwidth (MB/sec) | Latency / msg (ns) | Idle CPU Utilization |
 | :--- | ---: | ---: | ---: | ---: |
 | **LMAX Disruptor** | 20,638,173.60 | 1,259.65 | 48.45 | 100.0% |
 | **`librbipc` (Tier 2 Trusted)** | **17,836,827.98** | **1,088.67** | **56.06** | **0.13% – 0.3%** |
@@ -500,7 +500,7 @@ Dynamic 2MB THP Speedup vs. Standard 4KB Paging
 64 KB Ring  | [===] 0.96x (0 kB PMD mapped)
 4 MB Ring   | [====] 1.16x (6,144 kB PMD mapped, -13.9% latency)
 16 MB Ring  | [======] 1.86x (18,432 kB PMD mapped, -46.1% latency)
-32 MB Ring  | [==============>] 4.37x (34,816 kB PMD mapped, -77.1% latency!)
+32 MB Ring  | [==============>] 4.37x (34,816 kB PMD mapped, -77.1% latency)
 ```
 
 | Buffer Size | Standard 4KB Paging (msgs/s) | Latency (ns) | Dynamic 2MB THP (msgs/s) | Latency (ns) | PMD Mapped | Speedup Factor | Latency Cut |

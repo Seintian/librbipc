@@ -13,7 +13,7 @@
 
 Inter-Process Communication (IPC) constitutes the foundational computational spine of modern high-frequency trading (HFT) platforms, autonomous vehicular robotics, distributed database query engines, and high-performance microkernel operating systems. While `librbipc` establishes a state-of-the-art baseline through 64-bit monotonic sequence turn tracking, asymmetric Dekker synchronization (`sys_membarrier(2)`), a 4-tier hybrid backoff wait ladder, and zero-configuration dynamic 2MB Transparent HugePage (THP) alignment, contemporary hardware microarchitectures and concurrency theory are undergoing fundamental paradigm shifts.
 
-This research report synthesizes cutting-edge literature from prestigious systems, architecture, and concurrency venues—including **USENIX OSDI**, **ACM SOSP**, **USENIX ATC**, **ACM ASPLOS**, **ACM SPAA**, **ACM PPoPP**, **IEEE/ACM ISCA**, and the **Linux Kernel Mailing List (LKML)**. We analyze and formalize seven revolutionary architectural dimensions for integration into `librbipc`:
+This research report synthesizes cutting-edge literature from prestigious systems, architecture, and concurrency venues—including **USENIX OSDI**, **ACM SOSP**, **USENIX ATC**, **ACM ASPLOS**, **ACM SPAA**, **ACM PPoPP**, **IEEE/ACM ISCA**, and the **Linux Kernel Mailing List (LKML)**. We analyze and formalize seven foundational architectural dimensions for integration into `librbipc`:
 
 1. **Hardware-Accelerated Asynchronous DMA Offloading**: Direct user-space descriptor dispatching via **Intel Data Streaming Accelerator (DSA)** using `ENQCMD`/`MOVDIR64B` to achieve zero-CPU memory operation offloading for payloads $\ge 4\text{ KiB}$ (*USENIX ATC '25*).
 2. **User-Space Inter-Processor Hardware Interrupts (`UINTR`)**: Sub-100ns direct ring-3 core-to-core signaling via `SENDUIPI`, completely bypassing kernel context transitions and scheduler overhead (*Intel Architecture Extensions / LKML*).
@@ -56,7 +56,7 @@ While non-temporal stores bypass cache allocation lines (avoiding L1/L2/L3 cache
 
 1. **Load/Store Unit Port Contention**: Port 2, Port 3 (Load generation), Port 4, Port 7 (Store data/address) on Intel architectures are completely saturated by memory copy loops, stalling co-located application compute threads.
 2. **Instruction Pipeline Stalling**: Register renaming buffers, reorder buffers (ROB), and store buffer entries are consumed solely by moving bytes.
-3. **Linear CPU Burn**: Copying a 64 KiB buffer at 100,000 ops/sec requires sustained execution of millions of vector memory instructions, consuming 100% of a dedicated core's thermal and power budget.
+3. **Linear CPU Cycle Expenditure**: Copying a 64 KiB buffer at 100,000 ops/sec requires sustained execution of millions of vector memory instructions, consuming 100% of a dedicated core's thermal and power budget.
 
 ### 2.2 The Breakthrough: Intel Data Streaming Accelerator (DSA) & ROCKET
 
@@ -69,7 +69,7 @@ The landmark USENIX ATC 2025 paper *ROCKET: Rethinking Inter-Process Communicati
 |  1. Reserve Slot Ticket (FAA)                                                     |
 |  2. Format 64-byte DSA Descriptor                                                 |
 |  3. Execute ENQCMD (Submit to Dedicated Hardware Work Queue via single instruction) |
-|  4. Immediately Resume Computational Logic (Zero CPU cycles spent moving bytes!)  |
+|  4. Immediately Resume Computational Logic (Zero CPU cycles spent moving bytes)   |
 +------------------------------------------+----------------------------------------+
                                            |
                                            | ENQCMD / MOVDIR64B (MMIO direct to PCIe/Fabric)
@@ -176,7 +176,7 @@ User Interrupts (`UINTR`), standardized in recent Intel x86 microarchitectures a
                                                                                  |
                                                                   Hardware intercepts instruction stream
                                                                   Pushes RIP/RFLAGS to User Interrupt Stack
-                                                                  Dispatches directly to User Handler!
+                                                                  Dispatches directly to User Handler
                                                                   Latency: <= 90 nanoseconds
 ```
 
@@ -188,7 +188,7 @@ User Interrupts (`UINTR`), standardized in recent Intel x86 microarchitectures a
    $$\text{SENDUIPI } \mathbf{r64}$$
    The hardware reads the target logical processor's APIC ID from the UPID, sets the corresponding bit in the Posted Interrupt Request (PIR) bitmap, and sends a notification APIC vector directly to the target CPU core.
 3. **Hardware Dispatch**:
-   The target CPU core checks the PIR bitmap upon retiring its current instruction. If user interrupts are enabled (`UIRET`), it automatically pushes the user context to the User Interrupt Shadow Stack and vectors execution directly to the consumer's registered user-space handler function in **$\le 90\text{ nanoseconds}$**!
+   The target CPU core checks the PIR bitmap upon retiring its current instruction. If user interrupts are enabled (`UIRET`), it automatically pushes the user context to the User Interrupt Shadow Stack and vectors execution directly to the consumer's registered user-space handler function in **$\le 90\text{ nanoseconds}$**.
 
 ### 3.3 Integration Blueprint for `librbipc`
 
@@ -315,14 +315,14 @@ Recent foundational research from USENIX Security (*ERIM*) [7], USENIX ATC (*lib
    |Key15|Key14|Key13|Key12|Key11|Key10|Key 9|Key 8|Key 7|Key 6|Key 5|Key 4|Key 3|Key 2|Key 1|Key 0|
    +-----+-----+-----+-----+-----+-----+-----+-----+-----+-----+-----+-----+-----+-----+-----+-----+
                                         ^
-                                        | WRPKRU instruction (Unprivileged, ~20 CPU cycles!)
+                                        | WRPKRU instruction (Unprivileged, ~20 CPU cycles)
                                         | NO SYSCALL, NO TLB FLUSH, NO IPI SHOOTDOWN
 ```
 
 #### Microarchitectural Mechanics:
 1. **Page Tagging**: The operating system assigns a 4-bit protection key (PKEY 0–15) to each virtual memory page table entry during queue initialization.
 2. **The `WRPKRU` Instruction**:
-   User-space threads control access rights via the thread-local `PKRU` register. Executing `WRPKRU` alters permissions (Read/Write, Read-Only, or No-Access) in **only 15–20 CPU clock cycles**!
+   User-space threads control access rights via the thread-local `PKRU` register. Executing `WRPKRU` alters permissions (Read/Write, Read-Only, or No-Access) in **only 15–20 CPU clock cycles**.
 3. **Linux 6.10+ Memory Sealing (`mseal(2)`)**:
    Introduced in Linux kernel 6.10 [10], `mseal(2)` permanently seals a virtual memory area (VMA). Once sealed, malicious or exploited code cannot modify page protections (`mprotect`), unmap memory (`munmap`), or remap pointers (`mremap`).
 
@@ -381,7 +381,7 @@ Traditional IPC mechanisms are strictly host-local: processes communicate across
 
 ### 6.2 The Breakthrough: Compute Express Link (CXL) Disaggregated Memory
 
-The **Compute Express Link (CXL 2.0 / 3.0 / 3.1)** standard [11] establishes a revolutionary paradigm: extending PCIe Gen5/Gen6 physical links with **hardware-enforced cache coherency (`CXL.cache`) and direct memory semantics (`CXL.mem`)**.
+The **Compute Express Link (CXL 2.0 / 3.0 / 3.1)** standard [11] establishes an architectural paradigm: extending PCIe Gen5/Gen6 physical links with **hardware-enforced cache coherency (`CXL.cache`) and direct memory semantics (`CXL.mem`)**.
 
 ```
 +-----------------------------------+               +-----------------------------------+
@@ -401,9 +401,9 @@ The **Compute Express Link (CXL 2.0 / 3.0 / 3.1)** standard [11] establishes a r
 |                    CXL 3.0 / 3.1 Memory Fabric Switch & Pooled Device                 |
 |                                                                                       |
 |   - Multi-Port Disaggregated Memory Pool (DDR5 / HBM)                                 |
-|   - Back-Invalidate (BI) Hardware Snooping: Invalidates Host 2's Cache Line on Write! |
+|   - Back-Invalidate (BI) Hardware Snooping: Invalidates Host 2's Cache Line on Write  |
 |   - Hardware Coherent Memory-Mapped Circular Queue (`librbipc` ring buffer)           |
-|   - Access Latency: ~150 - 250 nanoseconds (vs 2,000 ns for RDMA!)                    |
+|   - Access Latency: ~150 - 250 nanoseconds (vs 2,000 ns for RDMA)                     |
 +---------------------------------------------------------------------------------------+
 ```
 
@@ -449,7 +449,7 @@ Linux **`io_uring`** [13, 14] provides an asynchronous, zero-syscall I/O framewo
 |                    `librbipc` Shared Memory Data Slots (Dual-Mapped)              |
 |                                                                                   |
 |  Pre-Registered with Kernel via `io_uring_register(IORING_REGISTER_BUFFERS)`     |
-|  Kernel DMA writes directly into slot payload memory!                             |
+|  Kernel DMA writes directly into slot payload memory                              |
 +-----------------------------------------+-----------------------------------------+
                                           |
                                           | Atomic Turn Advance (Single Store)
@@ -457,7 +457,7 @@ Linux **`io_uring`** [13, 14] provides an asynchronous, zero-syscall I/O framewo
 +-----------------------------------------------------------------------------------+
 |                             Consumer Worker Process                               |
 |                                                                                   |
-|  Reads payload directly from shared memory. Zero Intermediate Copies!             |
+|  Reads payload directly from shared memory (Zero Intermediate Copies)             |
 +-----------------------------------------------------------------------------------+
 ```
 

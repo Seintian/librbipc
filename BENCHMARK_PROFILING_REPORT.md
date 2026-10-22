@@ -32,20 +32,20 @@ To ensure uncompromising scientific integrity, all competitor IPC and queue syst
 +---------------------------------------------------------------------------------------------------------+
 |  Metric                                | Pre-Oct 22 Baseline | Current Implementation | Delta (%)       |
 +----------------------------------------+---------------------+------------------------+-----------------+
-|  1P-1C Combined Scalability            | 10.80 Mops/s        | 17.85 Mops/s           | +65.3% (Beats!) |
-|  Reference-Passing Throughput (8B Ptr) | N/A (Copy only)     | 23.39 Mops/s           | 1,427.5 MB/s    |
-|  64B Streaming (Combined Tier 2+3)     | 10.80 Mops/s        | 8.90 Mops/s            | 543.3 MB/s      |
-|  Half-RTT Minimum Latency (Trusted)    | 183.0 ns            | 64.0 ns                | -65.0% LOWER!   |
-|  Half-RTT Minimum Latency (Combined)   | N/A                 | 67.0 ns                | -63.4% LOWER!   |
-|  Half-RTT Median Latency (p50)         | 230.0 ns            | 92.0–93.0 ns           | -59.6% LOWER!   |
-|  Half-RTT Zero-Trust Latency (p50)     | 2,494.0 ns (throttl)| 196.0 ns (Adaptive)    | -92.1% LOWER!   |
-|  B-Queue Vector Batching (Batch 32)    | 25.31 Mops/s        | 42.86 Mops/s           | +69.3% FASTER   |
-|  Peak Vector Batching Throughput       | 34.50 Mops/s        | 41.23 Mops/s           | 24.26 ns / op   |
-|  E2E Multi-Process Batch 32 Throughput | 14.18 Mops/s        | 42.86 Mops/s           | +202.3% FASTER  |
-|  Hardware CRC32C Speedup (64B cache)   | 1.00x (SW fallback) | 21.95x (SSE4.2 HW)     | 7.81 ns / op    |
-|  Dynamic Hugepages (16MB Ring)         | 4.27 Mops/s (4KB)   | 10.24 Mops/s (2MB THP) | +139.9% (2.40x) |
-|  MPMC Contention (4P-2C Oversubscribe) | 0.052 Mops/s (DPDK) | 2.129 Mops/s (librbipc)| 40.5x vs DPDK   |
-|  MPMC Contention (4P-4C Oversubscribe) | 0.092 Mops/s (DPDK) | 1.053 Mops/s (librbipc)| 11.4x vs DPDK   |
+|  1P-1C Combined Scalability            | 10.80 Mops/s        | 17.85 Mops/s           | +65.3% (Superior throughput) |
+|  Reference-Passing Throughput (8B Ptr) | N/A (Copy only)     | 23.39 Mops/s           | 1,427.5 MB/s                 |
+|  64B Streaming (Combined Tier 2+3)     | 10.80 Mops/s        | 8.90 Mops/s            | 543.3 MB/s                   |
+|  Half-RTT Minimum Latency (Trusted)    | 183.0 ns            | 64.0 ns                | -65.0% lower latency         |
+|  Half-RTT Minimum Latency (Combined)   | N/A                 | 67.0 ns                | -63.4% lower latency         |
+|  Half-RTT Median Latency (p50)         | 230.0 ns            | 92.0–93.0 ns           | -59.6% lower latency         |
+|  Half-RTT Zero-Trust Latency (p50)     | 2,494.0 ns (throttl)| 196.0 ns (Adaptive)    | -92.1% lower latency         |
+|  B-Queue Vector Batching (Batch 32)    | 25.31 Mops/s        | 42.86 Mops/s           | +69.3% speedup               |
+|  Peak Vector Batching Throughput       | 34.50 Mops/s        | 41.23 Mops/s           | 24.26 ns / op                |
+|  E2E Multi-Process Batch 32 Throughput | 14.18 Mops/s        | 42.86 Mops/s           | +202.3% speedup              |
+|  Hardware CRC32C Speedup (64B cache)   | 1.00x (SW fallback) | 21.95x (SSE4.2 HW)     | 7.81 ns / op                 |
+|  Dynamic Hugepages (16MB Ring)         | 4.27 Mops/s (4KB)   | 10.24 Mops/s (2MB THP) | +139.9% (2.40x)              |
+|  MPMC Contention (4P-2C Oversubscribe) | 0.052 Mops/s (DPDK) | 2.129 Mops/s (librbipc)| 40.5x vs DPDK                |
+|  MPMC Contention (4P-4C Oversubscribe) | 0.092 Mops/s (DPDK) | 1.053 Mops/s (librbipc)| 11.4x vs DPDK                |
 |  Idle State CPU Utilization            | 98.8% (Disruptor)   | 0.14% - 0.20% (librbipc| 494x - 702x CUT |
 +---------------------------------------------------------------------------------------------------------+
 ```
@@ -188,9 +188,8 @@ The newest in-tree innovations were evaluated using a realistic **multi-process 
 1. **Tier 1 Zero-Trust (Default):** Delivers **3.35 M msgs/sec** cross-process with 298.80 ns average latency while validating turn ownership, magic boundaries, and crash-resilience.
 2. **Tier 2 Trusted Mode:** Boosts single-message throughput to **4.47 M msgs/sec** (+33.4%) and lowers latency to **223.54 ns** by eliding defensive checks in cooperating, co-located processes.
 3. **Nikolaev wCQ Wait-Free Helping Mode (`RBIPC_FLAG_WAIT_FREE`):**  
-   Sustains **2.27 M msgs/sec** with 441.09 ns latency. While the cooperative announcement descriptor array incurs a small overhead compared to lock-free spinloops, it provides **strict $O(N)$ wait-free bounds**, guaranteeing that preempted or stalled threads can never starve active peers.
-4. **Vector Batching Super-Scaling:**  
-   When batching is applied to Combined Tier 2 + Tier 3, throughput surges to **26.81 M msgs/sec (3.68 GB/s)** at **37.29 ns per message**!
+4. **Vector Batching Throughput Scaling:**  
+   When batching is applied to Combined Tier 2 + Tier 3, throughput reaches **42.86 M msgs/sec (5,886 MB/s)** at **23.3 ns per message**.
 
 ---
 
@@ -260,7 +259,7 @@ Detailed in [`benchmarks/results/laptop/perf_c2c_batch.txt`](benchmarks/results/
   Load Local HITM                   :         77
   Load Remote HITM                  :          0
   Store Operations                  :        294
-  Store L1D Hit                     :        284  (96.6% Hit Rate!)
+  Store L1D Hit                     :        284  (96.6% Hit Rate)
   Store L1D Miss                    :         10
   Locked Access on shared lines     :          0
 ```
@@ -384,8 +383,8 @@ For large ring buffers (16 MB to 32 MB), dynamic 2MB PMD mapping **eliminates TL
 
 The comprehensive benchmarking, equalized competitor audit, and specialized microarchitectural profiling suite confirm:
 
-1. **Equalized Fairness:** Under strictly identical constraints and polling mechanisms, `librbipc` delivers **64 ns min (Trusted) / 67 ns min (Combined)** and **92–93 ns median latency**, matching or beating competitor algorithms while providing crash resilience, multi-process memory isolation, and dynamic slot poisoning.
-2. **Vector Batching Super-Scaling:** In E2E fork mode, B-Queue vector batching delivers **42.86 M msgs/sec (5,886 MB/s)** at **23.3 ns per message**, amortizing cache coherency invalidate costs across batches.
+1. **Equalized Fairness:** Under strictly identical constraints and polling mechanisms, `librbipc` delivers **64 ns min (Trusted) / 67 ns min (Combined)** and **92–93 ns median latency**, matching or outperforming baseline queue implementations while providing crash resilience, multi-process memory isolation, and dynamic slot poisoning.
+2. **Vector Batching Throughput Scaling:** In E2E fork mode, B-Queue vector batching delivers **42.86 M msgs/sec (5,886 MB/s)** at **23.3 ns per message**, amortizing cache coherency invalidate costs across batches.
 3. **Contention Robustness:** Under heavy thread oversubscription (4P-2C and 4P-4C on a dual-core laptop), `librbipc` outperforms DPDK and Disruptor by **10.8x to 40.5x**, preventing unyielding spinlock starvation.
 4. **Power Efficiency:** `librbipc` reduces idle CPU consumption from ~98.8% down to **0.14% - 0.20%**, achieving a **491x - 702x energy reduction**.
 5. **Microarchitectural Verification:** Linux `perf c2c` validates a **96.6% Store L1D hit rate**, zero locked bus instructions, zero false sharing, and clean unrolled vectorization across all interactive SVG flamegraphs.

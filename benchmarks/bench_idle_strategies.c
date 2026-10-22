@@ -1,6 +1,6 @@
 /**
  * @file bench_idle_strategies.c
- * @brief Master coordinator for non-CPU-burning wait strategies benchmark.
+ * @brief Master coordinator for energy-efficient wait strategies benchmark.
  * @details Evaluates DPDK rte_ring, LMAX Disruptor, and librbipc wait strategies.
  */
 
