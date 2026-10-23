@@ -28,7 +28,7 @@ def copy_auxiliary_assets():
     if os.path.exists(benchmarks_src_dir):
         shutil.copytree(benchmarks_src_dir, benchmarks_dest_dir, dirs_exist_ok=True)
 
-    # Copy include, src, tests, and scripts referenced by relative links in README.md and TECHNICAL_REPORT.md
+    # Copy include, src, tests, and scripts referenced by relative links in README.md, ARCHITECTURE.md, and BENCHMARKS.md
     for subdir in ("include", "src", "tests", "scripts"):
         src_dir = os.path.join(REPO_DIR, subdir)
         dest_dir = os.path.join(DOCS_HTML_DIR, subdir)

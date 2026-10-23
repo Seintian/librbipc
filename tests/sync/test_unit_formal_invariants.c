@@ -2,8 +2,8 @@
  * @file test_unit_formal_invariants.c
  * @brief Formal concurrency invariants and linearizability verification harness.
  *
- * @details Rigorously tests the formal safety and liveness invariants documented
- *          in RESEARCH_REPORT.md Section 8.3:
+ *  @details Rigorously tests the formal safety and liveness invariants documented
+ *           in ARCHITECTURE.md Section 3:
  *          - Invariant 1: Strict Monotonic Ticket Ordering & No Gaps.
  *          - Invariant 2: Slot State Monotonic Sequence Turns.
  *          - Invariant 3: Bounded Wait-Free Progress & Starvation Elimination.
