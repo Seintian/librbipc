@@ -22,6 +22,12 @@ extern "C" {
 #endif
 
 /**
+ * @def RBIPC_IPC_MAX_FDS
+ * @brief Maximum count of file descriptors that can be transmitted in a single SCM_RIGHTS message (8).
+ */
+#define RBIPC_IPC_MAX_FDS 8U
+
+/**
  * @brief Transmit a raw file descriptor across a UNIX domain stream or datagram
  * socket.
  *
@@ -39,7 +45,7 @@ RBIPC_API RBIPC_NODISCARD RBIPC_LEAF int rbipc_ipc_send_fd(int socket_fd, int fd
  *
  * @param[in] socket_fd An open, connected UNIX domain socket (AF_UNIX).
  * @param[in] fds       Array of open file descriptors to transmit.
- * @param[in] count     Number of file descriptors in @p fds array (must be > 0 and <= 8).
+ * @param[in] count     Number of file descriptors in @p fds array (must be > 0 and <= @ref RBIPC_IPC_MAX_FDS).
  *
  * @return @ref RBIPC_OK on success.
  * @retval RBIPC_ERR_INVAL if arguments are invalid or any fd is negative.

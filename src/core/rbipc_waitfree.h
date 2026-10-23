@@ -58,10 +58,10 @@ typedef struct rbipc_help_slot {
   uint8_t inline_staging[24];        /**< Inline payload staging for transfers <= 24 bytes */
 } rbipc_help_slot_t;
 
-static_assert(sizeof(rbipc_help_slot_t) == 64,
-              "rbipc_help_slot_t must be exactly 64 bytes");
-static_assert(alignof(rbipc_help_slot_t) == 64,
-              "rbipc_help_slot_t must be 64-byte cache line aligned");
+static_assert(sizeof(rbipc_help_slot_t) == RBIPC_CACHE_LINE,
+              "rbipc_help_slot_t must be exactly 64 bytes (one cache line)");
+static_assert(alignof(rbipc_help_slot_t) == RBIPC_CACHE_LINE,
+              "rbipc_help_slot_t must be aligned to 64-byte cache line boundary");
 
 /**
  * @brief Initialize all helper slots in the cooperative helping table.

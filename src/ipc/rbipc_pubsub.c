@@ -412,7 +412,7 @@ int rbipc_sub_read(rbipc_sub_t *sub, uint64_t timeout_ns, const void **out_buf,
       if (rbipc_cpu_has_waitpkg() || rbipc_cpu_has_wfxt()) {
         uint32_t substate = (ring->wait_policy & RBIPC_WAIT_ADAPTIVE) ? 1 : 0;
         int hw_rc = rbipc_sync_hardware_wait_substate(
-            &hdr->write_ticket, 5000ULL, rbipc_pubsub_pred_ready, sub,
+            &hdr->write_ticket, RBIPC_HW_WAIT_TIMEOUT_NS, rbipc_pubsub_pred_ready, sub,
             substate);
         (void)hw_rc;
         rc = rbipc_sub_poll(sub, out_buf, out_len, out_seq);

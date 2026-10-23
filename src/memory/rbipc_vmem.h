@@ -18,6 +18,13 @@
 #include "rbipc_attr.h"
 
 #include <stddef.h>
+#include <sys/syscall.h>
+
+#ifndef SYS_mseal
+#if defined(__x86_64__) || defined(__aarch64__)
+#define SYS_mseal 462
+#endif
+#endif
 
 /**
  * @brief Maps the shared memory control header and slot metadata table into virtual memory.

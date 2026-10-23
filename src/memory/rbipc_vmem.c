@@ -20,12 +20,6 @@
 #include <sys/syscall.h>
 #include <unistd.h>
 
-#ifndef SYS_mseal
-#if defined(__x86_64__) || defined(__aarch64__)
-#define SYS_mseal 462
-#endif
-#endif
-
 /**
  * @brief Maps the control header and slot descriptor metadata region.
  * @details Invokes @c mmap with flags @c MAP_SHARED and protections @c PROT_READ | @c PROT_WRITE.

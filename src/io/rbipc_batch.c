@@ -241,8 +241,7 @@ int rbipc_reserve_write_batch_timeout(rbipc_ring_t *RBIPC_RESTRICT ring,
         *out_reserved = avail;
         return RBIPC_OK;
       }
-      if (sync_state.has_deadline &&
-          RBIPC_UNLIKELY(rbipc_clock_monotonic_ns() >= sync_state.deadline_ns)) {
+      if (RBIPC_UNLIKELY(rbipc_sync_is_expired(&sync_state, rbipc_clock_monotonic_ns()))) {
         return (timeout_ns == 0) ? RBIPC_ERR_FULL : RBIPC_ERR_TIMEOUT;
       }
       rbipc_cpu_pause();
@@ -279,7 +278,7 @@ int rbipc_reserve_write_batch_timeout(rbipc_ring_t *RBIPC_RESTRICT ring,
         if (rbipc_cpu_has_waitpkg() || rbipc_cpu_has_wfxt()) {
           uint32_t substate = (ring->wait_policy & RBIPC_WAIT_ADAPTIVE) ? 1 : 0;
           int hw_rc = rbipc_sync_hardware_wait_substate(
-              &slots[t & ring->cached_capacity_mask].sequence, 5000ULL, NULL,
+              &slots[t & ring->cached_capacity_mask].sequence, RBIPC_HW_WAIT_TIMEOUT_NS, NULL,
               NULL, substate);
           (void)hw_rc;
           avail = rbipc_simd_scan_vacant_slots_ex(
@@ -387,8 +386,7 @@ int rbipc_read_acquire_batch_timeout(rbipc_ring_t *RBIPC_RESTRICT ring,
         *out_acquired = avail;
         return RBIPC_OK;
       }
-      if (sync_state.has_deadline &&
-          RBIPC_UNLIKELY(rbipc_clock_monotonic_ns() >= sync_state.deadline_ns)) {
+      if (RBIPC_UNLIKELY(rbipc_sync_is_expired(&sync_state, rbipc_clock_monotonic_ns()))) {
         return (timeout_ns == 0) ? RBIPC_ERR_EMPTY : RBIPC_ERR_TIMEOUT;
       }
       rbipc_cpu_pause();
@@ -429,7 +427,7 @@ int rbipc_read_acquire_batch_timeout(rbipc_ring_t *RBIPC_RESTRICT ring,
         if (rbipc_cpu_has_waitpkg() || rbipc_cpu_has_wfxt()) {
           uint32_t substate = (ring->wait_policy & RBIPC_WAIT_ADAPTIVE) ? 1 : 0;
           int hw_rc = rbipc_sync_hardware_wait_substate(
-              &slots[t & ring->cached_capacity_mask].sequence, 5000ULL, NULL,
+              &slots[t & ring->cached_capacity_mask].sequence, RBIPC_HW_WAIT_TIMEOUT_NS, NULL,
               NULL, substate);
           (void)hw_rc;
           avail = rbipc_simd_scan_ready_slots_ex(

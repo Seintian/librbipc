@@ -181,8 +181,8 @@ RBIPC_INLINE bool rbipc_io_hardware_wait(const rbipc_ring_t *ring,
                (ring->wait_policy & RBIPC_WAIT_HW_MONITOR))) {
     if (rbipc_cpu_has_waitpkg() || rbipc_cpu_has_wfxt()) {
       uint32_t substate = (ring->wait_policy & RBIPC_WAIT_ADAPTIVE) ? 1 : 0;
-      return rbipc_sync_hardware_wait_substate(addr, 5000ULL, pred, ctx,
-                                               substate) == RBIPC_OK;
+      return rbipc_sync_hardware_wait_substate(addr, RBIPC_HW_WAIT_TIMEOUT_NS,
+                                               pred, ctx, substate) == RBIPC_OK;
     }
   }
   return false;
@@ -432,8 +432,7 @@ int rbipc_reserve_write_timeout(rbipc_ring_t *RBIPC_RESTRICT ring, uint32_t len,
         return rc;
       }
     } else {
-      if (sync_state.has_deadline &&
-          RBIPC_UNLIKELY(rbipc_clock_monotonic_ns() >= sync_state.deadline_ns)) {
+      if (RBIPC_UNLIKELY(rbipc_sync_is_expired(&sync_state, rbipc_clock_monotonic_ns()))) {
         return (timeout_ns == 0) ? RBIPC_ERR_FULL : RBIPC_ERR_TIMEOUT;
       }
       t = atomic_load_explicit(&hdr->write_ticket, memory_order_relaxed);
@@ -645,9 +644,7 @@ int rbipc_read_acquire_timeout(rbipc_ring_t *RBIPC_RESTRICT ring,
         return rc;
       }
     } else {
-      if (sync_state.has_deadline &&
-          RBIPC_UNLIKELY(rbipc_clock_monotonic_ns() >=
-                         sync_state.deadline_ns)) {
+      if (RBIPC_UNLIKELY(rbipc_sync_is_expired(&sync_state, rbipc_clock_monotonic_ns()))) {
         return (timeout_ns == 0) ? RBIPC_ERR_EMPTY : RBIPC_ERR_TIMEOUT;
       }
       t = atomic_load_explicit(&hdr->read_ticket, memory_order_relaxed);

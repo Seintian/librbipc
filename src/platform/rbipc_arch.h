@@ -41,10 +41,16 @@ RBIPC_INLINE RBIPC_NODISCARD uint64_t rbipc_clock_monotonic_ns(void) {
 }
 
 /**
+ * @def RBIPC_PAGE_SIZE_DEFAULT
+ * @brief Default virtual memory page size fallback in bytes (4096).
+ */
+#define RBIPC_PAGE_SIZE_DEFAULT 4096U
+
+/**
  * @brief Query system virtual memory page size with atomic process-local caching.
  *
  * @details Queries sysconf(_SC_PAGESIZE) on first invocation and caches the result
- * atomically to eliminate subsequent system calls. Falls back to 4096 bytes if sysconf fails.
+ * atomically to eliminate subsequent system calls. Falls back to RBIPC_PAGE_SIZE_DEFAULT bytes if sysconf fails.
  *
  * @return System virtual memory page size in bytes.
  */
@@ -55,7 +61,7 @@ RBIPC_INLINE RBIPC_NODISCARD size_t rbipc_page_size(void) {
     return ps;
   }
   long raw = sysconf(_SC_PAGESIZE);
-  ps = (raw > 0) ? (size_t)raw : 4096U;
+  ps = (raw > 0) ? (size_t)raw : RBIPC_PAGE_SIZE_DEFAULT;
   atomic_store_explicit(&s_page_size, ps, memory_order_release);
   return ps;
 }

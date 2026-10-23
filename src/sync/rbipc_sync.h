@@ -47,6 +47,12 @@ RBIPC_INLINE void rbipc_sync_spin_pause(uint32_t count) {
 #define RBIPC_FUTEX_PERIOD_NS 20000000ULL
 
 /**
+ * @def RBIPC_HW_WAIT_TIMEOUT_NS
+ * @brief Default maximum duration in nanoseconds for hardware monitor wait (UMWAIT / WFET).
+ */
+#define RBIPC_HW_WAIT_TIMEOUT_NS 5000ULL
+
+/**
  * @struct rbipc_sync_state_t
  * @brief Thread-local state tracking for backoff progression and deadline
  * timeout management.

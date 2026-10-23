@@ -310,8 +310,8 @@ rbipc_sync_hardware_wait_substate(const void *monitored_addr, uint64_t timeout_n
   if (timeout_ns == 0) {
     return RBIPC_ERR_TIMEOUT;
   }
-  if (timeout_ns > 5000ULL) {
-    timeout_ns = 5000ULL;
+  if (timeout_ns > RBIPC_HW_WAIT_TIMEOUT_NS) {
+    timeout_ns = RBIPC_HW_WAIT_TIMEOUT_NS;
   }
 
 #if defined(__x86_64__) || defined(_M_X64) || defined(__i386__) ||             \
@@ -399,7 +399,7 @@ int rbipc_sync_backoff_adaptive(rbipc_sync_state_t *RBIPC_RESTRICT state,
       predicate) {
     if (rbipc_cpu_has_waitpkg() || rbipc_cpu_has_wfxt()) {
       uint32_t substate = (policy & RBIPC_WAIT_ADAPTIVE) ? 1 : 0;
-      int hw_rc = rbipc_sync_hardware_wait_substate(futex_word, 5000ULL,
+      int hw_rc = rbipc_sync_hardware_wait_substate(futex_word, RBIPC_HW_WAIT_TIMEOUT_NS,
                                                     predicate, arg, substate);
       if (hw_rc == 0) {
         return 0;

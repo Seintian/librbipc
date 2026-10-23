@@ -256,6 +256,82 @@ static void rbipc_ring_abort_create(int fd, const char *name, void *ctrl_map,
  * ============================================================================
  */
 
+/**
+ * @brief Allocate, map, and initialize a complete ring buffer instance.
+ */
+static int
+rbipc_ring_create_instance(const char *name, size_t capacity,
+                           uint32_t slot_size, uint32_t flags, mode_t mode,
+                           uint32_t roles, size_t page_size,
+                           rbipc_ring_t **RBIPC_RESTRICT out_ring) {
+  size_t effective_page = page_size;
+  uint32_t cap = 0;
+  int rc = rbipc_ring_validate_create_params(capacity, slot_size,
+                                             &effective_page, &cap);
+  if (RBIPC_UNLIKELY(rc != RBIPC_OK)) {
+    return rc;
+  }
+  effective_page = page_size;
+
+  rbipc_layout_t layout;
+  rc = rbipc_shm_calc_layout_ex(cap, slot_size, effective_page, flags, &layout);
+  if (RBIPC_UNLIKELY(rc != RBIPC_OK)) {
+    return rc;
+  }
+
+  int fd = -1;
+  uint32_t shm_flags = flags & (RBIPC_CREATE_OVERWRITE | RBIPC_SHM_ANON |
+                                RBIPC_SHM_NAMED | RBIPC_FLAG_HUGETLB);
+  rc = rbipc_shm_create_ex(name, layout.total_shm_size, shm_flags, mode, &fd);
+  if (RBIPC_UNLIKELY(rc != RBIPC_OK)) {
+    return rc;
+  }
+
+  rbipc_shm_seal(fd);
+
+  bool is_named = (flags & RBIPC_SHM_NAMED) ||
+                  (!(flags & RBIPC_SHM_ANON) && name != NULL);
+  const char *effective_name = is_named ? name : NULL;
+
+  void *ctrl_map = NULL;
+  void *data_map = NULL;
+  rc = rbipc_ring_map_regions(fd, &layout, &ctrl_map, &data_map);
+  if (RBIPC_UNLIKELY(rc != RBIPC_OK)) {
+    rbipc_ring_abort_create(fd, effective_name, NULL, 0, NULL, 0);
+    return rc;
+  }
+
+  rbipc_shm_header_t *hdr = (rbipc_shm_header_t *)ctrl_map;
+  rbipc_ring_init_header_fields(hdr, &layout, cap, roles, flags);
+
+  rbipc_slot_t *slots =
+      (rbipc_slot_t *)((char *)ctrl_map + sizeof(rbipc_shm_header_t));
+  rbipc_slot_init_table_ex(slots, cap, (flags & RBIPC_FLAG_PACKED) != 0);
+
+  if (flags & RBIPC_FLAG_WAIT_FREE) {
+    rbipc_help_slot_t *help_slots =
+        (rbipc_help_slot_t *)((char *)slots +
+                              ((size_t)cap * sizeof(rbipc_slot_t)));
+    rbipc_waitfree_init_table(help_slots, RBIPC_HELP_MAX_PEERS);
+  }
+
+  rbipc_ring_t *ring = rbipc_ring_alloc_handle(
+      fd, effective_name, hdr, slots, ctrl_map, layout.data_offset, data_map,
+      layout.data_size, roles, true);
+  if (RBIPC_UNLIKELY(!ring)) {
+    rbipc_ring_abort_create(fd, effective_name, ctrl_map, layout.data_offset,
+                            data_map, layout.data_size);
+    return RBIPC_ERR_NOMEM;
+  }
+
+  /* Publish magic sentinel as the final step with release semantics */
+  atomic_store_explicit(&hdr->magic, htole64(RBIPC_MAGIC),
+                        memory_order_release);
+
+  *out_ring = ring;
+  return RBIPC_OK;
+}
+
 RBIPC_LEAF
 int rbipc_create_ex(const char *RBIPC_RESTRICT name, size_t capacity,
                     uint32_t slot_size, uint32_t flags, mode_t mode,
@@ -291,117 +367,19 @@ int rbipc_create_ex(const char *RBIPC_RESTRICT name, size_t capacity,
   /* Handle HugeTLB (2MB huge pages) request with graceful fallback */
   if (flags & RBIPC_FLAG_HUGETLB) {
     if (rbipc_shm_hugetlb_available()) {
-      size_t huge_page = RBIPC_HUGE_PAGE_2MB;
-      uint32_t h_cap = 0;
-      int h_rc = rbipc_ring_validate_create_params(capacity, slot_size, &huge_page, &h_cap);
+      int h_rc = rbipc_ring_create_instance(name, capacity, slot_size, flags,
+                                            mode, roles, RBIPC_HUGE_PAGE_2MB,
+                                            out_ring);
       if (h_rc == RBIPC_OK) {
-        huge_page = RBIPC_HUGE_PAGE_2MB;
-        rbipc_layout_t h_layout;
-        h_rc = rbipc_shm_calc_layout_ex(h_cap, slot_size, huge_page, flags, &h_layout);
-        if (h_rc == RBIPC_OK) {
-          int h_fd = -1;
-          uint32_t shm_flags = (flags & (RBIPC_CREATE_OVERWRITE | RBIPC_SHM_ANON | RBIPC_SHM_NAMED)) | RBIPC_FLAG_HUGETLB;
-          h_rc = rbipc_shm_create_ex(name, h_layout.total_shm_size, shm_flags, mode, &h_fd);
-          if (h_rc == RBIPC_OK) {
-            rbipc_shm_seal(h_fd);
-            void *ctrl_map = NULL;
-            void *data_map = NULL;
-            h_rc = rbipc_ring_map_regions(h_fd, &h_layout, &ctrl_map, &data_map);
-            if (h_rc == RBIPC_OK) {
-              rbipc_shm_header_t *hdr = (rbipc_shm_header_t *)ctrl_map;
-              rbipc_ring_init_header_fields(hdr, &h_layout, h_cap, roles, flags);
-              rbipc_slot_t *slots = (rbipc_slot_t *)((char *)ctrl_map + sizeof(rbipc_shm_header_t));
-              rbipc_slot_init_table_ex(slots, h_cap, (flags & RBIPC_FLAG_PACKED) != 0);
-              if (flags & RBIPC_FLAG_WAIT_FREE) {
-                rbipc_help_slot_t *help_slots =
-                    (rbipc_help_slot_t *)((char *)slots + ((size_t)h_cap * sizeof(rbipc_slot_t)));
-                rbipc_waitfree_init_table(help_slots, RBIPC_HELP_MAX_PEERS);
-              }
-              rbipc_ring_t *ring = rbipc_ring_alloc_handle(
-                  h_fd, NULL, hdr, slots, ctrl_map, h_layout.data_offset, data_map,
-                  h_layout.data_size, roles, true);
-              if (ring) {
-                atomic_store_explicit(&hdr->magic, htole64(RBIPC_MAGIC), memory_order_release);
-                *out_ring = ring;
-                return RBIPC_OK;
-              }
-              rbipc_ring_abort_create(h_fd, NULL, ctrl_map, h_layout.data_offset, data_map, h_layout.data_size);
-            } else {
-              close(h_fd);
-            }
-          }
-        }
+        return RBIPC_OK;
       }
     }
     /* Graceful fallback: clear RBIPC_FLAG_HUGETLB and proceed with standard 4KB pages */
     flags &= ~RBIPC_FLAG_HUGETLB;
   }
 
-  size_t page_size = 0;
-  uint32_t cap = 0;
-  int rc =
-      rbipc_ring_validate_create_params(capacity, slot_size, &page_size, &cap);
-  if (RBIPC_UNLIKELY(rc != RBIPC_OK)) {
-    return rc;
-  }
-
-  rbipc_layout_t layout;
-  rc = rbipc_shm_calc_layout_ex(cap, slot_size, page_size, flags, &layout);
-  if (RBIPC_UNLIKELY(rc != RBIPC_OK)) {
-    return rc;
-  }
-
-  int fd = -1;
-  uint32_t shm_flags =
-      flags & (RBIPC_CREATE_OVERWRITE | RBIPC_SHM_ANON | RBIPC_SHM_NAMED);
-  rc = rbipc_shm_create_ex(name, layout.total_shm_size, shm_flags, mode, &fd);
-  if (RBIPC_UNLIKELY(rc != RBIPC_OK)) {
-    return rc;
-  }
-
-  rbipc_shm_seal(fd);
-
-  bool is_named =
-      (flags & RBIPC_SHM_NAMED) ||
-      (!(flags & RBIPC_SHM_ANON) && name != NULL);
-  const char *effective_name = is_named ? name : NULL;
-
-  void *ctrl_map = NULL;
-  void *data_map = NULL;
-  rc = rbipc_ring_map_regions(fd, &layout, &ctrl_map, &data_map);
-  if (RBIPC_UNLIKELY(rc != RBIPC_OK)) {
-    rbipc_ring_abort_create(fd, effective_name, NULL, 0, NULL, 0);
-    return rc;
-  }
-
-  rbipc_shm_header_t *hdr = (rbipc_shm_header_t *)ctrl_map;
-  rbipc_ring_init_header_fields(hdr, &layout, cap, roles, flags);
-
-  rbipc_slot_t *slots =
-      (rbipc_slot_t *)((char *)ctrl_map + sizeof(rbipc_shm_header_t));
-  rbipc_slot_init_table_ex(slots, cap, (flags & RBIPC_FLAG_PACKED) != 0);
-
-  if (flags & RBIPC_FLAG_WAIT_FREE) {
-    rbipc_help_slot_t *help_slots =
-        (rbipc_help_slot_t *)((char *)slots + ((size_t)cap * sizeof(rbipc_slot_t)));
-    rbipc_waitfree_init_table(help_slots, RBIPC_HELP_MAX_PEERS);
-  }
-
-  rbipc_ring_t *ring = rbipc_ring_alloc_handle(
-      fd, effective_name, hdr, slots, ctrl_map, layout.data_offset, data_map,
-      layout.data_size, roles, true);
-  if (RBIPC_UNLIKELY(!ring)) {
-    rbipc_ring_abort_create(fd, effective_name, ctrl_map, layout.data_offset,
-                            data_map, layout.data_size);
-    return RBIPC_ERR_NOMEM;
-  }
-
-  /* Publish magic sentinel as the final step with release semantics */
-  atomic_store_explicit(&hdr->magic, htole64(RBIPC_MAGIC),
-                        memory_order_release);
-
-  *out_ring = ring;
-  return RBIPC_OK;
+  return rbipc_ring_create_instance(name, capacity, slot_size, flags, mode,
+                                    roles, rbipc_page_size(), out_ring);
 }
 
 RBIPC_LEAF

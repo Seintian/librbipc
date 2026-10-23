@@ -37,7 +37,7 @@ extern "C" {
  * @brief Intel Data Streaming Accelerator (DSA) 64-byte hardware descriptor layout.
  */
 typedef struct rbipc_dma_desc {
-  _Alignas(64) uint32_t pasid_flags;           /**< Process Address Space ID and control flags */
+  _Alignas(RBIPC_CACHE_LINE) uint32_t pasid_flags;           /**< Process Address Space ID and control flags */
   uint32_t flags;                 /**< Operation flags (request completion, CRC) */
   uint64_t completion_addr;       /**< User virtual address of completion record */
   uint64_t src_addr;              /**< Source virtual address */
@@ -48,9 +48,9 @@ typedef struct rbipc_dma_desc {
   uint8_t  reserved[25];
 } rbipc_dma_desc_t;
 
-static_assert(sizeof(rbipc_dma_desc_t) == 64,
+static_assert(sizeof(rbipc_dma_desc_t) == RBIPC_CACHE_LINE,
               "rbipc_dma_desc_t must be exactly 64 bytes for MOVDIR64B / ENQCMD");
-static_assert(alignof(rbipc_dma_desc_t) == 64,
+static_assert(alignof(rbipc_dma_desc_t) == RBIPC_CACHE_LINE,
               "rbipc_dma_desc_t must be 64-byte aligned");
 
 #ifdef __cplusplus

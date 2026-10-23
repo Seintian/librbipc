@@ -15,8 +15,6 @@
 #include <string.h>
 #include <errno.h>
 
-#define RBIPC_IPC_MAX_FDS 8
-
 /**
  * @brief Transmit multiple file descriptors across a UNIX domain socket via SCM_RIGHTS.
  */
