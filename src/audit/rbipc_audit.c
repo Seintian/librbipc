@@ -29,11 +29,14 @@
 #include <unistd.h>
 
 #ifndef SYS_pidfd_open
-#if defined(__x86_64__)
-#define SYS_pidfd_open 434
-#elif defined(__aarch64__)
-#define SYS_pidfd_open 434
-#elif defined(__i386__)
+#if defined(__NR_pidfd_open)
+#define SYS_pidfd_open __NR_pidfd_open
+#elif defined(__mips__)
+#define SYS_pidfd_open 4434
+#elif defined(__alpha__)
+#define SYS_pidfd_open 544
+#elif defined(__x86_64__) || defined(__aarch64__) || defined(__i386__) ||        \
+    defined(__riscv) || defined(__powerpc__) || defined(__s390x__)
 #define SYS_pidfd_open 434
 #endif
 #endif

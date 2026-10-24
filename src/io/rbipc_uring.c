@@ -25,7 +25,20 @@
 #include <unistd.h>
 
 #ifndef SYS_io_uring_setup
-#if defined(__x86_64__) || defined(__aarch64__)
+#if defined(__NR_io_uring_setup)
+#define SYS_io_uring_setup __NR_io_uring_setup
+#define SYS_io_uring_enter __NR_io_uring_enter
+#define SYS_io_uring_register __NR_io_uring_register
+#elif defined(__mips__)
+#define SYS_io_uring_setup 4425
+#define SYS_io_uring_enter 4426
+#define SYS_io_uring_register 4427
+#elif defined(__alpha__)
+#define SYS_io_uring_setup 535
+#define SYS_io_uring_enter 536
+#define SYS_io_uring_register 537
+#elif defined(__x86_64__) || defined(__aarch64__) || defined(__riscv) ||        \
+    defined(__powerpc__) || defined(__s390x__)
 #define SYS_io_uring_setup 425
 #define SYS_io_uring_enter 426
 #define SYS_io_uring_register 427

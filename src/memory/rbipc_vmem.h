@@ -21,7 +21,14 @@
 #include <sys/syscall.h>
 
 #ifndef SYS_mseal
-#if defined(__x86_64__) || defined(__aarch64__)
+#if defined(__NR_mseal)
+#define SYS_mseal __NR_mseal
+#elif defined(__mips__)
+#define SYS_mseal 4462
+#elif defined(__alpha__)
+#define SYS_mseal 566
+#elif defined(__x86_64__) || defined(__aarch64__) || defined(__riscv) ||        \
+    defined(__powerpc__) || defined(__s390x__)
 #define SYS_mseal 462
 #endif
 #endif

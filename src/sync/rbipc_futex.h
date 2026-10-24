@@ -27,9 +27,17 @@
 #include <linux/futex.h>
 #endif
 
+#include <sys/syscall.h>
+
 #ifndef SYS_futex_waitv
-#if defined(__x86_64__) || defined(__aarch64__) || defined(__i386__) ||        \
-    defined(__arm__) || defined(__riscv)
+#if defined(__NR_futex_waitv)
+#define SYS_futex_waitv __NR_futex_waitv
+#elif defined(__mips__)
+#define SYS_futex_waitv 4449
+#elif defined(__alpha__)
+#define SYS_futex_waitv 559
+#elif defined(__x86_64__) || defined(__aarch64__) || defined(__i386__) ||        \
+    defined(__arm__) || defined(__riscv) || defined(__powerpc__) || defined(__s390x__)
 #define SYS_futex_waitv 449
 #endif
 #endif
