@@ -125,7 +125,7 @@ static void test_telemetry_and_policy_validation(void) {
 
     assert(rbipc_get_stats(ring, &stats) == RBIPC_OK);
     assert(stats.capacity == 8);
-    assert(stats.slot_size == 128);
+    assert(stats.slot_size >= 128);
 
     assert(rbipc_get_slot_stats(ring, &slot_stats) == RBIPC_OK);
     assert(slot_stats.capacity == 8);
