@@ -1,69 +1,69 @@
 {
-  "timestamp": 1792501003,
+  "timestamp": 1792866943,
   "hardware": {
     "profile": "home_pc",
-    "cpu": "Intel(R) Core(TM) i5-6300U CPU @ 2.40GHz",
-    "cores": 2,
-    "threads": 4,
-    "hostname": "CHRIS-LAPTOP",
-    "kernel": "Linux 7.2.9-2-cachyos x86_64"
+    "cpu": "Intel(R) Core(TM) i5-10400F CPU @ 2.90GHz",
+    "cores": 5,
+    "threads": 10,
+    "hostname": "CHRIS-WINDOWS",
+    "kernel": "Linux 6.18.33.2-microsoft-standard-WSL2 x86_64"
   },
   "module1_latency_hierarchy": [
     {
       "mode": "Tier 1 Zero-Trust (Default / Robust)",
       "flags": 0,
-      "min_ns": 184,
-      "p25_ns": 228,
-      "p50_ns": 241,
-      "p75_ns": 268,
-      "p90_ns": 291,
-      "p99_ns": 413,
-      "p99_9_ns": 8842,
-      "max_ns": 551184,
-      "mean_ns": 299.70,
+      "min_ns": 50,
+      "p25_ns": 150,
+      "p50_ns": 200,
+      "p75_ns": 1500,
+      "p90_ns": 1700,
+      "p99_ns": 29001,
+      "p99_9_ns": 39101,
+      "max_ns": 100104,
+      "mean_ns": 2460.09,
       "reduction_pct": 0.00
     },
     {
       "mode": "Tier 2 Trusted Mode (Pure Vyukov)",
       "flags": 64,
-      "min_ns": 166,
-      "p25_ns": 218,
-      "p50_ns": 227,
-      "p75_ns": 241,
-      "p90_ns": 260,
-      "p99_ns": 366,
-      "p99_9_ns": 6992,
-      "max_ns": 621837,
-      "mean_ns": 302.32,
-      "reduction_pct": 5.81
+      "min_ns": 50,
+      "p25_ns": 150,
+      "p50_ns": 900,
+      "p75_ns": 1550,
+      "p90_ns": 1700,
+      "p99_ns": 29401,
+      "p99_9_ns": 40902,
+      "max_ns": 70653,
+      "mean_ns": 2782.44,
+      "reduction_pct": -350.00
     },
     {
       "mode": "Tier 3 Packed Descriptor Mode",
       "flags": 128,
-      "min_ns": 182,
-      "p25_ns": 228,
-      "p50_ns": 236,
-      "p75_ns": 247,
-      "p90_ns": 280,
-      "p99_ns": 315,
-      "p99_9_ns": 3000,
-      "max_ns": 422909,
-      "mean_ns": 263.36,
-      "reduction_pct": 2.07
+      "min_ns": 50,
+      "p25_ns": 150,
+      "p50_ns": 150,
+      "p75_ns": 200,
+      "p90_ns": 1500,
+      "p99_ns": 26251,
+      "p99_9_ns": 35701,
+      "max_ns": 78453,
+      "mean_ns": 1759.44,
+      "reduction_pct": 25.00
     },
     {
       "mode": "Combined Tier 2+3 (Trusted & Packed)",
       "flags": 192,
-      "min_ns": 188,
-      "p25_ns": 221,
-      "p50_ns": 231,
-      "p75_ns": 243,
-      "p90_ns": 254,
-      "p99_ns": 309,
-      "p99_9_ns": 3426,
-      "max_ns": 428701,
-      "mean_ns": 256.65,
-      "reduction_pct": 4.15
+      "min_ns": 100,
+      "p25_ns": 150,
+      "p50_ns": 150,
+      "p75_ns": 200,
+      "p90_ns": 1550,
+      "p99_ns": 26701,
+      "p99_9_ns": 35802,
+      "max_ns": 84004,
+      "mean_ns": 2040.28,
+      "reduction_pct": 25.00
     }
   ],
   "module2_streaming_throughput": [
@@ -71,280 +71,280 @@
       "mode": "Tier 1 Zero-Trust",
       "flags": 0,
       "pinned": false,
-      "msgs_per_sec": 9548852.07,
-      "mb_per_sec": 582.82,
-      "avg_latency_ns": 104.72
+      "msgs_per_sec": 16071163.11,
+      "mb_per_sec": 980.91,
+      "avg_latency_ns": 62.22
     },
     {
       "mode": "Tier 1 Zero-Trust",
       "flags": 0,
       "pinned": true,
-      "msgs_per_sec": 9501505.87,
-      "mb_per_sec": 579.93,
-      "avg_latency_ns": 105.25
+      "msgs_per_sec": 15871052.15,
+      "mb_per_sec": 968.69,
+      "avg_latency_ns": 63.01
     },
     {
       "mode": "Tier 2 Trusted",
       "flags": 64,
       "pinned": false,
-      "msgs_per_sec": 6385193.71,
-      "mb_per_sec": 389.72,
-      "avg_latency_ns": 156.61
+      "msgs_per_sec": 14310010.64,
+      "mb_per_sec": 873.41,
+      "avg_latency_ns": 69.88
     },
     {
       "mode": "Tier 2 Trusted",
       "flags": 64,
       "pinned": true,
-      "msgs_per_sec": 9083357.11,
-      "mb_per_sec": 554.40,
-      "avg_latency_ns": 110.09
+      "msgs_per_sec": 14412934.17,
+      "mb_per_sec": 879.70,
+      "avg_latency_ns": 69.38
     },
     {
       "mode": "Tier 3 Packed",
       "flags": 128,
       "pinned": false,
-      "msgs_per_sec": 9601229.73,
-      "mb_per_sec": 586.01,
-      "avg_latency_ns": 104.15
+      "msgs_per_sec": 15047670.27,
+      "mb_per_sec": 918.44,
+      "avg_latency_ns": 66.46
     },
     {
       "mode": "Tier 3 Packed",
       "flags": 128,
       "pinned": true,
-      "msgs_per_sec": 9647492.21,
-      "mb_per_sec": 588.84,
-      "avg_latency_ns": 103.65
+      "msgs_per_sec": 14807130.46,
+      "mb_per_sec": 903.76,
+      "avg_latency_ns": 67.54
     },
     {
       "mode": "Tier 2+3 Combined",
       "flags": 192,
       "pinned": false,
-      "msgs_per_sec": 9507498.73,
-      "mb_per_sec": 580.29,
-      "avg_latency_ns": 105.18
+      "msgs_per_sec": 13444947.01,
+      "mb_per_sec": 820.61,
+      "avg_latency_ns": 74.38
     },
     {
       "mode": "Tier 2+3 Combined",
       "flags": 192,
       "pinned": true,
-      "msgs_per_sec": 9587091.63,
-      "mb_per_sec": 585.15,
-      "avg_latency_ns": 104.31
+      "msgs_per_sec": 13649393.22,
+      "mb_per_sec": 833.09,
+      "avg_latency_ns": 73.26
     }
   ],
   "module3_batch_scaling": [
     {
       "batch_size": 1,
-      "tier1_msgs_sec": 8783883.92,
-      "tier1_mb_sec": 536.13,
-      "tier1_latency_ns": 113.84,
+      "tier1_msgs_sec": 18239167.43,
+      "tier1_mb_sec": 1113.23,
+      "tier1_latency_ns": 54.83,
       "tier1_speedup_vs_b1": 1.00,
-      "tier23_msgs_sec": 11378526.46,
-      "tier23_mb_sec": 694.49,
-      "tier23_latency_ns": 87.88,
+      "tier23_msgs_sec": 18183182.25,
+      "tier23_mb_sec": 1109.81,
+      "tier23_latency_ns": 55.00,
       "tier23_speedup_vs_b1": 1.00
     },
     {
       "batch_size": 4,
-      "tier1_msgs_sec": 22330845.41,
-      "tier1_mb_sec": 1362.97,
-      "tier1_latency_ns": 44.78,
-      "tier1_speedup_vs_b1": 2.54,
-      "tier23_msgs_sec": 20539149.39,
-      "tier23_mb_sec": 1253.61,
-      "tier23_latency_ns": 48.69,
-      "tier23_speedup_vs_b1": 1.81
+      "tier1_msgs_sec": 36231303.83,
+      "tier1_mb_sec": 2211.38,
+      "tier1_latency_ns": 27.60,
+      "tier1_speedup_vs_b1": 1.99,
+      "tier23_msgs_sec": 40648284.86,
+      "tier23_mb_sec": 2480.97,
+      "tier23_latency_ns": 24.60,
+      "tier23_speedup_vs_b1": 2.24
     },
     {
       "batch_size": 16,
-      "tier1_msgs_sec": 35859496.18,
-      "tier1_mb_sec": 2188.69,
-      "tier1_latency_ns": 27.89,
-      "tier1_speedup_vs_b1": 4.08,
-      "tier23_msgs_sec": 38379763.00,
-      "tier23_mb_sec": 2342.51,
-      "tier23_latency_ns": 26.06,
-      "tier23_speedup_vs_b1": 3.37
+      "tier1_msgs_sec": 76784392.50,
+      "tier1_mb_sec": 4686.55,
+      "tier1_latency_ns": 13.02,
+      "tier1_speedup_vs_b1": 4.21,
+      "tier23_msgs_sec": 63978642.39,
+      "tier23_mb_sec": 3904.95,
+      "tier23_latency_ns": 15.63,
+      "tier23_speedup_vs_b1": 3.52
     },
     {
       "batch_size": 32,
-      "tier1_msgs_sec": 36083002.45,
-      "tier1_mb_sec": 2202.33,
-      "tier1_latency_ns": 27.71,
-      "tier1_speedup_vs_b1": 4.11,
-      "tier23_msgs_sec": 42922128.19,
-      "tier23_mb_sec": 2619.76,
-      "tier23_latency_ns": 23.30,
-      "tier23_speedup_vs_b1": 3.77
+      "tier1_msgs_sec": 71698321.00,
+      "tier1_mb_sec": 4376.12,
+      "tier1_latency_ns": 13.95,
+      "tier1_speedup_vs_b1": 3.93,
+      "tier23_msgs_sec": 76516468.41,
+      "tier23_mb_sec": 4670.19,
+      "tier23_latency_ns": 13.07,
+      "tier23_speedup_vs_b1": 4.21
     },
     {
       "batch_size": 64,
-      "tier1_msgs_sec": 36988702.39,
-      "tier1_mb_sec": 2257.61,
-      "tier1_latency_ns": 27.04,
-      "tier1_speedup_vs_b1": 4.21,
-      "tier23_msgs_sec": 42393348.72,
-      "tier23_mb_sec": 2587.48,
-      "tier23_latency_ns": 23.59,
-      "tier23_speedup_vs_b1": 3.73
+      "tier1_msgs_sec": 81616396.41,
+      "tier1_mb_sec": 4981.47,
+      "tier1_latency_ns": 12.25,
+      "tier1_speedup_vs_b1": 4.47,
+      "tier23_msgs_sec": 79933163.09,
+      "tier23_mb_sec": 4878.73,
+      "tier23_latency_ns": 12.51,
+      "tier23_speedup_vs_b1": 4.40
     },
     {
       "batch_size": 128,
-      "tier1_msgs_sec": 40037709.12,
-      "tier1_mb_sec": 2443.71,
-      "tier1_latency_ns": 24.98,
-      "tier1_speedup_vs_b1": 4.56,
-      "tier23_msgs_sec": 36195276.99,
-      "tier23_mb_sec": 2209.18,
-      "tier23_latency_ns": 27.63,
-      "tier23_speedup_vs_b1": 3.18
+      "tier1_msgs_sec": 64406380.56,
+      "tier1_mb_sec": 3931.05,
+      "tier1_latency_ns": 15.53,
+      "tier1_speedup_vs_b1": 3.53,
+      "tier23_msgs_sec": 87032186.77,
+      "tier23_mb_sec": 5312.02,
+      "tier23_latency_ns": 11.49,
+      "tier23_speedup_vs_b1": 4.79
     }
   ],
   "module4_shm_lifecycle": {
-    "named": {"ops_sec": 15369.58, "latency_us": 65.06},
-    "anonymous": {"ops_sec": 17488.44, "latency_us": 57.18},
-    "speedup": 1.14
+    "named": {"ops_sec": 17806.24, "latency_us": 56.16},
+    "anonymous": {"ops_sec": 20500.48, "latency_us": 48.78},
+    "speedup": 1.15
   },
   "module5_pubsub_multicast": [
     {
       "mode": "Standard Copy (Std Ring)",
       "fanout": 1,
-      "pub_msgs_sec": 2759634.86,
-      "effective_msgs_sec": 2759634.86,
-      "effective_mb_sec": 168.43
+      "pub_msgs_sec": 15776528.63,
+      "effective_msgs_sec": 15776528.63,
+      "effective_mb_sec": 962.92
     },
     {
       "mode": "Standard Copy (Std Ring)",
       "fanout": 2,
-      "pub_msgs_sec": 653515.77,
-      "effective_msgs_sec": 1307031.54,
-      "effective_mb_sec": 79.77
+      "pub_msgs_sec": 16833571.53,
+      "effective_msgs_sec": 33667143.06,
+      "effective_mb_sec": 2054.88
     },
     {
       "mode": "Standard Copy (Std Ring)",
       "fanout": 4,
-      "pub_msgs_sec": 295161.58,
-      "effective_msgs_sec": 1180646.32,
-      "effective_mb_sec": 72.06
+      "pub_msgs_sec": 2639777.68,
+      "effective_msgs_sec": 10559110.72,
+      "effective_mb_sec": 644.48
     },
     {
       "mode": "Standard Copy (Std Ring)",
       "fanout": 8,
-      "pub_msgs_sec": 195887.88,
-      "effective_msgs_sec": 1567103.05,
-      "effective_mb_sec": 95.65
+      "pub_msgs_sec": 3014487.57,
+      "effective_msgs_sec": 24115900.54,
+      "effective_mb_sec": 1471.92
     },
     {
       "mode": "Standard Copy (Packed Ring)",
       "fanout": 1,
-      "pub_msgs_sec": 1757507.36,
-      "effective_msgs_sec": 1757507.36,
-      "effective_mb_sec": 107.27
+      "pub_msgs_sec": 16396888.66,
+      "effective_msgs_sec": 16396888.66,
+      "effective_mb_sec": 1000.79
     },
     {
       "mode": "Standard Copy (Packed Ring)",
       "fanout": 2,
-      "pub_msgs_sec": 509313.20,
-      "effective_msgs_sec": 1018626.40,
-      "effective_mb_sec": 62.17
+      "pub_msgs_sec": 4276570.61,
+      "effective_msgs_sec": 8553141.22,
+      "effective_mb_sec": 522.04
     },
     {
       "mode": "Standard Copy (Packed Ring)",
       "fanout": 4,
-      "pub_msgs_sec": 256504.93,
-      "effective_msgs_sec": 1026019.71,
-      "effective_mb_sec": 62.62
+      "pub_msgs_sec": 1601017.94,
+      "effective_msgs_sec": 6404071.76,
+      "effective_mb_sec": 390.87
     },
     {
       "mode": "Standard Copy (Packed Ring)",
       "fanout": 8,
-      "pub_msgs_sec": 237150.23,
-      "effective_msgs_sec": 1897201.87,
-      "effective_mb_sec": 115.80
+      "pub_msgs_sec": 1144026.46,
+      "effective_msgs_sec": 9152211.64,
+      "effective_mb_sec": 558.61
     },
     {
       "mode": "Zero-Copy (Std Ring)",
       "fanout": 1,
-      "pub_msgs_sec": 1817717.01,
-      "effective_msgs_sec": 1817717.01,
-      "effective_mb_sec": 110.94
+      "pub_msgs_sec": 16142769.23,
+      "effective_msgs_sec": 16142769.23,
+      "effective_mb_sec": 985.28
     },
     {
       "mode": "Zero-Copy (Std Ring)",
       "fanout": 2,
-      "pub_msgs_sec": 915690.71,
-      "effective_msgs_sec": 1831381.42,
-      "effective_mb_sec": 111.78
+      "pub_msgs_sec": 3922102.03,
+      "effective_msgs_sec": 7844204.07,
+      "effective_mb_sec": 478.77
     },
     {
       "mode": "Zero-Copy (Std Ring)",
       "fanout": 4,
-      "pub_msgs_sec": 270071.00,
-      "effective_msgs_sec": 1080283.99,
-      "effective_mb_sec": 65.94
+      "pub_msgs_sec": 2217444.57,
+      "effective_msgs_sec": 8869778.26,
+      "effective_mb_sec": 541.37
     },
     {
       "mode": "Zero-Copy (Std Ring)",
       "fanout": 8,
-      "pub_msgs_sec": 208353.03,
-      "effective_msgs_sec": 1666824.25,
-      "effective_mb_sec": 101.73
+      "pub_msgs_sec": 2411372.07,
+      "effective_msgs_sec": 19290976.55,
+      "effective_mb_sec": 1177.43
     },
     {
       "mode": "Zero-Copy (Packed Ring)",
       "fanout": 1,
-      "pub_msgs_sec": 1835103.95,
-      "effective_msgs_sec": 1835103.95,
-      "effective_mb_sec": 112.01
+      "pub_msgs_sec": 17641986.23,
+      "effective_msgs_sec": 17641986.23,
+      "effective_mb_sec": 1076.78
     },
     {
       "mode": "Zero-Copy (Packed Ring)",
       "fanout": 2,
-      "pub_msgs_sec": 1041660.00,
-      "effective_msgs_sec": 2083320.01,
-      "effective_mb_sec": 127.16
+      "pub_msgs_sec": 14312368.00,
+      "effective_msgs_sec": 28624736.01,
+      "effective_mb_sec": 1747.12
     },
     {
       "mode": "Zero-Copy (Packed Ring)",
       "fanout": 4,
-      "pub_msgs_sec": 251481.16,
-      "effective_msgs_sec": 1005924.65,
-      "effective_mb_sec": 61.40
+      "pub_msgs_sec": 1446189.91,
+      "effective_msgs_sec": 5784759.62,
+      "effective_mb_sec": 353.07
     },
     {
       "mode": "Zero-Copy (Packed Ring)",
       "fanout": 8,
-      "pub_msgs_sec": 201654.26,
-      "effective_msgs_sec": 1613234.08,
-      "effective_mb_sec": 98.46
+      "pub_msgs_sec": 1242878.25,
+      "effective_msgs_sec": 9943025.96,
+      "effective_mb_sec": 606.87
     }
   ],
   "module6_simd_scanning": {
     "standard_64bit": [
-      {"engine": "Scalar Baseline", "mslots_sec": 338.71, "speedup": 1.00},
-      {"engine": "SSE4.1 (128-bit)", "mslots_sec": 355.80, "speedup": 1.05},
-      {"engine": "AVX1 Fallback (256-bit)", "mslots_sec": 363.37, "speedup": 1.07},
-      {"engine": "AVX2 Vectorized (256-bit)", "mslots_sec": 395.93, "speedup": 1.17}
+      {"engine": "Scalar Baseline", "mslots_sec": 1442.51, "speedup": 1.00},
+      {"engine": "SSE4.1 (128-bit)", "mslots_sec": 639.17, "speedup": 0.44},
+      {"engine": "AVX1 Fallback (256-bit)", "mslots_sec": 686.08, "speedup": 0.48},
+      {"engine": "AVX2 Vectorized (256-bit)", "mslots_sec": 748.88, "speedup": 0.52}
     ],
     "tier3_packed": [
-      {"engine": "Scalar Baseline", "mslots_sec": 591.93, "speedup": 1.00},
-      {"engine": "SSE4.1 (128-bit)", "mslots_sec": 417.52, "speedup": 0.71},
-      {"engine": "AVX1 Fallback (256-bit)", "mslots_sec": 429.00, "speedup": 0.72},
-      {"engine": "AVX2 Vectorized (256-bit)", "mslots_sec": 302.84, "speedup": 0.51}
+      {"engine": "Scalar Baseline", "mslots_sec": 1428.56, "speedup": 1.00},
+      {"engine": "SSE4.1 (128-bit)", "mslots_sec": 654.33, "speedup": 0.46},
+      {"engine": "AVX1 Fallback (256-bit)", "mslots_sec": 687.16, "speedup": 0.48},
+      {"engine": "AVX2 Vectorized (256-bit)", "mslots_sec": 748.61, "speedup": 0.52}
     ]
   },
   "module7_primitives": {
     "multi_fd": {
-      "count_1": {"ops_sec": 185483.88, "latency_us": 5.39},
-      "count_2": {"ops_sec": 155373.07, "latency_us": 6.44},
-      "count_4": {"ops_sec": 99014.96, "latency_us": 10.10},
-      "count_4_seq": {"ops_sec": 40139.84, "latency_us": 24.91},
-      "speedup": 2.47
+      "count_1": {"ops_sec": 586431.50, "latency_us": 1.71},
+      "count_2": {"ops_sec": 512063.71, "latency_us": 1.95},
+      "count_4": {"ops_sec": 416756.03, "latency_us": 2.40},
+      "count_4_seq": {"ops_sec": 143555.57, "latency_us": 6.97},
+      "speedup": 2.90
     },
     "futex2": {
-      "memoized": {"ops_sec": 471137193.27, "latency_ns": 2.12},
-      "raw_syscall": {"ops_sec": 700107.29, "latency_ns": 1428.35},
-      "speedup": 672.95
+      "memoized": {"ops_sec": 794872120.97, "latency_ns": 1.26},
+      "raw_syscall": {"ops_sec": 3124434.46, "latency_ns": 320.06},
+      "speedup": 254.41
     },
     "hugetlb_available": false
   },
@@ -354,14 +354,14 @@
       "capacity": 1024,
       "slot_size": 64,
       "buffer_mb": 0.06,
-      "thp_msgs_sec": 15967839.49,
-      "thp_mb_sec": 974.60,
-      "thp_lat_ns": 62.63,
+      "thp_msgs_sec": 29513525.61,
+      "thp_mb_sec": 1801.36,
+      "thp_lat_ns": 33.88,
       "thp_pmd_mapped_kb": 0,
-      "std_msgs_sec": 16717559.10,
-      "std_mb_sec": 1020.36,
-      "std_lat_ns": 59.82,
-      "speedup_factor": 0.96,
+      "std_msgs_sec": 29821592.32,
+      "std_mb_sec": 1820.17,
+      "std_lat_ns": 33.53,
+      "speedup_factor": 0.99,
       "latency_reduction_pct": 0.00
     },
     {
@@ -369,45 +369,45 @@
       "capacity": 1024,
       "slot_size": 4096,
       "buffer_mb": 4.00,
-      "thp_msgs_sec": 14492563.54,
-      "thp_mb_sec": 884.56,
-      "thp_lat_ns": 69.00,
-      "thp_pmd_mapped_kb": 6144,
-      "std_msgs_sec": 12476716.89,
-      "std_mb_sec": 761.52,
-      "std_lat_ns": 80.15,
-      "speedup_factor": 1.16,
-      "latency_reduction_pct": 13.91
+      "thp_msgs_sec": 28653438.81,
+      "thp_mb_sec": 1748.87,
+      "thp_lat_ns": 34.90,
+      "thp_pmd_mapped_kb": 0,
+      "std_msgs_sec": 25249933.31,
+      "std_mb_sec": 1541.13,
+      "std_lat_ns": 39.60,
+      "speedup_factor": 1.13,
+      "latency_reduction_pct": 11.88
     },
     {
       "label": "Large Ring (16 MB)",
       "capacity": 4096,
       "slot_size": 4096,
       "buffer_mb": 16.00,
-      "thp_msgs_sec": 13113369.67,
-      "thp_mb_sec": 800.38,
-      "thp_lat_ns": 76.26,
-      "thp_pmd_mapped_kb": 18432,
-      "std_msgs_sec": 7066843.65,
-      "std_mb_sec": 431.33,
-      "std_lat_ns": 141.51,
-      "speedup_factor": 1.86,
-      "latency_reduction_pct": 46.11
+      "thp_msgs_sec": 18894747.94,
+      "thp_mb_sec": 1153.24,
+      "thp_lat_ns": 52.92,
+      "thp_pmd_mapped_kb": 0,
+      "std_msgs_sec": 9480064.89,
+      "std_mb_sec": 578.62,
+      "std_lat_ns": 105.48,
+      "speedup_factor": 1.99,
+      "latency_reduction_pct": 49.83
     },
     {
       "label": "Very Large Ring (32 MB)",
       "capacity": 8192,
       "slot_size": 4096,
       "buffer_mb": 32.00,
-      "thp_msgs_sec": 14577399.72,
-      "thp_mb_sec": 889.73,
-      "thp_lat_ns": 68.60,
-      "thp_pmd_mapped_kb": 34816,
-      "std_msgs_sec": 3337944.70,
-      "std_mb_sec": 203.73,
-      "std_lat_ns": 299.59,
-      "speedup_factor": 4.37,
-      "latency_reduction_pct": 77.10
+      "thp_msgs_sec": 18396271.89,
+      "thp_mb_sec": 1122.82,
+      "thp_lat_ns": 54.36,
+      "thp_pmd_mapped_kb": 0,
+      "std_msgs_sec": 6251744.24,
+      "std_mb_sec": 381.58,
+      "std_lat_ns": 159.96,
+      "speedup_factor": 2.94,
+      "latency_reduction_pct": 66.02
     }
   ]
 }
