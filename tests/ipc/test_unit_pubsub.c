@@ -175,7 +175,7 @@ static void test_pubsub_from_oldest_and_validation(void) {
 
     assert(rbipc_publish(NULL, "a", 1) == RBIPC_ERR_INVAL);
     assert(rbipc_publish(ring, NULL, 1) == RBIPC_ERR_INVAL);
-    assert(rbipc_publish(ring, "a", 65) == RBIPC_ERR_INVAL);
+    assert(rbipc_publish(ring, "a", rbipc_get_slot_size(ring) + 1) == RBIPC_ERR_INVAL);
 
     const void *bufs[2] = {"a", "b"};
     uint32_t lens[2] = {1, 1};
@@ -185,7 +185,7 @@ static void test_pubsub_from_oldest_and_validation(void) {
     assert(rbipc_publish_batch(ring, 2, bufs, NULL) == RBIPC_ERR_INVAL);
     const void *null_bufs[2] = {NULL, "b"};
     assert(rbipc_publish_batch(ring, 2, null_bufs, lens) == RBIPC_ERR_INVAL);
-    uint32_t bad_lens[2] = {1, 100};
+    uint32_t bad_lens[2] = {1, rbipc_get_slot_size(ring) + 1};
     assert(rbipc_publish_batch(ring, 2, bufs, bad_lens) == RBIPC_ERR_INVAL);
 
     assert(rbipc_sub_create(NULL, &sub) == RBIPC_ERR_INVAL);

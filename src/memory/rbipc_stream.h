@@ -28,11 +28,18 @@
 #include <string.h>
 
 /**
- * @def RBIPC_STREAM_THRESHOLD
- * @brief Minimum payload byte size (256 bytes) to activate non-temporal
- * streaming stores.
+ * @def RBIPC_STREAM_THRESHOLD_DEFAULT
+ * @brief Conservative default streaming threshold (256 KB) when dynamic cache discovery is unavailable.
  */
-#define RBIPC_STREAM_THRESHOLD 256U
+#define RBIPC_STREAM_THRESHOLD_DEFAULT (256ULL * 1024ULL)
+
+#define RBIPC_STREAM_THRESHOLD RBIPC_STREAM_THRESHOLD_DEFAULT
+
+/**
+ * @brief Retrieve dynamic optimal non-temporal streaming store threshold.
+ * @details Evaluates L3/L2 cache size dynamically (defaulting to 3/4 L3 or 512 KB, minimum 256 KB).
+ */
+RBIPC_NODISCARD RBIPC_LEAF size_t rbipc_stream_threshold(void);
 
 /**
  * @brief Copy memory buffer using cache-bypassing non-temporal streaming
@@ -49,8 +56,7 @@ RBIPC_NODISCARD RBIPC_LEAF int rbipc_stream_copy(void *RBIPC_RESTRICT dst,
                                                  size_t size);
 
 /**
- * @brief Automatically select streaming copy (>= 256 bytes) or standard memcpy
- * (< 256 bytes).
+ * @brief Automatically select streaming copy or standard memcpy based on dynamic cache threshold.
  *
  * @param[out] dst  Destination memory buffer.
  * @param[in]  src  Source memory buffer.
@@ -59,7 +65,7 @@ RBIPC_NODISCARD RBIPC_LEAF int rbipc_stream_copy(void *RBIPC_RESTRICT dst,
 RBIPC_INLINE void rbipc_stream_copy_auto(void *RBIPC_RESTRICT dst,
                                          const void *RBIPC_RESTRICT src,
                                          size_t size) {
-  if (size >= RBIPC_STREAM_THRESHOLD) {
+  if (size >= rbipc_stream_threshold()) {
     int rc = rbipc_stream_copy(dst, src, size);
     (void)rc;
   } else {

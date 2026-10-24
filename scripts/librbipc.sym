@@ -18,7 +18,9 @@ LIBRBIPC_1.0 {
         rbipc_enable_eventfd;
         rbipc_eventfd_drain;
         rbipc_get_eventfd;
+        rbipc_get_hardware_profile;
         rbipc_get_fd;
+        rbipc_get_slot_size;
         rbipc_get_lease_timeout;
         rbipc_get_slot_stats;
         rbipc_get_stats;

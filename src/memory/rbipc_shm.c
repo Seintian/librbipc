@@ -21,6 +21,7 @@
 #include "rbipc_attr.h"
 #include "rbipc_math.h"
 #include "rbipc_predicate.h"
+#include "rbipc_waitfree.h"
 
 #include <errno.h>
 #include <fcntl.h>
@@ -97,8 +98,9 @@ rbipc_shm_calc_data_geometry(uint32_t capacity, size_t aligned_slot_size,
   }
   size_t raw_data_size = (size_t)capacity * aligned_slot_size;
   size_t align = page_size;
-  if (raw_data_size >= RBIPC_HUGE_PAGE_2MB && RBIPC_HUGE_PAGE_2MB > align) {
-    align = RBIPC_HUGE_PAGE_2MB;
+  size_t hps = rbipc_huge_page_size();
+  if (raw_data_size >= hps && hps > align) {
+    align = hps;
   }
   size_t data_size = rbipc_align_up(raw_data_size, align);
   if (data_size < raw_data_size) {
@@ -127,7 +129,7 @@ rbipc_shm_calc_metadata_geometry_ex(uint32_t capacity, size_t page_size,
       (SIZE_MAX - sizeof(rbipc_shm_header_t)) / capacity) {
     return RBIPC_ERR_OVERFLOW;
   }
-  size_t help_bytes = (flags & RBIPC_FLAG_WAIT_FREE) ? (64 * 64) : 0;
+  size_t help_bytes = (flags & RBIPC_FLAG_WAIT_FREE) ? ((size_t)RBIPC_HELP_MAX_PEERS * sizeof(rbipc_help_slot_t)) : 0;
   size_t header_and_slots =
       sizeof(rbipc_shm_header_t) + ((size_t)capacity * sizeof(rbipc_slot_t)) + help_bytes;
   size_t data_offset = rbipc_align_up(header_and_slots, page_size);
@@ -172,8 +174,9 @@ int rbipc_shm_calc_layout_ex(uint32_t capacity, uint32_t slot_size,
     return rc;
 
   size_t offset_align = page_size;
-  if (data_size >= RBIPC_HUGE_PAGE_2MB && RBIPC_HUGE_PAGE_2MB > offset_align) {
-    offset_align = RBIPC_HUGE_PAGE_2MB;
+  size_t hps = rbipc_huge_page_size();
+  if (data_size >= hps && hps > offset_align) {
+    offset_align = hps;
   }
 
   size_t data_offset = 0;
@@ -204,20 +207,21 @@ bool rbipc_shm_hugetlb_available(void) {
     return cached == 1;
   }
 
+  size_t hps = rbipc_huge_page_size();
   int fd = memfd_create("rbipc_huge_probe",
-                        MFD_CLOEXEC | MFD_HUGETLB | MFD_HUGE_2MB);
+                        MFD_CLOEXEC | MFD_HUGETLB);
   if (fd < 0) {
     atomic_store_explicit(&s_hugetlb_available, 0, memory_order_relaxed);
     return false;
   }
 
   bool ok = false;
-  if (ftruncate(fd, (off_t)RBIPC_HUGE_PAGE_2MB) == 0) {
-    void *p = mmap(NULL, RBIPC_HUGE_PAGE_2MB, PROT_READ | PROT_WRITE,
+  if (ftruncate(fd, (off_t)hps) == 0) {
+    void *p = mmap(NULL, hps, PROT_READ | PROT_WRITE,
                    MAP_SHARED, fd, 0);
     if (p != MAP_FAILED) {
       ok = true;
-      munmap(p, RBIPC_HUGE_PAGE_2MB);
+      munmap(p, hps);
     }
   }
   close(fd);
@@ -241,7 +245,7 @@ RBIPC_INLINE int rbipc_shm_create_anonymous(const char *name, mode_t mode,
   int fd = -1;
   if ((flags & RBIPC_FLAG_HUGETLB) && rbipc_shm_hugetlb_available()) {
     fd = memfd_create(desc_name,
-                      MFD_CLOEXEC | MFD_ALLOW_SEALING | MFD_HUGETLB | MFD_HUGE_2MB);
+                      MFD_CLOEXEC | MFD_ALLOW_SEALING | MFD_HUGETLB);
   }
   if (fd < 0) {
     fd = memfd_create(desc_name, MFD_CLOEXEC | MFD_ALLOW_SEALING);

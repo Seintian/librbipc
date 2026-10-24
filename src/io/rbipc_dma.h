@@ -27,17 +27,27 @@ extern "C" {
 #endif
 
 /**
+ * @def RBIPC_DSA_DESC_SIZE
+ * @brief Intel Data Streaming Accelerator (DSA) hardware descriptor size specification in bytes.
+ * @note Strictly 64 bytes per Intel DSA hardware specification (MOVDIR64B / ENQCMD),
+ * decoupled from host CPU cache line size.
+ */
+#define RBIPC_DSA_DESC_SIZE 64U
+
+/**
  * @def RBIPC_DMA_OFFLOAD_THRESHOLD
  * @brief Minimum payload byte size where hardware DMA offload outperforms CPU vector registers.
+ * @details Updated from 4,096 to 16,384 bytes (16 KB) based on real-world PCIe/MMIO portal
+ * dispatch latency (~150-400 ns) break-even against in-core AVX-512/AVX2 memcpy.
  */
-#define RBIPC_DMA_OFFLOAD_THRESHOLD 4096U
+#define RBIPC_DMA_OFFLOAD_THRESHOLD 16384U
 
 /**
  * @struct rbipc_dma_desc
  * @brief Intel Data Streaming Accelerator (DSA) 64-byte hardware descriptor layout.
  */
 typedef struct rbipc_dma_desc {
-  _Alignas(RBIPC_CACHE_LINE) uint32_t pasid_flags;           /**< Process Address Space ID and control flags */
+  _Alignas(RBIPC_DSA_DESC_SIZE) uint32_t pasid_flags;           /**< Process Address Space ID and control flags */
   uint32_t flags;                 /**< Operation flags (request completion, CRC) */
   uint64_t completion_addr;       /**< User virtual address of completion record */
   uint64_t src_addr;              /**< Source virtual address */
@@ -48,10 +58,10 @@ typedef struct rbipc_dma_desc {
   uint8_t  reserved[25];
 } rbipc_dma_desc_t;
 
-static_assert(sizeof(rbipc_dma_desc_t) == RBIPC_CACHE_LINE,
-              "rbipc_dma_desc_t must be exactly 64 bytes for MOVDIR64B / ENQCMD");
-static_assert(alignof(rbipc_dma_desc_t) == RBIPC_CACHE_LINE,
-              "rbipc_dma_desc_t must be 64-byte aligned");
+static_assert(sizeof(rbipc_dma_desc_t) == RBIPC_DSA_DESC_SIZE,
+              "rbipc_dma_desc_t must be exactly 64 bytes for MOVDIR64B / ENQCMD per Intel DSA spec");
+static_assert(alignof(rbipc_dma_desc_t) == RBIPC_DSA_DESC_SIZE,
+              "rbipc_dma_desc_t must be 64-byte aligned per Intel DSA spec");
 
 #ifdef __cplusplus
 }

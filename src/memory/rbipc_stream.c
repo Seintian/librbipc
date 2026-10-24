@@ -102,6 +102,12 @@ static void rbipc_stream_copy_arm64_blocks(uint8_t *RBIPC_RESTRICT d,
 #endif
 
 RBIPC_LEAF
+
+RBIPC_LEAF size_t rbipc_stream_threshold(void) {
+  const rbipc_hardware_profile_t *prof = rbipc_get_hardware_profile();
+  return (prof && prof->stream_threshold > 0) ? prof->stream_threshold : RBIPC_STREAM_THRESHOLD_DEFAULT;
+}
+
 int rbipc_stream_copy(void *RBIPC_RESTRICT dst, const void *RBIPC_RESTRICT src,
                       size_t size) {
   if (RBIPC_UNLIKELY(!dst || !src)) {
@@ -111,9 +117,11 @@ int rbipc_stream_copy(void *RBIPC_RESTRICT dst, const void *RBIPC_RESTRICT src,
   const uint8_t *s = (const uint8_t *)src;
 
 #if defined(__x86_64__) || defined(_M_X64)
-  if (size >= RBIPC_STREAM_THRESHOLD) {
+  size_t stream_thresh = rbipc_stream_threshold();
+  if (size >= stream_thresh) {
     uintptr_t d_addr = (uintptr_t)d;
-    size_t align_offset = (64U - (d_addr & 63U)) & 63U;
+    size_t align = RBIPC_CACHE_LINE;
+    size_t align_offset = (align - (d_addr & (align - 1U))) & (align - 1U);
     if (align_offset > 0 && align_offset <= size) {
       memcpy(d, s, align_offset);
       d += align_offset;

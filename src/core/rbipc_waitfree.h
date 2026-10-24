@@ -55,13 +55,17 @@ typedef struct rbipc_help_slot {
   _Atomic uint32_t helper_pid;       /**< PID of peer that rendered assistance */
   _Atomic uint32_t reserved0;
   _Atomic uint64_t payload_offset;   /**< Byte offset in data ring for payload */
-  uint8_t inline_staging[24];        /**< Inline payload staging for transfers <= 24 bytes */
+#if RBIPC_CACHE_LINE > 40U
+  uint8_t inline_staging[RBIPC_CACHE_LINE - 40U]; /**< Dynamic payload staging up to cache line size */
+#else
+  uint8_t inline_staging[8];
+#endif
 } rbipc_help_slot_t;
 
 static_assert(sizeof(rbipc_help_slot_t) == RBIPC_CACHE_LINE,
-              "rbipc_help_slot_t must be exactly 64 bytes (one cache line)");
+              "rbipc_help_slot_t size must match RBIPC_CACHE_LINE");
 static_assert(alignof(rbipc_help_slot_t) == RBIPC_CACHE_LINE,
-              "rbipc_help_slot_t must be aligned to 64-byte cache line boundary");
+              "rbipc_help_slot_t must be aligned to RBIPC_CACHE_LINE boundary");
 
 /**
  * @brief Initialize all helper slots in the cooperative helping table.

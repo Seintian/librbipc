@@ -22,6 +22,11 @@
 #include <stdint.h>
 #include <time.h>
 #include <unistd.h>
+#include <stdio.h>
+#include <string.h>
+#if defined(__linux__)
+#include <sys/auxv.h>
+#endif
 
 /**
  * @brief Query current high-resolution monotonic clock timestamp in
@@ -60,10 +65,80 @@ RBIPC_INLINE RBIPC_NODISCARD size_t rbipc_page_size(void) {
   if (RBIPC_LIKELY(ps != 0)) {
     return ps;
   }
-  long raw = sysconf(_SC_PAGESIZE);
-  ps = (raw > 0) ? (size_t)raw : RBIPC_PAGE_SIZE_DEFAULT;
+#if defined(__linux__)
+  unsigned long aux_ps = getauxval(AT_PAGESZ);
+  if (aux_ps > 0) {
+    ps = (size_t)aux_ps;
+  }
+#endif
+  if (ps == 0) {
+    long raw = sysconf(_SC_PAGESIZE);
+    ps = (raw > 0) ? (size_t)raw : RBIPC_PAGE_SIZE_DEFAULT;
+  }
   atomic_store_explicit(&s_page_size, ps, memory_order_release);
   return ps;
+}
+
+/**
+ * @brief Query system default HugeTLB page size in bytes.
+ * @details Probes /proc/meminfo or /sys/kernel/mm/hugepages, dynamically resolving
+ * 2 MB on x86, 32 MB on 16 KB ARM64, 512 MB on 64 KB ARM64, or 16 MB on ppc64le.
+ */
+RBIPC_INLINE RBIPC_NODISCARD size_t rbipc_huge_page_size(void) {
+  static _Atomic size_t s_huge_page_size = 0;
+  size_t hps = atomic_load_explicit(&s_huge_page_size, memory_order_acquire);
+  if (RBIPC_LIKELY(hps != 0)) {
+    return hps;
+  }
+  FILE *fp = fopen("/proc/meminfo", "r");
+  if (fp) {
+    char line[128];
+    while (fgets(line, sizeof(line), fp)) {
+      if (strncmp(line, "Hugepagesize:", 13) == 0) {
+        unsigned long kb = 0;
+        if (sscanf(line + 13, "%lu", &kb) == 1 && kb > 0) {
+          hps = (size_t)kb * 1024ULL;
+          break;
+        }
+      }
+    }
+    fclose(fp);
+  }
+  if (hps == 0) {
+    size_t base_ps = rbipc_page_size();
+    if (base_ps >= 65536U) {
+      hps = 512ULL * 1024ULL * 1024ULL; /* 512 MB for 64 KB ARM/PowerPC */
+    } else if (base_ps >= 16384U) {
+      hps = 32ULL * 1024ULL * 1024ULL;  /* 32 MB for 16 KB Android/Apple */
+    } else {
+      hps = 2ULL * 1024ULL * 1024ULL;   /* 2 MB standard x86/ARM */
+    }
+  }
+  atomic_store_explicit(&s_huge_page_size, hps, memory_order_release);
+  return hps;
+}
+
+/**
+ * @brief Query physical L1 data cache line size in bytes with runtime hardware validation.
+ */
+RBIPC_INLINE RBIPC_NODISCARD size_t rbipc_cache_line_size(void) {
+  static _Atomic size_t s_cache_line = 0;
+  size_t cls = atomic_load_explicit(&s_cache_line, memory_order_acquire);
+  if (RBIPC_LIKELY(cls != 0)) {
+    return cls;
+  }
+#if defined(__linux__) && defined(AT_DCACHEBSIZE)
+  unsigned long aux_cls = getauxval(AT_DCACHEBSIZE);
+  if (aux_cls > 0) {
+    cls = (size_t)aux_cls;
+  }
+#endif
+  if (cls == 0) {
+    long conf = sysconf(_SC_LEVEL1_DCACHE_LINESIZE);
+    cls = (conf > 0) ? (size_t)conf : RBIPC_CACHE_LINE;
+  }
+  atomic_store_explicit(&s_cache_line, cls, memory_order_release);
+  return cls;
 }
 
 #if defined(__x86_64__) || defined(_M_X64) || defined(__i386__) ||             \

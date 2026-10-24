@@ -583,6 +583,11 @@ int rbipc_shutdown(rbipc_ring_t *ring) {
 }
 
 RBIPC_LEAF
+uint32_t rbipc_get_slot_size(const rbipc_ring_t *ring) {
+  return ring ? ring->cached_slot_size : 0;
+}
+
+RBIPC_LEAF
 int rbipc_get_fd(const rbipc_ring_t *ring) { return ring ? ring->fd : -1; }
 
 RBIPC_LEAF

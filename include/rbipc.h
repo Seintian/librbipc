@@ -442,8 +442,23 @@ extern "C" {
   0x5242495043323032ULL /**< 64-bit structural header identifier ('RBIPC202'). \
                          */
 #define RBIPC_VERSION 1U /**< Protocol layout format version number. */
-#define RBIPC_CACHE_LINE                                                       \
-  64U /**< Host hardware cache-line boundary in bytes (x86_64 / arm64). */
+#ifndef RBIPC_CACHE_LINE
+#if defined(__GCC_DESTRUCTIVE_SIZE) && (__GCC_DESTRUCTIVE_SIZE >= 32)
+#define RBIPC_CACHE_LINE __GCC_DESTRUCTIVE_SIZE
+#elif defined(__s390x__) || defined(__a64fx__)
+#define RBIPC_CACHE_LINE 256U
+#elif defined(__powerpc__) || defined(__ppc64__) || defined(__PPC64__) ||      \
+    (defined(__aarch64__) && (defined(__APPLE__) || defined(__THUNDERX__)))
+#define RBIPC_CACHE_LINE 128U
+#elif defined(__x86_64__) || defined(_M_X64) || defined(__i386__) ||          \
+    defined(__aarch64__) || defined(__riscv)
+#define RBIPC_CACHE_LINE 64U
+#elif defined(__arm__) || defined(__mips__)
+#define RBIPC_CACHE_LINE 32U
+#else
+#define RBIPC_CACHE_LINE 64U
+#endif
+#endif
 #define RBIPC_MIN_CAPACITY                                                     \
   2U /**< Minimum allowable ring slot capacity (power-of-two). */
 #define RBIPC_MAX_CAPACITY                                                     \
@@ -512,13 +527,16 @@ typedef struct {
                                     crash recovery). */
   _Atomic uint64_t acquire_timestamp_ns; /**< Monotonic timestamp in nanoseconds
                                             when slot was acquired. */
+#if RBIPC_CACHE_LINE > 32U
+  uint8_t _pad[RBIPC_CACHE_LINE - 32U];  /**< Dynamic cache-line padding to prevent false sharing */
+#endif
 } rbipc_slot_t;
 
 /* Enforce compile-time slot cache-line geometry and false-sharing immunity */
 static_assert(sizeof(rbipc_slot_t) == RBIPC_CACHE_LINE,
-              "rbipc_slot_t must be exactly 64 bytes (one cache line)");
+              "rbipc_slot_t size must match RBIPC_CACHE_LINE");
 static_assert(alignof(rbipc_slot_t) == RBIPC_CACHE_LINE,
-              "rbipc_slot_t must be aligned to 64-byte cache line boundary");
+              "rbipc_slot_t must be aligned to RBIPC_CACHE_LINE boundary");
 
 
 /**
@@ -605,7 +623,7 @@ typedef struct {
 
 /* Enforce compile-time header alignment and cache-line separation for atomic counters */
 static_assert(alignof(rbipc_shm_header_t) == RBIPC_CACHE_LINE,
-              "rbipc_shm_header_t must be aligned to 64-byte cache line boundary");
+              "rbipc_shm_header_t must be aligned to RBIPC_CACHE_LINE boundary");
 static_assert(sizeof(rbipc_shm_header_t) % RBIPC_CACHE_LINE == 0,
               "rbipc_shm_header_t size must be a multiple of cache line size");
 static_assert(offsetof(rbipc_shm_header_t, write_ticket) % RBIPC_CACHE_LINE == 0,
@@ -623,6 +641,32 @@ static_assert(offsetof(rbipc_shm_header_t, write_waiters) % RBIPC_CACHE_LINE == 
 static_assert(offsetof(rbipc_shm_header_t, shutdown_flag) % RBIPC_CACHE_LINE == 0,
               "rbipc_shm_header_t.shutdown_flag must reside on an isolated cache line");
 
+
+/**
+ * @struct rbipc_hardware_profile_t
+ * @brief Dynamic hardware topology, page geometry, and microarchitectural parameters.
+ */
+typedef struct {
+  size_t cache_line_size;          /**< Physical L1 data cache line size in bytes. */
+  size_t destructive_size;         /**< False-sharing avoidance alignment boundary in bytes. */
+  size_t page_size;                /**< Base virtual memory page size in bytes. */
+  size_t huge_page_size;           /**< System default HugeTLB page size in bytes. */
+  size_t l2_cache_size;            /**< L2 cache size in bytes. */
+  size_t l3_cache_size;            /**< Shared L3/LLC cache size in bytes. */
+  size_t stream_threshold;         /**< Optimal non-temporal streaming cutoff in bytes. */
+  size_t dma_offload_threshold;    /**< Optimal Intel DSA offload cutoff in bytes. */
+  uint32_t calibrated_spin_count;  /**< Calibrated base CPU pause iteration count. */
+  uint64_t tsc_ticks_per_ns;       /**< Calibrated or hardware crystal TSC ticks/ns. */
+  uint32_t online_cores;           /**< Number of active online CPU cores. */
+} rbipc_hardware_profile_t;
+
+/**
+ * @brief Retrieve process-cached hardware profile. Zero overhead on subsequent calls.
+ *
+ * @return Immutable pointer to cached hardware profile.
+ */
+RBIPC_API RBIPC_NODISCARD const rbipc_hardware_profile_t *
+rbipc_get_hardware_profile(void);
 
 /**
  * @struct rbipc_stats_t
@@ -1743,6 +1787,15 @@ rbipc_eventfd_drain(const rbipc_ring_t *RBIPC_RESTRICT ring);
  *
  * @see rbipc_attach_fd
  */
+/**
+ * @brief Retrieve configured maximum slot payload size in bytes.
+ *
+ * @param[in] ring Pointer to active ring buffer handle.
+ * @return Slot payload capacity in bytes, or 0 if ring is null.
+ */
+RBIPC_API RBIPC_NODISCARD RBIPC_PURE RBIPC_LEAF uint32_t
+rbipc_get_slot_size(const rbipc_ring_t *ring);
+
 RBIPC_API RBIPC_NODISCARD RBIPC_PURE RBIPC_LEAF int
 rbipc_get_fd(const rbipc_ring_t *ring);
 
