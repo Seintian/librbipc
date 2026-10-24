@@ -47,7 +47,7 @@ static void test_batch_validation(void) {
     assert(rbipc_read_release_batch(ring, 4, NULL) == RBIPC_ERR_INVAL);
 
     /* Commit with invalid length exceeding slot size */
-    lens[0] = BATCH_SLOT_SIZE + 100;
+    lens[0] = rbipc_get_slot_size(ring) + 100;
     assert(rbipc_commit_write_batch(ring, 1, tickets, lens) == RBIPC_ERR_INVAL);
 
     rbipc_detach(ring);
