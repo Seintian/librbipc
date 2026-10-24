@@ -16,9 +16,13 @@
 #ifndef RBIPC_ATTR_H
 #define RBIPC_ATTR_H
 
-#include "rbipc.h"
-
 #if defined(__GNUC__) || defined(__clang__)
+
+/**
+ * @def RBIPC_INTERNAL
+ * @brief Hides internal function from dynamic shared library symbol exports.
+ */
+#define RBIPC_INTERNAL __attribute__((visibility("hidden")))
 
 /**
  * @def RBIPC_INLINE
@@ -28,12 +32,6 @@
  * `__attribute__((always_inline))`. Eliminates function call overhead (call/ret
  * instructions, parameter shuffling) on the hot path.
  */
-/**
- * @def RBIPC_INTERNAL
- * @brief Hides internal function from dynamic shared library symbol exports.
- */
-#define RBIPC_INTERNAL __attribute__((visibility("hidden")))
-
 #define RBIPC_INLINE static inline __attribute__((always_inline))
 
 /**
