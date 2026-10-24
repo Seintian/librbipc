@@ -26,3 +26,6 @@ scratch/
 benchmarks/results/.*
 __pycache__/
 *.pyc
+
+# IDE
+.vscode
