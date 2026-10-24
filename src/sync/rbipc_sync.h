@@ -36,6 +36,13 @@ typedef bool (*rbipc_spin_pred_t)(void *arg);
 /**
  * @brief Bounded CPU micro-pause execution helper.
  */
+/**
+ * @brief Dynamic optimal spin pause count query from hardware profile.
+ */
+RBIPC_INLINE uint32_t rbipc_sync_spin_count(void) {
+  return (uint32_t)rbipc_get_hardware_profile()->calibrated_spin_count;
+}
+
 RBIPC_INLINE void rbipc_sync_spin_pause(uint32_t count) {
   for (uint32_t i = 0; i < count; ++i) {
     rbipc_cpu_pause();

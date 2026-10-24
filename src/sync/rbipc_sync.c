@@ -30,13 +30,19 @@
 #include <sys/syscall.h>
 
 #ifndef SYS_membarrier
-#if defined(__x86_64__)
+#if defined(__NR_membarrier)
+#define SYS_membarrier __NR_membarrier
+#elif defined(__mips__)
+#define SYS_membarrier 4358
+#elif defined(__alpha__)
+#define SYS_membarrier 518
+#elif defined(__x86_64__)
 #define SYS_membarrier 324
-#elif defined(__aarch64__)
+#elif defined(__aarch64__) || defined(__riscv)
 #define SYS_membarrier 283
-#elif defined(__i386__)
+#elif defined(__i386__) || defined(__powerpc__)
 #define SYS_membarrier 375
-#elif defined(__arm__)
+#elif defined(__arm__) || defined(__s390x__)
 #define SYS_membarrier 389
 #endif
 #endif
@@ -249,48 +255,8 @@ int rbipc_sync_backoff(rbipc_sync_state_t *RBIPC_RESTRICT state,
 #if defined(__x86_64__) || defined(_M_X64) || defined(__i386__) ||             \
     defined(_M_IX86)
 static uint64_t rbipc_get_tsc_ticks_per_ns(void) {
-  static _Atomic uint64_t s_ticks_per_ns = 0;
-  uint64_t val = atomic_load_explicit(&s_ticks_per_ns, memory_order_acquire);
-  if (RBIPC_LIKELY(val != 0)) {
-    return val;
-  }
-  uint64_t computed = 0;
-  FILE *f = fopen("/sys/devices/system/cpu/cpu0/tsc_freq_khz", "r");
-  if (f) {
-    char buf[64];
-    if (fgets(buf, sizeof(buf), f)) {
-      char *endptr = NULL;
-      uint64_t khz = strtoull(buf, &endptr, 10);
-      if (khz > 0) {
-        computed = (khz + 500000ULL) / 1000000ULL;
-        if (computed == 0) {
-          computed = 1;
-        }
-      }
-    }
-    fclose(f);
-  }
-  if (computed == 0) {
-    struct timespec ts1, ts2;
-    clock_gettime(CLOCK_MONOTONIC, &ts1);
-    uint64_t tsc1 = rbipc_rdtsc();
-    for (volatile int i = 0; i < 2000; i++) {
-      rbipc_cpu_pause();
-    }
-    clock_gettime(CLOCK_MONOTONIC, &ts2);
-    uint64_t tsc2 = rbipc_rdtsc();
-    uint64_t elapsed_ns =
-        (uint64_t)(ts2.tv_sec - ts1.tv_sec) * 1000000000ULL +
-        (uint64_t)(ts2.tv_nsec - ts1.tv_nsec);
-    if (elapsed_ns > 0 && tsc2 > tsc1) {
-      computed = (tsc2 - tsc1) / elapsed_ns;
-    }
-    if (computed == 0) {
-      computed = 3;
-    }
-  }
-  atomic_store_explicit(&s_ticks_per_ns, computed, memory_order_release);
-  return computed;
+  const rbipc_hardware_profile_t *prof = rbipc_get_hardware_profile();
+  return (prof && prof->tsc_ticks_per_ns > 0) ? prof->tsc_ticks_per_ns : 1;
 }
 #endif
 
@@ -387,7 +353,7 @@ int rbipc_sync_backoff_adaptive(rbipc_sync_state_t *RBIPC_RESTRICT state,
   }
   if ((policy & RBIPC_WAIT_ADAPTIVE) && predicate) {
     uint32_t budget =
-        (spin_budget > 0) ? spin_budget : RBIPC_SPIN_COUNT_DEFAULT;
+        (spin_budget > 0) ? spin_budget : rbipc_sync_spin_count();
     for (uint32_t i = 0; i < budget; ++i) {
       rbipc_cpu_pause();
       if (predicate(arg)) {
