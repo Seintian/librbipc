@@ -38,9 +38,18 @@ int rbipc_ipc_send_fds(int socket_fd, const int *fds, size_t count) {
     msg.msg_iov = &iov;
     msg.msg_iovlen = 1;
 
-    char cmsg_buf[CMSG_SPACE(RBIPC_IPC_MAX_FDS * sizeof(int))] = {};
+    char stack_cmsg[CMSG_SPACE(8 * sizeof(int))] = {};
+    char *cmsg_buf = stack_cmsg;
+    size_t control_len = CMSG_SPACE(count * sizeof(int));
+    if (count > 8) {
+        cmsg_buf = (char *)malloc(control_len);
+        if (RBIPC_UNLIKELY(!cmsg_buf)) {
+            return RBIPC_ERR_NOMEM;
+        }
+        memset(cmsg_buf, 0, control_len);
+    }
     msg.msg_control = cmsg_buf;
-    msg.msg_controllen = CMSG_SPACE(count * sizeof(int));
+    msg.msg_controllen = control_len;
 
     struct cmsghdr *cmsg = CMSG_FIRSTHDR(&msg);
     if (RBIPC_UNLIKELY(!cmsg)) {
@@ -52,6 +61,9 @@ int rbipc_ipc_send_fds(int socket_fd, const int *fds, size_t count) {
     memcpy(CMSG_DATA(cmsg), fds, count * sizeof(int));
 
     ssize_t ret = sendmsg(socket_fd, &msg, 0);
+    if (count > 8 && cmsg_buf != stack_cmsg) {
+        free(cmsg_buf);
+    }
     if (RBIPC_UNLIKELY(ret <= 0)) {
         return RBIPC_ERR_SYS;
     }

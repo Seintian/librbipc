@@ -22,6 +22,7 @@
 
 #include <fcntl.h>
 #include <unistd.h>
+#include <stdlib.h>
 
 /**
  * @brief Checks if host system has accessible CXL memory devices or DAX mappings.
@@ -32,6 +33,11 @@ bool rbipc_cxl_available(void) {
     return cached == 1;
   }
 
+  const char *env = getenv("RBIPC_CXL_DAX_PATH");
+  if (env && env[0] != '\0' && access(env, F_OK) == 0) {
+    cached = 1;
+    return true;
+  }
   if (access("/sys/bus/cxl", F_OK) == 0 || access("/dev/dax0.0", F_OK) == 0) {
     cached = 1;
     return true;
@@ -58,10 +64,13 @@ int rbipc_create_cxl(const char *dax_path, size_t capacity, size_t slot_size,
     return RBIPC_ERR_INVAL;
   }
 
-  /* If no explicit path provided, check default DAX character device */
+  /* If no explicit path provided, check environment variable or default DAX character device */
   const char *path = dax_path;
   if (!path) {
-    if (access("/dev/dax0.0", F_OK) == 0) {
+    const char *env = getenv("RBIPC_CXL_DAX_PATH");
+    if (env && env[0] != '\0') {
+      path = env;
+    } else if (access("/dev/dax0.0", F_OK) == 0) {
       path = "/dev/dax0.0";
     } else {
       return RBIPC_ERR_NOTSUP;
