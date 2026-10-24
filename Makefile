@@ -3,7 +3,7 @@ ifeq ($(origin CC),default)
 endif
 CC ?= gcc
 CSTD ?= $(shell echo '' | $(CC) -std=c23 -E -x c - >/dev/null 2>&1 && echo -std=c23 || (echo '' | $(CC) -std=c2x -E -x c - >/dev/null 2>&1 && echo -std=c2x || echo -std=c11))
-CFLAGS ?= $(CSTD) -Wall -Wextra -Wpedantic -Werror -O3 -flto -fPIC -fvisibility=hidden -MMD -MP -Iinclude -Isrc -Isrc/core -Isrc/memory -Isrc/sync -Isrc/io -Isrc/ipc -Isrc/audit -Isrc/platform -pthread -D_GNU_SOURCE
+CFLAGS ?= $(CSTD) -Wall -Wextra -Wpedantic -Werror -O3 -flto -fPIC -fvisibility=hidden -MMD -MP -Iinclude -Isrc -Isrc/core -Isrc/memory -Isrc/sync -Isrc/io -Isrc/ipc -Isrc/audit -Isrc/platform -pthread -D_GNU_SOURCE $(EXTRA_CFLAGS)
 LDFLAGS ?= -flto -pthread -lrt -lm
 AR ?= $(shell which gcc-ar 2>/dev/null || echo ar)
 

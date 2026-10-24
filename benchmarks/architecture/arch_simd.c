@@ -12,7 +12,7 @@ void run_module6_simd(uint64_t scan_iterations, m6_simd_result_t results[4]) {
 
     const uint32_t cap = 256;
     const uint32_t mask = cap - 1;
-    alignas(64) rbipc_slot_t slots[256];
+    alignas(RBIPC_CACHE_LINE) rbipc_slot_t slots[256];
     rbipc_slot_init_table(slots, cap);
 
     results[0].engine_name = "Scalar Baseline";
