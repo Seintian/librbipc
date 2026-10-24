@@ -205,6 +205,33 @@ static void rbipc_hardware_profile_init(void) {
 
   /* 9. TSC / Timer Ticks Per Nanosecond */
   s_profile.tsc_ticks_per_ns = rbipc_detect_tsc_ticks_per_ns();
+
+  /* Optional test / benchmark simulation overrides */
+  const char *env_ps = getenv("RBIPC_SIMULATE_PAGE_SIZE");
+  if (env_ps && env_ps[0] != '\0') {
+    s_profile.page_size = (size_t)strtoull(env_ps, NULL, 10);
+  }
+  const char *env_hps = getenv("RBIPC_SIMULATE_HUGE_PAGE_SIZE");
+  if (env_hps && env_hps[0] != '\0') {
+    s_profile.huge_page_size = (size_t)strtoull(env_hps, NULL, 10);
+  }
+  const char *env_l3 = getenv("RBIPC_SIMULATE_L3_CACHE_SIZE");
+  if (env_l3 && env_l3[0] != '\0') {
+    s_profile.l3_cache_size = (size_t)strtoull(env_l3, NULL, 10);
+    s_profile.stream_threshold = (s_profile.l3_cache_size * 3) / 4;
+  }
+  const char *env_cores = getenv("RBIPC_SIMULATE_ONLINE_CORES");
+  if (env_cores && env_cores[0] != '\0') {
+    s_profile.online_cores = (uint32_t)strtoul(env_cores, NULL, 10);
+  }
+  const char *env_spin = getenv("RBIPC_SIMULATE_SPIN_COUNT");
+  if (env_spin && env_spin[0] != '\0') {
+    s_profile.calibrated_spin_count = (uint32_t)strtoul(env_spin, NULL, 10);
+  }
+  const char *env_tsc = getenv("RBIPC_SIMULATE_TSC_FREQ");
+  if (env_tsc && env_tsc[0] != '\0') {
+    s_profile.tsc_ticks_per_ns = strtoull(env_tsc, NULL, 10);
+  }
 }
 
 RBIPC_LEAF
