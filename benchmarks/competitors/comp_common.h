@@ -41,7 +41,8 @@
 #define WARMUP_ITERATIONS   2000ULL
 #define LAT_ITERATIONS      30000ULL
 #define RING_CAPACITY       4096U
-#define CACHE_LINE_SIZE     64
+#include "rbipc.h"
+#define CACHE_LINE_SIZE     RBIPC_CACHE_LINE
 
 #define COL_RESET   "\033[0m"
 #define COL_BOLD    "\033[1m"

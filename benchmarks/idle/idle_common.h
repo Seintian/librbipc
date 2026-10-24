@@ -34,7 +34,8 @@
 
 #define NSEC_PER_SEC          1000000000ULL
 #define RING_CAPACITY         4096U
-#define CACHE_LINE_SIZE       64
+#include "rbipc.h"
+#define CACHE_LINE_SIZE       RBIPC_CACHE_LINE
 #define MSG_PAYLOAD_SIZE      64U
 
 #define COL_RESET   "\033[0m"
