@@ -1398,6 +1398,7 @@ rbipc_write_nonblock(rbipc_ring_t *RBIPC_RESTRICT ring,
  * @retval RBIPC_ERR_TIMEOUT  if deadline expired before a slot became ready.
  * @retval RBIPC_ERR_SHUTDOWN if ring buffer has shut down.
  * @retval RBIPC_ERR_POISONED if the slot was poisoned due to crashed producer.
+ * @retval RBIPC_ERR_OVERFLOW if actual message length exceeds @p max_len (payload truncated to @p max_len bytes, actual length returned in @p out_len).
  *
  * @see rbipc_read
  * @see rbipc_read_nonblock
@@ -1422,6 +1423,7 @@ rbipc_read_timeout(rbipc_ring_t *RBIPC_RESTRICT ring, void *RBIPC_RESTRICT buf,
  * @retval RBIPC_ERR_INVAL    if arguments are invalid.
  * @retval RBIPC_ERR_SHUTDOWN if ring buffer has shut down.
  * @retval RBIPC_ERR_POISONED if the slot was poisoned due to crashed producer.
+ * @retval RBIPC_ERR_OVERFLOW if actual message length exceeds @p max_len (payload truncated to @p max_len bytes, actual length returned in @p out_len).
  *
  * @see rbipc_read_timeout
  * @see rbipc_read_nonblock
@@ -1446,6 +1448,7 @@ RBIPC_API RBIPC_NODISCARD RBIPC_LEAF int rbipc_read(rbipc_ring_t *RBIPC_RESTRICT
  * @retval RBIPC_ERR_INVAL    if arguments are invalid.
  * @retval RBIPC_ERR_SHUTDOWN if ring buffer has shut down.
  * @retval RBIPC_ERR_POISONED if the slot was poisoned due to crashed producer.
+ * @retval RBIPC_ERR_OVERFLOW if actual message length exceeds @p max_len (payload truncated to @p max_len bytes, actual length returned in @p out_len).
  *
  * @see rbipc_read
  * @see rbipc_read_timeout

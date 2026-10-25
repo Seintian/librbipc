@@ -232,12 +232,12 @@ static void test_convenience_copy_io(void) {
     assert(out_len == msg_len);
     assert(strcmp(buf, test_msg) == 0);
 
-    /* 4. Truncated read and NULL out_len */
+    /* 4. Truncated read returns RBIPC_ERR_OVERFLOW and sets *out_len = actual_len */
     rc = rbipc_write_nonblock(ring, "1234567890", 10);
     assert(rc == RBIPC_OK);
     char small_buf[5] = {};
     rc = rbipc_read(ring, small_buf, 4, &out_len);
-    assert(rc == RBIPC_OK);
+    assert(rc == RBIPC_ERR_OVERFLOW);
     assert(out_len == 10);
     assert(memcmp(small_buf, "1234", 4) == 0);
 

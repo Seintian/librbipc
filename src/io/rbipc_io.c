@@ -788,6 +788,9 @@ int rbipc_read_timeout(rbipc_ring_t *RBIPC_RESTRICT ring,
   if (RBIPC_UNLIKELY(rel_rc != RBIPC_OK)) {
     return rel_rc;
   }
+  if (RBIPC_UNLIKELY(actual_len > max_len)) {
+    return RBIPC_ERR_OVERFLOW;
+  }
   return RBIPC_OK;
 }
 
