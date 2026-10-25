@@ -10,6 +10,8 @@
 #include <assert.h>
 #include <errno.h>
 #include <stdatomic.h>
+#include <pthread.h>
+#include <time.h>
 
 static void test_sync_state(void) {
     rbipc_sync_state_t state;
@@ -487,6 +489,73 @@ static void test_futex2_slot_waiting(void) {
     rbipc_sync_init_process();
 }
 
+
+typedef struct {
+  _Atomic uint32_t *futex_word;
+  _Atomic uint32_t *futex_waiters;
+  _Atomic bool started;
+  _Atomic bool woken;
+  uint32_t expected_val;
+} overflow_thread_arg_t;
+
+static void *overflow_waiter_thread(void *arg) {
+  overflow_thread_arg_t *targ = (overflow_thread_arg_t *)arg;
+  rbipc_sync_register_waiter(targ->futex_waiters);
+  atomic_store(&targ->started, true);
+  _Atomic uint32_t sflag = 0;
+  int rc = rbipc_futex_wait_or_shutdown(targ->futex_word, targ->expected_val, &sflag, 2000000000ULL);
+  rbipc_sync_deregister_waiter(targ->futex_waiters);
+  if (rc == RBIPC_OK) {
+    atomic_store(&targ->woken, true);
+  }
+  return NULL;
+}
+
+static void test_monotonic_counter_overflow_wake(void) {
+  _Atomic uint32_t futex_word = 0x7fffffffU; /* 2^31 - 1 */
+  _Atomic uint32_t futex_waiters = 0;
+
+  overflow_thread_arg_t arg = {
+    .futex_word = &futex_word,
+    .futex_waiters = &futex_waiters,
+    .started = false,
+    .woken = false,
+    .expected_val = 0x7fffffffU
+  };
+
+  pthread_t th;
+  pthread_create(&th, NULL, overflow_waiter_thread, &arg);
+  while (!atomic_load(&arg.started)) {
+    rbipc_cpu_pause();
+  }
+  struct timespec ts = { .tv_sec = 0, .tv_nsec = 5000000 }; /* 5ms */
+  nanosleep(&ts, NULL);
+
+  /* Wake across the signed boundary 0x7fffffff -> 0x80000000 */
+  rbipc_sync_wake_one(&futex_word, &futex_waiters);
+  pthread_join(th, NULL);
+
+  assert(atomic_load(&arg.woken) == true);
+  assert(atomic_load(&futex_word) == 0x80000000U);
+
+  /* Now test waking while already in the negative range: 0x80000000 -> 0x80000001 */
+  arg.started = false;
+  arg.woken = false;
+  arg.expected_val = 0x80000000U;
+
+  pthread_create(&th, NULL, overflow_waiter_thread, &arg);
+  while (!atomic_load(&arg.started)) {
+    rbipc_cpu_pause();
+  }
+  nanosleep(&ts, NULL);
+
+  rbipc_sync_wake_one(&futex_word, &futex_waiters);
+  pthread_join(th, NULL);
+
+  assert(atomic_load(&arg.woken) == true);
+  assert(atomic_load(&futex_word) == 0x80000001U);
+}
+
 int main(void) {
     printf("[test_unit_sync] Running tests...\n");
     test_sync_state();
@@ -498,6 +567,7 @@ int main(void) {
     test_futex2_waitv();
     test_futex_wake_op();
     test_futex2_slot_waiting();
+    test_monotonic_counter_overflow_wake();
     printf("[test_unit_sync] All tests passed successfully.\n");
     return 0;
 }
