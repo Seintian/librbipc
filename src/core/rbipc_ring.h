@@ -34,6 +34,25 @@
  *
  * @return Pointer to the allocated and initialized ring handle, or @c NULL if heap allocation fails.
  */
+/**
+ * @brief Initialize and format an open shared memory descriptor into a functional ring buffer.
+ *
+ * @param[in]  fd         Open writable file descriptor (memfd, shm, or CXL DAX partition).
+ * @param[in]  name       Optional object identifier or path.
+ * @param[in]  capacity   Slot count (power-of-two).
+ * @param[in]  slot_size  Payload capacity per slot.
+ * @param[in]  flags      Creation mode flags (e.g. RBIPC_FLAG_CXL, RBIPC_FLAG_WAIT_FREE).
+ * @param[in]  roles      Attached roles.
+ * @param[in]  page_size  Effective memory page size.
+ * @param[out] out_ring   Pointer to receive initialized ring handle.
+ * @return @ref RBIPC_OK on success, error code otherwise.
+ */
+RBIPC_INTERNAL RBIPC_NODISCARD
+int rbipc_ring_init_and_format_fd(int fd, const char *name, size_t capacity,
+                                  uint32_t slot_size, uint32_t flags,
+                                  uint32_t roles, size_t page_size,
+                                  rbipc_ring_t **out_ring);
+
 RBIPC_INTERNAL RBIPC_NODISCARD
 rbipc_ring_t *rbipc_ring_alloc_handle(int fd, const char * RBIPC_RESTRICT name,
                                       rbipc_shm_header_t *hdr,

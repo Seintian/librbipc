@@ -17,10 +17,13 @@
 #include "rbipc.h"
 #include "rbipc_internal.h"
 #include "rbipc_cxl.h"
+#include "rbipc_ring.h"
 #include "rbipc_shm.h"
 #include "rbipc_vmem.h"
+#include "rbipc_math.h"
 
 #include <fcntl.h>
+#include <sys/stat.h>
 #include <unistd.h>
 #include <stdlib.h>
 
@@ -34,7 +37,7 @@ bool rbipc_cxl_available(void) {
   }
 
   const char *env = getenv("RBIPC_CXL_DAX_PATH");
-  if (env && env[0] != '\0' && access(env, F_OK) == 0) {
+  if (env && env[0] != 0 && access(env, F_OK) == 0) {
     cached = 1;
     return true;
   }
@@ -63,12 +66,17 @@ int rbipc_create_cxl(const char *dax_path, size_t capacity, size_t slot_size,
   if (RBIPC_UNLIKELY(!out_ring || capacity == 0 || slot_size == 0)) {
     return RBIPC_ERR_INVAL;
   }
+  if (RBIPC_UNLIKELY(!rbipc_is_power_of_two(capacity) ||
+                     capacity < RBIPC_MIN_CAPACITY ||
+                     capacity > RBIPC_MAX_CAPACITY)) {
+    return RBIPC_ERR_INVAL;
+  }
 
   /* If no explicit path provided, check environment variable or default DAX character device */
   const char *path = dax_path;
   if (!path) {
     const char *env = getenv("RBIPC_CXL_DAX_PATH");
-    if (env && env[0] != '\0') {
+    if (env && env[0] != 0) {
       path = env;
     } else if (access("/dev/dax0.0", F_OK) == 0) {
       path = "/dev/dax0.0";
@@ -77,22 +85,40 @@ int rbipc_create_cxl(const char *dax_path, size_t capacity, size_t slot_size,
     }
   }
 
-  int fd = open(path, O_RDWR);
+  int fd = open(path, O_RDWR | O_CREAT, 0660);
   if (fd < 0) {
     return RBIPC_ERR_SYS;
   }
 
   flags |= RBIPC_FLAG_CXL;
+  uint32_t roles = flags & (RBIPC_ROLE_PRODUCER | RBIPC_ROLE_CONSUMER | RBIPC_ROLE_MONITOR);
+  if (roles == 0) {
+    roles = RBIPC_ROLE_PRODUCER | RBIPC_ROLE_CONSUMER;
+  }
 
-  /* Initialize ring over open DAX descriptor */
-  int rc = rbipc_attach_fd_ex(fd, flags, out_ring);
-  if (rc != RBIPC_OK) {
+  size_t page_sz = rbipc_page_size();
+  rbipc_layout_t layout;
+  int rc = rbipc_shm_calc_layout_ex((uint32_t)capacity, (uint32_t)slot_size, page_sz, flags, &layout);
+  if (RBIPC_UNLIKELY(rc != RBIPC_OK)) {
     close(fd);
     return rc;
   }
 
-  if (*out_ring) {
-    (*out_ring)->is_cxl = true;
+  struct stat st;
+  if (fstat(fd, &st) == 0 && S_ISREG(st.st_mode)) {
+    if ((size_t)st.st_size < layout.total_shm_size) {
+      if (ftruncate(fd, (off_t)layout.total_shm_size) != 0) {
+        close(fd);
+        return RBIPC_ERR_SYS;
+      }
+    }
+  }
+
+  rc = rbipc_ring_init_and_format_fd(fd, path, capacity, (uint32_t)slot_size,
+                                     flags, roles, page_sz, out_ring);
+  if (rc != RBIPC_OK) {
+    close(fd);
+    return rc;
   }
 
   return RBIPC_OK;
