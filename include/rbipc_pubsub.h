@@ -165,6 +165,8 @@ void rbipc_sub_destroy(rbipc_sub_t *sub);
  * @return @ref RBIPC_OK on success.
  * @retval RBIPC_ERR_INVAL if parameters are NULL.
  * @retval RBIPC_ERR_EMPTY if no new published messages are available.
+ * @retval RBIPC_ERR_POISONED if the encountered slot was aborted/poisoned.
+ * @retval RBIPC_ERR_OVERFLOW if subscriber lag exceeded topic capacity (cursor was clamped to oldest valid slot, notifying caller of dropped messages).
  */
 RBIPC_API RBIPC_NODISCARD RBIPC_LEAF int rbipc_sub_poll(rbipc_sub_t *sub,
                                               const void **out_buf,
@@ -189,6 +191,8 @@ RBIPC_API RBIPC_NODISCARD RBIPC_LEAF int rbipc_sub_poll(rbipc_sub_t *sub,
  *
  * @return @ref RBIPC_OK on success.
  * @retval RBIPC_ERR_INVAL if parameters are NULL or max_count is 0.
+ * @retval RBIPC_ERR_POISONED if the first encountered slot was aborted/poisoned.
+ * @retval RBIPC_ERR_OVERFLOW if subscriber lag exceeded topic capacity (cursor was clamped to oldest valid slot, notifying caller of dropped messages).
  */
 RBIPC_API RBIPC_NODISCARD RBIPC_LEAF int
 rbipc_sub_poll_batch(rbipc_sub_t *sub, uint32_t max_count,
@@ -205,9 +209,12 @@ rbipc_sub_poll_batch(rbipc_sub_t *sub, uint32_t max_count,
  * @param[out] out_seq    Pointer to receive message sequence number.
  *
  * @return @ref RBIPC_OK on success.
+ * @retval RBIPC_ERR_INVAL if parameters are NULL.
  * @retval RBIPC_ERR_TIMEOUT if timeout budget expired before a message was
  * published.
  * @retval RBIPC_ERR_SHUTDOWN if the topic ring was shut down.
+ * @retval RBIPC_ERR_POISONED if the encountered slot was aborted/poisoned.
+ * @retval RBIPC_ERR_OVERFLOW if subscriber lag exceeded topic capacity (cursor was clamped to oldest valid slot, notifying caller of dropped messages).
  */
 RBIPC_API RBIPC_NODISCARD RBIPC_LEAF int
 rbipc_sub_read(rbipc_sub_t *sub, uint64_t timeout_ns, const void **out_buf,

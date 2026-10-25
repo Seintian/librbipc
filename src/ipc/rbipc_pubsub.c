@@ -68,11 +68,13 @@ static void rbipc_pubsub_commit_slot_payload(rbipc_ring_t *ring,
  * @brief Clamp subscriber read cursor to prevent reading overwritten history
  * beyond ring capacity.
  */
-RBIPC_INLINE void rbipc_sub_clamp_cursor(rbipc_sub_t *sub, uint64_t head,
+RBIPC_INLINE bool rbipc_sub_clamp_cursor(rbipc_sub_t *sub, uint64_t head,
                                          uint32_t cap) {
   if (head > cap && sub->cursor < (head - cap)) {
     sub->cursor = head - cap;
+    return true;
   }
+  return false;
 }
 
 /* ============================================================================
@@ -272,7 +274,9 @@ int rbipc_sub_poll(rbipc_sub_t *sub, const void **out_buf, uint32_t *out_len,
     return RBIPC_ERR_EMPTY;
   }
 
-  rbipc_sub_clamp_cursor(sub, head, hdr->capacity);
+  if (RBIPC_UNLIKELY(rbipc_sub_clamp_cursor(sub, head, hdr->capacity))) {
+    return RBIPC_ERR_OVERFLOW;
+  }
 
   uint32_t mask = hdr->capacity_mask;
   const rbipc_slot_t *slots =
@@ -319,7 +323,9 @@ int rbipc_sub_poll_batch(rbipc_sub_t *sub, uint32_t max_count,
     return RBIPC_OK;
   }
 
-  rbipc_sub_clamp_cursor(sub, head, hdr->capacity);
+  if (RBIPC_UNLIKELY(rbipc_sub_clamp_cursor(sub, head, hdr->capacity))) {
+    return RBIPC_ERR_OVERFLOW;
+  }
 
   uint32_t mask = hdr->capacity_mask;
   const rbipc_slot_t *slots =
@@ -380,7 +386,7 @@ int rbipc_sub_read(rbipc_sub_t *sub, uint64_t timeout_ns, const void **out_buf,
 
   while (true) {
     int rc = rbipc_sub_poll(sub, out_buf, out_len, out_seq);
-    if (rc == RBIPC_OK || rc == RBIPC_ERR_POISONED) {
+    if (rc == RBIPC_OK || rc == RBIPC_ERR_POISONED || rc == RBIPC_ERR_OVERFLOW) {
       return rc;
     }
 
@@ -397,7 +403,7 @@ int rbipc_sub_read(rbipc_sub_t *sub, uint64_t timeout_ns, const void **out_buf,
       for (uint32_t spin = 0; spin < RBIPC_SPIN_COUNT_DEFAULT; ++spin) {
         rbipc_cpu_pause();
         rc = rbipc_sub_poll(sub, out_buf, out_len, out_seq);
-        if (rc == RBIPC_OK || rc == RBIPC_ERR_POISONED) {
+        if (rc == RBIPC_OK || rc == RBIPC_ERR_POISONED || rc == RBIPC_ERR_OVERFLOW) {
           return rc;
         }
         if (RBIPC_UNLIKELY(rbipc_ring_is_shutdown(hdr))) {
@@ -416,7 +422,7 @@ int rbipc_sub_read(rbipc_sub_t *sub, uint64_t timeout_ns, const void **out_buf,
             substate);
         (void)hw_rc;
         rc = rbipc_sub_poll(sub, out_buf, out_len, out_seq);
-        if (rc == RBIPC_OK || rc == RBIPC_ERR_POISONED) {
+        if (rc == RBIPC_OK || rc == RBIPC_ERR_POISONED || rc == RBIPC_ERR_OVERFLOW) {
           return rc;
         }
         if (RBIPC_UNLIKELY(rbipc_ring_is_shutdown(hdr))) {
@@ -428,7 +434,7 @@ int rbipc_sub_read(rbipc_sub_t *sub, uint64_t timeout_ns, const void **out_buf,
     /* Phase 2: Passive Futex Sleep with Dekker-style double-check */
     rbipc_sync_register_waiter(&hdr->futex_waiters);
     rc = rbipc_sub_poll(sub, out_buf, out_len, out_seq);
-    if (rc == RBIPC_OK || rc == RBIPC_ERR_POISONED) {
+    if (rc == RBIPC_OK || rc == RBIPC_ERR_POISONED || rc == RBIPC_ERR_OVERFLOW) {
       rbipc_sync_deregister_waiter(&hdr->futex_waiters);
       return rc;
     }

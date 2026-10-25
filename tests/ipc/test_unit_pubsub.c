@@ -99,9 +99,47 @@ static void test_pubsub_lapped_subscriber(void) {
     uint32_t len = 0;
     uint64_t seq = 0;
 
+    /* First poll detects lag overrun, clamps cursor to 6, and notifies caller via RBIPC_ERR_OVERFLOW */
+    assert(rbipc_sub_poll(sub, &buf, &len, &seq) == RBIPC_ERR_OVERFLOW);
+
+    /* Subsequent poll reads the oldest valid message (seq 6) */
     assert(rbipc_sub_poll(sub, &buf, &len, &seq) == RBIPC_OK);
     assert(seq == 6);
     assert(strcmp((const char *)buf, "msg 6") == 0);
+
+    /* Test batch polling under lag overrun */
+    rbipc_sub_t *sub_batch = NULL;
+    assert(rbipc_sub_create(ring, &sub_batch) == RBIPC_OK);
+    for (int i = 10; i < 20; ++i) {
+        char msg[32];
+        snprintf(msg, sizeof(msg), "msg %d", i);
+        assert(rbipc_publish(ring, msg, (uint32_t)strlen(msg) + 1) == RBIPC_OK);
+    }
+    const void *batch_bufs[4];
+    uint32_t batch_lens[4];
+    uint64_t batch_seqs[4];
+    uint32_t batch_polled = 0;
+    assert(rbipc_sub_poll_batch(sub_batch, 4, batch_bufs, batch_lens, batch_seqs, &batch_polled) == RBIPC_ERR_OVERFLOW);
+    assert(batch_polled == 0);
+    assert(rbipc_sub_poll_batch(sub_batch, 4, batch_bufs, batch_lens, batch_seqs, &batch_polled) == RBIPC_OK);
+    assert(batch_polled == 4);
+    assert(batch_seqs[0] == 16);
+    assert(batch_seqs[3] == 19);
+    rbipc_sub_destroy(sub_batch);
+
+    /* Test timed read under lag overrun */
+    rbipc_sub_t *sub_timed = NULL;
+    assert(rbipc_sub_create(ring, &sub_timed) == RBIPC_OK);
+    for (int i = 20; i < 30; ++i) {
+        char msg[32];
+        snprintf(msg, sizeof(msg), "msg %d", i);
+        assert(rbipc_publish(ring, msg, (uint32_t)strlen(msg) + 1) == RBIPC_OK);
+    }
+    assert(rbipc_sub_read(sub_timed, 1000000ULL, &buf, &len, &seq) == RBIPC_ERR_OVERFLOW);
+    assert(rbipc_sub_read(sub_timed, 1000000ULL, &buf, &len, &seq) == RBIPC_OK);
+    assert(seq == 26);
+    assert(strcmp((const char *)buf, "msg 26") == 0);
+    rbipc_sub_destroy(sub_timed);
 
     rbipc_sub_destroy(sub);
     rbipc_detach(ring);
