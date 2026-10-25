@@ -166,12 +166,59 @@ static void test_waitfree_concurrent_stress(void) {
   assert(rc == RBIPC_OK);
 }
 
+
+static void test_waitfree_timeout_cancellation(void) {
+  rbipc_ring_t *ring = NULL;
+  uint32_t flags = RBIPC_ROLE_PRODUCER | RBIPC_ROLE_CONSUMER | RBIPC_FLAG_WAIT_FREE | RBIPC_SHM_ANON;
+  int rc = rbipc_create_ex(NULL, WF_TEST_CAPACITY, WF_TEST_SLOT_SIZE, flags, 0, &ring);
+  assert(rc == RBIPC_OK);
+
+  /* Reserve write ticket */
+  void *slot_buf = NULL;
+  uint64_t ticket = 0;
+  rc = rbipc_reserve_write(ring, 16, &slot_buf, &ticket);
+  assert(rc == RBIPC_OK);
+
+  /* A post with 0ns timeout immediately attempts cooperative cycles and returns */
+  rc = rbipc_waitfree_post_and_wait(ring, ticket, RBIPC_HELP_OP_WRITE, "TestPayload", 11, 0ULL);
+  /* Either resolved locally or safely canceled */
+  assert(rc == RBIPC_OK || rc == RBIPC_ERR_TIMEOUT);
+
+  rc = rbipc_detach(ring);
+  assert(rc == RBIPC_OK);
+}
+
+static void test_waitfree_packed_helping(void) {
+  rbipc_ring_t *ring = NULL;
+  uint32_t flags = RBIPC_ROLE_PRODUCER | RBIPC_ROLE_CONSUMER | RBIPC_FLAG_WAIT_FREE | RBIPC_FLAG_PACKED | RBIPC_SHM_ANON;
+  int rc = rbipc_create_ex(NULL, WF_TEST_CAPACITY, WF_TEST_SLOT_SIZE, flags, 0, &ring);
+  assert(rc == RBIPC_OK);
+  assert(ring->is_wait_free == true);
+  assert(ring->is_packed == true);
+
+  const char packed_msg[] = "Packed Wait-Free Test Message";
+  rc = rbipc_write(ring, packed_msg, sizeof(packed_msg));
+  assert(rc == RBIPC_OK);
+
+  char recv_buf[64] = {0};
+  uint32_t bytes_read = 0;
+  rc = rbipc_read(ring, recv_buf, sizeof(recv_buf), &bytes_read);
+  assert(rc == RBIPC_OK);
+  assert(bytes_read == sizeof(packed_msg));
+  assert(strcmp(recv_buf, packed_msg) == 0);
+
+  rc = rbipc_detach(ring);
+  assert(rc == RBIPC_OK);
+}
+
 int main(void) {
   printf("[test_unit_waitfree] Running Nikolaev wCQ bounded wait-free helping tests...\n");
 
   test_waitfree_lifecycle();
   test_waitfree_cooperative_slow_path();
   test_waitfree_concurrent_stress();
+  test_waitfree_timeout_cancellation();
+  test_waitfree_packed_helping();
 
   printf("[test_unit_waitfree] All wait-free tests passed successfully.\n");
   return 0;

@@ -115,8 +115,10 @@ void rbipc_waitfree_cooperative_help(rbipc_ring_t *ring) {
     uint32_t slot_idx = (uint32_t)(ticket & ring->cached_capacity_mask);
     rbipc_slot_t *slot = &ring->slots[slot_idx];
 
+    uint64_t raw_seq = atomic_load_explicit(&slot->sequence, memory_order_acquire);
+    uint64_t seq = ring->is_packed ? rbipc_slot_unpack_seq(raw_seq) : raw_seq;
+
     if (op == RBIPC_HELP_OP_WRITE) {
-      uint64_t seq = atomic_load_explicit(&slot->sequence, memory_order_acquire);
       if (seq == ticket) {
         uint32_t len = atomic_load_explicit(&help->payload_len, memory_order_relaxed);
         char *slot_payload = (char *)ring->data_map + ((size_t)slot_idx * ring->cached_slot_size);
@@ -127,14 +129,13 @@ void rbipc_waitfree_cooperative_help(rbipc_ring_t *ring) {
         atomic_store_explicit(&help->helper_pid, (uint32_t)ring->cached_pid, memory_order_relaxed);
         atomic_store_explicit(&help->state, RBIPC_HELP_COMPLETED, memory_order_release);
       } else if (seq > ticket) {
-        /* Already advanced by another peer */
+        /* Already advanced by another peer or owner */
         atomic_store_explicit(&help->state, RBIPC_HELP_COMPLETED, memory_order_release);
       } else {
         /* Preceding turn not yet arrived; revert to POSTED so next cycle retries */
         atomic_store_explicit(&help->state, RBIPC_HELP_POSTED, memory_order_release);
       }
     } else if (op == RBIPC_HELP_OP_READ) {
-      uint64_t seq = atomic_load_explicit(&slot->sequence, memory_order_acquire);
       if (seq >= ticket + 1) {
         atomic_store_explicit(&help->helper_pid, (uint32_t)ring->cached_pid, memory_order_relaxed);
         atomic_store_explicit(&help->state, RBIPC_HELP_COMPLETED, memory_order_release);
@@ -196,19 +197,54 @@ int rbipc_waitfree_post_and_wait(rbipc_ring_t *ring, uint64_t ticket,
     if (timeout_ns != UINT64_MAX) {
       uint64_t elapsed = rbipc_clock_monotonic_ns() - start_time;
       if (elapsed >= timeout_ns) {
+        /* Attempt cancellation */
+        uint32_t expected = RBIPC_HELP_POSTED;
+        if (atomic_compare_exchange_strong_explicit(
+                &help->state, &expected, RBIPC_HELP_IDLE,
+                memory_order_acq_rel, memory_order_acquire)) {
+          return RBIPC_ERR_TIMEOUT;
+        }
+        /* Helper engaged or finished; wait for helper to complete */
+        while (atomic_load_explicit(&help->state, memory_order_acquire) == RBIPC_HELP_IN_PROGRESS) {
+          rbipc_cpu_pause();
+        }
+        if (atomic_load_explicit(&help->state, memory_order_acquire) == RBIPC_HELP_COMPLETED) {
+          atomic_store_explicit(&help->state, RBIPC_HELP_IDLE, memory_order_release);
+          return RBIPC_OK;
+        }
         atomic_store_explicit(&help->state, RBIPC_HELP_IDLE, memory_order_release);
         return RBIPC_ERR_TIMEOUT;
       }
     }
   }
 
-  /* Direct resolution fallback if peers were completely quiescent */
-  if (op == RBIPC_HELP_OP_WRITE) {
-    char *slot_payload = (char *)ring->data_map + ((size_t)ring_slot_idx * ring->cached_slot_size);
-    if (buf && len > 0) {
-      memcpy(slot_payload, buf, len);
+  /* Direct resolution: peers were quiescent. Claim request to prevent helper race */
+  uint32_t expected_posted = RBIPC_HELP_POSTED;
+  if (atomic_compare_exchange_strong_explicit(
+          &help->state, &expected_posted, RBIPC_HELP_IN_PROGRESS,
+          memory_order_acq_rel, memory_order_acquire)) {
+    if (op == RBIPC_HELP_OP_WRITE) {
+      rbipc_slot_t *slot = &ring->slots[ring_slot_idx];
+      uint64_t raw_seq = atomic_load_explicit(&slot->sequence, memory_order_acquire);
+      uint64_t seq = ring->is_packed ? rbipc_slot_unpack_seq(raw_seq) : raw_seq;
+      if (seq == ticket) {
+        if (buf && len > 0) {
+          memcpy(slot_payload, buf, len);
+        }
+        (void)rbipc_commit_write(ring, ticket, (uint32_t)len);
+      }
     }
-    (void)rbipc_commit_write(ring, ticket, (uint32_t)len);
+    atomic_store_explicit(&help->state, RBIPC_HELP_IDLE, memory_order_release);
+    return RBIPC_OK;
+  }
+
+  /* A helper claimed the request while we exited the loop; wait for completion */
+  while (atomic_load_explicit(&help->state, memory_order_acquire) == RBIPC_HELP_IN_PROGRESS) {
+    rbipc_cpu_pause();
+  }
+  if (atomic_load_explicit(&help->state, memory_order_acquire) == RBIPC_HELP_COMPLETED) {
+    atomic_store_explicit(&help->state, RBIPC_HELP_IDLE, memory_order_release);
+    return RBIPC_OK;
   }
 
   atomic_store_explicit(&help->state, RBIPC_HELP_IDLE, memory_order_release);
