@@ -1766,6 +1766,14 @@ rbipc_enable_eventfd(rbipc_ring_t *RBIPC_RESTRICT ring,
  * @brief Bind an existing external eventfd descriptor to the ring buffer
  * handle.
  *
+ * @details In multi-process topologies, file descriptor integers are private to
+ * each process's local descriptor table and cannot simply be read from shared
+ * memory. To establish cross-process reactor signaling, one process enables the
+ * eventfd via @ref rbipc_enable_eventfd, transmits it to peer processes via
+ * UNIX domain socket ancillary message passing (@ref rbipc_ipc_send_fds /
+ * @ref rbipc_ipc_recv_fds) using SCM_RIGHTS, and the receiving processes bind
+ * the duplicate descriptor to their ring handles using this function.
+ *
  * @param[in,out] ring     Ring buffer handle.
  * @param[in]     event_fd Open eventfd descriptor (must be >= 0).
  *

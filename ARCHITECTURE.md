@@ -13,9 +13,10 @@ The architecture is built on six fundamental design pillars:
 3. **Four-Tier Hybrid Synchronization**:
    Hot paths execute completely in user space with zero kernel system calls and zero hardware memory fences on commit and release. Under contention or vacancy, synchronization gracefully escalates through bounded micro-pauses, clock-gated hardware monitor-waits (`UMWAIT`, `WFET`), asymmetric Dekker memory barriers (`sys_membarrier`), and vectorized Linux 5.16+ `sys_futex_waitv` kernel sleep.
 4. **Vectorized Amortization (B-Queue & SIMD Scanning)**:
-   Atomic ticket allocation, memory fences, and sequence checks are amortized across batches of contiguous slots via B-Queue scatter-gather vector operations (`rbipc_reserve_write_batch`, `rbipc_read_acquire_batch`). Slot availability is checked in parallel using 256-bit AVX2, SSE4.1, or 128-bit ARM64 NEON vector sequence scanners.
+   Atomic ticket allocation, memory fences, and sequence checks are amortized across batches of contiguous slots via B-Queue scatter-gather vector operations (`rbipc_reserve_write_batch`, `rbipc_read_acquire_batch`). Slot availability is checked in parallel using 512-bit AVX-512 (8 slots/cycle), 256-bit AVX2 (4 slots/cycle), SSE4.1, or 128-bit ARM64 NEON vector sequence scanners.
 5. **Cache-Bypassing Non-Temporal Streaming Stores**:
-   Large message transfers ($\ge 256$ B) leverage CPU streaming store instructions (`_mm256_stream_si256`, `_mm_stream_si128`), writing directly through Write-Combining (WC) buffers into memory. This eliminates Read-For-Ownership (RFO) bus transactions and prevents cache pollution of active L1/L2 application working sets.
+   Large message transfers exceeding hardware-calibrated cache thresholds (dynamically set to 3/4 of L3 cache size with a 256 KiB floor) leverage CPU streaming store instructions (`_mm512_stream_si512`, `_mm256_stream_si256`, `_mm_stream_si128`, `stnp`), writing directly through Write-Combining (WC) buffers into memory. This eliminates Read-For-Ownership (RFO) bus transactions and prevents cache pollution of active application working sets.
+
 6. **Progressive Hardware Feature Unlocking**:
    At startup and runtime, `librbipc` inspects host CPU capabilities (`CPUID`, `getauxval`) and kernel interfaces. Advanced hardware features—such as Intel WAITPKG (`UMWAIT`), ARM64 `FEAT_WFxT`, Intel MPK (`WRPKRU`), Linux `mseal`, `io_uring`, and `sys_futex_waitv`—are dynamically activated when present, falling back cleanly to portable POSIX primitives when absent.
 
@@ -252,22 +253,24 @@ if (rc == RBIPC_OK) {
 Single-slot operations incur atomic instruction overhead for every message. For maximum throughput, `librbipc` provides **B-Queue Scatter-Gather Vector Batching**:
 - **Atomic Reservation Amortization**: `rbipc_reserve_write_batch` reserves up to $K$ contiguous slots with a single `atomic_fetch_add` on `write_ticket`.
 - **Batched Waiter Notification**: Producers commit all $K$ slots and issue a single waiter check and futex wakeup.
-- **SIMD Sequence Scanning**: Available slot sequences are scanned using 256-bit AVX2 (`_mm256_cmpeq_epi64`), SSE4.1, or ARM64 NEON intrinsics, checking 4 slots per CPU cycle.
+- **SIMD Sequence Scanning**: Available slot sequences are scanned using 512-bit AVX-512 (`_mm512_cmpeq_epi64_mask`, checking 8 slots per CPU cycle), 256-bit AVX2 (`_mm256_cmpeq_epi64`, checking 4 slots per CPU cycle), SSE4.1, or ARM64 NEON intrinsics.
 
 ### 5.3 Non-Temporal Streaming Stores
 
-For bulk payloads ($\ge 256$ B), `librbipc` provides cache-bypassing non-temporal streaming copies (`rbipc_stream_copy`):
-- Uses 256-bit AVX2 (`_mm256_stream_si256`) or 128-bit SSE2 (`_mm_stream_si128`) vector streaming instructions.
+For bulk payloads, `librbipc` provides cache-bypassing non-temporal streaming copies (`rbipc_stream_copy`):
+- **Hardware-Calibrated Threshold**: Activates dynamically when payload size exceeds 3/4 of L3 cache size (with a calibrated 256 KiB minimum floor) to avoid cache thrashing.
+- **Microarchitectural Acceleration**: Employs 512-bit AVX-512 (`_mm512_stream_si512`), 256-bit AVX2 (`_mm256_stream_si256`), 128-bit SSE2 (`_mm_stream_si128`), or ARM64 non-temporal pairs (`stnp`).
 - Bypasses L1, L2, and L3 caches, writing directly to DRAM via CPU Write-Combining buffers.
-- Concludes with an `_mm_sfence()` store fence to ensure global memory visibility before sequence turn commitment.
+- Concludes with an `_mm_sfence()` store fence (or `dmb ishst` on ARM64) to ensure global memory visibility before sequence turn commitment.
 - Prevents high-bandwidth IPC streams from evicting application hot-sets, hash tables, and instruction caches.
 
 ### 5.4 Asynchronous Eventfd Reactor
 
 For integration into event loops (`epoll`, `poll`, `io_uring`):
-- `rbipc_enable_eventfd(ring)` binds an internal `eventfd(2)` descriptor to ring buffer notifications.
-- When consumers are waiting, producers write to the eventfd, waking up threads blocked in `epoll_wait(2)`.
+- `rbipc_enable_eventfd(ring, &out_fd)` binds an internal non-blocking `eventfd(2)` descriptor to ring buffer notifications.
+- When consumers are waiting, producers write to the eventfd, waking up threads blocked in `epoll_wait(2)` or `io_uring`.
 - `rbipc_eventfd_drain(ring)` resets the descriptor counter with non-blocking reads.
+- **Inter-Process Descriptor Transmission**: Because file descriptors are private to each process's file table, raw `eventfd` integers cannot be shared directly via shared memory. In multi-process topologies, the creating process transmits the descriptor across a UNIX domain socket via ancillary messages (`SCM_RIGHTS`) using `rbipc_ipc_send_fds()` / `rbipc_ipc_recv_fds()`, and the peer process attaches it to its ring handle via `rbipc_set_eventfd()`.
 
 ### 5.5 Lock-Free 1-to-N Multicast Publish-Subscribe
 

@@ -23,8 +23,8 @@ For the detailed architectural specification, memory layout geometry, execution 
   - **Tier 2 (Trusted Mode, `RBIPC_FLAG_TRUSTED`)**: Bypasses PID tracking, achieving pure Vyukov turn sequence parity with DPDK `rte_ring` (**15.03 Mops/s**, +19.2% over DPDK).
   - **Tier 3 (Packed Mode, `RBIPC_FLAG_PACKED`)**: Compresses sequence turn, payload length, and slot state into a single 64-bit atomic integer for single-instruction commit and release.
   - **Combined Mode (`RBIPC_FLAG_TRUSTED | RBIPC_FLAG_PACKED`)**: Optimal small-message configuration delivering **65 ns min** and **89 ns p50** half-RTT latency.
-- **B-Queue Vector Batching & SIMD Scanning**: Amortizes atomic ticket claims and memory fences across batches of contiguous slots (`rbipc_reserve_write_batch`, `rbipc_read_acquire_batch`), accelerated by 256-bit x86-64 AVX2, SSE4.1, and 128-bit ARM64 NEON sequence scanners (**54.59M msgs/s**).
-- **Non-Temporal Streaming Stores**: Transfers bulk payloads ($\ge 256$ B) directly through CPU Write-Combining buffers via `_mm256_stream_si256` / `_mm_stream_si128` + `_mm_sfence()`, preventing L1/L2/L3 cache pollution and Read-For-Ownership (RFO) bus transactions.
+- **B-Queue Vector Batching & SIMD Scanning**: Amortizes atomic ticket claims and memory fences across batches of contiguous slots (`rbipc_reserve_write_batch`, `rbipc_read_acquire_batch`), accelerated by 512-bit AVX-512, 256-bit AVX2, SSE4.1, and 128-bit ARM64 NEON sequence scanners (**73.5M+ msgs/s**).
+- **Non-Temporal Streaming Stores**: Transfers bulk payloads directly through CPU Write-Combining buffers via AVX-512 (`_mm512_stream_si512`), AVX2 (`_mm256_stream_si256`), SSE2, and ARM64 (`stnp`) + `_mm_sfence()`, activating dynamically above 3/4 L3 cache size (minimum 256 KiB floor) to prevent cache thrashing and Read-For-Ownership (RFO) bus transactions.
 - **Race-Free Crash Resilience & Time-Bounded Consumer Leases**: Uses Linux 5.3+ `pidfd_open(2)` to audit slot-holding peers without PID-recycling races. Automatically poisons abandoned slots (`RBIPC_SLOT_POISONED`), heals orphaned ticket holes, and enforces nanosecond consumer leases (`rbipc_set_lease_timeout`).
 - **Memory Integrity & Sealing**: Seals shared memory descriptors via `fcntl(F_ADD_SEALS, F_SEAL_SHRINK | F_SEAL_GROW)` and Linux 6.10+ `sys_mseal` to eliminate `SIGBUS` hazards.
 - **Multi-Topology IPC Extensions**:
@@ -126,7 +126,7 @@ librbipc/
 | `rbipc_commit_write_batch` | Atomically commit a batch of reserved slots with a single memory fence and batched waiter notification. |
 | `rbipc_read_acquire_batch` / `_nonblock` / `_timeout` | Acquire up to `count` ready slots in a single atomic step, populating an array of `rbipc_rovec_t`. |
 | `rbipc_read_release_batch` | Recycle a batch of consumed read slots in a single atomic pass. |
-| `rbipc_stream_copy` | Transfer data using AVX2 (`_mm256_stream_si256`) / SSE2 non-temporal stores + `_mm_sfence()`. |
+| `rbipc_stream_copy` | Transfer data using AVX-512 (`_mm512_stream_si512`) / AVX2 (`_mm256_stream_si256`) / SSE2 non-temporal stores + `_mm_sfence()`. |
 | `rbipc_write_stream` / `_nonblock` / `_timeout` | Reserve slot, stream payload directly to DRAM bypassing caches, and commit. |
 
 ### 4. Reactor, Leases, Multicast Pub-Sub, & IPC Passing

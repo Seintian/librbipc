@@ -151,16 +151,24 @@ rbipc_batch_commit_slots(rbipc_ring_t *RBIPC_RESTRICT ring, uint32_t count,
   rbipc_slot_t *slots =
       (rbipc_slot_t *)RBIPC_ASSUME_ALIGNED(ring->slots, RBIPC_CACHE_LINE);
 
+  /* Coalesced release fence: guarantees all prior payload and metadata writes are
+   * visible before any slot sequence is published to readers. */
+  atomic_thread_fence(memory_order_release);
+
   for (uint32_t i = 0; i < count; ++i) {
     uint64_t ticket = tickets[i];
     rbipc_slot_t *slot = &slots[ticket & mask];
     if (RBIPC_UNLIKELY(ring->is_packed)) {
-      rbipc_slot_commit_packed(slot, ticket, written_lens[i]);
+      atomic_store_explicit(&slot->state, RBIPC_SLOT_COMMITTED, memory_order_relaxed);
+      uint64_t packed = rbipc_slot_pack(ticket + 1, written_lens[i], RBIPC_SLOT_COMMITTED);
+      atomic_store_explicit(&slot->sequence, packed, memory_order_relaxed);
     } else if (RBIPC_UNLIKELY(ring->is_trusted)) {
       atomic_store_explicit(&slot->len, written_lens[i], memory_order_relaxed);
-      atomic_store_explicit(&slot->sequence, ticket + 1, memory_order_release);
+      atomic_store_explicit(&slot->sequence, ticket + 1, memory_order_relaxed);
     } else {
-      rbipc_slot_commit(slot, ticket, written_lens[i]);
+      atomic_store_explicit(&slot->len, written_lens[i], memory_order_relaxed);
+      atomic_store_explicit(&slot->state, RBIPC_SLOT_COMMITTED, memory_order_relaxed);
+      atomic_store_explicit(&slot->sequence, ticket + 1, memory_order_relaxed);
     }
     if (ring->is_cxl) {
       rbipc_clwb(&slot->sequence);
@@ -185,17 +193,36 @@ static int rbipc_batch_release_slots(rbipc_ring_t *RBIPC_RESTRICT ring,
           : 0;
   int rc = RBIPC_OK;
 
+  /* Coalesced release fence: ensures all prior slot reads are complete before recycling */
+  atomic_thread_fence(memory_order_release);
+
   for (uint32_t i = 0; i < count; ++i) {
     uint64_t ticket = tickets[i];
     rbipc_slot_t *slot = &slots[ticket & mask];
     if (RBIPC_UNLIKELY(ring->is_packed)) {
-      rbipc_slot_release_packed(slot, ticket, cap);
+      atomic_store_explicit(&slot->state, RBIPC_SLOT_EMPTY, memory_order_relaxed);
+      atomic_store_explicit(&slot->producer_pid, 0, memory_order_relaxed);
+      atomic_store_explicit(&slot->consumer_pid, 0, memory_order_relaxed);
+      atomic_store_explicit(&slot->acquire_timestamp_ns, 0, memory_order_relaxed);
+      uint64_t next_packed =
+          rbipc_slot_pack(ticket + (uint64_t)cap, 0, RBIPC_SLOT_EMPTY);
+      atomic_store_explicit(&slot->sequence, next_packed, memory_order_relaxed);
     } else if (RBIPC_UNLIKELY(ring->is_trusted)) {
-      atomic_store_explicit(&slot->sequence, ticket + cap, memory_order_release);
+      atomic_store_explicit(&slot->sequence, ticket + cap, memory_order_relaxed);
     } else {
-      if (RBIPC_UNLIKELY(!rbipc_slot_release_ex(slot, ticket, cap, my_pid))) {
-        rc = RBIPC_ERR_TIMEOUT;
+      if (my_pid > 0) {
+        uint32_t current_cpid =
+            atomic_load_explicit(&slot->consumer_pid, memory_order_relaxed);
+        if (current_cpid == 0 || current_cpid != (uint32_t)my_pid) {
+          rc = RBIPC_ERR_TIMEOUT;
+          continue;
+        }
       }
+      atomic_store_explicit(&slot->state, RBIPC_SLOT_EMPTY, memory_order_relaxed);
+      atomic_store_explicit(&slot->producer_pid, 0, memory_order_relaxed);
+      atomic_store_explicit(&slot->consumer_pid, 0, memory_order_relaxed);
+      atomic_store_explicit(&slot->acquire_timestamp_ns, 0, memory_order_relaxed);
+      atomic_store_explicit(&slot->sequence, ticket + (uint64_t)cap, memory_order_relaxed);
     }
     if (ring->is_cxl) {
       rbipc_clwb(&slot->sequence);
