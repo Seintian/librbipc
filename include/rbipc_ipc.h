@@ -23,7 +23,7 @@ extern "C" {
 
 /**
  * @def RBIPC_IPC_MAX_FDS
- * @brief Maximum count of file descriptors that can be transmitted in a single SCM_RIGHTS message (8).
+ * @brief Maximum count of file descriptors that can be transmitted in a single SCM_RIGHTS message (253).
  */
 #define RBIPC_IPC_MAX_FDS 253U /**< Maximum fds transmissible via SCM_RIGHTS (Linux SCM_MAX_FD). */
 

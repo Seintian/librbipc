@@ -5,8 +5,7 @@
  *
  * @details Implements a bounded, multi-producer multi-consumer (MPMC) lock-free
  * ring buffer architecture situated within POSIX shared memory, targeted at ISO
- * C23 and modern Linux kernels. * The library combines three core architectural
- * core architectural components:
+ * C23 and modern Linux kernels. * The library combines three core architectural components:
  * 1. High-efficiency shared memory architecture: single 1x linear virtual
  * memory mapping for discrete slot queues with power-of-2 boundary masking,
  * with opt-in 2x virtual memory double-mapping (mirror windowing) for
@@ -40,14 +39,26 @@
 #ifndef RBIPC_H
 #define RBIPC_H
 
+#include <sys/stat.h>
+#include <sys/types.h>
+
+#ifdef __cplusplus
+#include <atomic>
+#include <cassert>
+#include <cstddef>
+#include <cstdint>
+#define RBIPC_ATOMIC(T) std::atomic<T>
+#define RBIPC_ALIGNAS(x) alignas(x)
+#else
 #include <assert.h>
 #include <stdalign.h>
 #include <stdatomic.h>
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
-#include <sys/stat.h>
-#include <sys/types.h>
+#define RBIPC_ATOMIC(T) _Atomic(T)
+#define RBIPC_ALIGNAS(x) alignas(x)
+#endif
 
 #ifdef __cplusplus
 extern "C" {
@@ -144,10 +155,16 @@ extern "C" {
 
 /**
  * @def RBIPC_RESTRICT
- * @brief C99/C11/C23 restrict keyword indicating disjoint, non-aliasing pointer
- * access.
+ * @brief C99/C11/C23 restrict keyword (or C++ __restrict__) indicating disjoint,
+ * non-aliasing pointer access.
  */
+#if defined(__cplusplus)
+#define RBIPC_RESTRICT __restrict__
+#elif defined(__STDC_VERSION__) && __STDC_VERSION__ >= 199901L
 #define RBIPC_RESTRICT restrict
+#else
+#define RBIPC_RESTRICT __restrict__
+#endif
 #else
 #define RBIPC_API
 #define RBIPC_NODISCARD
@@ -161,7 +178,11 @@ extern "C" {
 #define RBIPC_UNLIKELY(x) (x)
 #define RBIPC_ASSUME_ALIGNED(p, a) (p)
 #define RBIPC_UNREACHABLE() ((void)0)
+#if defined(__cplusplus) && defined(_MSC_VER)
+#define RBIPC_RESTRICT __restrict
+#else
 #define RBIPC_RESTRICT
+#endif
 #endif
 
 /* ============================================================================
@@ -514,18 +535,18 @@ enum rbipc_slot_state {
  * between concurrent worker cores.
  */
 typedef struct {
-  _Alignas(RBIPC_CACHE_LINE) _Atomic uint64_t
+  RBIPC_ALIGNAS(RBIPC_CACHE_LINE) RBIPC_ATOMIC(uint64_t)
       sequence; /**< Monotonically increasing sequence number for turn
                    scheduling. */
-  _Atomic uint32_t
+  RBIPC_ATOMIC(uint32_t)
       state; /**< Slot lifecycle state, represented by @ref rbipc_slot_state. */
-  _Atomic uint32_t producer_pid; /**< Process ID of the reserving producer (for
+  RBIPC_ATOMIC(uint32_t) producer_pid; /**< Process ID of the reserving producer (for
                                     ESRCH crash detection). */
-  _Atomic uint32_t
+  RBIPC_ATOMIC(uint32_t)
       len; /**< Valid committed byte length of the written payload. */
-  _Atomic uint32_t consumer_pid; /**< Process ID of acquiring consumer (for
+  RBIPC_ATOMIC(uint32_t) consumer_pid; /**< Process ID of acquiring consumer (for
                                     crash recovery). */
-  _Atomic uint64_t acquire_timestamp_ns; /**< Monotonic timestamp in nanoseconds
+  RBIPC_ATOMIC(uint64_t) acquire_timestamp_ns; /**< Monotonic timestamp in nanoseconds
                                             when slot was acquired. */
 #if RBIPC_CACHE_LINE > 32U
   uint8_t _pad[RBIPC_CACHE_LINE - 32U];  /**< Dynamic cache-line padding to prevent false sharing */
@@ -548,7 +569,7 @@ static_assert(alignof(rbipc_slot_t) == RBIPC_CACHE_LINE,
  * producers and consumers.
  */
 typedef struct {
-  _Atomic uint64_t
+  RBIPC_ATOMIC(uint64_t)
       magic; /**< Structural header identification signature (@ref RBIPC_MAGIC)
                 published last with release semantics. */
   uint32_t version; /**< Header protocol layout format version (@ref
@@ -571,53 +592,53 @@ typedef struct {
                           configuration layout fields. */
 
   /* Cache-line isolated atomic synchronization variables */
-  _Alignas(RBIPC_CACHE_LINE) _Atomic uint64_t
+  RBIPC_ALIGNAS(RBIPC_CACHE_LINE) RBIPC_ATOMIC(uint64_t)
       write_ticket; /**< Monotonic ticket counter claimed by reserving
                        producers. */
-  _Alignas(RBIPC_CACHE_LINE) _Atomic uint64_t
+  RBIPC_ALIGNAS(RBIPC_CACHE_LINE) RBIPC_ATOMIC(uint64_t)
       read_ticket; /**< Monotonic ticket counter claimed by acquiring consumers.
                     */
-  _Alignas(RBIPC_CACHE_LINE) _Atomic uint32_t
+  RBIPC_ALIGNAS(RBIPC_CACHE_LINE) RBIPC_ATOMIC(uint32_t)
       futex_seq; /**< Futex word sequence counter for consumer wakeups (data
                     ready). Used as 32-bit proxy word in classical SYS_futex
                     mode and as auxiliary wake target in vectorized futex2 mode.
                   */
-  _Alignas(RBIPC_CACHE_LINE) _Atomic uint32_t
+  RBIPC_ALIGNAS(RBIPC_CACHE_LINE) RBIPC_ATOMIC(uint32_t)
       futex_waiters; /**< Count of consumer threads actively sleeping on @c
                         futex_seq or slot sequence futexes. */
-  _Alignas(RBIPC_CACHE_LINE) _Atomic uint32_t
+  RBIPC_ALIGNAS(RBIPC_CACHE_LINE) RBIPC_ATOMIC(uint32_t)
       write_futex_seq; /**< Futex word sequence counter for producer wakeups
                           (space ready). Used as 32-bit proxy word in classical
                           SYS_futex mode and as auxiliary wake target in
                           vectorized futex2 mode. */
-  _Alignas(RBIPC_CACHE_LINE) _Atomic uint32_t
+  RBIPC_ALIGNAS(RBIPC_CACHE_LINE) RBIPC_ATOMIC(uint32_t)
       write_waiters; /**< Count of producer threads actively sleeping on @c
                         write_futex_seq or slot sequence futexes. */
-  _Alignas(RBIPC_CACHE_LINE) _Atomic uint32_t
+  RBIPC_ALIGNAS(RBIPC_CACHE_LINE) RBIPC_ATOMIC(uint32_t)
       active_producers; /**< Number of currently attached producer handles. */
-  _Alignas(RBIPC_CACHE_LINE) _Atomic uint32_t
+  RBIPC_ALIGNAS(RBIPC_CACHE_LINE) RBIPC_ATOMIC(uint32_t)
       active_consumers; /**< Number of currently attached consumer handles. */
-  _Alignas(RBIPC_CACHE_LINE) _Atomic uint32_t
+  RBIPC_ALIGNAS(RBIPC_CACHE_LINE) RBIPC_ATOMIC(uint32_t)
       shutdown_flag; /**< Atomic flag set to 1 when cooperative shutdown is
                         requested. */
-  _Alignas(RBIPC_CACHE_LINE) _Atomic uint32_t
+  RBIPC_ALIGNAS(RBIPC_CACHE_LINE) RBIPC_ATOMIC(uint32_t)
       eventfd_waiters; /**< Count of active eventfd/epoll reactor waiters
                           registered. */
-  _Alignas(RBIPC_CACHE_LINE) _Atomic uint64_t
+  RBIPC_ALIGNAS(RBIPC_CACHE_LINE) RBIPC_ATOMIC(uint64_t)
       lease_timeout_ns; /**< Configurable consumer lease duration in nanoseconds
                            (0 = disabled). */
 
   /* Cache-line isolated telemetry & operational error counters */
-  _Alignas(RBIPC_CACHE_LINE) _Atomic uint64_t
+  RBIPC_ALIGNAS(RBIPC_CACHE_LINE) RBIPC_ATOMIC(uint64_t)
       poisoned_slots_count; /**< Cumulative count of slots poisoned (aborts /
                                dead peers / holes). */
-  _Atomic uint64_t dead_producers_recovered; /**< Cumulative count of dead
+  RBIPC_ATOMIC(uint64_t) dead_producers_recovered; /**< Cumulative count of dead
                                                 producer crash recoveries. */
-  _Atomic uint64_t dead_consumers_recovered; /**< Cumulative count of dead
+  RBIPC_ATOMIC(uint64_t) dead_consumers_recovered; /**< Cumulative count of dead
                                                 consumer process recoveries. */
-  _Atomic uint64_t leases_revoked_count;     /**< Cumulative count of expired
+  RBIPC_ATOMIC(uint64_t) leases_revoked_count;     /**< Cumulative count of expired
                                                 consumer leases revoked. */
-  _Atomic uint64_t ticket_holes_healed; /**< Cumulative count of orphaned ticket
+  RBIPC_ATOMIC(uint64_t) ticket_holes_healed; /**< Cumulative count of orphaned ticket
                                            holes healed. */
 } rbipc_shm_header_t;
 

@@ -213,7 +213,7 @@ Measured empirically on reference hardware (**Intel Core i5-6300U @ 2.40 GHz**, 
 
 ### Prerequisites
 
-A modern Linux distribution with an ISO C23-compliant compiler (`gcc` $\ge 13$ or `clang` $\ge 17$), `make`, and standard POSIX development headers.
+A modern Linux distribution with an ISO C23-compliant compiler (`gcc` $\ge 13$ or `clang` $\ge 17$), `make`, and standard POSIX development headers. Public headers (rbipc.h, rbipc_ipc.h, rbipc_pubsub.h) are natively compatible with ISO C++17, C++20, and C++23 (g++ / clang++).
 
 ### Building
 
@@ -221,7 +221,7 @@ A modern Linux distribution with an ISO C23-compliant compiler (`gcc` $\ge 13$ o
 # Build static library, shared library, and all verification test suites
 make -j$(nproc)
 
-# Run complete 31-suite test suite (100% pass)
+# Run complete test suite across C23 and C++20 (100% pass)
 make test
 
 # Build all benchmark suites

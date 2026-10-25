@@ -36,7 +36,8 @@ STATIC_LIB = $(LIBDIR)/librbipc.a
 SHARED_LIB = $(LIBDIR)/librbipc.so
 
 TEST_SRCS = $(wildcard $(TESTDIR)/*/*.c)
-TEST_BINS = $(patsubst $(TESTDIR)/%.c, $(BINDIR)/%, $(TEST_SRCS))
+TEST_CPP_SRCS = $(wildcard $(TESTDIR)/*/*.cpp)
+TEST_BINS = $(patsubst $(TESTDIR)/%.c, $(BINDIR)/%, $(TEST_SRCS)) $(patsubst $(TESTDIR)/%.cpp, $(BINDIR)/%, $(TEST_CPP_SRCS))
 
 BENCH_SRCS = $(wildcard $(BENCHDIR)/*.c)
 BENCH_BINS = $(patsubst $(BENCHDIR)/%.c, $(BINDIR)/%, $(BENCH_SRCS))
@@ -65,10 +66,15 @@ $(STATIC_LIB): $(OBJS) | $(LIBDIR)
 
 $(SHARED_LIB): $(OBJS) $(VERSION_SCRIPT) | $(LIBDIR)
 	$(CC) -shared $(CFLAGS) -o $@ $(OBJS) $(SO_LDFLAGS)
+	ln -sf librbipc.so $(LIBDIR)/librbipc.so.1
 
 $(BINDIR)/%: $(TESTDIR)/%.c $(STATIC_LIB) | $(BINDIR)
 	@mkdir -p $(dir $@)
 	$(CC) $(CFLAGS) $< $(STATIC_LIB) $(LDFLAGS) -o $@
+
+$(BINDIR)/%: $(TESTDIR)/%.cpp $(STATIC_LIB) | $(BINDIR)
+	@mkdir -p $(dir $@)
+	$(CXX) -std=c++20 -Wall -Wextra -O3 -Iinclude -Isrc $< $(STATIC_LIB) $(LDFLAGS) -o $@
 
 $(BINDIR)/bench_architecture_suite: $(BENCHDIR)/bench_architecture_suite.c $(wildcard $(BENCHDIR)/architecture/*.c) $(wildcard $(BENCHDIR)/architecture/*.h) $(BENCHDIR)/bench_common.h $(STATIC_LIB) | $(BINDIR)
 	$(CC) $(CFLAGS) -I$(BENCHDIR)/architecture $(filter %.c,$^) $(STATIC_LIB) $(LDFLAGS) -o $@
