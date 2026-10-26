@@ -3,15 +3,15 @@
     "cpu_model": "Intel(R) Core(TM) i5-6300U CPU @ 2.40GHz",
     "kernel": "Linux 7.2.9-2-cachyos x86_64",
     "profile": "laptop",
-    "mode": "8-Byte Pointer / Scalar Exchange",
+    "mode": "64-Byte Payload memcpy",
     "policy": "ADAPTIVE",
     "model": "Multi-Thread (pthread)",
-    "iterations": 1000000
+    "iterations": 2000000
   },
   "result": {
-    "elapsed_seconds": 0.130329,
-    "latency_ns_per_op": 130.33,
-    "throughput_mops": 7.67,
-    "throughput_ops_sec": 7672883.32
+    "elapsed_seconds": 1.694377,
+    "latency_ns_per_op": 847.19,
+    "throughput_mops": 1.18,
+    "throughput_ops_sec": 1180374.72
   }
 }

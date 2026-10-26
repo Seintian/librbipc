@@ -245,6 +245,14 @@ A `perf c2c` (Cache-to-Cache) memory access trace was captured during high-throu
 
 This verifies that `librbipc`'s 64-byte alignment and strict separation of producer and consumer cache lines in `rbipc_shm_header_t` completely eliminate false sharing.
 
+### 8.4 Full Flamegraph & Profiling Investigation
+
+For the complete microarchitectural flamegraph breakdown, function-level on-CPU cycle distributions, and comparative analysis of normal versus stressed workloads (including 4P-4C saturation contention and fault-injection telemetry), see **[`PROFILING_ANALYSIS.md`](PROFILING_ANALYSIS.md)**:
+- [Normal 1P-1C 64B Streaming Flamegraph](benchmarks/profiling/flamegraph_normal_streaming.svg)
+- [Normal B-Queue Vector Batching Flamegraph](benchmarks/profiling/flamegraph_normal_batch.svg)
+- [Stressed 4P-4C MPMC Contention Flamegraph](benchmarks/profiling/flamegraph_stressed_mpmc.svg)
+- [Stressed Telemetry & Lease Revocation Flamegraph](benchmarks/profiling/flamegraph_stressed_telemetry.svg)
+
 ---
 
 ## 9. Comprehensive Synthesis

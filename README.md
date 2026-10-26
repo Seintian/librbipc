@@ -6,7 +6,7 @@
 
 `librbipc` is a zero-dependency, production-grade Inter-Process Communication (IPC) library written in ISO C23 for Linux. It implements a lock-free Multi-Producer / Multi-Consumer (MPMC) shared-memory ring buffer engineered for **sub-microsecond user-space fast paths**, **green idle CPU efficiency (0.3% CPU)** via Dekker-synchronized Linux `sys_futex_waitv` suspension, **deterministic crash recovery** (`pidfd_open(2)`), **B-Queue scatter-gather vector batching** (**54.59M msgs/s**), **non-temporal cache-bypassing streaming stores** (**19.87 GB/s**), **asynchronous `eventfd`/`epoll` reactor signaling**, and **1-to-N lock-free multicast publish-subscribe**.
 
-For the detailed architectural specification, memory layout geometry, execution modes, and synchronization engine, see **[`ARCHITECTURE.md`](ARCHITECTURE.md)**. For the empirical benchmark profiling analysis, apples-to-apples comparisons against **DPDK `rte_ring`**, **LMAX Disruptor**, **POSIX `mqueue`**, and **`AF_UNIX`**, low-level `perf` hardware counters, and cache contention analysis, see **[`BENCHMARKS.md`](BENCHMARKS.md)**.
+For the detailed architectural specification, memory layout geometry, execution modes, and synchronization engine, see **[`ARCHITECTURE.md`](ARCHITECTURE.md)**. For the empirical benchmark profiling analysis, apples-to-apples comparisons against **DPDK `rte_ring`**, **LMAX Disruptor**, **POSIX `mqueue`**, and **`AF_UNIX`**, low-level `perf` hardware counters, and cache contention analysis, see **[`BENCHMARKS.md`](BENCHMARKS.md)**. For the in-depth microarchitectural profiling and interactive flamegraphs comparing normal and stressed execution regimes, see **[`PROFILING_ANALYSIS.md`](PROFILING_ANALYSIS.md)**.
 
 ---
 
@@ -190,7 +190,7 @@ int main(void) {
 
 ## Performance Summary
 
-Measured empirically on reference hardware (**Intel Core i5-6300U @ 2.40 GHz**, 2C/4T Skylake Mobile, Linux `7.2.9-2-cachyos` x86_64, AC Mode). See **[`BENCHMARKS.md`](BENCHMARKS.md)** for full latency distributions, flamegraphs, and `perf c2c` cache contention analyses:
+Measured empirically on reference hardware (**Intel Core i5-6300U @ 2.40 GHz**, 2C/4T Skylake Mobile, Linux `7.2.9-2-cachyos` x86_64, AC Mode). See **[`BENCHMARKS.md`](BENCHMARKS.md)** for latency distributions and competitor comparisons, and **[`PROFILING_ANALYSIS.md`](PROFILING_ANALYSIS.md)** for interactive flamegraphs and hardware counter analyses:
 
 | Evaluation Dimension | `librbipc` Result | DPDK `rte_ring` | LMAX Disruptor | POSIX `mqueue` | `AF_UNIX` SOCK_DGRAM |
 | :--- | :--- | :--- | :--- | :--- | :--- |

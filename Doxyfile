@@ -7,8 +7,9 @@ CREATE_SUBDIRS         = NO
 OUTPUT_LANGUAGE        = English
 
 # Input configuration
-INPUT                  = include src README.md ARCHITECTURE.md BENCHMARKS.md
+INPUT                  = include src README.md ARCHITECTURE.md BENCHMARKS.md PROFILING_ANALYSIS.md
 USE_MDFILE_AS_MAINPAGE = README.md
+IMAGE_PATH             = benchmarks/profiling
 RECURSIVE              = YES
 FILE_PATTERNS          = *.h *.c *.md
 EXCLUDE_PATTERNS       = */build/* */bin/* */.git/* docs/*
