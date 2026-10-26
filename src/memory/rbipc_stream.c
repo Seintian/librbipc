@@ -121,7 +121,23 @@ int rbipc_stream_copy(void *RBIPC_RESTRICT dst, const void *RBIPC_RESTRICT src,
   if (size >= stream_thresh) {
     uintptr_t d_addr = (uintptr_t)d;
     size_t align = RBIPC_CACHE_LINE;
-    size_t align_offset = (align - (d_addr & (align - 1U))) & (align - 1U);
+    /*
+     * Microarchitectural Optimization: Two's Complement Boundary Alignment.
+     *
+     * In two's complement arithmetic, for any power-of-two alignment boundary A,
+     * the number of bytes required to advance an address d to the next multiple of A
+     * is given by the algebraic identity:
+     * \f[
+     *   \text{align\_offset} = (-d) \ \& \ (A - 1)
+     * \f]
+     * This replaces a multi-instruction dependency chain `(A - (d & (A - 1))) & (A - 1)`
+     * with a single negation (`neg`) and bitwise AND (`and`), reducing register pressure
+     * and ALU latency before streaming memory operations.
+     *
+     * Reference:
+     * - Henry S. Warren, Jr., "Hacker's Delight" (2nd ed., Addison-Wesley), §3.1.
+     */
+    size_t align_offset = (-d_addr) & (align - 1U);
     if (align_offset > 0 && align_offset <= size) {
       memcpy(d, s, align_offset);
       d += align_offset;
@@ -158,7 +174,7 @@ int rbipc_stream_copy(void *RBIPC_RESTRICT dst, const void *RBIPC_RESTRICT src,
 #elif defined(__aarch64__)
   if (size >= RBIPC_STREAM_THRESHOLD) {
     uintptr_t d_addr = (uintptr_t)d;
-    size_t align_offset = (16U - (d_addr & 15U)) & 15U;
+    size_t align_offset = (-d_addr) & 15U;
     if (align_offset > 0 && align_offset <= size) {
       memcpy(d, s, align_offset);
       d += align_offset;

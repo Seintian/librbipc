@@ -101,11 +101,24 @@ RBIPC_INLINE RBIPC_CONST bool rbipc_is_power_of_two(uint32_t val) {
  * @details Valid capacity must be a power of two, at least @ref RBIPC_MIN_CAPACITY slots,
  * and at most @ref RBIPC_MAX_CAPACITY slots.
  *
+ * Microarchitectural Optimization:
+ * Employs branchless unsigned range folding:
+ * \f[
+ *   (capacity - \text{MIN}) \le (\text{MAX} - \text{MIN})
+ * \f]
+ * Combined with the power-of-two invariant \f$capacity \ \& \ (capacity - 1) == 0\f$ via bitwise
+ * conjunction (`&`), this replaces three conditional branches with single-cycle subtraction,
+ * comparison, and bitwise masking, eliminating pipeline bubbles caused by branch predictor pressure.
+ *
+ * Reference:
+ * - Henry S. Warren, Jr., "Hacker's Delight" (2nd ed., Addison-Wesley), §4.2 (Range Test).
+ *
  * @param[in] capacity Slot capacity count to validate.
  * @return true if within admissible operational bounds, false otherwise.
  */
 RBIPC_INLINE RBIPC_CONST bool rbipc_is_valid_capacity(size_t capacity) {
-    return (capacity >= RBIPC_MIN_CAPACITY) && (capacity <= RBIPC_MAX_CAPACITY) && ((capacity & (capacity - 1)) == 0);
+    return ((capacity - RBIPC_MIN_CAPACITY) <= (RBIPC_MAX_CAPACITY - RBIPC_MIN_CAPACITY)) &
+           ((capacity & (capacity - 1U)) == 0);
 }
 
 /**
@@ -200,18 +213,41 @@ RBIPC_INLINE RBIPC_CONST bool rbipc_slot_is_ready_packed(uint64_t packed, uint64
     return rbipc_seq_diff(packed >> RBIPC_PACKED_SEQ_SHIFT, ticket + 1) == 0;
 }
 
+/**
+ * @brief Evaluate whether a slot descriptor sequence matches vacant state across descriptor layouts.
+ *
+ * @details Microarchitectural Optimization:
+ * Employs branchless arithmetic shift selection:
+ * \f[
+ *   \text{shift} = (\text{unsigned int})is\_packed \times \text{RBIPC\_PACKED\_SEQ\_SHIFT}
+ * \f]
+ * Because @ref RBIPC_PACKED_SEQ_SHIFT is a power of two (16), the optimizing compiler lowers this
+ * to a single bitwise shift (`shll $4`), avoiding conditional jump instructions and branch target
+ * buffer (BTB) allocation on high-frequency predicate polling paths.
+ *
+ * @param[in] word      Current sequence/descriptor word loaded from slot.
+ * @param[in] ticket    Reserving producer ticket number.
+ * @param[in] is_packed True if ring operates in packed 64-bit descriptor mode; false otherwise.
+ * @return true if slot sequence equals ticket under modulo arithmetic, false otherwise.
+ */
 RBIPC_INLINE RBIPC_CONST bool rbipc_slot_is_vacant_any(uint64_t word, uint64_t ticket, bool is_packed) {
-    uint64_t seq = is_packed ? (word >> RBIPC_PACKED_SEQ_SHIFT) : word;
+    uint64_t seq = word >> ((unsigned int)is_packed * RBIPC_PACKED_SEQ_SHIFT);
     return rbipc_seq_diff(seq, ticket) == 0;
 }
 
+/**
+ * @brief Evaluate whether a slot descriptor sequence matches ready state across descriptor layouts.
+ */
 RBIPC_INLINE RBIPC_CONST bool rbipc_slot_is_ready_any(uint64_t word, uint64_t ticket, bool is_packed) {
-    uint64_t seq = is_packed ? (word >> RBIPC_PACKED_SEQ_SHIFT) : word;
+    uint64_t seq = word >> ((unsigned int)is_packed * RBIPC_PACKED_SEQ_SHIFT);
     return rbipc_seq_diff(seq, ticket + 1) == 0;
 }
 
+/**
+ * @brief Evaluate whether sequence in word is strictly behind target across descriptor layouts.
+ */
 RBIPC_INLINE RBIPC_CONST bool rbipc_seq_is_behind_any(uint64_t word, uint64_t target, bool is_packed) {
-    uint64_t seq = is_packed ? (word >> RBIPC_PACKED_SEQ_SHIFT) : word;
+    uint64_t seq = word >> ((unsigned int)is_packed * RBIPC_PACKED_SEQ_SHIFT);
     return rbipc_seq_diff(seq, target) < 0;
 }
 
