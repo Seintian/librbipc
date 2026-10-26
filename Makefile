@@ -2,10 +2,30 @@ ifeq ($(origin CC),default)
   CC = gcc
 endif
 CC ?= gcc
+
+ifeq ($(findstring clang,$(CC)),clang)
+  ifeq ($(origin CXX),default)
+    CXX = clang++
+  endif
+  CXX ?= clang++
+  ifeq ($(origin AR),default)
+    AR = $(shell which llvm-ar 2>/dev/null || echo ar)
+  endif
+  AR ?= $(shell which llvm-ar 2>/dev/null || echo ar)
+else
+  ifeq ($(origin CXX),default)
+    CXX = g++
+  endif
+  CXX ?= g++
+  ifeq ($(origin AR),default)
+    AR = $(shell which gcc-ar 2>/dev/null || echo ar)
+  endif
+  AR ?= $(shell which gcc-ar 2>/dev/null || echo ar)
+endif
+
 CSTD ?= $(shell echo '' | $(CC) -std=c23 -E -x c - >/dev/null 2>&1 && echo -std=c23 || (echo '' | $(CC) -std=c2x -E -x c - >/dev/null 2>&1 && echo -std=c2x || echo -std=c11))
-CFLAGS ?= $(CSTD) -Wall -Wextra -Wpedantic -Werror -O3 -flto -fPIC -fvisibility=hidden -MMD -MP -Iinclude -Isrc -Isrc/core -Isrc/memory -Isrc/sync -Isrc/io -Isrc/ipc -Isrc/audit -Isrc/platform -pthread -D_GNU_SOURCE $(EXTRA_CFLAGS)
+CFLAGS ?= $(CSTD) -Wall -Wextra -Wpedantic -Werror -O3 -march=native -flto -fPIC -fvisibility=hidden -MMD -MP -Iinclude -Isrc -Isrc/core -Isrc/memory -Isrc/sync -Isrc/io -Isrc/ipc -Isrc/audit -Isrc/platform -pthread -D_GNU_SOURCE $(EXTRA_CFLAGS)
 LDFLAGS ?= -flto -pthread -lrt -lm
-AR ?= $(shell which gcc-ar 2>/dev/null || echo ar)
 
 VERSION_MAJOR ?= 1
 VERSION_MINOR ?= 0
@@ -74,7 +94,7 @@ $(BINDIR)/%: $(TESTDIR)/%.c $(STATIC_LIB) | $(BINDIR)
 
 $(BINDIR)/%: $(TESTDIR)/%.cpp $(STATIC_LIB) | $(BINDIR)
 	@mkdir -p $(dir $@)
-	$(CXX) -std=c++20 -Wall -Wextra -O3 -Iinclude -Isrc $< $(STATIC_LIB) $(LDFLAGS) -o $@
+	$(CXX) -std=c++20 -Wall -Wextra -O3 -march=native -Iinclude -Isrc $< $(STATIC_LIB) $(LDFLAGS) -o $@
 
 $(BINDIR)/bench_architecture_suite: $(BENCHDIR)/bench_architecture_suite.c $(wildcard $(BENCHDIR)/architecture/*.c) $(wildcard $(BENCHDIR)/architecture/*.h) $(BENCHDIR)/bench_common.h $(STATIC_LIB) | $(BINDIR)
 	$(CC) $(CFLAGS) -I$(BENCHDIR)/architecture $(filter %.c,$^) $(STATIC_LIB) $(LDFLAGS) -o $@
@@ -180,7 +200,7 @@ monitor-live: $(STATIC_LIB) $(TOOL_BINS)
 	fi; \
 	$(BINDIR)/rbipc_stat $(RING) --watch 0.5 --slots
 
-coverage: CFLAGS = $(CSTD) -Wall -Wextra -Wpedantic -Werror -O0 -g --coverage -fPIC -Iinclude -Isrc -Isrc/core -Isrc/memory -Isrc/sync -Isrc/io -Isrc/ipc -Isrc/audit -Isrc/platform -pthread -D_GNU_SOURCE
+coverage: CFLAGS = $(CSTD) -Wall -Wextra -Wpedantic -Werror -O0 -march=native -g --coverage -fPIC -Iinclude -Isrc -Isrc/core -Isrc/memory -Isrc/sync -Isrc/io -Isrc/ipc -Isrc/audit -Isrc/platform -pthread -D_GNU_SOURCE
 coverage: LDFLAGS += --coverage
 coverage: clean test
 	@echo "=================================================="
@@ -217,12 +237,12 @@ compile_commands: compile_commands.json
 docs:
 	@which doxygen > /dev/null 2>&1 && doxygen Doxyfile && python3 scripts/postprocess_docs.py || echo "doxygen is not installed in the environment; install doxygen to generate HTML documentation."
 
-tsan: CFLAGS = $(CSTD) -Wall -Wextra -Wpedantic -Werror -Wno-error=tsan -O1 -g -fsanitize=thread -fPIC -Iinclude -Isrc -Isrc/core -Isrc/memory -Isrc/sync -Isrc/io -Isrc/ipc -Isrc/audit -Isrc/platform -pthread -D_GNU_SOURCE
+tsan: CFLAGS = $(CSTD) -Wall -Wextra -Wpedantic -Werror -Wno-error=tsan -O1 -march=native -g -fsanitize=thread -fPIC -Iinclude -Isrc -Isrc/core -Isrc/memory -Isrc/sync -Isrc/io -Isrc/ipc -Isrc/audit -Isrc/platform -pthread -D_GNU_SOURCE
 tsan: LDFLAGS += -fsanitize=thread
 tsan: clean
 	make test RUN_TEST="setarch $$(uname -m) -R" CFLAGS="$(CFLAGS)" LDFLAGS="$(LDFLAGS)"
 
-asan: CFLAGS = $(CSTD) -Wall -Wextra -Wpedantic -Werror -O1 -g -fsanitize=address,undefined -fPIC -Iinclude -Isrc -Isrc/core -Isrc/memory -Isrc/sync -Isrc/io -Isrc/ipc -Isrc/audit -Isrc/platform -pthread -D_GNU_SOURCE
+asan: CFLAGS = $(CSTD) -Wall -Wextra -Wpedantic -Werror -O1 -march=native -g -fsanitize=address,undefined -fPIC -Iinclude -Isrc -Isrc/core -Isrc/memory -Isrc/sync -Isrc/io -Isrc/ipc -Isrc/audit -Isrc/platform -pthread -D_GNU_SOURCE
 asan: LDFLAGS += -fsanitize=address,undefined
 asan: clean test
 
