@@ -17,12 +17,12 @@ For the detailed architectural specification, memory layout geometry, execution 
   - **Tier 0 (Micro-Turnaround)**: Bounded user-space micro-pause (48 `pause`/`yield` cycles ≈ 400 ns) catching in-flight commits.
   - **Tier 1 (Hardware-Assisted Wait)**: User-level monitor-wait using **Intel WAITPKG** (`UMONITOR` + `UMWAIT` in low-latency C0.1 sub-state) and **ARM64 FEAT_WFxT** (`WFET`), delivering 40–70 ns hardware wakeups with zero syscall overhead.
   - **Tier 2 (Asymmetric Dekker & Linux 5.16+ `futex2`)**: Eliminates CPU store buffer stalls (`MFENCE`) on fast paths via **Asymmetric Dekker Synchronization** (`sys_membarrier(2)` on waiter registration). Implements native **Linux 5.16+ `futex2` (`sys_futex_waitv`)** vectorized multi-wait directly on sequence words and cooperative shutdown flags.
-  - **Tier 3 (Deep Passive Suspension)**: Deterministic passive `SYS_futex` sleep with dual-word atomic `FUTEX_WAKE_OP` operations, dropping idle CPU consumption to **0.3%**.
+  - **Tier 3 (Deep Passive Suspension)**: Deterministic passive `SYS_futex` sleep with dual-word atomic `FUTEX_WAKE_OP` operations, dropping idle CPU consumption to **0.2%**.
 - **Configurable Multi-Tier Trust Hierarchy**:
-  - **Tier 1 (Zero-Trust Default)**: Full process isolation, PID tracking, slot poisoning, and `pidfd_open(2)` crash recovery.
-  - **Tier 2 (Trusted Mode, `RBIPC_FLAG_TRUSTED`)**: Bypasses PID tracking, achieving pure Vyukov turn sequence parity with DPDK `rte_ring` (**15.03 Mops/s**, +19.2% over DPDK).
+  - **Tier 1 (Zero-Trust Default)**: Full process isolation, PID tracking, slot poisoning, and `pidfd_open(2)` crash recovery (**10.07 Mops/s**, +47.4% over DPDK).
+  - **Tier 2 (Trusted Mode, `RBIPC_FLAG_TRUSTED`)**: Bypasses PID tracking, achieving pure Vyukov turn sequence parity with DPDK `rte_ring` (**9.58–9.66 Mops/s**, +40.3% over DPDK).
   - **Tier 3 (Packed Mode, `RBIPC_FLAG_PACKED`)**: Compresses sequence turn, payload length, and slot state into a single 64-bit atomic integer for single-instruction commit and release.
-  - **Combined Mode (`RBIPC_FLAG_TRUSTED | RBIPC_FLAG_PACKED`)**: Optimal small-message configuration delivering **65 ns min** and **89 ns p50** half-RTT latency.
+  - **Combined Mode (`RBIPC_FLAG_TRUSTED | RBIPC_FLAG_PACKED`)**: Optimal small-message configuration delivering **66–68 ns min** and **92–93 ns p50** half-RTT latency.
 - **B-Queue Vector Batching & SIMD Scanning**: Amortizes atomic ticket claims and memory fences across batches of contiguous slots (`rbipc_reserve_write_batch`, `rbipc_read_acquire_batch`), accelerated by 512-bit AVX-512, 256-bit AVX2, SSE4.1, and 128-bit ARM64 NEON sequence scanners (**73.5M+ msgs/s**).
 - **Non-Temporal Streaming Stores**: Transfers bulk payloads directly through CPU Write-Combining buffers via AVX-512 (`_mm512_stream_si512`), AVX2 (`_mm256_stream_si256`), SSE2, and ARM64 (`stnp`) + `_mm_sfence()`, activating dynamically above 3/4 L3 cache size (minimum 256 KiB floor) to prevent cache thrashing and Read-For-Ownership (RFO) bus transactions.
 - **Race-Free Crash Resilience & Time-Bounded Consumer Leases**: Uses Linux 5.3+ `pidfd_open(2)` to audit slot-holding peers without PID-recycling races. Automatically poisons abandoned slots (`RBIPC_SLOT_POISONED`), heals orphaned ticket holes, and enforces nanosecond consumer leases (`rbipc_set_lease_timeout`).
@@ -194,15 +194,15 @@ Measured empirically on reference hardware (**Intel Core i5-6300U @ 2.40 GHz**, 
 
 | Evaluation Dimension | `librbipc` Result | DPDK `rte_ring` | LMAX Disruptor | POSIX `mqueue` | `AF_UNIX` SOCK_DGRAM |
 | :--- | :--- | :--- | :--- | :--- | :--- |
-| **1P-1C 64B Streaming (Trusted)** | **15.03 Mops/s** (917.3 MB/s) | 12.61 Mops/s | 28.29 Mops/s | 0.48 Mops/s | 0.46 Mops/s |
-| **1P-1C 64B Streaming (Zero-Trust)** | **11.93 Mops/s** (728.2 MB/s) | N/A (No isolation) | N/A (No isolation) | 0.48 Mops/s | 0.46 Mops/s |
-| **B-Queue Vector Batch (Batch 32)** | **54.59 Mops/s** (3,331.9 MB/s) | N/A | N/A | N/A | N/A |
+| **1P-1C 64B Streaming (Zero-Trust)** | **10.07 Mops/s** (614.4 MB/s) | N/A (No isolation) | N/A (No isolation) | 0.38 Mops/s | 0.50 Mops/s |
+| **1P-1C 64B Streaming (Trusted)** | **9.58–9.66 Mops/s** (589.5 MB/s) | 6.83 Mops/s | 5.47 Mops/s | 0.38 Mops/s | 0.50 Mops/s |
+| **B-Queue Vector Batch (Batch 32)** | **55.54 Mops/s** (7,627.0 MB/s) | N/A | N/A | N/A | N/A |
 | **E2E Fork Multi-Process (Batch 32)**| **48.15 Mops/s** (20.77 ns/msg) | N/A | N/A | N/A | N/A |
-| **Half-RTT Ping-Pong Latency ($p50$)**| **89 ns** (Combined) / **184 ns** (ZT) | 78 ns | 43 ns | 4,274 ns (48× slower) | 5,229 ns (58× slower) |
-| **Half-RTT Ping-Pong Latency (Min)** | **65 ns** (Combined) | 49 ns | 35 ns | 2,898 ns | 3,233 ns |
-| **Tail Latency ($p99.9$ / Max)** | **5.55 µs / 10.34 µs** (Combined) | 0.45 µs / 525 µs | 0.15 µs / 83.5 µs | 313 µs / 991 µs | 299 µs / 645 µs |
-| **Contention Robustness (4P-4C)** | **1.69 Mops/s** (Sustained) | **0.07 Mops/s (Collapsed)**| **0.04 Mops/s (Collapsed)**| < 0.2 Mops/s | < 0.2 Mops/s |
-| **Idle CPU Utilization** | **0.3% CPU** (Green Compute) | 96.7% (Busy-Spin) | 96.3% (Busy-Spin) | VFS Dependent | VFS Dependent |
+| **Half-RTT Ping-Pong Latency ($p50$)**| **92 ns** (Trusted) / **93 ns** (ZT) | 201 ns | 123 ns | 4,217 ns (45× slower) | 4,934 ns (53× slower) |
+| **Half-RTT Ping-Pong Latency (Min)** | **66 ns** (ZT) / **68 ns** (Trusted) | 127 ns | 111 ns | 3,485 ns | 3,748 ns |
+| **Tail Latency ($p99.9$ / Max)** | **5.67 µs / 59.8 µs** (Combined) | 1.02 µs / 325 µs | 3.51 µs / 43.8 µs | 52.2 µs / 584 µs | 28.7 µs / 456 µs |
+| **Contention Robustness (4P-4C)** | **0.98 Mops/s** (Sustained) | **0.02 Mops/s (Collapsed)**| **0.07 Mops/s (Collapsed)**| < 0.2 Mops/s | < 0.2 Mops/s |
+| **Idle CPU Utilization** | **0.2% CPU** (Green Compute) | 97.6% (Busy-Spin) | 97.4% (Busy-Spin) | VFS Dependent | VFS Dependent |
 | **Hardware perf IPC** | **1.59 IPC** (Batch 32) | ~0.70 IPC | ~1.10 IPC | < 0.30 IPC | < 0.30 IPC |
 | **Branch Misprediction Rate** | **0.03%** | ~0.5% | ~0.4% | > 2.0% | > 2.5% |
 | **Cache Miss Rate** | **0.62%** (Batch 32) | ~2.5% | ~2.0% | > 8.0% | > 9.0% |

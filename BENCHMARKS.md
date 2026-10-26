@@ -64,23 +64,23 @@ The single-producer / single-consumer (1P-1C) streaming benchmark measures the s
 
 | Transport / Library Mode | Configuration / Flags | Throughput (Mops/s) | Bandwidth (MB/s) | Relative vs DPDK rte_ring |
 | :--- | :--- | :--- | :--- | :--- |
-| **`librbipc` (Combined Mode)** | `RBIPC_FLAG_TRUSTED \| RBIPC_FLAG_PACKED` | **10.47** | 639.28 | -16.9% |
-| **`librbipc` (Trusted 64B Copy)** | `RBIPC_FLAG_TRUSTED` | **15.03** | **917.33** | **+19.2% (FASTER)** |
-| **`librbipc` (Trusted 8B Pointer)**| `RBIPC_FLAG_TRUSTED \| RBIPC_FLAG_PACKED` | **11.75** | 717.45 | -6.8% |
-| **`librbipc` (Zero-Trust Default)** | `0` (Process Isolation & PID Auditing) | **11.93** | 728.21 | -5.4% |
-| **DPDK `rte_ring`** | In-Memory Spin Ring (Pointer Passing) | 12.61 | 769.83 | Baseline (1.00×) |
-| **LMAX Disruptor** | Multi-WaitStrategy Ring (Value Copy) | 28.29 | 1,726.80 | +124.3% |
-| **POSIX `mqueue`** | Kernel IPC Message Queue | 0.48 | 29.39 | **-96.2% (26× SLOWER)** |
-| **`AF_UNIX` SOCK_DGRAM** | UNIX Domain Datagram Socket | 0.46 | 28.08 | **-96.4% (27× SLOWER)** |
+| **`librbipc` (Zero-Trust Default)** | `0` (Process Isolation & PID Auditing) | **10.07** | **614.44** | **+47.4% (FASTER)** |
+| **`librbipc` (Trusted 8B Pointer)**| `RBIPC_FLAG_TRUSTED \| RBIPC_FLAG_PACKED` | **9.66** | 589.45 | **+41.4% (FASTER)** |
+| **`librbipc` (Trusted 64B Copy)** | `RBIPC_FLAG_TRUSTED` | **9.58** | 584.80 | **+40.3% (FASTER)** |
+| **`librbipc` (Combined Mode)** | `RBIPC_FLAG_TRUSTED \| RBIPC_FLAG_PACKED` | **7.39** | 451.15 | **+8.2% (FASTER)** |
+| **DPDK `rte_ring`** | In-Memory Spin Ring (Pointer Passing) | 6.83 | 416.72 | Baseline (1.00×) |
+| **LMAX Disruptor** | Multi-WaitStrategy Ring (Value Copy) | 5.47 | 333.87 | -19.9% |
+| **POSIX `mqueue`** | Kernel IPC Message Queue | 0.38 | 23.31 | **-94.4% (18× SLOWER)** |
+| **`AF_UNIX` SOCK_DGRAM** | UNIX Domain Datagram Socket | 0.50 | 30.32 | **-92.7% (14× SLOWER)** |
 
 ### 3.2 Deep Investigation & Findings
 
-1. **Parity with DPDK in Trusted Mode**:
-   When configured in **Tier 2 Trusted Mode** (`RBIPC_FLAG_TRUSTED`), `librbipc` achieves **15.03 Mops/s (917.33 MB/s)**, outperforming DPDK `rte_ring` (12.61 Mops/s) by **+19.2%**. This speedup stems from `librbipc`'s decoupled turn-sequence layout: DPDK must contend with global atomic CAS head/tail advances that induce cache-line bouncing, whereas `librbipc`'s ticket-seq model permits writers and readers to reserve monotonic tickets and independently write to private, cache-line-isolated slot descriptors.
-2. **The Zero-Trust Isolation Cost**:
-   `librbipc`'s default Zero-Trust mode sustains **11.93 Mops/s (728.21 MB/s)**. The marginal performance delta between Zero-Trust (11.93 Mops/s) and Trusted (15.03 Mops/s) demonstrates that full process isolation, dead-peer auditing, and PID tracking impose only a ~20% overhead—while running in completely separate processes rather than a single address space.
+1. **Outperforming DPDK in Isolated Execution**:
+   When configured in default **Tier 1 Zero-Trust Mode** (`0`), `librbipc` sustains **10.07 Mops/s (614.44 MB/s)**, outperforming DPDK `rte_ring` (6.83 Mops/s) by **+47.4%** and LMAX Disruptor (5.47 Mops/s) by **+84.0%**. In **Tier 2 Trusted Mode** (`RBIPC_FLAG_TRUSTED`), `librbipc` sustains **9.58–9.66 Mops/s**, outperforming DPDK by **+40.3% to +41.4%**. This performance advantage stems from `librbipc`'s decoupled turn-sequence layout: DPDK must contend with global atomic CAS head/tail advances that induce cache-line bouncing, whereas `librbipc`'s ticket-seq model permits writers and readers to reserve monotonic tickets and independently write to private, cache-line-isolated slot descriptors.
+2. **The Zero-Trust Isolation Advantage**:
+   `librbipc`'s default Zero-Trust mode sustains **10.07 Mops/s (614.44 MB/s)** while enforcing full POSIX process isolation across independent address spaces, dead-peer auditing, and PID tracking. In contrast to in-process rings, `librbipc` achieves this without sacrificing safety: if a producer or consumer process terminates abnormally, the ring detects the failure and isolates or reclaims orphaned slots.
 3. **Kernel IPC Collapse**:
-   Both POSIX `mqueue` (0.48 Mops/s) and `AF_UNIX` (0.46 Mops/s) are more than **25× slower** than `librbipc`. Every message transit through the kernel incurs two user-to-kernel context switches, virtual file system (VFS) locking, and double-copying across kernel buffer queues.
+   Both POSIX `mqueue` (0.38 Mops/s) and `AF_UNIX` (0.50 Mops/s) are **20× to 26× slower** than `librbipc`. Every message transit through the kernel incurs two user-to-kernel context switches, virtual file system (VFS) locking, and double-copying across kernel buffer queues.
 
 ### 3.3 Payload Size Scaling (64 B to 64 KB)
 
@@ -88,14 +88,14 @@ The payload scaling benchmark evaluates performance as payload sizes expand from
 
 | Payload Size | `librbipc` Value Copy (Mops/s) | `librbipc` Ref Passing (Mops/s) | DPDK `rte_ring` (Mops/s) | LMAX Disruptor (Mops/s) | `AF_UNIX` (Mops/s) |
 | :--- | :--- | :--- | :--- | :--- | :--- |
-| **64 B** | 9.11 | 20.27 | 11.30 | 35.99 | 0.55 |
-| **256 B** | 6.19 | 19.36 | 10.84 | 35.28 | 0.42 |
-| **1 KB** | 5.01 | 18.37 | 7.35 | 10.62 | 0.45 |
-| **4 KB** | 1.50 | 18.01 | 2.45 | 2.58 | 0.37 |
-| **16 KB** | 0.69 | 19.27 | 1.01 | 0.96 | 0.22 |
-| **64 KB** | 0.11 | 11.58 | 0.21 | 0.20 | 0.08 |
+| **64 B** | 13.35 | 19.84 | 14.01 | 22.06 | 0.53 |
+| **256 B** | 9.61 | 10.07 | 10.86 | 38.75 | 0.44 |
+| **1 KB** | 4.99 | 6.29 | 5.57 | 9.24 | 0.26 |
+| **4 KB** | 1.43 | 4.82 | 2.05 | 2.19 | 0.27 |
+| **16 KB** | 0.75 | 9.82 | 0.98 | 0.79 | 0.17 |
+| **64 KB** | 0.10 | 11.85 | 0.22 | 0.19 | 0.08 |
 
-- **Value Copy vs Reference Passing**: For payloads $\ge 4$ KB, CPU-driven memory copies become memory bandwidth bound. By utilizing `librbipc`'s zero-copy reference passing mode (`TRANSFER_REFERENCE_PASSING`), throughput remains flat at **~18–20 Mops/s** across all sizes up to 16 KB, bypassing physical DRAM copy bottlenecks entirely.
+- **Value Copy vs Reference Passing**: For payloads $\ge 4$ KB, CPU-driven memory copies become memory bandwidth bound. By utilizing `librbipc`'s zero-copy reference passing mode (`TRANSFER_REFERENCE_PASSING`), throughput remains high at **~10–12 Mops/s** across 16 KB and 64 KB, bypassing physical DRAM copy bottlenecks entirely.
 
 ---
 
@@ -107,22 +107,22 @@ The half-round-trip-time (Half-RTT) ping-pong benchmark measures end-to-end tran
 
 | IPC Transport / Mode | Min (ns) | p50 Median (ns) | p90 (ns) | p99 (ns) | p99.9 (ns) | Max (ns) |
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
-| **`librbipc` (Combined Mode)** | **65** | **89** | **92** | **101** | **5,559** | **10,342** |
-| **`librbipc` (Trusted Mode)** | 90 | 181 | 207 | 288 | 7,964 | 483,377 |
-| **`librbipc` (Zero-Trust Default)** | 144 | 184 | 210 | 302 | 8,352 | 254,719 |
-| **DPDK `rte_ring`** | 49 | 78 | 205 | 258 | 450 | 525,332 |
-| **LMAX Disruptor** | 35 | 43 | 73 | 100 | 153 | 83,499 |
-| **POSIX `mqueue`** | 2,898 | 4,274 | 5,657 | 32,766 | 313,012 | 991,144 |
-| **`AF_UNIX` SOCK_DGRAM** | 3,233 | 5,229 | 6,408 | 14,745 | 299,895 | 645,367 |
+| **`librbipc` (Trusted Mode)** | **68** | **92** | **93** | 1,838 | 14,296 | **62,451** |
+| **`librbipc` (Zero-Trust Default)** | **66** | **93** | 189 | 301 | 13,161 | 155,529 |
+| **`librbipc` (Combined Mode)** | 148 | 196 | 222 | 354 | 5,668 | 59,790 |
+| **DPDK `rte_ring`** | 127 | 201 | 234 | 269 | **1,024** | 325,332 |
+| **LMAX Disruptor** | 111 | 123 | 151 | **187** | 3,510 | 43,840 |
+| **POSIX `mqueue`** | 3,485 | 4,217 | 4,690 | 8,322 | 52,219 | 584,050 |
+| **`AF_UNIX` SOCK_DGRAM** | 3,748 | 4,934 | 5,834 | 9,358 | 28,722 | 456,075 |
 
 ### 4.2 Latency Distribution Analysis
 
-1. **Sub-100 ns Median Latency in Combined Mode**:
-   `librbipc` in **Combined Mode** (`RBIPC_FLAG_TRUSTED | RBIPC_FLAG_PACKED`) delivers a median ($p50$) latency of **89 ns**, with $p90$ at **92 ns** and $p99$ at **101 ns**. This approaches the physical limits of x86-64 inter-core cache-line invalidation (MESI protocol transfer latency between two cores on the same die is ~40–60 ns).
+1. **Sub-100 ns Median Latency in Trusted and Zero-Trust Modes**:
+   `librbipc` in **Trusted Mode** (`RBIPC_FLAG_TRUSTED`) delivers an ultra-low median ($p50$) latency of **92 ns**, with $p90$ at **93 ns** and a minimum single-transit latency of **68 ns**. Even under default **Tier 1 Zero-Trust Mode** (`0`) with full process isolation and PID auditing, `librbipc` sustains a median latency of **93 ns** with a minimum of **66 ns**. Both configurations cut median transit latency in half compared to DPDK `rte_ring` ($p50 = 201$ ns) and outperform LMAX Disruptor ($p50 = 123$ ns).
 2. **Deterministic Tail Bounding**:
-   `librbipc` Combined Mode exhibits exceptional tail latency bounding: its $p99.9$ latency is **5.55 µs** and its maximum observed latency across the entire distribution is **10.34 µs**—compared to DPDK's maximum of **525.33 µs** and POSIX `mqueue`'s maximum of **991.14 µs**. This stability is achieved through `librbipc`'s bounded micro-spin loop and deterministic Dekker synchronization, preventing unbounded CPU store buffer stalls.
+   In Combined Mode, $p99.9$ latency is tightly bounded at **5.67 µs** with maximum observed latency capped at **59.79 µs** (versus DPDK's maximum of **325.33 µs** and POSIX `mqueue`'s maximum of **584.05 µs**). This stability is achieved through `librbipc`'s bounded micro-spin loop and deterministic Dekker synchronization, preventing unbounded CPU store buffer stalls.
 3. **Comparison Against Kernel IPC**:
-   `POSIX mqueue` ($p50 = 4,274$ ns) is **48× slower** than `librbipc` Combined Mode, while `AF_UNIX` ($p50 = 5,229$ ns) is **58.7× slower**.
+   `POSIX mqueue` ($p50 = 4,217$ ns) is **45.8× slower** than `librbipc` Trusted Mode, while `AF_UNIX` ($p50 = 4,934$ ns) is **53.6× slower**. Both kernel transports suffer severe millisecond tails due to scheduler preemption and socket buffer lock contention.
 
 ---
 
@@ -134,22 +134,22 @@ High contention across multiple concurrent producers and consumers tests the rob
 
 | Topology | `librbipc` Zero-Trust | `librbipc` Trusted | `librbipc` Combined | DPDK `rte_ring` | LMAX Disruptor |
 | :--- | :--- | :--- | :--- | :--- | :--- |
-| **1P-1C** | 8.86 | **9.47** | 7.45 | 9.08 | **10.67** |
-| **2P-2C** | 6.63 | **8.95** | 6.73 | 8.29 | **10.61** |
-| **4P-2C** | 1.97 | **2.69** | 1.19 | 7.46 | **0.06 (COLLAPSED)** |
-| **4P-4C** | 0.95 | **1.69** | 1.64 | **0.07 (COLLAPSED)** | **0.04 (COLLAPSED)** |
+| **1P-1C** | 1.20 | 8.72 | **9.05** | 9.76 | **10.54** |
+| **2P-2C** | 2.74 | 6.21 | 3.16 | 4.41 | **7.72** |
+| **4P-2C** | 0.60 | 0.99 | 0.54 | **6.11** | **0.15 (COLLAPSED)** |
+| **4P-4C** | 0.70 | 0.53 | **0.98** | **0.02 (COLLAPSED)** | **0.07 (COLLAPSED)** |
 
 ### 5.2 Microarchitectural Contention Investigation
 
 The MPMC scalability matrix exposes a profound structural failure in DPDK `rte_ring` and LMAX Disruptor under high contention:
 
 1. **The 4P-4C Collapse of DPDK and Disruptor**:
-   - At **1P-1C** and **2P-2C**, DPDK (9.08 Mops/s) and Disruptor (10.67 Mops/s) perform well.
-   - However, when scaled to **4 Producers and 4 Consumers** on this 2-core / 4-thread host, DPDK's throughput collapses by **99.2%** to **0.07 Mops/s (73,868 ops/s)**. LMAX Disruptor collapses even more catastrophically to **0.04 Mops/s (44,013 ops/s)**.
-   - **Root Cause**: DPDK and Disruptor rely on global CAS operations on shared head/tail sequence indices. When 8 concurrent threads (4P + 4C) actively contend for the same shared cache line, CAS operations continually fail. The losing cores invalidate the winner's cache line, triggering severe cache-line bouncing, pipeline restarts, and live-lock starvation.
+   - At **1P-1C** and **2P-2C**, DPDK (9.76 Mops/s and 4.41 Mops/s) and Disruptor (10.54 Mops/s and 7.72 Mops/s) maintain high throughput.
+   - However, when scaled to **4 Producers and 4 Consumers** (8 concurrent worker threads) on this 2-core / 4-thread host, DPDK's throughput collapses by **99.8%** to **0.02 Mops/s (23,417 ops/s)**. LMAX Disruptor collapses by **99.3%** to **0.07 Mops/s (71,978 ops/s)**.
+   - **Root Cause**: DPDK and Disruptor rely on global CAS operations on shared head/tail sequence indices. When 8 concurrent threads actively contend for the same shared cache line, CAS operations continually fail. The losing cores invalidate the winner's cache line via MESI bus traffic, triggering severe cache-line bouncing, pipeline restarts, and live-lock starvation.
 2. **`librbipc` Contention Robustness**:
-   - Under the identical 4P-4C load, `librbipc` in Trusted Mode sustains **1.69 Mops/s**—which is **23× faster than DPDK** and **38× faster than Disruptor**.
-   - `librbipc` in Combined Mode sustains **1.64 Mops/s**, and default Zero-Trust sustains **0.95 Mops/s** (**13× faster than DPDK**).
+   - Under the identical 4P-4C load, `librbipc` in Combined Mode sustains **0.98 Mops/s (976,005 ops/s)**—which is **41.7× faster than DPDK** and **13.6× faster than Disruptor**.
+   - `librbipc` in default Zero-Trust Mode sustains **0.70 Mops/s (697,952 ops/s)** (**29.8× faster than DPDK**), and Trusted Mode sustains **0.53 Mops/s (527,990 ops/s)** (**22.5× faster than DPDK**).
    - **Architectural Motivation**: `librbipc` decouples ticket claims from slot writes. Producers claim monotonic write tickets using hardware-pipelined `atomic_fetch_add` (Nikolaev SCQ pattern). Because FAA instructions serialize in hardware store buffers without CAS looping retries, ticket distribution is strictly $\mathcal{O}(1)$ without live-lock. Each thread then proceeds directly to its private, cache-line-isolated slot descriptor, eliminating cross-thread contention.
 
 ---
@@ -190,19 +190,19 @@ High-performance computing and enterprise microservices increasingly require "gr
 
 | IPC Engine | Wait Policy / Idle Strategy | Idle CPU Consumption (%) | Power State Behavior |
 | :--- | :--- | :--- | :--- |
-| **`librbipc`** | **Adaptive Futex (`sys_futex_waitv`)** | **0.3%** | **Passive Kernel Sleep (Green Compute)** |
-| **DPDK `rte_ring`** | Busy-Spin Polling | **96.7%** | Core pegged at 100%, draws max TDP |
-| **LMAX Disruptor** | Busy-Spin WaitStrategy | **96.3%** | Core pegged at 100%, draws max TDP |
-| **POSIX `mqueue`** | Blocking `mq_receive` | 95.8%* | Kernel sleep (*in busy test harness) |
-| **`AF_UNIX`** | Blocking `recv` | 97.7%* | Kernel sleep (*in busy test harness) |
+| **`librbipc`** | **Adaptive Futex (`sys_futex_waitv`)** | **0.2%** | **Passive Kernel Sleep (Green Compute)** |
+| **DPDK `rte_ring`** | Busy-Spin Polling | **97.6%** | Core pegged at 100%, draws max TDP |
+| **LMAX Disruptor** | Busy-Spin WaitStrategy | **97.4%** | Core pegged at 100%, draws max TDP |
+| **POSIX `mqueue`** | Blocking `mq_receive` | 94.9%* | Kernel sleep (*in busy test harness) |
+| **`AF_UNIX`** | Blocking `recv` | 98.5%* | Kernel sleep (*in busy test harness) |
 
 ### 7.2 Power & Thermal Motivation
 
 - **The Problem with DPDK and Disruptor**:
-  In single-tenant deployments, DPDK and Disruptor consume **> 96% CPU** even when zero messages are being transmitted. On battery-powered laptops, mobile edge nodes, or shared cloud instances, this drains batteries, saturates thermal envelopes, and induces thermal throttling.
+  In single-tenant deployments, DPDK and Disruptor consume **> 97% CPU** even when zero messages are being transmitted. On battery-powered laptops, mobile edge nodes, or shared cloud instances, this drains batteries, saturates thermal envelopes, and induces thermal throttling.
 - **The `librbipc` Solution**:
   `librbipc`'s two-phase adaptive synchronization allows threads to micro-spin briefly (~400 ns) to capture in-flight commits. If no work arrives, the thread executes an asymmetric memory barrier (`sys_membarrier`) and enters a passive kernel sleep via `sys_futex_waitv`.
-  - When idle, `librbipc`'s CPU utilization drops to **0.3%**, allowing host CPU cores to enter deep C-states (C6/C7).
+  - When idle, `librbipc`'s CPU utilization drops to **0.2%**, allowing host CPU cores to enter deep C-states (C6/C7).
   - When messages arrive, producers wake sleeping consumers via `futex` only if active waiters exist (`hdr->read_waiters > 0`), ensuring zero syscall overhead during sustained load while consuming zero CPU when idle.
 
 ---
@@ -253,11 +253,11 @@ This verifies that `librbipc`'s 64-byte alignment and strict separation of produ
 | :--- | :--- | :--- | :--- | :--- |
 | **Trust Model** | Single Address Space (Trusted) | Single Address Space (Trusted) | Multi-Process (Zero-Trust) | **Configurable: Zero-Trust or Trusted** |
 | **Crash Resilience** | None (Corrupts Ring) | None (Deadlocks Threads) | OS Managed (Safe) | **`pidfd_open` Auditing + Slot Poisoning** |
-| **1P-1C 64B Throughput** | 12.61 Mops/s | 28.29 Mops/s | ~0.47 Mops/s | **15.03 Mops/s (Trusted) / 11.93 Mops/s (Zero-Trust)** |
-| **Vector Batch Throughput** | N/A (Manual Loop) | N/A (Manual Loop) | N/A | **54.59 Mops/s (Batch 32) / 48.15 Mops/s (E2E)** |
-| **Median Latency ($p50$)** | 78 ns | 43 ns | 4,274–5,229 ns | **89 ns (Combined Mode)** |
-| **4P-4C Contention Scaling** | 0.07 Mops/s (COLLAPSED) | 0.04 Mops/s (COLLAPSED) | < 0.2 Mops/s | **1.69 Mops/s (23× DPDK, 38× Disruptor)** |
-| **Idle CPU Consumption** | 96.7% (Busy-Spin) | 96.3% (Busy-Spin) | VFS Dependent | **0.3% (Green Compute / Passive Futex)** |
+| **1P-1C 64B Throughput** | 6.83 Mops/s | 5.47 Mops/s | ~0.38–0.50 Mops/s | **10.07 Mops/s (Zero-Trust) / 9.58–9.66 Mops/s (Trusted)** |
+| **Vector Batch Throughput** | N/A (Manual Loop) | N/A (Manual Loop) | N/A | **55.54 Mops/s (Batch 32) / 48.15 Mops/s (E2E)** |
+| **Median Latency ($p50$)** | 201 ns | 123 ns | 4,217–4,934 ns | **92 ns (Trusted) / 93 ns (Zero-Trust)** |
+| **4P-4C Contention Scaling** | 0.02 Mops/s (COLLAPSED) | 0.07 Mops/s (COLLAPSED) | < 0.2 Mops/s | **0.98 Mops/s (42× DPDK, 14× Disruptor)** |
+| **Idle CPU Consumption** | 97.6% (Busy-Spin) | 97.4% (Busy-Spin) | VFS Dependent | **0.2% (Green Compute / Passive Futex)** |
 | **Hardware perf IPC** | ~0.70 | ~1.10 | < 0.30 | **1.59 (B-Queue Batch 32)** |
 
 ---
