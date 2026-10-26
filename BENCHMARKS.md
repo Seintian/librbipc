@@ -259,3 +259,48 @@ This verifies that `librbipc`'s 64-byte alignment and strict separation of produ
 | **4P-4C Contention Scaling** | 0.07 Mops/s (COLLAPSED) | 0.04 Mops/s (COLLAPSED) | < 0.2 Mops/s | **1.69 Mops/s (23× DPDK, 38× Disruptor)** |
 | **Idle CPU Consumption** | 96.7% (Busy-Spin) | 96.3% (Busy-Spin) | VFS Dependent | **0.3% (Green Compute / Passive Futex)** |
 | **Hardware perf IPC** | ~0.70 | ~1.10 | < 0.30 | **1.59 (B-Queue Batch 32)** |
+
+---
+
+## 10. Microarchitectural Optimization Empirical Telemetry
+
+Following the systemic application of branchless arithmetic, multi-table slicing-by-8 checksum processing, compiler invariant propagation, and vector loop unswitching, comprehensive regression and throughput benchmarks were executed from clean builds on the reference laptop host in AC Mode.
+
+### 10.1 Before-vs-After Microarchitectural Optimization Matrix
+
+| Subsystem / Evaluation Benchmark | Baseline Metric (Pre-Optimization) | Optimized Metric (Post-Optimization) | Empirical Gain / Delta | Primary Microarchitectural Factor |
+| :--- | :--- | :--- | :--- | :--- |
+| **Software CRC32C Throughput (4 KiB)** | 320.1 MB/s | **1,821.5 MB/s** (peak 2,262 MB/s) | **+469% (5.7× FASTER)** | Slicing-by-8 independent 8-way ILP loads; 0 L1D cache misses |
+| **Software CRC32C Latency (4 KiB)** | 12,720 ns | **2,245 ns** | **-82.3% LATENCY** | Elimination of serial byte-to-byte accumulator data dependencies |
+| **Master Harness Throughput (Zero-Trust)** | 2.95 Mops/s (405.0 MB/s) | **6.08 Mops/s** (835.4 MB/s) | **+106% (2.06× FASTER)** | Branchless range folding and CMOV capacity clamping |
+| **Master Harness Latency (Zero-Trust)** | 338.9 ns/msg | **164.4 ns/msg** | **-51.5% LATENCY** | Elimination of branch target buffer (BTB) flushes |
+| **Tier 3 Packed Mode Throughput** | 3.41 Mops/s (468.9 MB/s) | **6.34 Mops/s** (871.2 MB/s) | **+86.0% (1.86× FASTER)** | Straight-line bitwise shift sequence extraction |
+| **Tier 3 Packed Mode Latency** | 294.1 ns/msg | **157.6 ns/msg** | **-46.4% LATENCY** | Single-cycle register arithmetic replacing conditional branches |
+| **B-Queue Batch Mode (Combined Tier 2+3)** | 29.10 Mops/s (4,001.2 MB/s) | **45.07 Mops/s** (6,189.6 MB/s) | **+54.9% (1.55× FASTER)** | Loop unswitching of format flags and SIMD wrap boundary hints |
+| **B-Queue Batch Latency (Batch 32)** | 34.36 ns/msg | **22.19 ns/msg** | **-35.4% LATENCY** | Amortized store fences and zero branch mispredicts in vector inner loops |
+
+### 10.2 Analysis of Slicing-by-8 Checksum Acceleration
+
+The baseline software CRC32C engine implemented the Sarwate lookup algorithm, requiring 8 sequential single-byte lookups per 64-bit integer. Each lookup depended strictly on the outcome of the preceding XOR operation:
+$$\text{crc}_{i+1} = T[(\text{crc}_i \oplus b_i) \ \& \ \text{0xFF}] \oplus (\text{crc}_i \gg 8)$$
+On modern superscalar pipelines (such as Intel Skylake), this loop incurred an unavoidable latency chain across load and ALU ports. 
+
+Replacing this loop with Kounavis & Berry's 8-table decomposition (`src/platform/rbipc_crc32c_tables.h`) allows the CPU's out-of-order execution engine to calculate memory addresses for all 8 lookups simultaneously. Because the total table footprint is exactly 8 KiB (8 tables $\times$ 256 entries $\times$ 4 bytes), the entire working set resides continuously in the 32 KiB L1 Data Cache. As measured by `bin/bench_crc32c`, software processing bandwidth rose from 320.1 MB/s to **1,821.5–2,262.0 MB/s**, reducing verification latency for 4 KiB frames from 12.72 µs to **2.25 µs**.
+
+### 10.3 Analysis of Branchless Core Fast Paths
+
+In high-frequency queue streaming, small branch prediction perturbations accumulate into severe latency tails. Prior to refactoring, `rbipc_slot_is_vacant_any`, `rbipc_slot_is_ready_any`, and `rbipc_round_up_pow2_32` contained conditional jump sequences.
+
+The refactored implementations:
+1. Replaced ternary descriptor shifts with arithmetic multiplication-shifts (`shll $4`), generating deterministic straight-line execution across packed and unpacked slot formats.
+2. Clamped count-leading-zero operands to non-zero values using conditional move instructions (`cmov`), completely avoiding branch mispredictions and the 14–20 cycle pipeline flush cost.
+3. Substituted multi-branch capacity bounds checks with unsigned arithmetic range folding:
+   $$(\text{capacity} - \text{MIN}) \le (\text{MAX} - \text{MIN}) \quad \land \quad (\text{capacity} \ \& \ (\text{capacity} - 1)) = 0$$
+
+These refactorings caused master verification throughput to double from **2.95 Mops/s to 6.08 Mops/s**, reducing mean per-message latency from **338.9 ns to 164.4 ns**.
+
+### 10.4 Analysis of B-Queue Loop Unswitching
+
+In `rbipc_batch_commit_slots` and `rbipc_batch_release_slots` (`src/io/rbipc_batch.c`), the ring descriptor configuration (`is_packed`, `is_trusted`, `is_cxl`) is static throughout execution. In the unoptimized codebase, these predicates were evaluated inside the loop for every slot index $i \in [0, K-1]$.
+
+By hoisting these invariants outside the loops (loop unswitching), each loop variation executes a uniform, specialized instruction sequence. Combined with `RBIPC_LIKELY` hints on SIMD contiguous buffer wrap checks, B-Queue vector batching throughput advanced from 29.10 Mops/s to **45.07–45.56 Mops/s (6,189–6,257 MB/s)**, achieving an average message transfer latency of **21.95–22.19 ns**.

@@ -101,8 +101,6 @@ static void rbipc_stream_copy_arm64_blocks(uint8_t *RBIPC_RESTRICT d,
 }
 #endif
 
-RBIPC_LEAF
-
 RBIPC_LEAF size_t rbipc_stream_threshold(void) {
   const rbipc_hardware_profile_t *prof = rbipc_get_hardware_profile();
   return (prof && prof->stream_threshold > 0) ? prof->stream_threshold : RBIPC_STREAM_THRESHOLD_DEFAULT;
