@@ -1811,15 +1811,6 @@ RBIPC_API RBIPC_NODISCARD RBIPC_LEAF int
 rbipc_eventfd_drain(const rbipc_ring_t *RBIPC_RESTRICT ring);
 
 /**
- * @brief Retrieve underlying shared memory file descriptor.
- *
- * @param[in] ring Ring buffer handle.
- *
- * @return Non-negative file descriptor on success, or -1 on invalid argument.
- *
- * @see rbipc_attach_fd
- */
-/**
  * @brief Retrieve configured maximum slot payload size in bytes.
  *
  * @param[in] ring Pointer to active ring buffer handle.
@@ -1828,6 +1819,15 @@ rbipc_eventfd_drain(const rbipc_ring_t *RBIPC_RESTRICT ring);
 RBIPC_API RBIPC_NODISCARD RBIPC_PURE RBIPC_LEAF uint32_t
 rbipc_get_slot_size(const rbipc_ring_t *ring);
 
+/**
+ * @brief Retrieve underlying shared memory file descriptor.
+ *
+ * @param[in] ring Ring buffer handle.
+ *
+ * @return Non-negative file descriptor on success, or -1 on invalid argument.
+ *
+ * @see rbipc_attach_fd
+ */
 RBIPC_API RBIPC_NODISCARD RBIPC_PURE RBIPC_LEAF int
 rbipc_get_fd(const rbipc_ring_t *ring);
 

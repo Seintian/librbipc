@@ -17,24 +17,6 @@
 #include <stddef.h>
 
 /**
- * @brief Allocates and initializes a heap-allocated ring buffer runtime handle.
- * @details Allocates a @c struct @c rbipc_ring instance via @c calloc, records all memory
- *          mappings and offsets, populates descriptor metadata, and caches the current process PID.
- *
- * @param[in] fd            Shared memory file descriptor.
- * @param[in] name          Optional POSIX shared memory object name (may be @c NULL for anonymous descriptors).
- * @param[in] hdr           Pointer to the mapped control header in virtual memory.
- * @param[in] slots         Pointer to the array of mapped slot descriptors in virtual memory.
- * @param[in] ctrl_map      Base virtual address of the mapped control region.
- * @param[in] ctrl_map_size Size in bytes of the mapped control region.
- * @param[in] data_map      Base virtual address of the shared data mapping (1x linear for slot queues).
- * @param[in] data_size     Size in bytes of a single circular data buffer.
- * @param[in] roles         Bitmask of active participant role flags (@ref RBIPC_ROLE_PRODUCER).
- * @param[in] is_creator    @c true if this process initialized the shared memory region; @c false otherwise.
- *
- * @return Pointer to the allocated and initialized ring handle, or @c NULL if heap allocation fails.
- */
-/**
  * @brief Initialize and format an open shared memory descriptor into a functional ring buffer.
  *
  * @param[in]  fd         Open writable file descriptor (memfd, shm, or CXL DAX partition).
@@ -53,6 +35,24 @@ int rbipc_ring_init_and_format_fd(int fd, const char *name, size_t capacity,
                                   uint32_t roles, size_t page_size,
                                   rbipc_ring_t **out_ring);
 
+/**
+ * @brief Allocates and initializes a heap-allocated ring buffer runtime handle.
+ * @details Allocates a @c struct @c rbipc_ring instance via @c calloc, records all memory
+ *          mappings and offsets, populates descriptor metadata, and caches the current process PID.
+ *
+ * @param[in] fd            Shared memory file descriptor.
+ * @param[in] name          Optional POSIX shared memory object name (may be @c NULL for anonymous descriptors).
+ * @param[in] hdr           Pointer to the mapped control header in virtual memory.
+ * @param[in] slots         Pointer to the array of mapped slot descriptors in virtual memory.
+ * @param[in] ctrl_map      Base virtual address of the mapped control region.
+ * @param[in] ctrl_map_size Size in bytes of the mapped control region.
+ * @param[in] data_map      Base virtual address of the shared data mapping (1x linear for slot queues).
+ * @param[in] data_size     Size in bytes of a single circular data buffer.
+ * @param[in] roles         Bitmask of active participant role flags (@ref RBIPC_ROLE_PRODUCER).
+ * @param[in] is_creator    @c true if this process initialized the shared memory region; @c false otherwise.
+ *
+ * @return Pointer to the allocated and initialized ring handle, or @c NULL if heap allocation fails.
+ */
 RBIPC_INTERNAL RBIPC_NODISCARD
 rbipc_ring_t *rbipc_ring_alloc_handle(int fd, const char * RBIPC_RESTRICT name,
                                       rbipc_shm_header_t *hdr,
