@@ -1,5 +1,5 @@
 {
-  "timestamp": 1792742792,
+  "timestamp": 1793008521,
   "hardware": {
     "profile": "laptop",
     "cpu": "Intel(R) Core(TM) i5-6300U CPU @ 2.40GHz",
@@ -9,67 +9,67 @@
     "kernel": "Linux 7.2.9-2-cachyos x86_64"
   },
   "throughput_64b": [
-    {"name": "librbipc (Zero-Trust 64B)", "ops_sec": 11930966.00, "mb_sec": 728.21},
-    {"name": "librbipc (Trusted 64B)", "ops_sec": 15029505.17, "mb_sec": 917.33},
-    {"name": "librbipc (Combined 64B)", "ops_sec": 10474018.46, "mb_sec": 639.28},
-    {"name": "librbipc (Trusted 8B Ptr)", "ops_sec": 11754780.70, "mb_sec": 717.45},
-    {"name": "rte_ring (DPDK alg)", "ops_sec": 12612910.78, "mb_sec": 769.83},
-    {"name": "LMAX Disruptor", "ops_sec": 28291880.54, "mb_sec": 1726.80},
-    {"name": "POSIX mqueue", "ops_sec": 481577.45, "mb_sec": 29.39},
-    {"name": "AF_UNIX DGRAM", "ops_sec": 460106.94, "mb_sec": 28.08}
+    {"name": "librbipc (Zero-Trust 64B)", "ops_sec": 10564357.48, "mb_sec": 644.80},
+    {"name": "librbipc (Trusted 64B)", "ops_sec": 22430677.99, "mb_sec": 1369.06},
+    {"name": "librbipc (Combined 64B)", "ops_sec": 10486360.55, "mb_sec": 640.04},
+    {"name": "librbipc (Trusted 8B Ptr)", "ops_sec": 25413910.00, "mb_sec": 1551.14},
+    {"name": "rte_ring (DPDK alg)", "ops_sec": 25562130.42, "mb_sec": 1560.19},
+    {"name": "LMAX Disruptor", "ops_sec": 14642844.91, "mb_sec": 893.73},
+    {"name": "POSIX mqueue", "ops_sec": 517285.38, "mb_sec": 31.57},
+    {"name": "AF_UNIX DGRAM", "ops_sec": 457926.26, "mb_sec": 27.95}
   ],
   "latency_distribution": [
-    {"name": "librbipc (Zero-Trust)", "min_ns": 144, "p50_ns": 184, "p90_ns": 210, "p99_ns": 302, "p999_ns": 8352, "max_ns": 254719},
-    {"name": "librbipc (Trusted)", "min_ns": 90, "p50_ns": 181, "p90_ns": 207, "p99_ns": 288, "p999_ns": 7964, "max_ns": 483377},
-    {"name": "librbipc (Combined)", "min_ns": 65, "p50_ns": 89, "p90_ns": 92, "p99_ns": 101, "p999_ns": 5559, "max_ns": 10342},
-    {"name": "rte_ring (DPDK alg)", "min_ns": 49, "p50_ns": 78, "p90_ns": 205, "p99_ns": 258, "p999_ns": 450, "max_ns": 525332},
-    {"name": "LMAX Disruptor", "min_ns": 35, "p50_ns": 43, "p90_ns": 73, "p99_ns": 100, "p999_ns": 153, "max_ns": 83499},
-    {"name": "POSIX mqueue", "min_ns": 2898, "p50_ns": 4274, "p90_ns": 5657, "p99_ns": 32766, "p999_ns": 313012, "max_ns": 991144},
-    {"name": "AF_UNIX DGRAM", "min_ns": 3233, "p50_ns": 5229, "p90_ns": 6408, "p99_ns": 14745, "p999_ns": 299895, "max_ns": 645367}
+    {"name": "librbipc (Zero-Trust)", "min_ns": 155, "p50_ns": 191, "p90_ns": 215, "p99_ns": 369, "p999_ns": 12727, "max_ns": 217417},
+    {"name": "librbipc (Trusted)", "min_ns": 156, "p50_ns": 198, "p90_ns": 215, "p99_ns": 290, "p999_ns": 7623, "max_ns": 181402},
+    {"name": "librbipc (Combined)", "min_ns": 153, "p50_ns": 200, "p90_ns": 228, "p99_ns": 322, "p999_ns": 6497, "max_ns": 37378},
+    {"name": "rte_ring (DPDK alg)", "min_ns": 49, "p50_ns": 80, "p90_ns": 211, "p99_ns": 260, "p999_ns": 3520, "max_ns": 560320},
+    {"name": "LMAX Disruptor", "min_ns": 43, "p50_ns": 44, "p90_ns": 75, "p99_ns": 80, "p999_ns": 141, "max_ns": 20558},
+    {"name": "POSIX mqueue", "min_ns": 3274, "p50_ns": 4320, "p90_ns": 5115, "p99_ns": 15850, "p999_ns": 296304, "max_ns": 625990},
+    {"name": "AF_UNIX DGRAM", "min_ns": 3780, "p50_ns": 5489, "p90_ns": 6539, "p99_ns": 13575, "p999_ns": 407972, "max_ns": 1149855}
   ],
   "payload_scaling_value": [
-    {"size": 64, "librbipc": 9108579.74, "rte_ring": 11304486.92, "disruptor": 35994269.71, "mqueue": 452420.50, "af_unix": 548523.74},
-    {"size": 256, "librbipc": 6192765.30, "rte_ring": 10840631.34, "disruptor": 35281395.59, "mqueue": 339193.58, "af_unix": 415485.09},
-    {"size": 1024, "librbipc": 5011359.50, "rte_ring": 7351551.95, "disruptor": 10617204.65, "mqueue": 324666.39, "af_unix": 451080.86},
-    {"size": 4096, "librbipc": 1498198.49, "rte_ring": 2449760.92, "disruptor": 2577331.54, "mqueue": 369535.53, "af_unix": 373873.32},
-    {"size": 16384, "librbipc": 685576.14, "rte_ring": 1007362.10, "disruptor": 957538.80, "mqueue": 0.00, "af_unix": 219530.05},
-    {"size": 65536, "librbipc": 106080.42, "rte_ring": 211490.89, "disruptor": 197043.21, "mqueue": 0.00, "af_unix": 83144.55}
+    {"size": 64, "librbipc": 2490285.09, "rte_ring": 23029906.64, "disruptor": 43019819.23, "mqueue": 417561.47, "af_unix": 372206.38},
+    {"size": 256, "librbipc": 2174463.51, "rte_ring": 8843785.58, "disruptor": 16345624.97, "mqueue": 412957.72, "af_unix": 397427.93},
+    {"size": 1024, "librbipc": 4188376.42, "rte_ring": 6755362.32, "disruptor": 9001442.93, "mqueue": 424027.67, "af_unix": 354285.17},
+    {"size": 4096, "librbipc": 1727957.01, "rte_ring": 2576312.30, "disruptor": 2103405.08, "mqueue": 361466.78, "af_unix": 344312.71},
+    {"size": 16384, "librbipc": 538754.26, "rte_ring": 1044815.97, "disruptor": 957634.49, "mqueue": 0.00, "af_unix": 230794.98},
+    {"size": 65536, "librbipc": 58772.04, "rte_ring": 198291.64, "disruptor": 217249.99, "mqueue": 0.00, "af_unix": 60426.54}
   ],
   "payload_scaling_reference": [
-    {"size": 64, "librbipc": 20270797.58, "rte_ring": 9602259.99, "disruptor": 43517994.69},
-    {"size": 256, "librbipc": 19358142.08, "rte_ring": 27252003.36, "disruptor": 12962787.73},
-    {"size": 1024, "librbipc": 18369386.32, "rte_ring": 29150439.59, "disruptor": 32034084.27},
-    {"size": 4096, "librbipc": 18006062.64, "rte_ring": 27616451.67, "disruptor": 13839527.91},
-    {"size": 16384, "librbipc": 19274080.31, "rte_ring": 31164103.94, "disruptor": 17064162.10},
-    {"size": 65536, "librbipc": 11582157.45, "rte_ring": 23322663.21, "disruptor": 23709801.51}
+    {"size": 64, "librbipc": 19014099.91, "rte_ring": 30250504.43, "disruptor": 21591044.03},
+    {"size": 256, "librbipc": 10518327.40, "rte_ring": 2975073.50, "disruptor": 12469224.40},
+    {"size": 1024, "librbipc": 1609925.90, "rte_ring": 27679745.35, "disruptor": 12248650.05},
+    {"size": 4096, "librbipc": 14277688.19, "rte_ring": 12511549.72, "disruptor": 9016457.74},
+    {"size": 16384, "librbipc": 5430712.53, "rte_ring": 33513468.23, "disruptor": 47234201.34},
+    {"size": 65536, "librbipc": 9404595.09, "rte_ring": 25840394.22, "disruptor": 40516586.48}
   ],
   "payload_scaling": [
-    {"size": 64, "librbipc": 9108579.74, "rte_ring": 11304486.92, "disruptor": 35994269.71, "mqueue": 452420.50, "af_unix": 548523.74},
-    {"size": 256, "librbipc": 6192765.30, "rte_ring": 10840631.34, "disruptor": 35281395.59, "mqueue": 339193.58, "af_unix": 415485.09},
-    {"size": 1024, "librbipc": 5011359.50, "rte_ring": 7351551.95, "disruptor": 10617204.65, "mqueue": 324666.39, "af_unix": 451080.86},
-    {"size": 4096, "librbipc": 1498198.49, "rte_ring": 2449760.92, "disruptor": 2577331.54, "mqueue": 369535.53, "af_unix": 373873.32},
-    {"size": 16384, "librbipc": 685576.14, "rte_ring": 1007362.10, "disruptor": 957538.80, "mqueue": 0.00, "af_unix": 219530.05},
-    {"size": 65536, "librbipc": 106080.42, "rte_ring": 211490.89, "disruptor": 197043.21, "mqueue": 0.00, "af_unix": 83144.55}
+    {"size": 64, "librbipc": 2490285.09, "rte_ring": 23029906.64, "disruptor": 43019819.23, "mqueue": 417561.47, "af_unix": 372206.38},
+    {"size": 256, "librbipc": 2174463.51, "rte_ring": 8843785.58, "disruptor": 16345624.97, "mqueue": 412957.72, "af_unix": 397427.93},
+    {"size": 1024, "librbipc": 4188376.42, "rte_ring": 6755362.32, "disruptor": 9001442.93, "mqueue": 424027.67, "af_unix": 354285.17},
+    {"size": 4096, "librbipc": 1727957.01, "rte_ring": 2576312.30, "disruptor": 2103405.08, "mqueue": 361466.78, "af_unix": 344312.71},
+    {"size": 16384, "librbipc": 538754.26, "rte_ring": 1044815.97, "disruptor": 957634.49, "mqueue": 0.00, "af_unix": 230794.98},
+    {"size": 65536, "librbipc": 58772.04, "rte_ring": 198291.64, "disruptor": 217249.99, "mqueue": 0.00, "af_unix": 60426.54}
   ],
   "idle_cpu": {
-    "rte_ring": 96.7,
-    "disruptor": 96.3,
-    "mqueue": 95.8,
-    "af_unix": 97.7,
-    "librbipc": 0.3
+    "rte_ring": 94.9,
+    "disruptor": 98.5,
+    "mqueue": 98.8,
+    "af_unix": 97.8,
+    "librbipc": 0.2
   },
   "mpmc_scalability": [
-    {"config": "1P-1C", "librbipc_zero_trust": 8860067.29, "librbipc_trusted": 9468800.30, "librbipc_combined": 7449229.03, "librbipc": 7449229.03, "rte_ring": 9081794.27, "disruptor": 10668000.31},
-    {"config": "2P-2C", "librbipc_zero_trust": 6628304.69, "librbipc_trusted": 8952412.02, "librbipc_combined": 6730650.02, "librbipc": 6730650.02, "rte_ring": 8291387.21, "disruptor": 10608956.21},
-    {"config": "4P-2C", "librbipc_zero_trust": 1972165.41, "librbipc_trusted": 2687363.74, "librbipc_combined": 1189737.25, "librbipc": 1189737.25, "rte_ring": 7464518.72, "disruptor": 59354.98},
-    {"config": "4P-4C", "librbipc_zero_trust": 947373.48, "librbipc_trusted": 1690387.25, "librbipc_combined": 1642688.43, "librbipc": 1642688.43, "rte_ring": 73868.14, "disruptor": 44013.47}
+    {"config": "1P-1C", "librbipc_zero_trust": 5484054.45, "librbipc_trusted": 6329115.53, "librbipc_combined": 9258144.85, "librbipc": 9258144.85, "rte_ring": 9748500.39, "disruptor": 9564395.35},
+    {"config": "2P-2C", "librbipc_zero_trust": 1359588.62, "librbipc_trusted": 1059888.15, "librbipc_combined": 2980870.44, "librbipc": 2980870.44, "rte_ring": 587577.33, "disruptor": 8626450.04},
+    {"config": "4P-2C", "librbipc_zero_trust": 1353045.18, "librbipc_trusted": 963308.21, "librbipc_combined": 771644.93, "librbipc": 771644.93, "rte_ring": 345030.52, "disruptor": 282251.13},
+    {"config": "4P-4C", "librbipc_zero_trust": 760548.14, "librbipc_trusted": 1226008.46, "librbipc_combined": 675773.95, "librbipc": 675773.95, "rte_ring": 8758777.83, "disruptor": 36026.07}
   ],
   "batch_scaling": [
-    {"batch_size": 1, "ops_sec": 10848222.52, "librbipc": 10848222.52, "rte_ring": 36176243.42, "disruptor": 41389717.72},
-    {"batch_size": 4, "ops_sec": 22371059.37, "librbipc": 22371059.37, "rte_ring": 115209762.41, "disruptor": 77714932.30},
-    {"batch_size": 8, "ops_sec": 25400721.79, "librbipc": 25400721.79, "rte_ring": 210458525.99, "disruptor": 202464806.56},
-    {"batch_size": 16, "ops_sec": 25093089.09, "librbipc": 25093089.09, "rte_ring": 223367352.18, "disruptor": 251854911.42},
-    {"batch_size": 32, "ops_sec": 33130541.29, "librbipc": 33130541.29, "rte_ring": 457048835.67, "disruptor": 445525586.53},
-    {"batch_size": 64, "ops_sec": 37023722.21, "librbipc": 37023722.21, "rte_ring": 555265583.53, "disruptor": 523042643.67}
+    {"batch_size": 1, "ops_sec": 3989262.98, "librbipc": 3989262.98, "rte_ring": 26277072.28, "disruptor": 14543908.13},
+    {"batch_size": 4, "ops_sec": 18470266.66, "librbipc": 18470266.66, "rte_ring": 116645281.70, "disruptor": 113529542.66},
+    {"batch_size": 8, "ops_sec": 22093588.44, "librbipc": 22093588.44, "rte_ring": 96481326.04, "disruptor": 217248675.87},
+    {"batch_size": 16, "ops_sec": 25067833.56, "librbipc": 25067833.56, "rte_ring": 260187647.33, "disruptor": 309035900.70},
+    {"batch_size": 32, "ops_sec": 41765215.17, "librbipc": 41765215.17, "rte_ring": 428236180.82, "disruptor": 450891186.43},
+    {"batch_size": 64, "ops_sec": 45490565.71, "librbipc": 45490565.71, "rte_ring": 363287607.53, "disruptor": 320536449.80}
   ]
 }

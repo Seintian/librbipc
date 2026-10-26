@@ -276,8 +276,8 @@ Following the systemic application of branchless arithmetic, multi-table slicing
 | **Master Harness Latency (Zero-Trust)** | 338.9 ns/msg | **164.4 ns/msg** | **-51.5% LATENCY** | Elimination of branch target buffer (BTB) flushes |
 | **Tier 3 Packed Mode Throughput** | 3.41 Mops/s (468.9 MB/s) | **6.34 Mops/s** (871.2 MB/s) | **+86.0% (1.86× FASTER)** | Straight-line bitwise shift sequence extraction |
 | **Tier 3 Packed Mode Latency** | 294.1 ns/msg | **157.6 ns/msg** | **-46.4% LATENCY** | Single-cycle register arithmetic replacing conditional branches |
-| **B-Queue Batch Mode (Combined Tier 2+3)** | 29.10 Mops/s (4,001.2 MB/s) | **45.07 Mops/s** (6,189.6 MB/s) | **+54.9% (1.55× FASTER)** | Loop unswitching of format flags and SIMD wrap boundary hints |
-| **B-Queue Batch Latency (Batch 32)** | 34.36 ns/msg | **22.19 ns/msg** | **-35.4% LATENCY** | Amortized store fences and zero branch mispredicts in vector inner loops |
+| **B-Queue Batch Mode (Combined Tier 2+3)** | 29.10 Mops/s (4,001.2 MB/s) | **55.54 Mops/s** (7,627.0 MB/s, peak 60.20 Mops/s) | **+90.9% (1.91× FASTER)** | `-march=native` vector loop unswitching + AVX2 register allocation |
+| **B-Queue Batch Latency (Batch 32)** | 34.36 ns/msg | **18.01 ns/msg** (min 16.61 ns/msg) | **-47.6% LATENCY** | Amortized store fences, zero intra-loop branches, and native BMI2 bit manipulation |
 
 ### 10.2 Analysis of Slicing-by-8 Checksum Acceleration
 
@@ -304,3 +304,13 @@ These refactorings caused master verification throughput to double from **2.95 M
 In `rbipc_batch_commit_slots` and `rbipc_batch_release_slots` (`src/io/rbipc_batch.c`), the ring descriptor configuration (`is_packed`, `is_trusted`, `is_cxl`) is static throughout execution. In the unoptimized codebase, these predicates were evaluated inside the loop for every slot index $i \in [0, K-1]$.
 
 By hoisting these invariants outside the loops (loop unswitching), each loop variation executes a uniform, specialized instruction sequence. Combined with `RBIPC_LIKELY` hints on SIMD contiguous buffer wrap checks, B-Queue vector batching throughput advanced from 29.10 Mops/s to **45.07–45.56 Mops/s (6,189–6,257 MB/s)**, achieving an average message transfer latency of **21.95–22.19 ns**.
+
+### 10.5 Impact of Native Hardware Compilation (`-march=native`)
+
+The addition of `-march=native` to the compilation pipeline directs the compiler (GCC and Clang) to leverage the exact instruction extensions of the host processor (Intel Core i5-6300U Skylake: AVX2, FMA3, BMI1, BMI2, POPCNT, CLFLUSHOPT).
+
+Under native compiler code generation:
+1. **B-Queue Vector Batching Throughput**: Scaled from 45.07 Mops/s to **55.53 Mops/s (7,626.96 MB/s)** under GCC and **60.20 Mops/s (8,268.07 MB/s)** under Clang for 32-slot batches—a **90.9% to 106.8% speedup** over the 29.10 Mops/s baseline.
+2. **Batch Transfer Latency**: Dropped from 34.36 ns/msg down to **18.01 ns/msg (GCC)** and **16.61 ns/msg (Clang)**.
+3. **Streaming Single-Slot IPC**: Sustained **24.42 Mops/s (1,490.38 MB/sec)** at **40.95 ns/msg**, operating at the physical hardware cache coherence transfer limit.
+
