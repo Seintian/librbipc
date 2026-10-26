@@ -483,13 +483,13 @@ int rbipc_commit_write(rbipc_ring_t *RBIPC_RESTRICT ring, uint64_t ticket,
     rbipc_slot_commit(slot, ticket, written_len);
   }
 
-  if (ring->is_cxl) {
+  if (RBIPC_UNLIKELY(ring->is_cxl)) {
     rbipc_clwb(&slot->sequence);
   }
-  if (ring->is_isolated) {
+  if (RBIPC_UNLIKELY(ring->is_isolated)) {
     rbipc_mpk_deny_write(ring);
   }
-  if (ring->is_wait_free) {
+  if (RBIPC_UNLIKELY(ring->is_wait_free)) {
     rbipc_waitfree_cooperative_help(ring);
   }
 
@@ -700,10 +700,10 @@ int rbipc_read_release(rbipc_ring_t *RBIPC_RESTRICT ring, uint64_t ticket) {
     released = rbipc_slot_release_ex(slot, ticket, cap, expected_pid);
   }
 
-  if (ring->is_cxl) {
+  if (RBIPC_UNLIKELY(ring->is_cxl)) {
     rbipc_clwb(&slot->sequence);
   }
-  if (ring->is_wait_free) {
+  if (RBIPC_UNLIKELY(ring->is_wait_free)) {
     rbipc_waitfree_cooperative_help(ring);
   }
 

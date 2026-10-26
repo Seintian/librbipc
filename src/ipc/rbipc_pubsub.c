@@ -70,7 +70,7 @@ static void rbipc_pubsub_commit_slot_payload(rbipc_ring_t *ring,
  */
 RBIPC_INLINE bool rbipc_sub_clamp_cursor(rbipc_sub_t *sub, uint64_t head,
                                          uint32_t cap) {
-  if (head > cap && sub->cursor < (head - cap)) {
+  if (RBIPC_UNLIKELY(head > cap && sub->cursor < (head - cap))) {
     sub->cursor = head - cap;
     return true;
   }
@@ -284,7 +284,7 @@ int rbipc_sub_poll(rbipc_sub_t *sub, const void **out_buf, uint32_t *out_len,
   const rbipc_slot_t *slot = &slots[sub->cursor & mask];
   uint64_t seq = atomic_load_explicit(&slot->sequence, memory_order_acquire);
 
-  if (rbipc_slot_is_ready_any(seq, sub->cursor, ring->is_packed)) {
+  if (RBIPC_LIKELY(rbipc_slot_is_ready_any(seq, sub->cursor, ring->is_packed))) {
     uint32_t state = ring->is_packed
                          ? rbipc_slot_unpack_state(seq)
                          : atomic_load_explicit(&slot->state, memory_order_acquire);
