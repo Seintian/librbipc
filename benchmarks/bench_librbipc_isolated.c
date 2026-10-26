@@ -18,6 +18,7 @@
 #include <stdbool.h>
 #include <string.h>
 #include <pthread.h>
+#include <stdatomic.h>
 #include <unistd.h>
 #include <sys/wait.h>
 #include <time.h>
@@ -146,6 +147,64 @@ static void *producer_fn(void *arg) {
     return NULL;
 }
 
+/* --- MPMC Consumer Worker --- */
+static void *consumer_mpmc_fn(void *arg) {
+    bench_ctx_t *ctx = (bench_ctx_t *)arg;
+    rbipc_ring_t *r = ctx->ring;
+    uint64_t iters = ctx->iters;
+    char sink[64];
+
+    for (uint64_t n = 0; n < iters; n++) {
+        const void *buf = NULL;
+        uint32_t len = 0;
+        uint64_t ticket = 0;
+
+        while (rbipc_read_acquire(r, &buf, &len, &ticket) != RBIPC_OK) {
+            __asm__ volatile("pause" ::: "memory");
+        }
+        if (ctx->mode == BENCH_MODE_COPY && buf) {
+            memcpy(sink, buf, len > sizeof(sink) ? sizeof(sink) : len);
+        } else if (ctx->mode == BENCH_MODE_PTR && buf) {
+            uintptr_t val = *(const uintptr_t *)buf;
+            (void)val;
+        }
+        rbipc_read_release(r, ticket);
+    }
+    return NULL;
+}
+
+/* --- MPMC Producer Worker --- */
+static void *producer_mpmc_fn(void *arg) {
+    bench_ctx_t *ctx = (bench_ctx_t *)arg;
+    rbipc_ring_t *r = ctx->ring;
+    uint64_t iters = ctx->iters;
+
+    if (ctx->mode == BENCH_MODE_PTR) {
+        for (uint64_t i = 0; i < iters; i++) {
+            void *buf = NULL;
+            uint64_t ticket = 0;
+            while (rbipc_reserve_write(r, 8, &buf, &ticket) != RBIPC_OK) {
+                __asm__ volatile("pause" ::: "memory");
+            }
+            *(uintptr_t *)buf = (uintptr_t)i;
+            rbipc_commit_write(r, ticket, 8);
+        }
+    } else {
+        char payload[64];
+        memset(payload, 0x5A, sizeof(payload));
+        for (uint64_t i = 0; i < iters; i++) {
+            void *buf = NULL;
+            uint64_t ticket = 0;
+            while (rbipc_reserve_write(r, 64, &buf, &ticket) != RBIPC_OK) {
+                __asm__ volatile("pause" ::: "memory");
+            }
+            memcpy(buf, payload, 64);
+            rbipc_commit_write(r, ticket, 64);
+        }
+    }
+    return NULL;
+}
+
 int main(int argc, char **argv) {
     bench_mode_t mode = BENCH_MODE_PTR;
     uint64_t iters = 1000000ULL;
@@ -153,6 +212,8 @@ int main(int argc, char **argv) {
     bool use_fork = false;
     bool trusted = false;
     bool packed = false;
+    int num_prods = 1;
+    int num_cons = 1;
 
     for (int i = 1; i < argc; i++) {
         if (strcmp(argv[i], "--ptr") == 0) {
@@ -173,6 +234,17 @@ int main(int argc, char **argv) {
             packed = true;
         } else if (strcmp(argv[i], "--iters") == 0 && i + 1 < argc) {
             iters = strtoull(argv[++i], NULL, 10);
+        } else if (strcmp(argv[i], "--mpmc") == 0 && i + 2 < argc) {
+            num_prods = atoi(argv[++i]);
+            num_cons = atoi(argv[++i]);
+            if (num_prods < 1) num_prods = 1;
+            if (num_cons < 1) num_cons = 1;
+        } else if (strcmp(argv[i], "--prods") == 0 && i + 1 < argc) {
+            num_prods = atoi(argv[++i]);
+            if (num_prods < 1) num_prods = 1;
+        } else if (strcmp(argv[i], "--cons") == 0 && i + 1 < argc) {
+            num_cons = atoi(argv[++i]);
+            if (num_cons < 1) num_cons = 1;
         }
     }
 
@@ -186,6 +258,9 @@ int main(int argc, char **argv) {
     printf("   Mode       : %s%s%s\n", mode_str, trusted ? " [TRUSTED]" : "", packed ? " [PACKED]" : "");
     printf("   Policy     : %s\n", pol_str);
     printf("   Iterations : %lu\n", (unsigned long)iters);
+    if (num_prods > 1 || num_cons > 1) {
+        printf("   Topology   : MPMC (%dP - %dC)\n", num_prods, num_cons);
+    }
     printf("   Model      : %s\n", use_fork ? "Multi-Process (fork)" : "Multi-Thread (pthread)");
     printf("======================================================================\n");
 
@@ -227,6 +302,55 @@ int main(int argc, char **argv) {
             close(sync_pipe[0]);
             waitpid(pid, NULL, 0);
         }
+    } else if (num_prods > 1 || num_cons > 1) {
+        pthread_t *prod_ths = malloc((size_t)num_prods * sizeof(pthread_t));
+        pthread_t *cons_ths = malloc((size_t)num_cons * sizeof(pthread_t));
+        bench_ctx_t *p_ctxs = malloc((size_t)num_prods * sizeof(bench_ctx_t));
+        bench_ctx_t *c_ctxs = malloc((size_t)num_cons * sizeof(bench_ctx_t));
+        assert(prod_ths && cons_ths && p_ctxs && c_ctxs);
+
+        uint64_t iters_p = iters / (uint64_t)num_prods;
+        uint64_t total_msgs = iters_p * (uint64_t)num_prods;
+        uint64_t iters_c = total_msgs / (uint64_t)num_cons;
+        total_msgs = iters_c * (uint64_t)num_cons;
+        iters_p = total_msgs / (uint64_t)num_prods;
+        iters = total_msgs;
+
+        for (int i = 0; i < num_prods; i++) {
+            p_ctxs[i] = (bench_ctx_t){
+                .ring = rp,
+                .iters = iters_p,
+                .mode = mode,
+                .batch_size = 32
+            };
+        }
+        for (int i = 0; i < num_cons; i++) {
+            c_ctxs[i] = (bench_ctx_t){
+                .ring = rc,
+                .iters = iters_c,
+                .mode = mode,
+                .batch_size = 32
+            };
+        }
+
+        for (int i = 0; i < num_cons; i++) {
+            pthread_create(&cons_ths[i], NULL, consumer_mpmc_fn, &c_ctxs[i]);
+        }
+        for (int i = 0; i < num_prods; i++) {
+            pthread_create(&prod_ths[i], NULL, producer_mpmc_fn, &p_ctxs[i]);
+        }
+
+        for (int i = 0; i < num_prods; i++) {
+            pthread_join(prod_ths[i], NULL);
+        }
+        for (int i = 0; i < num_cons; i++) {
+            pthread_join(cons_ths[i], NULL);
+        }
+
+        free(prod_ths);
+        free(cons_ths);
+        free(p_ctxs);
+        free(c_ctxs);
     } else {
         pthread_t cons_th;
         pthread_create(&cons_th, NULL, consumer_fn, &cons_ctx);
