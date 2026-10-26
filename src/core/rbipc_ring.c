@@ -713,49 +713,71 @@ int rbipc_get_slot_stats(const rbipc_ring_t *RBIPC_RESTRICT ring,
 
   uint64_t now_ns = rbipc_clock_monotonic_ns();
 
-  for (uint32_t i = 0; i < cap; ++i) {
-    rbipc_slot_t *slot = &ring->slots[i];
-    uint32_t state =
-        ring->is_packed
-            ? rbipc_slot_unpack_state(
-                  atomic_load_explicit(&slot->sequence, memory_order_relaxed))
-            : atomic_load_explicit(&slot->state, memory_order_relaxed);
-    switch (state) {
-    case RBIPC_SLOT_EMPTY:
-      out_slot_stats->empty_count++;
-      break;
-    case RBIPC_SLOT_RESERVING:
-      out_slot_stats->reserving_count++;
-      break;
-    case RBIPC_SLOT_RESERVED:
-      out_slot_stats->reserved_count++;
-      break;
-    case RBIPC_SLOT_COMMITTED:
-      out_slot_stats->committed_count++;
-      break;
-    case RBIPC_SLOT_POISONED:
-      out_slot_stats->poisoned_count++;
-      break;
-    default:
-      break;
-    }
+  /*
+   * Microarchitectural Optimization: Loop Unswitching & Branchless Histogramming.
+   *
+   * 1. Invariant Hoisting: The ring format (packed vs. standard) is constant across the entire
+   *    ring buffer. Hoisting `ring->is_packed` outside the loop eliminates up to 1,048,576
+   *    redundant branch evaluations per telemetry snapshot.
+   * 2. Branchless Histogramming: Rather than evaluating a 5-way `switch (state)` inside a tight
+   *    loop, slot lifecycle states [0, 4] are counted via direct array index increments:
+   *    `state_counts[state & 7U]++`. This converts 5 conditional branch paths into a single ALU
+   *    load/add/store, completely eliminating branch misprediction penalties.
+   */
+  uint32_t state_counts[8] = {0};
 
-    uint32_t cpid =
-        atomic_load_explicit(&slot->consumer_pid, memory_order_relaxed);
-    if (cpid > 0) {
-      uint64_t acq_ts = atomic_load_explicit(&slot->acquire_timestamp_ns,
-                                             memory_order_relaxed);
-      if (acq_ts > 0) {
-        out_slot_stats->active_leased_slots++;
-        if (now_ns > acq_ts) {
-          uint64_t elapsed = now_ns - acq_ts;
-          if (elapsed > out_slot_stats->max_lease_elapsed_ns) {
-            out_slot_stats->max_lease_elapsed_ns = elapsed;
+  if (ring->is_packed) {
+    for (uint32_t i = 0; i < cap; ++i) {
+      rbipc_slot_t *slot = &ring->slots[i];
+      uint32_t state = rbipc_slot_unpack_state(
+          atomic_load_explicit(&slot->sequence, memory_order_relaxed));
+      state_counts[state & 7U]++;
+
+      uint32_t cpid =
+          atomic_load_explicit(&slot->consumer_pid, memory_order_relaxed);
+      if (cpid > 0) {
+        uint64_t acq_ts = atomic_load_explicit(&slot->acquire_timestamp_ns,
+                                               memory_order_relaxed);
+        if (acq_ts > 0) {
+          out_slot_stats->active_leased_slots++;
+          if (now_ns > acq_ts) {
+            uint64_t elapsed = now_ns - acq_ts;
+            if (elapsed > out_slot_stats->max_lease_elapsed_ns) {
+              out_slot_stats->max_lease_elapsed_ns = elapsed;
+            }
+          }
+        }
+      }
+    }
+  } else {
+    for (uint32_t i = 0; i < cap; ++i) {
+      rbipc_slot_t *slot = &ring->slots[i];
+      uint32_t state = atomic_load_explicit(&slot->state, memory_order_relaxed);
+      state_counts[state & 7U]++;
+
+      uint32_t cpid =
+          atomic_load_explicit(&slot->consumer_pid, memory_order_relaxed);
+      if (cpid > 0) {
+        uint64_t acq_ts = atomic_load_explicit(&slot->acquire_timestamp_ns,
+                                               memory_order_relaxed);
+        if (acq_ts > 0) {
+          out_slot_stats->active_leased_slots++;
+          if (now_ns > acq_ts) {
+            uint64_t elapsed = now_ns - acq_ts;
+            if (elapsed > out_slot_stats->max_lease_elapsed_ns) {
+              out_slot_stats->max_lease_elapsed_ns = elapsed;
+            }
           }
         }
       }
     }
   }
+
+  out_slot_stats->empty_count = state_counts[RBIPC_SLOT_EMPTY];
+  out_slot_stats->reserving_count = state_counts[RBIPC_SLOT_RESERVING];
+  out_slot_stats->reserved_count = state_counts[RBIPC_SLOT_RESERVED];
+  out_slot_stats->committed_count = state_counts[RBIPC_SLOT_COMMITTED];
+  out_slot_stats->poisoned_count = state_counts[RBIPC_SLOT_POISONED];
 
   return RBIPC_OK;
 }

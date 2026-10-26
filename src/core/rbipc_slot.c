@@ -36,6 +36,19 @@ RBIPC_INLINE void rbipc_slot_init_single(rbipc_slot_t *slot, uint32_t index) {
   atomic_init(&slot->acquire_timestamp_ns, 0);
 }
 
+/**
+ * @brief Initialize all slot control descriptors in shared memory.
+ *
+ * @details Microarchitectural Optimization: Loop Unswitching (Invariant Hoisting).
+ * The descriptor layout boolean @p is_packed is structurally invariant across the entire ring buffer.
+ * Evaluating `if (is_packed)` inside the loop creates @p capacity redundant branch evaluations and
+ * prevents SIMD auto-vectorization. Hoisting the invariant branch outside produces two specialized,
+ * branchless loops that can be unrolled and vectorized by the compiler backend.
+ *
+ * @param[out] slots     Direct pointer to slot descriptor table.
+ * @param[in]  capacity  Total number of slots in the ring buffer.
+ * @param[in]  is_packed True if ring operates in packed 64-bit descriptor mode; false otherwise.
+ */
 RBIPC_LEAF
 void rbipc_slot_init_table_ex(rbipc_slot_t *RBIPC_RESTRICT slots,
                               uint32_t capacity, bool is_packed) {
@@ -43,15 +56,17 @@ void rbipc_slot_init_table_ex(rbipc_slot_t *RBIPC_RESTRICT slots,
     return;
   rbipc_slot_t *s =
       (rbipc_slot_t *)RBIPC_ASSUME_ALIGNED(slots, RBIPC_CACHE_LINE);
-  for (uint32_t i = 0; i < capacity; ++i) {
-    if (is_packed) {
+  if (is_packed) {
+    for (uint32_t i = 0; i < capacity; ++i) {
       atomic_init(&s[i].sequence, rbipc_slot_pack(i, 0, RBIPC_SLOT_EMPTY));
       atomic_init(&s[i].state, RBIPC_SLOT_EMPTY);
       atomic_init(&s[i].producer_pid, 0);
       atomic_init(&s[i].len, 0);
       atomic_init(&s[i].consumer_pid, 0);
       atomic_init(&s[i].acquire_timestamp_ns, 0);
-    } else {
+    }
+  } else {
+    for (uint32_t i = 0; i < capacity; ++i) {
       rbipc_slot_init_single(&s[i], i);
     }
   }

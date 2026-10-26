@@ -62,8 +62,9 @@ void rbipc_slot_init_table_ex(rbipc_slot_t *RBIPC_RESTRICT slots,
  */
 RBIPC_INLINE uint64_t rbipc_slot_pack(uint64_t seq, uint32_t len,
                                       uint32_t state) {
-  uint64_t l =
-      (len > RBIPC_PACKED_MAX_LEN) ? RBIPC_PACKED_MAX_LEN : (uint64_t)len;
+  uint64_t l = RBIPC_LIKELY(len <= RBIPC_PACKED_MAX_LEN)
+                   ? (uint64_t)len
+                   : (uint64_t)RBIPC_PACKED_MAX_LEN;
   return ((seq << RBIPC_PACKED_SEQ_SHIFT) & RBIPC_PACKED_SEQ_MASK) |
          ((l << RBIPC_PACKED_LEN_SHIFT) & RBIPC_PACKED_LEN_MASK) |
          ((uint64_t)state & RBIPC_PACKED_STATE_MASK);

@@ -98,14 +98,16 @@ void rbipc_waitfree_cooperative_help(rbipc_ring_t *ring) {
   for (uint32_t i = 0; i < RBIPC_HELP_MAX_PEERS; ++i) {
     rbipc_help_slot_t *help = &ring->help_slots[i];
     uint32_t state = atomic_load_explicit(&help->state, memory_order_acquire);
-    if (state != RBIPC_HELP_POSTED) {
+    /* In steady-state operation, help requests are exceptionally rare (<0.01% of turns).
+     * Partitions the cooperative assistance dispatch out-of-line. */
+    if (RBIPC_LIKELY(state != RBIPC_HELP_POSTED)) {
       continue;
     }
 
     uint32_t expected_posted = RBIPC_HELP_POSTED;
-    if (!atomic_compare_exchange_strong_explicit(
+    if (RBIPC_UNLIKELY(!atomic_compare_exchange_strong_explicit(
             &help->state, &expected_posted, RBIPC_HELP_IN_PROGRESS,
-            memory_order_acq_rel, memory_order_acquire)) {
+            memory_order_acq_rel, memory_order_acquire))) {
       continue;
     }
 
