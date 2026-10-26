@@ -71,7 +71,7 @@ RBIPC_INTERNAL uint32_t rbipc_simd_scan_avx512(const rbipc_slot_t *slots, uint32
     RBIPC_PREFETCH(&slots[(base_t + 16) & mask].sequence, RBIPC_PREFETCH_READ,
                    RBIPC_PREFETCH_LOCALITY_HIGH);
     uint64_t s[8];
-    if (idx + 8 <= mask + 1) {
+    if (RBIPC_LIKELY(idx + 8 <= mask + 1)) {
       for (int k = 0; k < 8; ++k) {
         s[k] = atomic_load_explicit(&slots[idx + k].sequence, memory_order_acquire);
       }
@@ -133,7 +133,7 @@ RBIPC_INTERNAL uint32_t rbipc_simd_scan_avx2(const rbipc_slot_t *slots, uint32_t
     RBIPC_PREFETCH(&slots[(base_t + 8) & mask].sequence, RBIPC_PREFETCH_READ,
                    RBIPC_PREFETCH_LOCALITY_HIGH);
     uint64_t s0, s1, s2, s3;
-    if (idx + 4 <= mask + 1) {
+    if (RBIPC_LIKELY(idx + 4 <= mask + 1)) {
       s0 = atomic_load_explicit(&slots[idx + 0].sequence, memory_order_acquire);
       s1 = atomic_load_explicit(&slots[idx + 1].sequence, memory_order_acquire);
       s2 = atomic_load_explicit(&slots[idx + 2].sequence, memory_order_acquire);
@@ -205,7 +205,7 @@ RBIPC_INTERNAL uint32_t rbipc_simd_scan_avx(const rbipc_slot_t *slots, uint32_t 
     RBIPC_PREFETCH(&slots[(base_t + 8) & mask].sequence, RBIPC_PREFETCH_READ,
                    RBIPC_PREFETCH_LOCALITY_HIGH);
     uint64_t s0, s1, s2, s3;
-    if (idx + 4 <= mask + 1) {
+    if (RBIPC_LIKELY(idx + 4 <= mask + 1)) {
       s0 = atomic_load_explicit(&slots[idx + 0].sequence, memory_order_acquire);
       s1 = atomic_load_explicit(&slots[idx + 1].sequence, memory_order_acquire);
       s2 = atomic_load_explicit(&slots[idx + 2].sequence, memory_order_acquire);
@@ -271,7 +271,7 @@ RBIPC_INTERNAL uint32_t rbipc_simd_scan_sse41(const rbipc_slot_t *slots, uint32_
                    RBIPC_PREFETCH_LOCALITY_HIGH);
 
     uint64_t s0, s1;
-    if (idx + 2 <= mask + 1) {
+    if (RBIPC_LIKELY(idx + 2 <= mask + 1)) {
       s0 = atomic_load_explicit(&slots[idx + 0].sequence, memory_order_acquire);
       s1 = atomic_load_explicit(&slots[idx + 1].sequence, memory_order_acquire);
     } else {
@@ -315,7 +315,7 @@ static uint32_t rbipc_simd_scan_neon(const rbipc_slot_t *slots, uint32_t mask,
     uint64_t base_t = t + avail;
     uint32_t idx = (uint32_t)(base_t & mask);
     uint64_t s0, s1;
-    if (idx + 2 <= mask + 1) {
+    if (RBIPC_LIKELY(idx + 2 <= mask + 1)) {
       s0 = atomic_load_explicit(&slots[idx + 0].sequence, memory_order_acquire);
       s1 = atomic_load_explicit(&slots[idx + 1].sequence, memory_order_acquire);
     } else {

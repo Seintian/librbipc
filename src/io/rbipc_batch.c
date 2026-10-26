@@ -43,25 +43,35 @@ rbipc_batch_populate_reserved(rbipc_ring_t *RBIPC_RESTRICT ring, uint64_t t,
       (rbipc_slot_t *)RBIPC_ASSUME_ALIGNED(ring->slots, RBIPC_CACHE_LINE);
   pid_t my_pid = ring->cached_pid;
 
-  for (uint32_t i = 0; i < count; ++i) {
-    uint64_t ticket_i = t + (uint64_t)i;
-    uint32_t idx = (uint32_t)(ticket_i & mask);
-    rbipc_slot_t *slot = &slots[idx];
+  if (RBIPC_UNLIKELY(ring->is_isolated)) {
+    rbipc_mpk_allow_write(ring);
+  }
 
-    if (RBIPC_LIKELY(!ring->is_trusted)) {
+  /* Microarchitectural Optimization: Loop Unswitching over ring trust mode */
+  if (RBIPC_LIKELY(!ring->is_trusted)) {
+    for (uint32_t i = 0; i < count; ++i) {
+      uint64_t ticket_i = t + (uint64_t)i;
+      uint32_t idx = (uint32_t)(ticket_i & mask);
+      rbipc_slot_t *slot = &slots[idx];
       rbipc_slot_mark_reserved(slot, my_pid);
+
+      iovecs[i].buf = rbipc_io_calc_slot_ptr(ring, ticket_i);
+      iovecs[i].ticket = ticket_i;
+      iovecs[i].max_len = slot_size;
+
+      RBIPC_PREFETCH(iovecs[i].buf, RBIPC_PREFETCH_WRITE,
+                     RBIPC_PREFETCH_LOCALITY_HIGH);
     }
+  } else {
+    for (uint32_t i = 0; i < count; ++i) {
+      uint64_t ticket_i = t + (uint64_t)i;
+      iovecs[i].buf = rbipc_io_calc_slot_ptr(ring, ticket_i);
+      iovecs[i].ticket = ticket_i;
+      iovecs[i].max_len = slot_size;
 
-    if (ring->is_isolated) {
-      rbipc_mpk_allow_write(ring);
+      RBIPC_PREFETCH(iovecs[i].buf, RBIPC_PREFETCH_WRITE,
+                     RBIPC_PREFETCH_LOCALITY_HIGH);
     }
-
-    iovecs[i].buf = rbipc_io_calc_slot_ptr(ring, ticket_i);
-    iovecs[i].ticket = ticket_i;
-    iovecs[i].max_len = slot_size;
-
-    RBIPC_PREFETCH(iovecs[i].buf, RBIPC_PREFETCH_WRITE,
-                   RBIPC_PREFETCH_LOCALITY_HIGH);
   }
   RBIPC_PREFETCH(&slots[(t + count) & mask], RBIPC_PREFETCH_WRITE,
                  RBIPC_PREFETCH_LOCALITY_HIGH);
@@ -80,14 +90,14 @@ rbipc_batch_populate_acquired(const rbipc_ring_t *RBIPC_RESTRICT ring,
   pid_t my_pid = ring->cached_pid;
   uint64_t now_ts = rbipc_clock_monotonic_ns();
 
-  for (uint32_t i = 0; i < count; ++i) {
-    uint64_t ticket_i = t + (uint64_t)i;
-    uint32_t idx = (uint32_t)(ticket_i & mask);
-    rbipc_slot_t *slot = &slots[idx];
+  /* Microarchitectural Optimization: Loop Unswitching over descriptor format */
+  if (ring->is_packed) {
+    for (uint32_t i = 0; i < count; ++i) {
+      uint64_t ticket_i = t + (uint64_t)i;
+      uint32_t idx = (uint32_t)(ticket_i & mask);
+      rbipc_slot_t *slot = &slots[idx];
+      rovecs[i].ticket = ticket_i;
 
-    rovecs[i].ticket = ticket_i;
-
-    if (RBIPC_UNLIKELY(ring->is_packed)) {
       uint64_t packed = atomic_load_explicit(&slot->sequence, memory_order_acquire);
       uint32_t state = rbipc_slot_unpack_state(packed);
       if (RBIPC_UNLIKELY(state == RBIPC_SLOT_POISONED)) {
@@ -99,28 +109,36 @@ rbipc_batch_populate_acquired(const rbipc_ring_t *RBIPC_RESTRICT ring,
         RBIPC_PREFETCH(rovecs[i].buf, RBIPC_PREFETCH_READ,
                        RBIPC_PREFETCH_LOCALITY_HIGH);
       }
-      continue;
     }
-
-    if (RBIPC_UNLIKELY(ring->is_trusted)) {
+  } else if (ring->is_trusted) {
+    for (uint32_t i = 0; i < count; ++i) {
+      uint64_t ticket_i = t + (uint64_t)i;
+      uint32_t idx = (uint32_t)(ticket_i & mask);
+      rbipc_slot_t *slot = &slots[idx];
+      rovecs[i].ticket = ticket_i;
       rovecs[i].buf = rbipc_io_calc_slot_ptr(ring, ticket_i);
       rovecs[i].len = atomic_load_explicit(&slot->len, memory_order_acquire);
       RBIPC_PREFETCH(rovecs[i].buf, RBIPC_PREFETCH_READ,
                      RBIPC_PREFETCH_LOCALITY_HIGH);
-      continue;
     }
+  } else {
+    for (uint32_t i = 0; i < count; ++i) {
+      uint64_t ticket_i = t + (uint64_t)i;
+      uint32_t idx = (uint32_t)(ticket_i & mask);
+      rbipc_slot_t *slot = &slots[idx];
+      rovecs[i].ticket = ticket_i;
 
-    uint32_t state = atomic_load_explicit(&slot->state, memory_order_acquire);
-    if (rbipc_slot_state_is_committed(state)) {
+      uint32_t state = atomic_load_explicit(&slot->state, memory_order_acquire);
       rbipc_slot_mark_acquired(slot, my_pid, now_ts);
-      rovecs[i].buf = rbipc_io_calc_slot_ptr(ring, ticket_i);
-      rovecs[i].len = atomic_load_explicit(&slot->len, memory_order_acquire);
-      RBIPC_PREFETCH(rovecs[i].buf, RBIPC_PREFETCH_READ,
-                     RBIPC_PREFETCH_LOCALITY_HIGH);
-    } else {
-      rbipc_slot_mark_acquired(slot, my_pid, now_ts);
-      rovecs[i].buf = NULL;
-      rovecs[i].len = 0;
+      if (RBIPC_LIKELY(rbipc_slot_state_is_committed(state))) {
+        rovecs[i].buf = rbipc_io_calc_slot_ptr(ring, ticket_i);
+        rovecs[i].len = atomic_load_explicit(&slot->len, memory_order_acquire);
+        RBIPC_PREFETCH(rovecs[i].buf, RBIPC_PREFETCH_READ,
+                       RBIPC_PREFETCH_LOCALITY_HIGH);
+      } else {
+        rovecs[i].buf = NULL;
+        rovecs[i].len = 0;
+      }
     }
   }
   RBIPC_PREFETCH(&slots[(t + count) & mask], RBIPC_PREFETCH_READ,
@@ -155,23 +173,35 @@ rbipc_batch_commit_slots(rbipc_ring_t *RBIPC_RESTRICT ring, uint32_t count,
    * visible before any slot sequence is published to readers. */
   atomic_thread_fence(memory_order_release);
 
-  for (uint32_t i = 0; i < count; ++i) {
-    uint64_t ticket = tickets[i];
-    rbipc_slot_t *slot = &slots[ticket & mask];
-    if (RBIPC_UNLIKELY(ring->is_packed)) {
+  /* Microarchitectural Optimization: Loop Unswitching over descriptor format */
+  if (ring->is_packed) {
+    for (uint32_t i = 0; i < count; ++i) {
+      uint64_t ticket = tickets[i];
+      rbipc_slot_t *slot = &slots[ticket & mask];
       atomic_store_explicit(&slot->state, RBIPC_SLOT_COMMITTED, memory_order_relaxed);
       uint64_t packed = rbipc_slot_pack(ticket + 1, written_lens[i], RBIPC_SLOT_COMMITTED);
       atomic_store_explicit(&slot->sequence, packed, memory_order_relaxed);
-    } else if (RBIPC_UNLIKELY(ring->is_trusted)) {
+    }
+  } else if (ring->is_trusted) {
+    for (uint32_t i = 0; i < count; ++i) {
+      uint64_t ticket = tickets[i];
+      rbipc_slot_t *slot = &slots[ticket & mask];
       atomic_store_explicit(&slot->len, written_lens[i], memory_order_relaxed);
       atomic_store_explicit(&slot->sequence, ticket + 1, memory_order_relaxed);
-    } else {
+    }
+  } else {
+    for (uint32_t i = 0; i < count; ++i) {
+      uint64_t ticket = tickets[i];
+      rbipc_slot_t *slot = &slots[ticket & mask];
       atomic_store_explicit(&slot->len, written_lens[i], memory_order_relaxed);
       atomic_store_explicit(&slot->state, RBIPC_SLOT_COMMITTED, memory_order_relaxed);
       atomic_store_explicit(&slot->sequence, ticket + 1, memory_order_relaxed);
     }
-    if (ring->is_cxl) {
-      rbipc_clwb(&slot->sequence);
+  }
+
+  if (RBIPC_UNLIKELY(ring->is_cxl)) {
+    for (uint32_t i = 0; i < count; ++i) {
+      rbipc_clwb(&slots[tickets[i] & mask].sequence);
     }
   }
 }
@@ -196,10 +226,11 @@ static int rbipc_batch_release_slots(rbipc_ring_t *RBIPC_RESTRICT ring,
   /* Coalesced release fence: ensures all prior slot reads are complete before recycling */
   atomic_thread_fence(memory_order_release);
 
-  for (uint32_t i = 0; i < count; ++i) {
-    uint64_t ticket = tickets[i];
-    rbipc_slot_t *slot = &slots[ticket & mask];
-    if (RBIPC_UNLIKELY(ring->is_packed)) {
+  /* Microarchitectural Optimization: Loop Unswitching over descriptor format */
+  if (ring->is_packed) {
+    for (uint32_t i = 0; i < count; ++i) {
+      uint64_t ticket = tickets[i];
+      rbipc_slot_t *slot = &slots[ticket & mask];
       atomic_store_explicit(&slot->state, RBIPC_SLOT_EMPTY, memory_order_relaxed);
       atomic_store_explicit(&slot->producer_pid, 0, memory_order_relaxed);
       atomic_store_explicit(&slot->consumer_pid, 0, memory_order_relaxed);
@@ -207,9 +238,17 @@ static int rbipc_batch_release_slots(rbipc_ring_t *RBIPC_RESTRICT ring,
       uint64_t next_packed =
           rbipc_slot_pack(ticket + (uint64_t)cap, 0, RBIPC_SLOT_EMPTY);
       atomic_store_explicit(&slot->sequence, next_packed, memory_order_relaxed);
-    } else if (RBIPC_UNLIKELY(ring->is_trusted)) {
+    }
+  } else if (ring->is_trusted) {
+    for (uint32_t i = 0; i < count; ++i) {
+      uint64_t ticket = tickets[i];
+      rbipc_slot_t *slot = &slots[ticket & mask];
       atomic_store_explicit(&slot->sequence, ticket + cap, memory_order_relaxed);
-    } else {
+    }
+  } else {
+    for (uint32_t i = 0; i < count; ++i) {
+      uint64_t ticket = tickets[i];
+      rbipc_slot_t *slot = &slots[ticket & mask];
       if (my_pid > 0) {
         uint32_t current_cpid =
             atomic_load_explicit(&slot->consumer_pid, memory_order_relaxed);
@@ -224,10 +263,14 @@ static int rbipc_batch_release_slots(rbipc_ring_t *RBIPC_RESTRICT ring,
       atomic_store_explicit(&slot->acquire_timestamp_ns, 0, memory_order_relaxed);
       atomic_store_explicit(&slot->sequence, ticket + (uint64_t)cap, memory_order_relaxed);
     }
-    if (ring->is_cxl) {
-      rbipc_clwb(&slot->sequence);
+  }
+
+  if (RBIPC_UNLIKELY(ring->is_cxl)) {
+    for (uint32_t i = 0; i < count; ++i) {
+      rbipc_clwb(&slots[tickets[i] & mask].sequence);
     }
   }
+
   return rc;
 }
 
