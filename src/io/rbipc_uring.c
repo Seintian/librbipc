@@ -98,21 +98,26 @@ struct rbipc_io_uring_params {
  */
 bool rbipc_uring_available(void) {
 #ifdef SYS_io_uring_setup
-  static int cached = -1;
-  if (cached != -1) {
-    return cached == 1;
+  /*
+   * Cached capability probe. _Atomic since rbipc_uring_available() may be
+   * invoked concurrently by multiple threads; the idempotent write (1 or 0)
+   * converges so relaxed ordering is sufficient.
+   */
+  static _Atomic int cached = -1;
+  const int cd = atomic_load_explicit(&cached, memory_order_relaxed);
+  if (cd != -1) {
+    return cd == 1;
   }
 
   struct rbipc_io_uring_params p = {0};
   long fd = syscall(SYS_io_uring_setup, 2, &p);
-  if (fd >= 0) {
+  bool supported = (fd >= 0);
+  if (supported) {
     close((int)fd);
-    cached = 1;
-    return true;
   }
 
-  cached = 0;
-  return false;
+  atomic_store_explicit(&cached, supported ? 1 : 0, memory_order_relaxed);
+  return supported;
 #else
   return false;
 #endif
@@ -124,6 +129,19 @@ bool rbipc_uring_available(void) {
 int rbipc_uring_register_ring(const rbipc_ring_t *ring, int uring_fd) {
 #ifdef SYS_io_uring_register
   if (RBIPC_UNLIKELY(!ring || uring_fd < 0 || !ring->data_map || ring->data_size == 0)) {
+    return RBIPC_ERR_INVAL;
+  }
+
+  const long page = (long)sysconf(_SC_PAGESIZE);
+  if (RBIPC_UNLIKELY(page <= 0 ||
+                     (uintptr_t)ring->data_map % (uintptr_t)page != 0 ||
+                     ring->data_size % (uintptr_t)page != 0 ||
+                     ring->data_size > UINT32_MAX)) {
+    /*
+     * io_uring fixed-buffer registration requires page-aligned addresses and
+     * page-aligned lengths (and IOV bufs are u32-sized). Rejecting early gives
+     * a clear diagnostic instead of a confusing EINVAL from the kernel.
+     */
     return RBIPC_ERR_INVAL;
   }
 
