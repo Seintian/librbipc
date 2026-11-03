@@ -110,32 +110,83 @@ int rbipc_ipc_recv_fds(int socket_fd, int *out_fds, size_t max_count, size_t *ou
         return RBIPC_ERR_SYS;
     }
 
-    struct cmsghdr *cmsg = CMSG_FIRSTHDR(&msg);
-    if (RBIPC_UNLIKELY(!cmsg || cmsg->cmsg_level != SOL_SOCKET || cmsg->cmsg_type != SCM_RIGHTS)) {
-        return RBIPC_ERR_SYS;
-    }
+    /*
+     * recvmsg() with SCM_RIGHTS *installs* the received fds in this process as
+     * part of the syscall, regardless of what we do next. We therefore must
+     * account for every fd deposited by the kernel: fds we do not return to the
+     * caller must be closed, and if no usable SCM_RIGHTS block exists, every
+     * installed fd must be closed to avoid an fd-exhaustion leak.
+     *
+     * The control buffer may contain several cmsghdrs (e.g. SCM_CREDENTIALS
+     * followed by one or more SCM_RIGHTS blocks). We walk all of them with
+     * CMSG_NXTHDR, and only consume the first SCM_RIGHTS block, closing any
+     * deskriptors in later blocks and any excess beyond max_count.
+     */
+    size_t copy_count = 0;
+    bool found_rights = false;
+    const size_t control_len = (size_t)msg.msg_controllen;
 
-    size_t data_bytes = (cmsg->cmsg_len > sizeof(struct cmsghdr)) ? (cmsg->cmsg_len - sizeof(struct cmsghdr)) : 0;
-    size_t num_fds = data_bytes / sizeof(int);
-    if (RBIPC_UNLIKELY(num_fds == 0)) {
-        return RBIPC_ERR_SYS;
-    }
+    for (struct cmsghdr *cmsg = CMSG_FIRSTHDR(&msg); cmsg != NULL;
+        cmsg = CMSG_NXTHDR(&msg, cmsg)) {
+        /* Validate the header against the actual received control length so a
+         * malformed/oversized cmsg_len cannot drive reads past the buffer that
+         * the kernel set up. */
+        const unsigned char *chdr = (const unsigned char *)cmsg;
+        if ((size_t)(chdr - (const unsigned char *)msg.msg_control) + sizeof(struct cmsghdr) > control_len) {
+            break;
+        }
+        if (cmsg->cmsg_level != SOL_SOCKET || cmsg->cmsg_type != SCM_RIGHTS) {
+            continue; /* Credentials/other blocks carry no fds; skip. */
+        }
 
-    size_t copy_count = (num_fds < max_count) ? num_fds : max_count;
-    memcpy(out_fds, CMSG_DATA(cmsg), copy_count * sizeof(int));
+        size_t hdr_sz = (cmsg->cmsg_len > sizeof(struct cmsghdr))
+                            ? (size_t)(cmsg->cmsg_len - sizeof(struct cmsghdr))
+                            : 0;
+        /* cmsg_len includes header + padding; bound the payload by the space
+         * actually present and by CMSG_SPACE for one int per fd. */
+        size_t span = (size_t)cmsg->cmsg_len;
+        if (span > control_len - (size_t)(chdr - (const unsigned char *)msg.msg_control)) {
+            span = control_len - (size_t)(chdr - (const unsigned char *)msg.msg_control);
+        }
+        size_t fds_present = (span >= sizeof(struct cmsghdr)) ? (span - sizeof(struct cmsghdr)) / sizeof(int) : 0;
+        size_t num_fds = (hdr_sz / sizeof(int));
+        if (num_fds > fds_present) num_fds = fds_present;
 
-    /* Safely close any excess descriptors beyond caller's max_count */
-    if (RBIPC_UNLIKELY(num_fds > max_count)) {
-        int excess_fds[RBIPC_IPC_MAX_FDS];
-        size_t excess_count = num_fds - max_count;
-        if (excess_count > RBIPC_IPC_MAX_FDS) excess_count = RBIPC_IPC_MAX_FDS;
-        memcpy(excess_fds, ((const char *)CMSG_DATA(cmsg)) + max_count * sizeof(int),
-               excess_count * sizeof(int));
-        for (size_t i = 0; i < excess_count; ++i) {
-            if (rbipc_is_valid_fd(excess_fds[i])) {
-                close(excess_fds[i]);
+        if (num_fds == 0) {
+            continue;
+        }
+
+        int *fds = (int *)CMSG_DATA(cmsg);
+        if (!found_rights) {
+            /* First (and only) SCM_RIGHTS block we honor. */
+            found_rights = true;
+            size_t keep = (num_fds < max_count) ? num_fds : max_count;
+            for (size_t i = 0; i < keep; ++i) {
+                out_fds[i] = fds[i];
+            }
+            copy_count = keep;
+            /* Close any fds beyond the caller's requested count. */
+            for (size_t i = keep; i < num_fds; ++i) {
+                if (rbipc_is_valid_fd(fds[i])) {
+                    close(fds[i]);
+                }
+            }
+        } else {
+            /* Additional SCM_RIGHTS blocks are surplus; close all of them. */
+            for (size_t i = 0; i < num_fds; ++i) {
+                if (rbipc_is_valid_fd(fds[i])) {
+                    close(fds[i]);
+                }
             }
         }
+    }
+
+    if (!found_rights) {
+        /* No usable SCM_RIGHTS block encountered. Any fds the kernel installed
+         * are unreachable here because we skipped non-rights blocks; the drain
+         * above accounts for rights blocks. If none existed, nothing to close. */
+        *out_count = 0;
+        return RBIPC_ERR_SYS;
     }
 
     *out_count = copy_count;
