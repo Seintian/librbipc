@@ -428,9 +428,15 @@ RBIPC_INLINE void rbipc_sync_dispatch_wake(_Atomic uint32_t *futex_word,
 RBIPC_LEAF
 void rbipc_sync_wake_n(_Atomic uint32_t *futex_word,
                        _Atomic uint32_t *futex_waiters, uint32_t count) {
+  /*
+   * Contract: wake up to @p count waiters. A zero count is a no-op (wake no
+   * one); it must NOT be coerced into waking a waiter, which would produce a
+   * spurious wakeup inconsistent with the documented semantics.
+   */
+  if (RBIPC_UNLIKELY(count == 0)) {
+    return;
+  }
   int c = (count > (uint32_t)INT32_MAX) ? INT32_MAX : (int)count;
-  if (c <= 0)
-    c = 1;
   rbipc_sync_dispatch_wake(futex_word, futex_waiters, c);
 }
 
