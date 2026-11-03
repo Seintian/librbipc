@@ -51,7 +51,14 @@ int rbipc_vmem_map_ctrl(int fd, size_t size, void ** RBIPC_RESTRICT out_map) {
 RBIPC_LEAF
 void rbipc_vmem_unmap_ctrl(void *map, size_t size) {
     if (map && size > 0) {
-        munmap(map, size);
+        if (RBIPC_UNLIKELY(munmap(map, size) != 0 &&
+                           (errno == EPERM || errno == EINVAL))) {
+            /*
+             * Region was permanently sealed via mseal(2): munmap() is blocked.
+             * Ignore the failure; the address range stays reserved for the
+             * process lifetime (documented behavior for sealed isolated rings).
+             */
+        }
     }
 }
 
@@ -84,7 +91,10 @@ int rbipc_vmem_map_data(int fd, size_t offset, size_t data_size, void ** RBIPC_R
 RBIPC_LEAF
 void rbipc_vmem_unmap_data(void *data_map, size_t data_size) {
     if (data_map && data_size > 0) {
-        munmap(data_map, data_size);
+        if (RBIPC_UNLIKELY(munmap(data_map, data_size) != 0 &&
+                           (errno == EPERM || errno == EINVAL))) {
+            /* Region sealed via mseal(2): munmap() is intentionally blocked. */
+        }
     }
 }
 

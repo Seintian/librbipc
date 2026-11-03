@@ -76,6 +76,10 @@ struct rbipc_ring {
   bool is_cxl;       /**< True if ring operates over a CXL DAX memory fabric. */
   int data_pkey;     /**< Hardware protection key for data payload buffer (-1 if unused). */
   int ctrl_pkey;     /**< Hardware protection key for control metadata (-1 if unused). */
+  bool is_sealed;    /**< True if ctrl/data VMAs were permanently sealed via Linux
+                        mseal(2) and therefore can no longer be munmap()ed; the
+                        virtual address range is intentionally retained for the
+                        process lifetime and only the ring handle is released. */
   struct rbipc_help_slot *help_slots; /**< Cooperative helper array for wait-free mode. */
   uint32_t help_slot_index; /**< Assigned index in cooperative helper array. */
 };
