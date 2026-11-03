@@ -51,12 +51,21 @@ int rbipc_reactor_set_fd(rbipc_ring_t *RBIPC_RESTRICT ring, int event_fd) {
   if (RBIPC_UNLIKELY(!ring || event_fd < 0)) {
     return RBIPC_ERR_INVAL;
   }
-  if (ring->event_fd >= 0 && ring->owns_eventfd) {
+  /*
+   * If this handle already carries a counted eventfd, release its waiter
+   * contribution before switching to the new one. This holds regardless of
+   * ownership so that re-setting an externally supplied fd does not drift
+   * eventfd_waiters upward by 1 per call (M13). Only close the descriptor if
+   * this handle created it.
+   */
+  if (ring->event_fd >= 0) {
     if (ring->hdr) {
       atomic_fetch_sub_explicit(&ring->hdr->eventfd_waiters, 1,
                                 memory_order_release);
     }
-    close(ring->event_fd);
+    if (ring->owns_eventfd) {
+      close(ring->event_fd);
+    }
   }
   ring->event_fd = event_fd;
   ring->owns_eventfd = false;
