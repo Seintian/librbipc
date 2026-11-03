@@ -206,11 +206,11 @@ RBIPC_INLINE RBIPC_CONST bool rbipc_slot_is_ready(uint64_t seq, uint64_t ticket)
 }
 
 RBIPC_INLINE RBIPC_CONST bool rbipc_slot_is_vacant_packed(uint64_t packed, uint64_t ticket) {
-    return rbipc_seq_diff(packed >> RBIPC_PACKED_SEQ_SHIFT, ticket) == 0;
+    return rbipc_seq_diff(packed >> RBIPC_PACKED_SEQ_SHIFT, ticket & RBIPC_PACKED_SEQ_TURN_MASK) == 0;
 }
 
 RBIPC_INLINE RBIPC_CONST bool rbipc_slot_is_ready_packed(uint64_t packed, uint64_t ticket) {
-    return rbipc_seq_diff(packed >> RBIPC_PACKED_SEQ_SHIFT, ticket + 1) == 0;
+    return rbipc_seq_diff(packed >> RBIPC_PACKED_SEQ_SHIFT, (ticket + 1) & RBIPC_PACKED_SEQ_TURN_MASK) == 0;
 }
 
 /**
@@ -225,6 +225,10 @@ RBIPC_INLINE RBIPC_CONST bool rbipc_slot_is_ready_packed(uint64_t packed, uint64
  * to a single bitwise shift (`shll $4`), avoiding conditional jump instructions and branch target
  * buffer (BTB) allocation on high-frequency predicate polling paths.
  *
+ * In packed mode the stored turn occupies only the low 48 bits, so the comparing
+ * ticket is masked to 48 bits. Without this mask, once tickets exceed 2^48 the
+ * wrapped stored turn can never match the full ticket and the ring deadlocks.
+ *
  * @param[in] word      Current sequence/descriptor word loaded from slot.
  * @param[in] ticket    Reserving producer ticket number.
  * @param[in] is_packed True if ring operates in packed 64-bit descriptor mode; false otherwise.
@@ -232,7 +236,8 @@ RBIPC_INLINE RBIPC_CONST bool rbipc_slot_is_ready_packed(uint64_t packed, uint64
  */
 RBIPC_INLINE RBIPC_CONST bool rbipc_slot_is_vacant_any(uint64_t word, uint64_t ticket, bool is_packed) {
     uint64_t seq = word >> ((unsigned int)is_packed * RBIPC_PACKED_SEQ_SHIFT);
-    return rbipc_seq_diff(seq, ticket) == 0;
+    uint64_t t = (is_packed) ? (ticket & RBIPC_PACKED_SEQ_TURN_MASK) : ticket;
+    return rbipc_seq_diff(seq, t) == 0;
 }
 
 /**
@@ -240,7 +245,8 @@ RBIPC_INLINE RBIPC_CONST bool rbipc_slot_is_vacant_any(uint64_t word, uint64_t t
  */
 RBIPC_INLINE RBIPC_CONST bool rbipc_slot_is_ready_any(uint64_t word, uint64_t ticket, bool is_packed) {
     uint64_t seq = word >> ((unsigned int)is_packed * RBIPC_PACKED_SEQ_SHIFT);
-    return rbipc_seq_diff(seq, ticket + 1) == 0;
+    uint64_t t = (is_packed) ? ((ticket + 1) & RBIPC_PACKED_SEQ_TURN_MASK) : (ticket + 1);
+    return rbipc_seq_diff(seq, t) == 0;
 }
 
 /**
@@ -248,7 +254,8 @@ RBIPC_INLINE RBIPC_CONST bool rbipc_slot_is_ready_any(uint64_t word, uint64_t ti
  */
 RBIPC_INLINE RBIPC_CONST bool rbipc_seq_is_behind_any(uint64_t word, uint64_t target, bool is_packed) {
     uint64_t seq = word >> ((unsigned int)is_packed * RBIPC_PACKED_SEQ_SHIFT);
-    return rbipc_seq_diff(seq, target) < 0;
+    uint64_t t = (is_packed) ? (target & RBIPC_PACKED_SEQ_TURN_MASK) : target;
+    return rbipc_seq_diff(seq, t) < 0;
 }
 
 /**

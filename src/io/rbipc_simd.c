@@ -43,7 +43,9 @@ RBIPC_INTERNAL uint32_t rbipc_simd_scan_scalar(const rbipc_slot_t *slots, uint32
     const rbipc_slot_t *slot = &slots[(t + i) & mask];
     uint64_t raw = atomic_load_explicit(&slot->sequence, memory_order_acquire);
     uint64_t seq = is_packed ? (raw >> RBIPC_PACKED_SEQ_SHIFT) : raw;
-    if (rbipc_seq_diff(seq, t + i + offset) == 0) {
+    uint64_t target = (!is_packed) ? (t + i + offset)
+                                   : ((t + i + offset) & RBIPC_PACKED_SEQ_TURN_MASK);
+    if (rbipc_seq_diff(seq, target) == 0) {
       avail++;
     } else {
       break;
@@ -60,7 +62,9 @@ RBIPC_INTERNAL uint32_t rbipc_simd_scan_avx512(const rbipc_slot_t *slots, uint32
                                                uint64_t t, uint32_t count,
                                                uint64_t offset, bool is_packed) {
   uint32_t avail = 0;
-  long long start_t = (long long)t + (long long)offset;
+  long long masked_t = (long long)(t + offset) &
+                       (is_packed ? (long long)RBIPC_PACKED_SEQ_TURN_MASK : -1LL);
+  long long start_t = masked_t;
   __m512i vtgt = _mm512_set_epi64(start_t + 7, start_t + 6, start_t + 5, start_t + 4,
                                   start_t + 3, start_t + 2, start_t + 1, start_t);
   const __m512i vstep = _mm512_set1_epi64(8);
@@ -123,7 +127,9 @@ RBIPC_INTERNAL uint32_t rbipc_simd_scan_avx2(const rbipc_slot_t *slots, uint32_t
                                              uint64_t t, uint32_t count,
                                              uint64_t offset, bool is_packed) {
   uint32_t avail = 0;
-  long long start_t = (long long)t + (long long)offset;
+  long long masked_t = (long long)(t + offset) &
+                       (is_packed ? (long long)RBIPC_PACKED_SEQ_TURN_MASK : -1LL);
+  long long start_t = masked_t;
   __m256i vtgt = _mm256_set_epi64x(start_t + 3, start_t + 2, start_t + 1, start_t);
   const __m256i vstep = _mm256_set1_epi64x(4);
 
@@ -194,7 +200,9 @@ RBIPC_INTERNAL uint32_t rbipc_simd_scan_avx(const rbipc_slot_t *slots, uint32_t 
                                             uint64_t t, uint32_t count,
                                             uint64_t offset, bool is_packed) {
   uint32_t avail = 0;
-  long long start_t = (long long)t + (long long)offset;
+  long long masked_t = (long long)(t + offset) &
+                       (is_packed ? (long long)RBIPC_PACKED_SEQ_TURN_MASK : -1LL);
+  long long start_t = masked_t;
   __m128i vtgt0 = _mm_set_epi64x(start_t + 1, start_t + 0);
   __m128i vtgt1 = _mm_set_epi64x(start_t + 3, start_t + 2);
   const __m128i vstep = _mm_set1_epi64x(4);
@@ -258,7 +266,9 @@ RBIPC_INTERNAL uint32_t rbipc_simd_scan_sse41(const rbipc_slot_t *slots, uint32_
                                               uint64_t t, uint32_t count,
                                               uint64_t offset, bool is_packed) {
   uint32_t avail = 0;
-  long long start_t = (long long)t + (long long)offset;
+  long long masked_t = (long long)(t + offset) &
+                       (is_packed ? (long long)RBIPC_PACKED_SEQ_TURN_MASK : -1LL);
+  long long start_t = masked_t;
   __m128i vtgt = _mm_set_epi64x(start_t + 1, start_t);
   const __m128i vstep = _mm_set1_epi64x(2);
 
@@ -329,7 +339,11 @@ static uint32_t rbipc_simd_scan_neon(const rbipc_slot_t *slots, uint32_t mask,
     if (is_packed) {
       vseq = vshrq_n_u64(vseq, RBIPC_PACKED_SEQ_SHIFT);
     }
-    uint64x2_t vtgt = {base_t + 0 + offset, base_t + 1 + offset};
+    uint64_t tg0 = (!is_packed) ? (base_t + 0 + offset)
+                                : ((base_t + 0 + offset) & RBIPC_PACKED_SEQ_TURN_MASK);
+    uint64_t tg1 = (!is_packed) ? (base_t + 1 + offset)
+                                : ((base_t + 1 + offset) & RBIPC_PACKED_SEQ_TURN_MASK);
+    uint64x2_t vtgt = {tg0, tg1};
     uint64x2_t cmp = vceqq_u64(vseq, vtgt);
     if (vgetq_lane_u64(cmp, 0) == 0)
       return avail;

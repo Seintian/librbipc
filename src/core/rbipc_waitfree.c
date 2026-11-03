@@ -119,9 +119,10 @@ void rbipc_waitfree_cooperative_help(rbipc_ring_t *ring) {
 
     uint64_t raw_seq = atomic_load_explicit(&slot->sequence, memory_order_acquire);
     uint64_t seq = ring->is_packed ? rbipc_slot_unpack_seq(raw_seq) : raw_seq;
+    uint64_t tmasked = ring->is_packed ? (ticket & RBIPC_PACKED_SEQ_TURN_MASK) : ticket;
 
     if (op == RBIPC_HELP_OP_WRITE) {
-      if (seq == ticket) {
+      if (seq == tmasked) {
         uint32_t len = atomic_load_explicit(&help->payload_len, memory_order_relaxed);
         char *slot_payload = (char *)ring->data_map + ((size_t)slot_idx * ring->cached_slot_size);
         if (len <= sizeof(help->inline_staging)) {
@@ -130,7 +131,7 @@ void rbipc_waitfree_cooperative_help(rbipc_ring_t *ring) {
         (void)rbipc_commit_write(ring, ticket, len);
         atomic_store_explicit(&help->helper_pid, (uint32_t)ring->cached_pid, memory_order_relaxed);
         atomic_store_explicit(&help->state, RBIPC_HELP_COMPLETED, memory_order_release);
-      } else if (seq > ticket) {
+      } else if (seq > tmasked) {
         /* Already advanced by another peer or owner */
         atomic_store_explicit(&help->state, RBIPC_HELP_COMPLETED, memory_order_release);
       } else {
@@ -138,7 +139,7 @@ void rbipc_waitfree_cooperative_help(rbipc_ring_t *ring) {
         atomic_store_explicit(&help->state, RBIPC_HELP_POSTED, memory_order_release);
       }
     } else if (op == RBIPC_HELP_OP_READ) {
-      if (seq >= ticket + 1) {
+      if (seq >= tmasked + 1) {
         atomic_store_explicit(&help->helper_pid, (uint32_t)ring->cached_pid, memory_order_relaxed);
         atomic_store_explicit(&help->state, RBIPC_HELP_COMPLETED, memory_order_release);
       } else {
@@ -229,7 +230,8 @@ int rbipc_waitfree_post_and_wait(rbipc_ring_t *ring, uint64_t ticket,
       rbipc_slot_t *slot = &ring->slots[ring_slot_idx];
       uint64_t raw_seq = atomic_load_explicit(&slot->sequence, memory_order_acquire);
       uint64_t seq = ring->is_packed ? rbipc_slot_unpack_seq(raw_seq) : raw_seq;
-      if (seq == ticket) {
+      uint64_t tmasked = ring->is_packed ? (ticket & RBIPC_PACKED_SEQ_TURN_MASK) : ticket;
+      if (seq == tmasked) {
         if (buf && len > 0) {
           memcpy(slot_payload, buf, len);
         }

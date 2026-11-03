@@ -91,13 +91,14 @@ RBIPC_LEAF
 bool rbipc_slot_poison_packed(rbipc_slot_t *slot, uint64_t ticket) {
   if (RBIPC_UNLIKELY(rbipc_is_null(slot)))
     return false;
+  uint64_t t = ticket & RBIPC_PACKED_SEQ_TURN_MASK;
   uint64_t cur = atomic_load_explicit(&slot->sequence, memory_order_acquire);
   while (true) {
     uint64_t seq = rbipc_slot_unpack_seq(cur);
-    if (seq != ticket) {
+    if (seq != t) {
       return false;
     }
-    uint64_t poisoned = rbipc_slot_pack(ticket + 1, 0, RBIPC_SLOT_POISONED);
+    uint64_t poisoned = rbipc_slot_pack(t + 1, 0, RBIPC_SLOT_POISONED);
     if (atomic_compare_exchange_weak_explicit(&slot->sequence, &cur, poisoned,
                                               memory_order_release,
                                               memory_order_acquire)) {

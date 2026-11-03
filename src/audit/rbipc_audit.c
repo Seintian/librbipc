@@ -83,7 +83,8 @@ bool rbipc_audit_recover_dead_producer(rbipc_shm_header_t *hdr,
   bool is_packed = (le32toh(hdr->flags) & RBIPC_FLAG_PACKED) != 0;
   uint64_t raw_seq = atomic_load_explicit(&slot->sequence, memory_order_acquire);
   uint64_t turn = is_packed ? rbipc_slot_unpack_seq(raw_seq) : raw_seq;
-  if (turn != ticket)
+  uint64_t t_ticket = is_packed ? (ticket & RBIPC_PACKED_SEQ_TURN_MASK) : ticket;
+  if (turn != t_ticket)
     return false;
 
   uint32_t state =

@@ -435,6 +435,11 @@ extern "C" {
 #define RBIPC_PACKED_LEN_MASK 0x000000000000FFF0ULL
 #define RBIPC_PACKED_SEQ_SHIFT 16U
 #define RBIPC_PACKED_SEQ_MASK 0xFFFFFFFFFFFF0000ULL
+/* 48-bit monotonic turn field recovered by shifting the packed seq word down by
+ * RBIPC_PACKED_SEQ_SHIFT. Because the turn is stored in only 48 bits, any full
+ * 64-bit ticket used for comparison must be masked with this constant in packed
+ * mode; otherwise the ring deadlocks once tickets exceed 2^48. */
+#define RBIPC_PACKED_SEQ_TURN_MASK 0x0000FFFFFFFFFFFFULL
 #define RBIPC_PACKED_MAX_LEN 4095U
 /** @} */
 /** @} */
