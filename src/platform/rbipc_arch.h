@@ -23,7 +23,9 @@
 #include <time.h>
 #include <unistd.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
+#include <errno.h>
 #if defined(__linux__)
 #include <sys/auxv.h>
 #endif
@@ -95,10 +97,34 @@ RBIPC_INLINE RBIPC_NODISCARD size_t rbipc_huge_page_size(void) {
     char line[128];
     while (fgets(line, sizeof(line), fp)) {
       if (strncmp(line, "Hugepagesize:", 13) == 0) {
-        unsigned long kb = 0;
-        if (sscanf(line + 13, "%lu", &kb) == 1 && kb > 0) {
-          hps = (size_t)kb * 1024ULL;
-          break;
+        /*
+         * /proc/meminfo lines use the form "Hugepagesize:       2048 kB".
+         *
+         * strtoul() is used instead of sscanf() because it provides exhaustive
+         * error reporting:
+         *   - errno == ERANGE on out-of-range (overflow) conversion,
+         *   - a zero-length conversion (no digits parsed) when the value is
+         *     absent or malformed.
+         * The end-pointer additionally lets us reject trailing garbage and a
+         * non-"kB" suffix instead of silently accepting a partial number.
+         */
+        errno = 0;
+        char *end = NULL;
+        unsigned long kb = strtoul(line + 13, &end, 10);
+
+        if (errno != ERANGE && end != (line + 13) && *end != '\0') {
+          /* Skip optional trailing whitespace before validating the unit. */
+          char *unit = end;
+          while (*unit == ' ' || *unit == '\t') {
+            ++unit;
+          }
+          /* Accept only a "kB" (or "KB") unit suffix. */
+          if ((unit[0] == 'k' || unit[0] == 'K') && unit[1] == 'B' &&
+              unit[2] == '\0' && kb > 0UL &&
+              kb <= (SIZE_MAX >> 10UL)) {
+            hps = (size_t)kb * 1024ULL;
+            break;
+          }
         }
       }
     }
