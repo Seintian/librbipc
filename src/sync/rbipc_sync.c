@@ -177,12 +177,33 @@ int rbipc_sync_wait_registered_or_shutdown(
                                         remaining_ns);
   rbipc_sync_deregister_waiter(futex_waiters);
 
-  if (rc == RBIPC_ERR_TIMEOUT && state->has_deadline) {
+  if (rc == RBIPC_OK) {
+    /*
+     * The waiter was released explicitly (e.g. shutdown flag was raised or a
+     * peer woke it). Signal success so the caller re-evaluates the ring.
+     */
+    return RBIPC_OK;
+  }
+  if (rc != RBIPC_ERR_TIMEOUT) {
+    /*
+     * A genuine syscall/validation failure (e.g. futex returned EINVAL/EFAULT)
+     * must be surfaced to the caller. Swallowing these to 0 would make the
+     * caller re-enter the wait loop forever, burning CPU in a busy loop.
+     */
+    return rc;
+  }
+  /* rc == RBIPC_ERR_TIMEOUT: distinguish deadline expiry from periodic refresh. */
+  if (state->has_deadline) {
     uint64_t post_now = rbipc_clock_monotonic_ns();
     if (post_now >= state->deadline_ns) {
       return RBIPC_ERR_TIMEOUT;
     }
   }
+  /*
+   * Periodic refresh wake-up (futex period elapsed without the deadline being
+   * reached, or an unbounded wait). Return 0 so the caller re-scans the ring
+   * for new work before blocking again.
+   */
   return 0;
 }
 
