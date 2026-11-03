@@ -772,13 +772,25 @@ typedef struct {
 /**
  * @struct rbipc_rovec_t
  * @brief Vector descriptor for B-Queue batch read acquisitions.
+ *
+ * @details In untrusted mode a slot that was poisoned (its producer crashed
+ * before committing) yields a descriptor with @c buf == NULL and @c len == 0.
+ * The caller MUST still release such slots (they are part of the claimed
+ * contiguous ticket run) via @ref rbipc_read_release_batch, but MUST NOT
+ * dereference @c buf. Callers that cannot tolerate poisoned slots should use
+ * the single-message @ref rbipc_read family, which reports
+ * @ref RBIPC_ERR_POISONED explicitly.
  */
 typedef struct {
   const void
-      *buf; /**< Direct read-only pointer to payload data in shared memory. */
+      *buf; /**< Direct read-only pointer to payload data in shared memory, or
+               NULL if the slot was poisoned (untrusted mode). May be NULL only
+               for poisoned slots; callers must treat @c buf == NULL as "skip
+               this slot". */
   uint64_t ticket; /**< Monotonic 64-bit ticket identifier assigned to this
                       acquired slot. */
-  uint32_t len;    /**< Exact byte length of the committed message payload. */
+  uint32_t len;    /**< Exact byte length of the committed message payload (0
+                      for poisoned slots). */
 } rbipc_rovec_t;
 
 /* ============================================================================
@@ -1557,6 +1569,12 @@ rbipc_commit_write_batch(rbipc_ring_t *RBIPC_RESTRICT ring, uint32_t count,
  * @details Claims up to @p count contiguous committed slots in a single atomic
  * claim.
  *
+ * @brief Acquire a batch of committed messages for reading (Zero-Copy, B-Queue
+ * Batching).
+ *
+ * @details Claims up to @p count contiguous committed slots in a single atomic
+ * claim.
+ *
  * @param[in,out] ring         Ring buffer handle.
  * @param[in]     count        Maximum number of messages to acquire.
  * @param[out]    rovecs       Caller-provided array of at least @p count vector
@@ -1567,6 +1585,11 @@ rbipc_commit_write_batch(rbipc_ring_t *RBIPC_RESTRICT ring, uint32_t count,
  * @return @ref RBIPC_OK on success.
  * @retval RBIPC_ERR_INVAL    if arguments are null or count is zero.
  * @retval RBIPC_ERR_SHUTDOWN if ring buffer has shut down and drained.
+ *
+ * @note In untrusted mode a poisoned slot within the acquired run is returned
+ * with @c rovecs[i].buf == NULL and @c len == 0. The slot is still part of the
+ * claimed run and MUST be released via @ref rbipc_read_release_batch, but its
+ * @c buf MUST NOT be dereferenced.
  *
  * @see rbipc_read_release_batch
  */
