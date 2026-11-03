@@ -128,7 +128,16 @@ bool rbipc_futex2_has_u64(void) {
       .__reserved = 0,
   };
   long ret = syscall(SYS_futex_waitv, &w, 1, 0, NULL, CLOCK_MONOTONIC);
-  int res = (ret < 0 && errno == EINVAL) ? 0 : 1;
+  /*
+   * The probe reports u64 support only when the syscall succeeds. Because
+   * dummy(0) != w.val(1), a working 64-bit waitv returns 0 immediately without
+   * blocking. Any negative return (whether EINVAL for an unsupported size
+   * flag or another error) is treated conservatively as "unsupported" so the
+   * caller falls back to the always-valid u32 descriptor. Otherwise a
+   * non-EINVAL error would be misread as support and fail later at the real
+   * wait site (M4).
+   */
+  int res = (ret < 0) ? 0 : 1;
   atomic_store_explicit(&s_has_u64, res, memory_order_release);
   return res == 1;
 #else
