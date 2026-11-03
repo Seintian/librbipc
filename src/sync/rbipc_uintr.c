@@ -26,22 +26,31 @@
  */
 bool rbipc_uintr_available(void) {
 #if defined(__x86_64__)
-  static int cached = -1;
-  if (cached != -1) {
-    return cached == 1;
+  /*
+   * Cached capability probe. _Atomic since rbipc_uintr_available() may be
+   * invoked concurrently by multiple threads; the write is idempotent (always
+   * converges to 1 or 0) so relaxed ordering is sufficient. The cache is never
+   * reset after the first probe.
+   */
+  static _Atomic int cached = -1;
+  const int cd = atomic_load_explicit(&cached, memory_order_relaxed);
+  if (cd != -1) {
+    return cd == 1;
   }
 
   unsigned int eax = 0, ebx = 0, ecx = 0, edx = 0;
+  bool supported = false;
   if (__get_cpuid_count(7, 0, &eax, &ebx, &ecx, &edx)) {
     /* EDX bit 5: UINTR (User Interrupts) */
     if (edx & (1U << 5)) {
-      cached = 1;
-      return true;
+      supported = true;
     }
   }
 
-  cached = 0;
-  return false;
+  /* Only the first thread to probe publishes the result; others may probe
+   * once more but converge on the same value (idempotent write). */
+  atomic_store_explicit(&cached, supported ? 1 : 0, memory_order_relaxed);
+  return supported;
 #else
   return false;
 #endif
