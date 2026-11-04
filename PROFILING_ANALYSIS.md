@@ -79,7 +79,7 @@ The table below summarizes the microarchitectural hardware performance counters 
 | **Instructions Executed (`instructions:u`)** | 3,676,924,371 | 3,495,598,178 | 1,058,765,055 | ~12,200,000,000 |
 | **Instructions Per Cycle (IPC)** | 0.65 | **1.24 (HIGH ILP)** | 0.21 (Pause Bound) | 0.33 |
 | **Total Branches (`branches:u`)** | 785,566,777 | 376,938,912 | 228,753,191 | ~2,800,000,000 |
-| **Branch Mispredictions (`branch-misses:u`)**| 229,983 | 1,253,902 | 1,379,573 | ~9,500,000 |
+| **Branch Mispredictions (`branch-misses:u`)** | 229,983 | 1,253,902 | 1,379,573 | ~9,500,000 |
 | **Branch Misprediction Rate (%)** | **0.029% (EXTRAORDINARY)** | **0.33%** | **0.60%** | 0.34% |
 | **Cache References (`cache-references:u`)** | 431,218,444 | 228,079,277 | 81,768,403 | ~850,000,000 |
 | **Cache Misses (`cache-misses:u`)** | 5,795,337 | 2,373,627 | 1,883,684 | ~14,200,000 |
@@ -93,6 +93,7 @@ The table below summarizes the microarchitectural hardware performance counters 
 ## 5. Flamegraph Dissections & Visual Stack Analyses
 
 Interactive flamegraphs provide an immediate, visual decomposition of on-CPU execution time:
+
 - The **x-axis** spans the entire sampling profile (100% of captured CPU samples). The width of each rectangular box is proportional to the fraction of CPU cycles spent in that function (including its callees).
 - The **y-axis** represents call stack depth, with caller frames at the bottom and active callee frames at the top.
 - The visual shape immediately distinguishes algorithms: **flat, broad plateaus** indicate clean, direct user-space computation with minimal call overhead, whereas **towering spires** reveal deep recursive call chains, lock contention loops, or kernel synchronization transitions.
@@ -126,10 +127,11 @@ Interactive flamegraphs provide an immediate, visual decomposition of on-CPU exe
 | **`rbipc_reserve_write_timeout`** | 2,459,287,480 | **38.74%** | Atomic fetch-and-add reservation on `hdr->write_ticket`, slot address calculation, turn check |
 | **`main` (Producer Loop Harness)** | 363,677,215 | **5.73%** | Iteration counting and payload preparation |
 | **`rbipc_commit_write`** | 331,800,817 | **5.23%** | Release-store of sequence turn word and slot status bitmask |
-| **`rbipc_io_handle_write_backoff`**| 0 | **0.00%** | Zero backoff: ring buffer never saturates during balanced 1P-1C streaming |
+| **`rbipc_io_handle_write_backoff`** | 0 | **0.00%** | Zero backoff: ring buffer never saturates during balanced 1P-1C streaming |
 | **Kernel / System Call Traps** | 0 | **0.00%** | Zero context switches, zero futex calls; 100% of execution resides in user space |
 
-#### Microarchitectural Findings:
+#### Microarchitectural Findings
+
 1. **Shallow Call Stack Depth**: The call hierarchy is extremely shallow (maximum 3 levels: `main` $\to$ `consumer_fn` $\to$ slot primitives). Inlining ensures that hot-path execution involves zero function call frame allocations, preserving register availability for payload pointers.
 2. **Near-Zero Branch Misprediction (0.029%)**: With only 229,983 misses out of 785 million branches, compiler hints (`RBIPC_LIKELY`) and straight-line conditional move (`cmov`) instructions ensure that Intel Skylake's branch predictor (BPU) operates with **99.971% accuracy**, completely eliminating pipeline flushing penalties.
 3. **Symmetric Producer/Consumer Balance**: Time is split almost equally between producer operations (38.74% reserve + 5.23% commit + 5.73% loop = 49.70%) and consumer operations (49.72%), proving optimal load balancing across CPU cores without starvation.
@@ -164,7 +166,8 @@ Interactive flamegraphs provide an immediate, visual decomposition of on-CPU exe
 | **`clock_gettime`** | 71,321,203 | **2.47%** | Harness iteration timing |
 | **Backoff & Stalls** | 0 | **0.00%** | Zero backoff, zero store buffer stalls |
 
-#### Microarchitectural Findings:
+#### 5.2 Microarchitectural Findings
+
 1. **Instruction-Level Parallelism Doubling (1.24 IPC)**:
    In single-slot streaming, serial atomic operations constrain execution to 0.65 IPC. In contrast, B-Queue vector batching achieves **1.24 IPC**—nearly doubling the number of instructions retired per clock cycle. Amortizing `atomic_fetch_add(32)` across 32 contiguous slots allows the Skylake out-of-order execution engine to dispatch multiple independent memory load/store operations in parallel.
 2. **AVX2 Vector Scanning Prominence**:
@@ -203,7 +206,8 @@ Interactive flamegraphs provide an immediate, visual decomposition of on-CPU exe
 | **`rbipc_read_release`** | 225,094,086 | **3.31%** | Atomic release of consumer turn sequences |
 | **`rbipc_commit_write`** | 107,288,647 | **1.58%** | Atomic release of producer turn sequences |
 
-#### Microarchitectural Findings:
+#### 5.3 Microarchitectural Findings
+
 1. **The Absorption Mechanism of Adaptive Backoff**:
    In stark contrast to normal streaming where backoff is 0.0%, under 4P-4C contention **77.94%** of total CPU cycles (54.22% write + 23.72% read) are spent inside `rbipc_io_handle_write_backoff` and `rbipc_io_handle_read_backoff`.
    - **Why this is beneficial**: In naïve spin-locks or DPDK `rte_ring`, contending threads spin aggressively with tight CAS loops. Under 8 contending threads on 4 logical CPUs, tight CAS loops invalidate the shared cacheline on every iteration, causing catastrophic cacheline bouncing across the L3 interconnect and collapsing throughput to 0.02 Mops/s.
@@ -243,7 +247,8 @@ Interactive flamegraphs provide an immediate, visual decomposition of on-CPU exe
 | **`producer_worker`** | 1,199,876,447 | **3.23%** | Message production and simulated 0.2% slot aborts (`rbipc_abort_write`) |
 | **`rbipc_slot_recover_expired_lease_ex`** | 316,000,000 | **0.85%** | Background lease revocation: discovering stalled consumer slots and force-releasing |
 
-#### Microarchitectural Findings:
+#### 5.4 Microarchitectural Findings
+
 1. **The Cost of High-Frequency Lease Auditing (vDSO 40.9%)**:
    In strict real-time telemetry pipelines where consumer leases are actively verified on every message transit, timestamping is the primary CPU consumer. Thanks to Linux vDSO (`__vdso_clock_gettime`), these timestamps execute entirely in user space by reading the hardware Time Stamp Counter (`RDTSC`) without incurring a kernel system call trap.
 2. **Defensive Isolation Efficiency**:
@@ -274,7 +279,7 @@ flowchart TD
     end
 ```
 
-### Key Analytical Takeaways:
+### Key Analytical Takeaways
 
 1. **Clean Decoupling of Hot Path vs. Contention Management**:
    In normal execution, `librbipc` operates with zero backoff overhead: 100% of CPU cycles are dedicated to payload transfers, achieving sub-20 ns batch latency and sub-100 ns streaming latency. The backoff engine remains dormant.
