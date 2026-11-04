@@ -22,6 +22,20 @@
 #include "rbipc_predicate.h"
 
 /**
+ * @brief Initialize the common slot control fields (everything but sequence).
+ * @details Shared by single-slot init and the packed table-init branch; the
+ *          sequence word is set separately since packed mode packs the ticket
+ *          and state into it.
+ */
+RBIPC_INLINE void rbipc_slot_init_fields(rbipc_slot_t *slot) {
+  atomic_init(&slot->state, RBIPC_SLOT_EMPTY);
+  atomic_init(&slot->producer_pid, 0);
+  atomic_init(&slot->len, 0);
+  atomic_init(&slot->consumer_pid, 0);
+  atomic_init(&slot->acquire_timestamp_ns, 0);
+}
+
+/**
  * @brief Initialize an individual slot control descriptor in shared memory.
  *
  * @param[out] slot  Direct pointer to slot descriptor.
@@ -29,11 +43,7 @@
  */
 RBIPC_INLINE void rbipc_slot_init_single(rbipc_slot_t *slot, uint32_t index) {
   atomic_init(&slot->sequence, index);
-  atomic_init(&slot->state, RBIPC_SLOT_EMPTY);
-  atomic_init(&slot->producer_pid, 0);
-  atomic_init(&slot->len, 0);
-  atomic_init(&slot->consumer_pid, 0);
-  atomic_init(&slot->acquire_timestamp_ns, 0);
+  rbipc_slot_init_fields(slot);
 }
 
 /**
@@ -59,11 +69,7 @@ void rbipc_slot_init_table_ex(rbipc_slot_t *RBIPC_RESTRICT slots,
   if (is_packed) {
     for (uint32_t i = 0; i < capacity; ++i) {
       atomic_init(&s[i].sequence, rbipc_slot_pack(i, 0, RBIPC_SLOT_EMPTY));
-      atomic_init(&s[i].state, RBIPC_SLOT_EMPTY);
-      atomic_init(&s[i].producer_pid, 0);
-      atomic_init(&s[i].len, 0);
-      atomic_init(&s[i].consumer_pid, 0);
-      atomic_init(&s[i].acquire_timestamp_ns, 0);
+      rbipc_slot_init_fields(&s[i]);
     }
   } else {
     for (uint32_t i = 0; i < capacity; ++i) {

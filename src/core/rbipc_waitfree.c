@@ -113,6 +113,57 @@ void rbipc_waitfree_unregister_peer(rbipc_ring_t *ring) {
 }
 
 /**
+ * @brief Perform cooperative assistance for a claimed WRITE help request.
+ * @details Copies the staged payload into the ring slot and commits the write
+ *          once the preceding turn has arrived; otherwise reverts to POSTED so
+ *          the next scan cycle retries.
+ */
+static void rbipc_waitfree_help_write(rbipc_ring_t *ring,
+                                      rbipc_help_slot_t *help, uint64_t ticket,
+                                      uint64_t seq, uint64_t tmasked,
+                                      uint32_t slot_idx) {
+  if (seq == tmasked) {
+    uint32_t len =
+        atomic_load_explicit(&help->payload_len, memory_order_relaxed);
+    char *slot_payload =
+        (char *)ring->data_map + ((size_t)slot_idx * ring->cached_slot_size);
+    if (len <= sizeof(help->inline_staging)) {
+      memcpy(slot_payload, help->inline_staging, len);
+    }
+    (void)rbipc_commit_write(ring, ticket, len);
+    atomic_store_explicit(&help->helper_pid, (uint32_t)ring->cached_pid,
+                          memory_order_relaxed);
+    atomic_store_explicit(&help->state, RBIPC_HELP_COMPLETED,
+                          memory_order_release);
+  } else if (seq > tmasked) {
+    /* Already advanced by another peer or owner */
+    atomic_store_explicit(&help->state, RBIPC_HELP_COMPLETED,
+                          memory_order_release);
+  } else {
+    /* Preceding turn not yet arrived; revert to POSTED so next cycle retries */
+    atomic_store_explicit(&help->state, RBIPC_HELP_POSTED, memory_order_release);
+  }
+}
+
+/**
+ * @brief Perform cooperative assistance for a claimed READ help request.
+ * @details Marks the request COMPLETED once the slot has advanced past the
+ *          target turn; otherwise reverts to POSTED for a later retry.
+ */
+static void rbipc_waitfree_help_read(rbipc_ring_t *ring,
+                                     rbipc_help_slot_t *help, uint64_t seq,
+                                     uint64_t tmasked) {
+  if (seq >= tmasked + 1) {
+    atomic_store_explicit(&help->helper_pid, (uint32_t)ring->cached_pid,
+                          memory_order_relaxed);
+    atomic_store_explicit(&help->state, RBIPC_HELP_COMPLETED,
+                          memory_order_release);
+  } else {
+    atomic_store_explicit(&help->state, RBIPC_HELP_POSTED, memory_order_release);
+  }
+}
+
+/**
  * @brief Actively scans cooperative helper slots to assist stalled concurrent peers.
  */
 void rbipc_waitfree_cooperative_help(rbipc_ring_t *ring) {
@@ -146,29 +197,9 @@ void rbipc_waitfree_cooperative_help(rbipc_ring_t *ring) {
     rbipc_waitfree_slot_seq_and_ticket(ring, slot, ticket, &seq, &tmasked);
 
     if (op == RBIPC_HELP_OP_WRITE) {
-      if (seq == tmasked) {
-        uint32_t len = atomic_load_explicit(&help->payload_len, memory_order_relaxed);
-        char *slot_payload = (char *)ring->data_map + ((size_t)slot_idx * ring->cached_slot_size);
-        if (len <= sizeof(help->inline_staging)) {
-          memcpy(slot_payload, help->inline_staging, len);
-        }
-        (void)rbipc_commit_write(ring, ticket, len);
-        atomic_store_explicit(&help->helper_pid, (uint32_t)ring->cached_pid, memory_order_relaxed);
-        atomic_store_explicit(&help->state, RBIPC_HELP_COMPLETED, memory_order_release);
-      } else if (seq > tmasked) {
-        /* Already advanced by another peer or owner */
-        atomic_store_explicit(&help->state, RBIPC_HELP_COMPLETED, memory_order_release);
-      } else {
-        /* Preceding turn not yet arrived; revert to POSTED so next cycle retries */
-        atomic_store_explicit(&help->state, RBIPC_HELP_POSTED, memory_order_release);
-      }
+      rbipc_waitfree_help_write(ring, help, ticket, seq, tmasked, slot_idx);
     } else if (op == RBIPC_HELP_OP_READ) {
-      if (seq >= tmasked + 1) {
-        atomic_store_explicit(&help->helper_pid, (uint32_t)ring->cached_pid, memory_order_relaxed);
-        atomic_store_explicit(&help->state, RBIPC_HELP_COMPLETED, memory_order_release);
-      } else {
-        atomic_store_explicit(&help->state, RBIPC_HELP_POSTED, memory_order_release);
-      }
+      rbipc_waitfree_help_read(ring, help, seq, tmasked);
     }
   }
 }

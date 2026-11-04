@@ -113,17 +113,28 @@ rbipc_ring_init_header_fields(rbipc_shm_header_t *RBIPC_RESTRICT hdr,
 }
 
 /**
- * @brief Atomically increment participant counters based on active roles.
+ * @brief Atomically adjust participant counters by @p delta based on active roles.
+ * @details Shared by register (delta=+1) and deregister (delta=-1) paths.
  */
-static void rbipc_ring_register_roles(rbipc_shm_header_t *hdr, uint32_t roles) {
+static void rbipc_ring_adjust_roles(rbipc_shm_header_t *hdr, uint32_t roles,
+                                    int delta) {
   if (!hdr)
     return;
   if (roles & RBIPC_ROLE_PRODUCER) {
-    atomic_fetch_add_explicit(&hdr->active_producers, 1, memory_order_relaxed);
+    atomic_fetch_add_explicit(&hdr->active_producers, delta,
+                              memory_order_relaxed);
   }
   if (roles & RBIPC_ROLE_CONSUMER) {
-    atomic_fetch_add_explicit(&hdr->active_consumers, 1, memory_order_relaxed);
+    atomic_fetch_add_explicit(&hdr->active_consumers, delta,
+                              memory_order_relaxed);
   }
+}
+
+/**
+ * @brief Atomically increment participant counters based on active roles.
+ */
+static void rbipc_ring_register_roles(rbipc_shm_header_t *hdr, uint32_t roles) {
+  rbipc_ring_adjust_roles(hdr, roles, 1);
 }
 
 /**
@@ -131,14 +142,7 @@ static void rbipc_ring_register_roles(rbipc_shm_header_t *hdr, uint32_t roles) {
  */
 static void rbipc_ring_deregister_roles(rbipc_shm_header_t *hdr,
                                         uint32_t roles) {
-  if (!hdr)
-    return;
-  if (roles & RBIPC_ROLE_PRODUCER) {
-    atomic_fetch_sub_explicit(&hdr->active_producers, 1, memory_order_relaxed);
-  }
-  if (roles & RBIPC_ROLE_CONSUMER) {
-    atomic_fetch_sub_explicit(&hdr->active_consumers, 1, memory_order_relaxed);
-  }
+  rbipc_ring_adjust_roles(hdr, roles, -1);
 }
 
 /**
