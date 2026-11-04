@@ -78,7 +78,18 @@ static void run_producer_process(uint32_t producer_id, proc_coordination_t *coor
     proc_msg_t msg;
     msg.producer_id = producer_id;
 
+    /* Stack canary to detect corruption of the producer's stack frame. */
+    volatile uint64_t canary_before = 0xDEADBEEFCAFEBABEULL;
+    volatile uint64_t canary_after = 0xDEADBEEFCAFEBABEULL;
+
     for (uint32_t i = 0; i < MSGS_PER_PRODUCER; ++i) {
+        if (canary_before != 0xDEADBEEFCAFEBABEULL || canary_after != 0xDEADBEEFCAFEBABEULL) {
+            fprintf(stderr, "[producer %u] STACK CANARY TRIPPED at iter %u (before=%llx after=%llx)\n",
+                    producer_id, i, (unsigned long long)canary_before,
+                    (unsigned long long)canary_after);
+            atomic_fetch_add(&coord->error_count, 1);
+            _exit(2);
+        }
         msg.seq = i;
         msg.timestamp_ns = get_time_ns();
         for (size_t b = 0; b < sizeof(msg.payload); ++b) {
