@@ -38,6 +38,17 @@ struct rbipc_sub {
  */
 
 /**
+ * @brief Stamp a slot as reserved by the publisher, clearing stale consumer
+ * ownership metadata.
+ */
+RBIPC_INLINE void rbipc_pubsub_mark_slot_reserved(rbipc_slot_t *slot,
+                                                  pid_t pid) {
+  atomic_store_explicit(&slot->consumer_pid, 0, memory_order_relaxed);
+  atomic_store_explicit(&slot->acquire_timestamp_ns, 0, memory_order_relaxed);
+  rbipc_slot_mark_reserved(slot, pid);
+}
+
+/**
  * @brief Atomically writes payload, commits slot state, and publishes sequence
  * turn.
  */
@@ -50,9 +61,7 @@ static void rbipc_pubsub_commit_slot_payload(rbipc_ring_t *ring,
       (rbipc_slot_t *)RBIPC_ASSUME_ALIGNED(ring->slots, RBIPC_CACHE_LINE);
 
   rbipc_slot_t *slot = &slots[ticket & mask];
-  atomic_store_explicit(&slot->consumer_pid, 0, memory_order_relaxed);
-  atomic_store_explicit(&slot->acquire_timestamp_ns, 0, memory_order_relaxed);
-  rbipc_slot_mark_reserved(slot, ring->cached_pid);
+  rbipc_pubsub_mark_slot_reserved(slot, ring->cached_pid);
 
   void *slot_ptr = rbipc_io_calc_slot_ptr(ring, ticket);
   rbipc_stream_copy_auto(slot_ptr, buf, len);
@@ -75,6 +84,23 @@ RBIPC_INLINE bool rbipc_sub_clamp_cursor(rbipc_sub_t *sub, uint64_t head,
     return true;
   }
   return false;
+}
+
+/**
+ * @brief Extract slot state and payload length honoring the packed descriptor
+ * layout.
+ */
+RBIPC_INLINE void rbipc_sub_slot_state_and_len(const rbipc_ring_t *ring,
+                                               const rbipc_slot_t *slot,
+                                               uint64_t seq, uint32_t *state,
+                                               uint32_t *len) {
+  if (ring->is_packed) {
+    *state = rbipc_slot_unpack_state(seq);
+    *len = rbipc_slot_unpack_len(seq);
+  } else {
+    *state = atomic_load_explicit(&slot->state, memory_order_acquire);
+    *len = atomic_load_explicit(&slot->len, memory_order_acquire);
+  }
 }
 
 /* ============================================================================
@@ -103,9 +129,7 @@ int rbipc_publish_reserve(rbipc_ring_t *ring, uint32_t len, void **out_buf,
       (rbipc_slot_t *)RBIPC_ASSUME_ALIGNED(ring->slots, RBIPC_CACHE_LINE);
   rbipc_slot_t *slot = &slots[ticket & mask];
 
-  atomic_store_explicit(&slot->consumer_pid, 0, memory_order_relaxed);
-  atomic_store_explicit(&slot->acquire_timestamp_ns, 0, memory_order_relaxed);
-  rbipc_slot_mark_reserved(slot, ring->cached_pid);
+  rbipc_pubsub_mark_slot_reserved(slot, ring->cached_pid);
 
   *out_buf = rbipc_io_calc_slot_ptr(ring, ticket);
   *out_ticket = ticket;
@@ -285,17 +309,16 @@ int rbipc_sub_poll(rbipc_sub_t *sub, const void **out_buf, uint32_t *out_len,
   uint64_t seq = atomic_load_explicit(&slot->sequence, memory_order_acquire);
 
   if (RBIPC_LIKELY(rbipc_slot_is_ready_any(seq, sub->cursor, ring->is_packed))) {
-    uint32_t state = ring->is_packed
-                         ? rbipc_slot_unpack_state(seq)
-                         : atomic_load_explicit(&slot->state, memory_order_acquire);
+    uint32_t state = 0;
+    uint32_t len = 0;
+    rbipc_sub_slot_state_and_len(ring, slot, seq, &state, &len);
     if (RBIPC_UNLIKELY(state == RBIPC_SLOT_POISONED)) {
       *out_seq = sub->cursor;
       sub->cursor++;
       return RBIPC_ERR_POISONED;
     }
     *out_buf = rbipc_io_calc_slot_ptr(ring, sub->cursor);
-    *out_len = ring->is_packed ? rbipc_slot_unpack_len(seq)
-                               : atomic_load_explicit(&slot->len, memory_order_acquire);
+    *out_len = len;
     *out_seq = sub->cursor;
     sub->cursor++;
     return RBIPC_OK;
@@ -340,9 +363,9 @@ int rbipc_sub_poll_batch(rbipc_sub_t *sub, uint32_t max_count,
       break;
     }
 
-    uint32_t state = ring->is_packed
-                         ? rbipc_slot_unpack_state(seq)
-                         : atomic_load_explicit(&slot->state, memory_order_acquire);
+    uint32_t state = 0;
+    uint32_t len = 0;
+    rbipc_sub_slot_state_and_len(ring, slot, seq, &state, &len);
     if (RBIPC_UNLIKELY(state == RBIPC_SLOT_POISONED)) {
       if (count > 0) {
         break;
@@ -354,8 +377,7 @@ int rbipc_sub_poll_batch(rbipc_sub_t *sub, uint32_t max_count,
     }
 
     out_bufs[count] = rbipc_io_calc_slot_ptr(ring, cur);
-    out_lens[count] = ring->is_packed ? rbipc_slot_unpack_len(seq)
-                                      : atomic_load_explicit(&slot->len, memory_order_acquire);
+    out_lens[count] = len;
     out_seqs[count] = cur;
     sub->cursor++;
     count++;
