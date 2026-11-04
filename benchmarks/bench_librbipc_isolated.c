@@ -17,6 +17,7 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include <string.h>
+#include <limits.h>
 #include <pthread.h>
 #include <stdatomic.h>
 #include <unistd.h>
@@ -32,6 +33,22 @@ static inline uint64_t get_ns(void) {
     struct timespec ts;
     clock_gettime(CLOCK_MONOTONIC, &ts);
     return (uint64_t)ts.tv_sec * NSEC_PER_SEC + (uint64_t)ts.tv_nsec;
+}
+
+/**
+ * @brief Parse a positive integer CLI argument, falling back to @p def on
+ * missing, non-numeric, or non-positive input.
+ */
+static int parse_positive_int(const char *s, int def) {
+    if (s == NULL || *s == '\0') {
+        return def;
+    }
+    char *end = NULL;
+    long v = strtol(s, &end, 10);
+    if (end == s || *end != '\0' || v < 1 || v > INT_MAX) {
+        return def;
+    }
+    return (int)v;
 }
 
 typedef enum {
@@ -235,15 +252,15 @@ int main(int argc, char **argv) {
         } else if (strcmp(argv[i], "--iters") == 0 && i + 1 < argc) {
             iters = strtoull(argv[++i], NULL, 10);
         } else if (strcmp(argv[i], "--mpmc") == 0 && i + 2 < argc) {
-            num_prods = atoi(argv[++i]);
-            num_cons = atoi(argv[++i]);
+            num_prods = parse_positive_int(argv[++i], 1);
+            num_cons = parse_positive_int(argv[++i], 1);
             if (num_prods < 1) num_prods = 1;
             if (num_cons < 1) num_cons = 1;
         } else if (strcmp(argv[i], "--prods") == 0 && i + 1 < argc) {
-            num_prods = atoi(argv[++i]);
+            num_prods = parse_positive_int(argv[++i], 1);
             if (num_prods < 1) num_prods = 1;
         } else if (strcmp(argv[i], "--cons") == 0 && i + 1 < argc) {
-            num_cons = atoi(argv[++i]);
+            num_cons = parse_positive_int(argv[++i], 1);
             if (num_cons < 1) num_cons = 1;
         }
     }
