@@ -18,6 +18,7 @@
 #include "rbipc.h"
 #include "rbipc_internal.h"
 #include "rbipc_uring.h"
+#include "rbipc_arch.h"
 
 #include <errno.h>
 #include <sys/syscall.h>
@@ -132,7 +133,7 @@ int rbipc_uring_register_ring(const rbipc_ring_t *ring, int uring_fd) {
     return RBIPC_ERR_INVAL;
   }
 
-  const long page = (long)sysconf(_SC_PAGESIZE);
+  const long page = (long)rbipc_page_size();
   if (RBIPC_UNLIKELY(page <= 0 ||
                      (uintptr_t)ring->data_map % (uintptr_t)page != 0 ||
                      ring->data_size % (uintptr_t)page != 0 ||

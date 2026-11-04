@@ -29,32 +29,59 @@
 
 /**
  * @brief Checks if host hardware supports Intel Data Streaming Accelerator (DSA).
+ * @details Cached capability probe. _Atomic since rbipc_dma_available() may be
+ *          invoked concurrently by multiple threads; the idempotent write (1 or 0)
+ *          converges so relaxed ordering is sufficient.
  */
 bool rbipc_dma_available(void) {
 #if defined(__x86_64__)
-  static int cached = -1;
-  if (cached != -1) {
-    return cached == 1;
+  static _Atomic int cached = -1;
+  const int cd = atomic_load_explicit(&cached, memory_order_relaxed);
+  if (cd != -1) {
+    return cd == 1;
   }
 
   unsigned int eax = 0, ebx = 0, ecx = 0, edx = 0;
+  int supported = 0;
   if (__get_cpuid_count(7, 0, &eax, &ebx, &ecx, &edx)) {
     /* ECX bit 27: MOVDIR64B */
     /* ECX bit 29: ENQCMD */
     if ((ecx & (1U << 27)) && (ecx & (1U << 29))) {
       /* Verify that /dev/dsa work queues exist */
       if (access("/dev/dsa", F_OK) == 0) {
-        cached = 1;
-        return true;
+        supported = 1;
       }
     }
   }
 
-  cached = 0;
-  return false;
+  atomic_store_explicit(&cached, supported, memory_order_relaxed);
+  return supported == 1;
 #else
   return false;
 #endif
+}
+
+/**
+ * @brief Reserve a slot, copy the payload, and commit the write.
+ * @details Shared by the blocking and bounded-timeout DMA write paths. The
+ *          reserve callback abstracts the timeout variant; the payload is
+ *          copied with the non-temporal streaming pipeline.
+ */
+typedef int (*rbipc_dma_reserve_fn)(rbipc_ring_t *ring, uint32_t len,
+                                    uint64_t timeout_ns, void **out_buf,
+                                    uint64_t *out_ticket);
+
+static int rbipc_dma_reserve_copy_commit(rbipc_ring_t *ring, const void *buf,
+                                         size_t len, uint64_t timeout_ns,
+                                         rbipc_dma_reserve_fn reserve) {
+  void *slot_buf = NULL;
+  uint64_t ticket = 0;
+  int rc = reserve(ring, (uint32_t)len, timeout_ns, &slot_buf, &ticket);
+  if (RBIPC_UNLIKELY(rc != RBIPC_OK)) {
+    return rc;
+  }
+  rbipc_stream_copy_auto(slot_buf, buf, len);
+  return rbipc_commit_write(ring, ticket, (uint32_t)len);
 }
 
 /**
@@ -71,30 +98,8 @@ int rbipc_write_dma(rbipc_ring_t *ring, const void *buf, size_t len) {
     return rbipc_write_stream(ring, buf, (uint32_t)len, &stream_ticket);
   }
 
-  /* Hardware DSA offload path */
-  void *slot_buf = NULL;
-  uint64_t ticket = 0;
-  int rc = rbipc_reserve_write(ring, (uint32_t)len, &slot_buf, &ticket);
-  if (RBIPC_UNLIKELY(rc != RBIPC_OK)) {
-    return rc;
-  }
-
-  /* On systems with DSA hardware work queues mapped, dispatch descriptor via MOVDIR64B */
-#if defined(__x86_64__)
-  rbipc_dma_desc_t desc = {0};
-  desc.src_addr = (uint64_t)(uintptr_t)buf;
-  desc.dst_addr = (uint64_t)(uintptr_t)slot_buf;
-  desc.xfer_size = (uint32_t)len;
-  desc.op = 0x03; /* DSA_OPCODE_MEMMOVE */
-  (void)desc;
-
-  /* Fallback streaming copy if WQ portal is not opened */
-  rbipc_stream_copy_auto(slot_buf, buf, len);
-#else
-  rbipc_stream_copy_auto(slot_buf, buf, len);
-#endif
-
-  return rbipc_commit_write(ring, ticket, (uint32_t)len);
+  return rbipc_dma_reserve_copy_commit(ring, buf, len, UINT64_MAX,
+                                       rbipc_reserve_write_timeout);
 }
 
 /**
@@ -111,13 +116,6 @@ int rbipc_write_dma_timeout(rbipc_ring_t *ring, const void *buf, size_t len,
     return rbipc_write_stream_timeout(ring, buf, (uint32_t)len, timeout_ns, &stream_ticket);
   }
 
-  void *slot_buf = NULL;
-  uint64_t ticket = 0;
-  int rc = rbipc_reserve_write_timeout(ring, (uint32_t)len, timeout_ns, &slot_buf, &ticket);
-  if (RBIPC_UNLIKELY(rc != RBIPC_OK)) {
-    return rc;
-  }
-
-  rbipc_stream_copy_auto(slot_buf, buf, len);
-  return rbipc_commit_write(ring, ticket, (uint32_t)len);
+  return rbipc_dma_reserve_copy_commit(ring, buf, len, timeout_ns,
+                                       rbipc_reserve_write_timeout);
 }
