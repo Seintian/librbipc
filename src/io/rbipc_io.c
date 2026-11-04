@@ -60,6 +60,19 @@ rbipc_io_complete_write_reservation(rbipc_ring_t *RBIPC_RESTRICT ring,
 }
 
 /**
+ * @brief Finalize a successful read acquisition: populate payload pointers and
+ * prefetch the next slot.
+ */
+RBIPC_INLINE void rbipc_io_finish_read(const rbipc_ring_t *ring,
+                                       uint64_t ticket, uint32_t len,
+                                       const void **out_buf,
+                                       uint32_t *out_len) {
+  *out_buf = rbipc_io_calc_slot_ptr(ring, ticket);
+  *out_len = len;
+  rbipc_io_prefetch_read_next(ring, ticket + 1);
+}
+
+/**
  * @brief Finalize single-slot read acquisition and extract message payload
  * pointers.
  */
@@ -70,26 +83,21 @@ RBIPC_INLINE int rbipc_io_complete_read_acquisition(
   *out_ticket = ticket;
 
   if (ring->is_trusted) {
-    *out_buf = rbipc_io_calc_slot_ptr(ring, ticket);
-    if (ring->is_packed) {
-      *out_len = rbipc_slot_unpack_len(seq);
-    } else {
-      *out_len = atomic_load_explicit(&slot->len, memory_order_acquire);
-    }
-    rbipc_io_prefetch_read_next(ring, ticket + 1);
+    uint32_t len = ring->is_packed ? rbipc_slot_unpack_len(seq)
+                                   : atomic_load_explicit(&slot->len,
+                                                          memory_order_acquire);
+    rbipc_io_finish_read(ring, ticket, len, out_buf, out_len);
     return RBIPC_OK;
   }
 
   if (ring->is_packed) {
-    uint32_t state = rbipc_slot_unpack_state(seq);
-    if (RBIPC_UNLIKELY(state == RBIPC_SLOT_POISONED)) {
+    if (RBIPC_UNLIKELY(rbipc_slot_unpack_state(seq) == RBIPC_SLOT_POISONED)) {
       *out_buf = NULL;
       *out_len = 0;
       return RBIPC_ERR_POISONED;
     }
-    *out_buf = rbipc_io_calc_slot_ptr(ring, ticket);
-    *out_len = rbipc_slot_unpack_len(seq);
-    rbipc_io_prefetch_read_next(ring, ticket + 1);
+    rbipc_io_finish_read(ring, ticket, rbipc_slot_unpack_len(seq), out_buf,
+                         out_len);
     return RBIPC_OK;
   }
 
@@ -101,9 +109,9 @@ RBIPC_INLINE int rbipc_io_complete_read_acquisition(
 
   if (RBIPC_LIKELY(rbipc_slot_state_is_committed(state))) {
     rbipc_slot_mark_acquired(slot, ring->cached_pid, acq_ts);
-    *out_buf = rbipc_io_calc_slot_ptr(ring, ticket);
-    *out_len = atomic_load_explicit(&slot->len, memory_order_acquire);
-    rbipc_io_prefetch_read_next(ring, ticket + 1);
+    rbipc_io_finish_read(ring, ticket,
+                         atomic_load_explicit(&slot->len, memory_order_acquire),
+                         out_buf, out_len);
     return RBIPC_OK;
   }
   if (rbipc_slot_state_is_poisoned(state)) {
@@ -120,9 +128,10 @@ RBIPC_INLINE int rbipc_io_complete_read_acquisition(
     state = atomic_load_explicit(&slot->state, memory_order_acquire);
     if (rbipc_slot_state_is_committed(state)) {
       rbipc_slot_mark_acquired(slot, ring->cached_pid, acq_ts);
-      *out_buf = rbipc_io_calc_slot_ptr(ring, ticket);
-      *out_len = atomic_load_explicit(&slot->len, memory_order_acquire);
-      rbipc_io_prefetch_read_next(ring, ticket + 1);
+      rbipc_io_finish_read(ring, ticket,
+                           atomic_load_explicit(&slot->len,
+                                                memory_order_acquire),
+                           out_buf, out_len);
       return RBIPC_OK;
     }
     if (rbipc_slot_state_is_poisoned(state)) {
