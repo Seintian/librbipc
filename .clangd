@@ -37,3 +37,14 @@ CompileFlags:
   Add:
     - -xc
     - -std=c23
+
+---
+# C++ test files (e.g. tests/core/test_unit_cpp_compat.cpp) must NOT inherit
+# the C standard from compile_flags.txt / compile_commands.json. Override to
+# the C++ standard used by the Makefile (see Makefile:97).
+If:
+  PathMatch: .*\.cpp
+CompileFlags:
+  Add:
+    - -xc++
+    - -std=c++20

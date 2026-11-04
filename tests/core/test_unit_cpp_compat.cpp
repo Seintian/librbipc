@@ -26,7 +26,7 @@ static_assert(sizeof(rbipc_shm_header_t) % RBIPC_CACHE_LINE == 0, "rbipc_shm_hea
 static_assert(alignof(rbipc_shm_header_t) == RBIPC_CACHE_LINE, "rbipc_shm_header_t alignment mismatch in C++");
 
 int main() {
-    std::cout << "[test_unit_cpp_compat] Testing C++ public API integration..." << std::endl;
+    std::cout << "[test_unit_cpp_compat] Testing C++ public API integration..." << '\n';
 
     const std::string ring_name = "/rbipc_cpp_compat_test";
     const size_t capacity = 64;
@@ -62,7 +62,7 @@ int main() {
     }
 
     consumer_thread.join();
-    std::cout << "  [cpp_spsc] Transmitted " << msg_count << " messages across C++ threads successfully." << std::endl;
+    std::cout << "  [cpp_spsc] Transmitted " << msg_count << " messages across C++ threads successfully." << '\n';
 
     // 3. Test PubSub subscriber integration in C++
     rbipc_sub_t *sub = nullptr;
@@ -81,7 +81,7 @@ int main() {
     assert(std::string(static_cast<const char*>(sub_data)) == pub_msg);
 
     rbipc_sub_destroy(sub);
-    std::cout << "  [cpp_pubsub] Multicast broadcast validated." << std::endl;
+    std::cout << "  [cpp_pubsub] Multicast broadcast validated." << '\n';
 
     // 4. Close & destroy ring
     rc = rbipc_detach(ring);
@@ -89,6 +89,6 @@ int main() {
     rc = rbipc_destroy(ring_name.c_str());
     assert(rc == RBIPC_OK);
 
-    std::cout << "[test_unit_cpp_compat] All C++ compatibility checks passed successfully." << std::endl;
+    std::cout << "[test_unit_cpp_compat] All C++ compatibility checks passed successfully." << '\n';
     return 0;
 }

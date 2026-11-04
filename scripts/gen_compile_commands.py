@@ -31,6 +31,18 @@ def main():
             "file": os.path.abspath(t)
         })
 
+    # C++ test executables (built with g++ -std=c++20, see Makefile:97)
+    cxx = os.environ.get("CXX", "g++")
+    for t in sorted(glob.glob("tests/*/*.cpp")):
+        rel = t[6:-4] # strip 'tests/' and '.cpp'
+        b = f"bin/{rel}"
+        cmd = f"{cxx} -std=c++20 -Wall -Wextra -O3 -march=native -Iinclude -Isrc {t} -Llib -lrbipc -pthread -lrt -lm -o {b}"
+        entries.append({
+            "directory": cwd,
+            "command": cmd,
+            "file": os.path.abspath(t)
+        })
+
     # Benchmark executables
     for b_src in sorted(glob.glob("benchmarks/*.c")):
         b = f"bin/{os.path.basename(b_src)[:-2]}"
