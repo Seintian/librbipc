@@ -136,6 +136,21 @@ int rbipc_publish_reserve(rbipc_ring_t *ring, uint32_t len, void **out_buf,
   return RBIPC_OK;
 }
 
+/**
+ * @brief Wake blocked subscribers and signal the reactor after a publish.
+ * @details Shared by the commit, abort, and batch publish tails: issues a
+ *          release fence, wakes any futex waiters, then signals the reactor
+ *          eventfd so poll-based subscribers observe the new data.
+ */
+static void rbipc_pubsub_signal_waiters(rbipc_shm_header_t *hdr,
+                                        rbipc_ring_t *ring) {
+  atomic_signal_fence(memory_order_seq_cst);
+  if (RBIPC_UNLIKELY(rbipc_sync_has_waiters(&hdr->futex_waiters))) {
+    rbipc_sync_wake_all(&hdr->futex_seq, &hdr->futex_waiters);
+  }
+  rbipc_reactor_signal(ring);
+}
+
 RBIPC_LEAF
 int rbipc_publish_commit(rbipc_ring_t *ring, uint64_t ticket, uint32_t len) {
   if (RBIPC_UNLIKELY(!ring || !ring->hdr)) {
@@ -160,11 +175,7 @@ int rbipc_publish_commit(rbipc_ring_t *ring, uint64_t ticket, uint32_t len) {
     rbipc_slot_commit(slot, ticket, len);
   }
 
-  atomic_signal_fence(memory_order_seq_cst);
-  if (RBIPC_UNLIKELY(rbipc_sync_has_waiters(&hdr->futex_waiters))) {
-    rbipc_sync_wake_all(&hdr->futex_seq, &hdr->futex_waiters);
-  }
-  rbipc_reactor_signal(ring);
+  rbipc_pubsub_signal_waiters(hdr, ring);
 
   return RBIPC_OK;
 }
@@ -185,11 +196,7 @@ int rbipc_publish_abort(rbipc_ring_t *ring, uint64_t ticket) {
   if (poisoned) {
     atomic_fetch_add_explicit(&hdr->poisoned_slots_count, 1,
                               memory_order_relaxed);
-    atomic_signal_fence(memory_order_seq_cst);
-    if (RBIPC_UNLIKELY(rbipc_sync_has_waiters(&hdr->futex_waiters))) {
-      rbipc_sync_wake_all(&hdr->futex_seq, &hdr->futex_waiters);
-    }
-    rbipc_reactor_signal(ring);
+    rbipc_pubsub_signal_waiters(hdr, ring);
   }
   return RBIPC_OK;
 }
@@ -230,11 +237,7 @@ int rbipc_publish_batch(rbipc_ring_t *ring, uint32_t count,
                                      lens[i]);
   }
 
-  atomic_signal_fence(memory_order_seq_cst);
-  if (RBIPC_UNLIKELY(rbipc_sync_has_waiters(&hdr->futex_waiters))) {
-    rbipc_sync_wake_all(&hdr->futex_seq, &hdr->futex_waiters);
-  }
-  rbipc_reactor_signal(ring);
+  rbipc_pubsub_signal_waiters(hdr, ring);
 
   return RBIPC_OK;
 }
