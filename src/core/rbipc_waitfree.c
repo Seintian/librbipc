@@ -47,6 +47,31 @@ void rbipc_waitfree_init_table(rbipc_help_slot_t *table, uint32_t count) {
 }
 
 /**
+ * @brief Load a slot's sequence and compute the ticket masked to the stored turn width.
+ *
+ * @details Isolates the descriptor-layout-dependent prologue (packed vs. plain
+ * sequence extraction and 48-bit ticket masking) shared by the cooperative help
+ * and direct-resolution paths.
+ *
+ * @param[in]  ring      Ring handle providing the packed-mode flag.
+ * @param[in]  slot      Slot descriptor to inspect.
+ * @param[in]  ticket    Ticket number to mask.
+ * @param[out] out_seq   Receives the slot's current sequence turn.
+ * @param[out] out_tmask Receives the ticket masked to the stored turn width.
+ */
+static void rbipc_waitfree_slot_seq_and_ticket(const rbipc_ring_t *ring,
+                                               const rbipc_slot_t *slot,
+                                               uint64_t ticket,
+                                               uint64_t *out_seq,
+                                               uint64_t *out_tmask) {
+  uint64_t raw_seq =
+      atomic_load_explicit(&slot->sequence, memory_order_acquire);
+  *out_seq = ring->is_packed ? rbipc_slot_unpack_seq(raw_seq) : raw_seq;
+  *out_tmask =
+      ring->is_packed ? (ticket & RBIPC_PACKED_SEQ_TURN_MASK) : ticket;
+}
+
+/**
  * @brief Registers the current process/thread in the cooperative helper array.
  */
 int rbipc_waitfree_register_peer(rbipc_ring_t *ring) {
@@ -117,9 +142,8 @@ void rbipc_waitfree_cooperative_help(rbipc_ring_t *ring) {
     uint32_t slot_idx = (uint32_t)(ticket & ring->cached_capacity_mask);
     rbipc_slot_t *slot = &ring->slots[slot_idx];
 
-    uint64_t raw_seq = atomic_load_explicit(&slot->sequence, memory_order_acquire);
-    uint64_t seq = ring->is_packed ? rbipc_slot_unpack_seq(raw_seq) : raw_seq;
-    uint64_t tmasked = ring->is_packed ? (ticket & RBIPC_PACKED_SEQ_TURN_MASK) : ticket;
+    uint64_t seq = 0, tmasked = 0;
+    rbipc_waitfree_slot_seq_and_ticket(ring, slot, ticket, &seq, &tmasked);
 
     if (op == RBIPC_HELP_OP_WRITE) {
       if (seq == tmasked) {
@@ -228,9 +252,8 @@ int rbipc_waitfree_post_and_wait(rbipc_ring_t *ring, uint64_t ticket,
           memory_order_acq_rel, memory_order_acquire)) {
     if (op == RBIPC_HELP_OP_WRITE) {
       rbipc_slot_t *slot = &ring->slots[ring_slot_idx];
-      uint64_t raw_seq = atomic_load_explicit(&slot->sequence, memory_order_acquire);
-      uint64_t seq = ring->is_packed ? rbipc_slot_unpack_seq(raw_seq) : raw_seq;
-      uint64_t tmasked = ring->is_packed ? (ticket & RBIPC_PACKED_SEQ_TURN_MASK) : ticket;
+      uint64_t seq = 0, tmasked = 0;
+      rbipc_waitfree_slot_seq_and_ticket(ring, slot, ticket, &seq, &tmasked);
       if (seq == tmasked) {
         if (buf && len > 0) {
           memcpy(slot_payload, buf, len);

@@ -45,12 +45,15 @@
  */
 
 /**
- * @brief Validates ring creation parameters and resolves the host page
- * boundary.
+ * @brief Validates ring creation parameters and resolves the rounded capacity.
+ *
+ * @param[in]  capacity Requested slot count.
+ * @param[in]  slot_size Payload capacity per slot.
+ * @param[out] out_cap   Rounded power-of-two capacity within bounds.
+ * @return @ref RBIPC_OK on success, or an error code.
  */
 static int
 rbipc_ring_validate_create_params(size_t capacity, uint32_t slot_size,
-                                  size_t *RBIPC_RESTRICT out_page_size,
                                   uint32_t *RBIPC_RESTRICT out_cap) {
   if (capacity == 0 || !rbipc_is_valid_slot_size(slot_size)) {
     return RBIPC_ERR_INVAL;
@@ -58,9 +61,6 @@ rbipc_ring_validate_create_params(size_t capacity, uint32_t slot_size,
   if (capacity > (size_t)RBIPC_MAX_CAPACITY) {
     return RBIPC_ERR_OVERFLOW;
   }
-
-  size_t page_size = rbipc_page_size();
-  *out_page_size = page_size;
 
   uint32_t cap = rbipc_round_up_pow2_32((uint32_t)capacity);
   if (cap == 0 || cap > RBIPC_MAX_CAPACITY) {
@@ -266,17 +266,14 @@ int rbipc_ring_init_and_format_fd(int fd, const char *name, size_t capacity,
   if (RBIPC_UNLIKELY(!out_ring || capacity == 0 || slot_size == 0)) {
     return RBIPC_ERR_INVAL;
   }
-  size_t effective_page = page_size;
   uint32_t cap = 0;
-  int rc = rbipc_ring_validate_create_params(capacity, slot_size,
-                                             &effective_page, &cap);
+  int rc = rbipc_ring_validate_create_params(capacity, slot_size, &cap);
   if (RBIPC_UNLIKELY(rc != RBIPC_OK)) {
     return rc;
   }
-  effective_page = page_size;
 
   rbipc_layout_t layout;
-  rc = rbipc_shm_calc_layout_ex(cap, slot_size, effective_page, flags, &layout);
+  rc = rbipc_shm_calc_layout_ex(cap, slot_size, page_size, flags, &layout);
   if (RBIPC_UNLIKELY(rc != RBIPC_OK)) {
     return rc;
   }
@@ -335,17 +332,14 @@ rbipc_ring_create_instance(const char *name, size_t capacity,
                            uint32_t slot_size, uint32_t flags, mode_t mode,
                            uint32_t roles, size_t page_size,
                            rbipc_ring_t **RBIPC_RESTRICT out_ring) {
-  size_t effective_page = page_size;
   uint32_t cap = 0;
-  int rc = rbipc_ring_validate_create_params(capacity, slot_size,
-                                             &effective_page, &cap);
+  int rc = rbipc_ring_validate_create_params(capacity, slot_size, &cap);
   if (RBIPC_UNLIKELY(rc != RBIPC_OK)) {
     return rc;
   }
-  effective_page = page_size;
 
   rbipc_layout_t layout;
-  rc = rbipc_shm_calc_layout_ex(cap, slot_size, effective_page, flags, &layout);
+  rc = rbipc_shm_calc_layout_ex(cap, slot_size, page_size, flags, &layout);
   if (RBIPC_UNLIKELY(rc != RBIPC_OK)) {
     return rc;
   }
@@ -365,7 +359,7 @@ rbipc_ring_create_instance(const char *name, size_t capacity,
   const char *effective_name = is_named ? name : NULL;
 
   return rbipc_ring_init_and_format_fd(fd, effective_name, capacity, slot_size,
-                                       flags, roles, effective_page, out_ring);
+                                       flags, roles, page_size, out_ring);
 }
 
 RBIPC_LEAF
@@ -706,6 +700,54 @@ int rbipc_get_stats(const rbipc_ring_t *RBIPC_RESTRICT ring,
   return RBIPC_OK;
 }
 
+/**
+ * @brief Read the lifecycle state word of a slot, honoring the ring descriptor layout.
+ *
+ * @details In packed mode the state lives in the low nibble of the packed sequence
+ * word; otherwise it is stored in the dedicated @c state field. This isolates the
+ * layout-dependent read so callers can iterate slots uniformly.
+ *
+ * @param[in] slot      Slot descriptor to inspect.
+ * @param[in] is_packed True if the ring uses 64-bit packed descriptors.
+ * @return The slot lifecycle state (@ref RBIPC_SLOT_EMPTY, ...).
+ */
+static uint32_t rbipc_slot_state_word(const rbipc_slot_t *slot, bool is_packed) {
+  if (is_packed) {
+    uint64_t word = atomic_load_explicit(&slot->sequence, memory_order_relaxed);
+    return rbipc_slot_unpack_state(word);
+  }
+  return atomic_load_explicit(&slot->state, memory_order_relaxed);
+}
+
+/**
+ * @brief Track an active consumer lease on a slot, updating aggregate lease stats.
+ *
+ * @param[in,out] stats  Slot statistics accumulator.
+ * @param[in]     slot   Slot descriptor holding the lease.
+ * @param[in]     now_ns Current monotonic timestamp.
+ */
+static void rbipc_slot_stats_track_lease(rbipc_slot_stats_t *stats,
+                                         const rbipc_slot_t *slot,
+                                         uint64_t now_ns) {
+  uint32_t cpid =
+      atomic_load_explicit(&slot->consumer_pid, memory_order_relaxed);
+  if (cpid == 0) {
+    return;
+  }
+  uint64_t acq_ts =
+      atomic_load_explicit(&slot->acquire_timestamp_ns, memory_order_relaxed);
+  if (acq_ts == 0) {
+    return;
+  }
+  stats->active_leased_slots++;
+  if (now_ns > acq_ts) {
+    uint64_t elapsed = now_ns - acq_ts;
+    if (elapsed > stats->max_lease_elapsed_ns) {
+      stats->max_lease_elapsed_ns = elapsed;
+    }
+  }
+}
+
 RBIPC_LEAF
 int rbipc_get_slot_stats(const rbipc_ring_t *RBIPC_RESTRICT ring,
                          rbipc_slot_stats_t *RBIPC_RESTRICT out_slot_stats) {
@@ -720,63 +762,18 @@ int rbipc_get_slot_stats(const rbipc_ring_t *RBIPC_RESTRICT ring,
   uint64_t now_ns = rbipc_clock_monotonic_ns();
 
   /*
-   * Microarchitectural Optimization: Loop Unswitching & Branchless Histogramming.
-   *
-   * 1. Invariant Hoisting: The ring format (packed vs. standard) is constant across the entire
-   *    ring buffer. Hoisting `ring->is_packed` outside the loop eliminates up to 1,048,576
-   *    redundant branch evaluations per telemetry snapshot.
-   * 2. Branchless Histogramming: Rather than evaluating a 5-way `switch (state)` inside a tight
-   *    loop, slot lifecycle states [0, 4] are counted via direct array index increments:
-   *    `state_counts[state & 7U]++`. This converts 5 conditional branch paths into a single ALU
-   *    load/add/store, completely eliminating branch misprediction penalties.
+   * Microarchitectural Optimization: Branchless Histogramming.
+   * Slot lifecycle states [0, 4] are counted via direct array index increments
+   * (`state_counts[state & 7U]++`), converting 5 conditional branch paths into a
+   * single ALU load/add/store and eliminating branch misprediction penalties.
    */
   uint32_t state_counts[8] = {0};
 
-  if (ring->is_packed) {
-    for (uint32_t i = 0; i < cap; ++i) {
-      rbipc_slot_t *slot = &ring->slots[i];
-      uint32_t state = rbipc_slot_unpack_state(
-          atomic_load_explicit(&slot->sequence, memory_order_relaxed));
-      state_counts[state & 7U]++;
-
-      uint32_t cpid =
-          atomic_load_explicit(&slot->consumer_pid, memory_order_relaxed);
-      if (cpid > 0) {
-        uint64_t acq_ts = atomic_load_explicit(&slot->acquire_timestamp_ns,
-                                               memory_order_relaxed);
-        if (acq_ts > 0) {
-          out_slot_stats->active_leased_slots++;
-          if (now_ns > acq_ts) {
-            uint64_t elapsed = now_ns - acq_ts;
-            if (elapsed > out_slot_stats->max_lease_elapsed_ns) {
-              out_slot_stats->max_lease_elapsed_ns = elapsed;
-            }
-          }
-        }
-      }
-    }
-  } else {
-    for (uint32_t i = 0; i < cap; ++i) {
-      rbipc_slot_t *slot = &ring->slots[i];
-      uint32_t state = atomic_load_explicit(&slot->state, memory_order_relaxed);
-      state_counts[state & 7U]++;
-
-      uint32_t cpid =
-          atomic_load_explicit(&slot->consumer_pid, memory_order_relaxed);
-      if (cpid > 0) {
-        uint64_t acq_ts = atomic_load_explicit(&slot->acquire_timestamp_ns,
-                                               memory_order_relaxed);
-        if (acq_ts > 0) {
-          out_slot_stats->active_leased_slots++;
-          if (now_ns > acq_ts) {
-            uint64_t elapsed = now_ns - acq_ts;
-            if (elapsed > out_slot_stats->max_lease_elapsed_ns) {
-              out_slot_stats->max_lease_elapsed_ns = elapsed;
-            }
-          }
-        }
-      }
-    }
+  for (uint32_t i = 0; i < cap; ++i) {
+    rbipc_slot_t *slot = &ring->slots[i];
+    uint32_t state = rbipc_slot_state_word(slot, ring->is_packed);
+    state_counts[state & 7U]++;
+    rbipc_slot_stats_track_lease(out_slot_stats, slot, now_ns);
   }
 
   out_slot_stats->empty_count = state_counts[RBIPC_SLOT_EMPTY];

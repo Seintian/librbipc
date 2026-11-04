@@ -214,20 +214,39 @@ RBIPC_INLINE RBIPC_CONST bool rbipc_slot_is_ready_packed(uint64_t packed, uint64
 }
 
 /**
+ * @brief Extract the sequence turn from a slot word across descriptor layouts.
+ *
+ * @details In packed mode the 48-bit turn occupies the high bits of the descriptor
+ * word; otherwise the word is the plain sequence. Employs branchless arithmetic
+ * shift selection: because @ref RBIPC_PACKED_SEQ_SHIFT is a power of two (16), the
+ * compiler lowers `(unsigned)is_packed * RBIPC_PACKED_SEQ_SHIFT` to a single shift,
+ * avoiding conditional branches on high-frequency polling paths.
+ *
+ * @param[in] word      Current sequence/descriptor word loaded from slot.
+ * @param[in] is_packed True if ring operates in packed 64-bit descriptor mode.
+ * @return The sequence turn value.
+ */
+RBIPC_INLINE RBIPC_CONST uint64_t rbipc_slot_seq_from_word(uint64_t word, bool is_packed) {
+    return word >> ((unsigned int)is_packed * RBIPC_PACKED_SEQ_SHIFT);
+}
+
+/**
+ * @brief Mask a ticket to the stored turn width across descriptor layouts.
+ *
+ * @details In packed mode the stored turn occupies only the low 48 bits, so the
+ * comparing ticket is masked to 48 bits. Without this mask, once tickets exceed
+ * 2^48 the wrapped stored turn can never match the full ticket and the ring deadlocks.
+ *
+ * @param[in] ticket    Ticket number to compare.
+ * @param[in] is_packed True if ring operates in packed 64-bit descriptor mode.
+ * @return The ticket masked to the stored turn width.
+ */
+RBIPC_INLINE RBIPC_CONST uint64_t rbipc_slot_ticket_masked(uint64_t ticket, bool is_packed) {
+    return is_packed ? (ticket & RBIPC_PACKED_SEQ_TURN_MASK) : ticket;
+}
+
+/**
  * @brief Evaluate whether a slot descriptor sequence matches vacant state across descriptor layouts.
- *
- * @details Microarchitectural Optimization:
- * Employs branchless arithmetic shift selection:
- * \f[
- *   \text{shift} = (\text{unsigned int})is\_packed \times \text{RBIPC\_PACKED\_SEQ\_SHIFT}
- * \f]
- * Because @ref RBIPC_PACKED_SEQ_SHIFT is a power of two (16), the optimizing compiler lowers this
- * to a single bitwise shift (`shll $4`), avoiding conditional jump instructions and branch target
- * buffer (BTB) allocation on high-frequency predicate polling paths.
- *
- * In packed mode the stored turn occupies only the low 48 bits, so the comparing
- * ticket is masked to 48 bits. Without this mask, once tickets exceed 2^48 the
- * wrapped stored turn can never match the full ticket and the ring deadlocks.
  *
  * @param[in] word      Current sequence/descriptor word loaded from slot.
  * @param[in] ticket    Reserving producer ticket number.
@@ -235,27 +254,24 @@ RBIPC_INLINE RBIPC_CONST bool rbipc_slot_is_ready_packed(uint64_t packed, uint64
  * @return true if slot sequence equals ticket under modulo arithmetic, false otherwise.
  */
 RBIPC_INLINE RBIPC_CONST bool rbipc_slot_is_vacant_any(uint64_t word, uint64_t ticket, bool is_packed) {
-    uint64_t seq = word >> ((unsigned int)is_packed * RBIPC_PACKED_SEQ_SHIFT);
-    uint64_t t = (is_packed) ? (ticket & RBIPC_PACKED_SEQ_TURN_MASK) : ticket;
-    return rbipc_seq_diff(seq, t) == 0;
+    return rbipc_seq_diff(rbipc_slot_seq_from_word(word, is_packed),
+                          rbipc_slot_ticket_masked(ticket, is_packed)) == 0;
 }
 
 /**
  * @brief Evaluate whether a slot descriptor sequence matches ready state across descriptor layouts.
  */
 RBIPC_INLINE RBIPC_CONST bool rbipc_slot_is_ready_any(uint64_t word, uint64_t ticket, bool is_packed) {
-    uint64_t seq = word >> ((unsigned int)is_packed * RBIPC_PACKED_SEQ_SHIFT);
-    uint64_t t = (is_packed) ? ((ticket + 1) & RBIPC_PACKED_SEQ_TURN_MASK) : (ticket + 1);
-    return rbipc_seq_diff(seq, t) == 0;
+    return rbipc_seq_diff(rbipc_slot_seq_from_word(word, is_packed),
+                          rbipc_slot_ticket_masked(ticket + 1, is_packed)) == 0;
 }
 
 /**
  * @brief Evaluate whether sequence in word is strictly behind target across descriptor layouts.
  */
 RBIPC_INLINE RBIPC_CONST bool rbipc_seq_is_behind_any(uint64_t word, uint64_t target, bool is_packed) {
-    uint64_t seq = word >> ((unsigned int)is_packed * RBIPC_PACKED_SEQ_SHIFT);
-    uint64_t t = (is_packed) ? (target & RBIPC_PACKED_SEQ_TURN_MASK) : target;
-    return rbipc_seq_diff(seq, t) < 0;
+    return rbipc_seq_diff(rbipc_slot_seq_from_word(word, is_packed),
+                          rbipc_slot_ticket_masked(target, is_packed)) < 0;
 }
 
 /**

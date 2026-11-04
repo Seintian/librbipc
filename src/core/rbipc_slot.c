@@ -180,6 +180,25 @@ void rbipc_slot_mark_acquired(rbipc_slot_t *slot, pid_t pid,
                         memory_order_relaxed);
 }
 
+/**
+ * @brief Reset a recovered slot back to the vacant EMPTY state.
+ *
+ * @details Clears producer/consumer ownership and length, marks the slot EMPTY,
+ * and advances its sequence to @p next_seq so the slot becomes claimable again.
+ * Caller must have already cleared @c consumer_pid via a successful CAS.
+ *
+ * @param[in,out] slot     Slot descriptor to reset.
+ * @param[in]     next_seq Sequence value to publish (packed or plain).
+ */
+RBIPC_INLINE void rbipc_slot_reset_to_vacant(rbipc_slot_t *slot,
+                                             uint64_t next_seq) {
+  atomic_store_explicit(&slot->producer_pid, 0, memory_order_relaxed);
+  atomic_store_explicit(&slot->acquire_timestamp_ns, 0, memory_order_relaxed);
+  atomic_store_explicit(&slot->len, 0, memory_order_relaxed);
+  atomic_store_explicit(&slot->state, RBIPC_SLOT_EMPTY, memory_order_release);
+  atomic_store_explicit(&slot->sequence, next_seq, memory_order_release);
+}
+
 RBIPC_LEAF
 bool rbipc_slot_recover_dead_consumer_ex(rbipc_slot_t *slot, uint64_t ticket,
                                          bool is_packed) {
@@ -193,13 +212,9 @@ bool rbipc_slot_recover_dead_consumer_ex(rbipc_slot_t *slot, uint64_t ticket,
             memory_order_relaxed)) {
       return false;
     }
-    atomic_store_explicit(&slot->producer_pid, 0, memory_order_relaxed);
-    atomic_store_explicit(&slot->acquire_timestamp_ns, 0, memory_order_relaxed);
-    atomic_store_explicit(&slot->len, 0, memory_order_relaxed);
-    atomic_store_explicit(&slot->state, RBIPC_SLOT_EMPTY, memory_order_release);
     uint64_t next_seq =
         is_packed ? rbipc_slot_pack(ticket, 0, RBIPC_SLOT_EMPTY) : ticket;
-    atomic_store_explicit(&slot->sequence, next_seq, memory_order_release);
+    rbipc_slot_reset_to_vacant(slot, next_seq);
     return true;
   }
   return false;
@@ -230,17 +245,11 @@ bool rbipc_slot_recover_expired_lease_ex(rbipc_slot_t *slot,
               memory_order_relaxed)) {
         return false;
       }
-      atomic_store_explicit(&slot->producer_pid, 0, memory_order_relaxed);
-      atomic_store_explicit(&slot->acquire_timestamp_ns, 0,
-                            memory_order_relaxed);
-      atomic_store_explicit(&slot->len, 0, memory_order_relaxed);
-      atomic_store_explicit(&slot->state, RBIPC_SLOT_EMPTY,
-                            memory_order_release);
-      uint64_t next_seq = is_packed ? rbipc_slot_pack(target_vacant_ticket, 0,
-                                                      RBIPC_SLOT_EMPTY)
-                                    : target_vacant_ticket;
-      atomic_store_explicit(&slot->sequence, next_seq,
-                            memory_order_release);
+      uint64_t next_seq =
+          is_packed ? rbipc_slot_pack(target_vacant_ticket, 0,
+                                      RBIPC_SLOT_EMPTY)
+                    : target_vacant_ticket;
+      rbipc_slot_reset_to_vacant(slot, next_seq);
       return true;
     }
   }
