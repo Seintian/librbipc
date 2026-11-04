@@ -66,7 +66,7 @@ TOOLDIR = tools
 TOOL_SRCS = $(wildcard $(TOOLDIR)/*.c)
 TOOL_BINS = $(patsubst $(TOOLDIR)/%.c, $(BINDIR)/%, $(TOOL_SRCS))
 
-.PHONY: all clean test bench bench-laptop bench-laptop-powersave bench-home-pc monitor monitor-live coverage valgrind clang-tidy compile_commands docs tsan asan install uninstall format
+.PHONY: all clean test bench bench-laptop bench-laptop-powersave bench-home-pc monitor monitor-live coverage valgrind clang-tidy compile_commands docs tsan asan install uninstall format docker-image docker-build docker-test docker-asan docker-tsan docker-clang-tidy docker-shell
 
 all: $(STATIC_LIB) $(SHARED_LIB) librbipc.pc $(TEST_BINS) $(TOOL_BINS) compile_commands.json
 
@@ -245,6 +245,33 @@ tsan: clean
 asan: CFLAGS = $(CSTD) -Wall -Wextra -Wpedantic -Werror -O1 -march=native -g -fsanitize=address,undefined -fPIC -Iinclude -Isrc -Isrc/core -Isrc/memory -Isrc/sync -Isrc/io -Isrc/ipc -Isrc/audit -Isrc/platform -pthread -D_GNU_SOURCE
 asan: LDFLAGS += -fsanitize=address,undefined
 asan: clean test
+
+# Docker targets: run build/test inside the CI-matching image (ubuntu:24.04,
+# gcc 13.3.0) as the invoking user. scripts/docker_build.sh maps the container
+# uid/gid to the host user so build/, lib/ and bin/ artifacts are NOT left
+# root-owned (the classic `docker run -v $PWD:/work` footgun).
+DOCKER_IMAGE ?= librbipc-ci
+
+docker-image:
+	@docker build -t $(DOCKER_IMAGE) .
+
+docker-build: docker-image
+	@./scripts/docker_build.sh make clean all
+
+docker-test: docker-image
+	@./scripts/docker_build.sh make test
+
+docker-asan: docker-image
+	@./scripts/docker_build.sh make asan
+
+docker-tsan: docker-image
+	@./scripts/docker_build.sh make tsan
+
+docker-clang-tidy: docker-image
+	@./scripts/docker_build.sh make clang-tidy
+
+docker-shell: docker-image
+	@./scripts/docker_build.sh bash
 
 librbipc.pc: librbipc.pc.in Makefile
 	@echo "Generating pkg-config file from $<..."

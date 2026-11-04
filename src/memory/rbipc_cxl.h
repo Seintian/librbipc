@@ -73,17 +73,17 @@ static inline void rbipc_clwb(const void *addr) {
   }
 
   /* Dispatch to the strongest available flush instruction. The three asm
-   * statements differ only in the mnemonic; expand them via a macro so the
-   * branch bodies remain distinct to clang-tidy (avoids bugprone-branch-clone). */
-#define RBIPC_FLUSH_INSN(insn) __asm__ volatile(insn " (%0)" : : "r"(addr) : "memory")
+   * statements are written out explicitly (rather than via a macro) so each
+   * branch body carries a distinct single string literal; clang-tidy's
+   * bugprone-branch-clone otherwise treats the macro-expanded asm statements
+   * as identical clones. */
   if (RBIPC_LIKELY(cap == 2)) {
-    RBIPC_FLUSH_INSN("clwb");
+    __asm__ volatile("clwb (%0)" : : "r"(addr) : "memory");
   } else if (cap == 1) {
-    RBIPC_FLUSH_INSN("clflushopt");
+    __asm__ volatile("clflushopt (%0)" : : "r"(addr) : "memory");
   } else {
-    RBIPC_FLUSH_INSN("clflush");
+    __asm__ volatile("clflush (%0)" : : "r"(addr) : "memory");
   }
-#undef RBIPC_FLUSH_INSN
 #elif defined(__aarch64__)
   __asm__ volatile("dc cvac, %0" : : "r"(addr) : "memory");
 #else

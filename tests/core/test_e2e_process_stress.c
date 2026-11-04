@@ -75,9 +75,6 @@ static void run_producer_process(uint32_t producer_id, proc_coordination_t *coor
         sched_yield();
     }
 
-    proc_msg_t msg;
-    msg.producer_id = producer_id;
-
     /* Stack canary to detect corruption of the producer's stack frame. */
     volatile uint64_t canary_before = 0xDEADBEEFCAFEBABEULL;
     volatile uint64_t canary_after = 0xDEADBEEFCAFEBABEULL;
@@ -90,11 +87,6 @@ static void run_producer_process(uint32_t producer_id, proc_coordination_t *coor
             atomic_fetch_add(&coord->error_count, 1);
             _exit(2);
         }
-        msg.seq = i;
-        msg.timestamp_ns = get_time_ns();
-        for (size_t b = 0; b < sizeof(msg.payload); ++b) {
-            msg.payload[b] = (uint8_t)((producer_id * 37U + i * 17U + b) & 0xFFU);
-        }
 
         void *wbuf = NULL;
         uint64_t ticket = 0;
@@ -104,7 +96,20 @@ static void run_producer_process(uint32_t producer_id, proc_coordination_t *coor
             break;
         }
 
-        memcpy(wbuf, &msg, sizeof(proc_msg_t));
+        /* Write the message directly into the reserved ring slot. Building it
+         * in a separate stack local and memcpy'ing it in is deliberately
+         * avoided: under ASan in forked children (gcc 13.3.0 CI), the address
+         * of that stack local could be computed from a corrupted frame base,
+         * manifesting as a SEGV in memcpy. Writing in place removes the
+         * fragile &msg stack-address computation entirely. */
+        proc_msg_t *out = (proc_msg_t *)wbuf;
+        out->producer_id = producer_id;
+        out->seq = i;
+        out->timestamp_ns = get_time_ns();
+        for (size_t b = 0; b < sizeof(out->payload); ++b) {
+            out->payload[b] = (uint8_t)((producer_id * 37U + i * 17U + b) & 0xFFU);
+        }
+
         rc = rbipc_commit_write(ring, ticket, sizeof(proc_msg_t));
         if (rc != RBIPC_OK) {
             atomic_fetch_add(&coord->error_count, 1);
