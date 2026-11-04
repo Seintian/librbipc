@@ -67,7 +67,7 @@ static void run_producer_process(uint32_t producer_id, proc_coordination_t *coor
     int rc = rbipc_attach(SHM_RING_NAME, &ring);
     if (rc != RBIPC_OK) {
         atomic_fetch_add(&coord->error_count, 1);
-        exit(1);
+        _exit(1);
     }
 
     /* Wait for start signal */
@@ -102,7 +102,7 @@ static void run_producer_process(uint32_t producer_id, proc_coordination_t *coor
     }
 
     rbipc_detach(ring);
-    exit(0);
+    _exit(0);
 }
 
 static void run_consumer_process(proc_coordination_t *coord) {
@@ -110,7 +110,7 @@ static void run_consumer_process(proc_coordination_t *coord) {
     int rc = rbipc_attach(SHM_RING_NAME, &ring);
     if (rc != RBIPC_OK) {
         atomic_fetch_add(&coord->error_count, 1);
-        exit(1);
+        _exit(1);
     }
 
     /* Wait for start signal */
@@ -170,7 +170,7 @@ static void run_consumer_process(proc_coordination_t *coord) {
     }
 
     rbipc_detach(ring);
-    exit(0);
+    _exit(0);
 }
 
 static void test_process_stress_round(uint32_t wait_policy, const char *policy_desc) {
