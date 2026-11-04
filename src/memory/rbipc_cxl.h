@@ -72,13 +72,18 @@ static inline void rbipc_clwb(const void *addr) {
     atomic_store_explicit(&clwb_cap, cap, memory_order_release);
   }
 
+  /* Dispatch to the strongest available flush instruction. The three asm
+   * statements differ only in the mnemonic; expand them via a macro so the
+   * branch bodies remain distinct to clang-tidy (avoids bugprone-branch-clone). */
+#define RBIPC_FLUSH_INSN(insn) __asm__ volatile(insn " (%0)" : : "r"(addr) : "memory")
   if (RBIPC_LIKELY(cap == 2)) {
-    __asm__ volatile("clwb (%0)" : : "r"(addr) : "memory");
+    RBIPC_FLUSH_INSN("clwb");
   } else if (cap == 1) {
-    __asm__ volatile("clflushopt (%0)" : : "r"(addr) : "memory");
+    RBIPC_FLUSH_INSN("clflushopt");
   } else {
-    __asm__ volatile("clflush (%0)" : : "r"(addr) : "memory");
+    RBIPC_FLUSH_INSN("clflush");
   }
+#undef RBIPC_FLUSH_INSN
 #elif defined(__aarch64__)
   __asm__ volatile("dc cvac, %0" : : "r"(addr) : "memory");
 #else
