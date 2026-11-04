@@ -167,6 +167,57 @@ RBIPC_INLINE RBIPC_NODISCARD size_t rbipc_cache_line_size(void) {
   return cls;
 }
 
+/**
+ * @brief Query L2 cache size in bytes with atomic process-local caching.
+ * @details Queries sysconf(_SC_LEVEL2_CACHE_SIZE) on first invocation and caches
+ *          the result atomically. Returns 0 when the size is unavailable.
+ */
+RBIPC_INLINE RBIPC_NODISCARD size_t rbipc_l2_cache_size(void) {
+  static _Atomic size_t s_l2 = 0;
+  size_t l2 = atomic_load_explicit(&s_l2, memory_order_acquire);
+  if (RBIPC_LIKELY(l2 != 0)) {
+    return l2;
+  }
+  long raw = sysconf(_SC_LEVEL2_CACHE_SIZE);
+  l2 = (raw > 0) ? (size_t)raw : 0;
+  atomic_store_explicit(&s_l2, l2, memory_order_release);
+  return l2;
+}
+
+/**
+ * @brief Query L3 (last-level) cache size in bytes with atomic process-local caching.
+ * @details Queries sysconf(_SC_LEVEL3_CACHE_SIZE) on first invocation and caches
+ *          the result atomically. Returns 0 when the size is unavailable.
+ */
+RBIPC_INLINE RBIPC_NODISCARD size_t rbipc_l3_cache_size(void) {
+  static _Atomic size_t s_l3 = 0;
+  size_t l3 = atomic_load_explicit(&s_l3, memory_order_acquire);
+  if (RBIPC_LIKELY(l3 != 0)) {
+    return l3;
+  }
+  long raw = sysconf(_SC_LEVEL3_CACHE_SIZE);
+  l3 = (raw > 0) ? (size_t)raw : 0;
+  atomic_store_explicit(&s_l3, l3, memory_order_release);
+  return l3;
+}
+
+/**
+ * @brief Query number of online processors with atomic process-local caching.
+ * @details Queries sysconf(_SC_NPROCESSORS_ONLN) on first invocation and caches
+ *          the result atomically. Falls back to 1 when unavailable.
+ */
+RBIPC_INLINE RBIPC_NODISCARD uint32_t rbipc_online_cores(void) {
+  static _Atomic uint32_t s_cores = 0;
+  uint32_t cores = atomic_load_explicit(&s_cores, memory_order_acquire);
+  if (RBIPC_LIKELY(cores != 0)) {
+    return cores;
+  }
+  long raw = sysconf(_SC_NPROCESSORS_ONLN);
+  cores = (raw > 0) ? (uint32_t)raw : 1U;
+  atomic_store_explicit(&s_cores, cores, memory_order_release);
+  return cores;
+}
+
 #if defined(__x86_64__) || defined(_M_X64) || defined(__i386__) ||             \
     defined(_M_IX86)
 #include <cpuid.h>

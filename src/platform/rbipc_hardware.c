@@ -109,129 +109,126 @@ static uint64_t rbipc_detect_tsc_ticks_per_ns(void) {
 #endif
 }
 
-static void rbipc_hardware_profile_init(void) {
-  /* 1. Base Virtual Memory Page Size */
-  size_t ps = 0;
-#if defined(__linux__)
-  unsigned long aux_ps = getauxval(AT_PAGESZ);
-  if (aux_ps > 0) ps = (size_t)aux_ps;
-#endif
-  if (ps == 0) {
-    long raw = sysconf(_SC_PAGESIZE);
-    ps = (raw > 0) ? (size_t)raw : 4096U;
-  }
-  s_profile.page_size = ps;
-
-  /* 2. Physical Cache Line Size & Destructive Size */
-  size_t cls = 0;
-#if defined(__linux__) && defined(AT_DCACHEBSIZE)
-  unsigned long aux_cls = getauxval(AT_DCACHEBSIZE);
-  if (aux_cls > 0) cls = (size_t)aux_cls;
-#endif
-  if (cls == 0) {
-    long conf = sysconf(_SC_LEVEL1_DCACHE_LINESIZE);
-    cls = (conf > 0) ? (size_t)conf : RBIPC_CACHE_LINE;
-  }
-  s_profile.cache_line_size = cls;
-  s_profile.destructive_size = (cls < RBIPC_CACHE_LINE) ? RBIPC_CACHE_LINE : cls;
-
-  /* 3. System Default HugeTLB Page Size */
-  size_t hps = 0;
-  FILE *fp = fopen("/proc/meminfo", "r");
-  if (fp) {
-    char line[128];
-    while (fgets(line, sizeof(line), fp)) {
-      if (strncmp(line, "Hugepagesize:", 13) == 0) {
-        unsigned long kb = 0;
-        if (sscanf(line + 13, "%lu", &kb) == 1 && kb > 0) {
-          hps = (size_t)kb * 1024ULL;
-          break;
-        }
-      }
-    }
-    fclose(fp);
-  }
-  if (hps == 0) {
-    if (ps >= 65536U) {
-      hps = 512ULL * 1024ULL * 1024ULL; /* 512 MB for 64 KB page ARM64/ppc64le */
-    } else if (ps >= 16384U) {
-      hps = 32ULL * 1024ULL * 1024ULL;  /* 32 MB for 16 KB page Android/Apple */
-    } else {
-      hps = 2ULL * 1024ULL * 1024ULL;   /* 2 MB for 4 KB page x86/ARM */
-    }
-  }
-  s_profile.huge_page_size = hps;
-
-  /* 4. Cache Hierarchy (L2 and L3) */
-  long l2 = sysconf(_SC_LEVEL2_CACHE_SIZE);
-  long l3 = sysconf(_SC_LEVEL3_CACHE_SIZE);
-  s_profile.l2_cache_size = (l2 > 0) ? (size_t)l2 : 0;
-  s_profile.l3_cache_size = (l3 > 0) ? (size_t)l3 : 0;
-
-  /* 5. Optimal Non-Temporal Streaming Threshold */
-  size_t st = 0;
-  if (s_profile.l3_cache_size > 0) {
-    /* glibc policy: 3/4 of L3 cache size */
-    st = (s_profile.l3_cache_size * 3) / 4;
-  } else if (s_profile.l2_cache_size > 0) {
-    st = s_profile.l2_cache_size;
-  }
-  if (st < (256ULL * 1024ULL)) {
-    st = 256ULL * 1024ULL; /* Minimum 256 KB floor to avoid L1/L2 thrashing */
-  }
-  s_profile.stream_threshold = st;
-
-  /* 6. Intel DSA DMA Offload Threshold */
-  s_profile.dma_offload_threshold = 16384U; /* 16 KB break-even */
-
-  /* 7. Online Processors */
-  long cores = sysconf(_SC_NPROCESSORS_ONLN);
-  s_profile.online_cores = (cores > 0) ? (uint32_t)cores : 1U;
-
-  /* 8. Microarchitectural Spin Budget */
-  s_profile.calibrated_spin_count = 48U;
+/**
+ * @brief Detect the microarchitectural spin budget (PAUSE iterations).
+ * @details On Skylake/Ice Lake where PAUSE takes ~140 cycles, 16 pauses is
+ *          ~2240 cycles (~700 ns); other x86 and non-x86 use a 48-iteration
+ *          default.
+ */
+static uint32_t rbipc_detect_spin_count(void) {
+  uint32_t spin = 48U;
 #if defined(__x86_64__) || defined(_M_X64)
-  /* On Skylake/Ice Lake where PAUSE takes 140 cycles, 16 pauses is ~2240 cycles (~700 ns) */
   unsigned int eax = 0, ebx = 0, ecx = 0, edx = 0;
   unsigned int family = 0, model = 0;
   if (__get_cpuid(1, &eax, &ebx, &ecx, &edx)) {
     family = ((eax >> 8) & 0x0F) + ((eax >> 20) & 0xFF);
     model = ((eax >> 4) & 0x0F) | ((eax >> 12) & 0xF0);
-    if (family == 6 && (model == 0x4E || model == 0x5E || model == 0x8E || model == 0x9E || model == 0x55)) {
-      s_profile.calibrated_spin_count = 16U;
+    if (family == 6 && (model == 0x4E || model == 0x5E || model == 0x8E ||
+                        model == 0x9E || model == 0x55)) {
+      spin = 16U;
     }
   }
 #endif
+  return spin;
+}
 
-  /* 9. TSC / Timer Ticks Per Nanosecond */
-  s_profile.tsc_ticks_per_ns = rbipc_detect_tsc_ticks_per_ns();
+/**
+ * @brief Compute the optimal non-temporal streaming threshold from cache sizes.
+ * @details Uses 3/4 of L3 when present, else L2, with a 256 KB floor to avoid
+ *          L1/L2 thrashing.
+ */
+static size_t rbipc_detect_stream_threshold(size_t l2, size_t l3) {
+  size_t st = 0;
+  if (l3 > 0) {
+    st = (l3 * 3) / 4;
+  } else if (l2 > 0) {
+    st = l2;
+  }
+  if (st < (256ULL * 1024ULL)) {
+    st = 256ULL * 1024ULL;
+  }
+  return st;
+}
 
-  /* Optional test / benchmark simulation overrides */
-  const char *env_ps = getenv("RBIPC_SIMULATE_PAGE_SIZE");
-  if (env_ps && env_ps[0] != '\0') {
-    s_profile.page_size = (size_t)strtoull(env_ps, NULL, 10);
+/**
+ * @brief Parse a base-10 unsigned environment override into @p out.
+ * @details Returns true only when the variable is present, non-empty, and the
+ *          entire string parses as a valid uint64 (rejecting trailing garbage
+ *          and overflow via errno==ERANGE). Absent, empty, or malformed values
+ *          leave @p out untouched and return false.
+ */
+static bool rbipc_env_u64(const char *name, uint64_t *out) {
+  const char *val = getenv(name);
+  if (!val || val[0] == '\0') {
+    return false;
   }
-  const char *env_hps = getenv("RBIPC_SIMULATE_HUGE_PAGE_SIZE");
-  if (env_hps && env_hps[0] != '\0') {
-    s_profile.huge_page_size = (size_t)strtoull(env_hps, NULL, 10);
+  errno = 0;
+  char *end = NULL;
+  unsigned long long parsed = strtoull(val, &end, 10);
+  if (errno == ERANGE || end == val || *end != '\0') {
+    return false;
   }
-  const char *env_l3 = getenv("RBIPC_SIMULATE_L3_CACHE_SIZE");
-  if (env_l3 && env_l3[0] != '\0') {
-    s_profile.l3_cache_size = (size_t)strtoull(env_l3, NULL, 10);
+  *out = (uint64_t)parsed;
+  return true;
+}
+
+/**
+ * @brief Apply optional RBIPC_SIMULATE_* environment overrides for benchmarking.
+ */
+static void rbipc_profile_apply_env_overrides(void) {
+  uint64_t v = 0;
+  if (rbipc_env_u64("RBIPC_SIMULATE_PAGE_SIZE", &v)) {
+    s_profile.page_size = (size_t)v;
+  }
+  if (rbipc_env_u64("RBIPC_SIMULATE_HUGE_PAGE_SIZE", &v)) {
+    s_profile.huge_page_size = (size_t)v;
+  }
+  if (rbipc_env_u64("RBIPC_SIMULATE_L3_CACHE_SIZE", &v)) {
+    s_profile.l3_cache_size = (size_t)v;
     s_profile.stream_threshold = (s_profile.l3_cache_size * 3) / 4;
   }
-  const char *env_cores = getenv("RBIPC_SIMULATE_ONLINE_CORES");
-  if (env_cores && env_cores[0] != '\0') {
-    s_profile.online_cores = (uint32_t)strtoul(env_cores, NULL, 10);
+  if (rbipc_env_u64("RBIPC_SIMULATE_ONLINE_CORES", &v)) {
+    s_profile.online_cores = (uint32_t)v;
   }
-  const char *env_spin = getenv("RBIPC_SIMULATE_SPIN_COUNT");
-  if (env_spin && env_spin[0] != '\0') {
-    s_profile.calibrated_spin_count = (uint32_t)strtoul(env_spin, NULL, 10);
+  if (rbipc_env_u64("RBIPC_SIMULATE_SPIN_COUNT", &v)) {
+    s_profile.calibrated_spin_count = (uint32_t)v;
   }
-  const char *env_tsc = getenv("RBIPC_SIMULATE_TSC_FREQ");
-  if (env_tsc && env_tsc[0] != '\0') {
-    s_profile.tsc_ticks_per_ns = strtoull(env_tsc, NULL, 10);
+  if (rbipc_env_u64("RBIPC_SIMULATE_TSC_FREQ", &v)) {
+    s_profile.tsc_ticks_per_ns = v;
   }
+}
+
+static void rbipc_hardware_profile_init(void) {
+  /* Reuse the cached arch.h accessors instead of re-probing the kernel. */
+  s_profile.page_size = rbipc_page_size();
+  s_profile.cache_line_size = rbipc_cache_line_size();
+  s_profile.destructive_size =
+      (s_profile.cache_line_size < RBIPC_CACHE_LINE) ? RBIPC_CACHE_LINE
+                                                     : s_profile.cache_line_size;
+  s_profile.huge_page_size = rbipc_huge_page_size();
+
+  /* Cache hierarchy (L2 and L3) via centralized cached accessors. */
+  s_profile.l2_cache_size = rbipc_l2_cache_size();
+  s_profile.l3_cache_size = rbipc_l3_cache_size();
+
+  /* Optimal non-temporal streaming threshold. */
+  s_profile.stream_threshold =
+      rbipc_detect_stream_threshold(s_profile.l2_cache_size, s_profile.l3_cache_size);
+
+  /* Intel DSA DMA offload threshold (16 KB break-even). */
+  s_profile.dma_offload_threshold = 16384U;
+
+  /* Online processors via centralized cached accessor. */
+  s_profile.online_cores = rbipc_online_cores();
+
+  /* Microarchitectural spin budget. */
+  s_profile.calibrated_spin_count = rbipc_detect_spin_count();
+
+  /* TSC / timer ticks per nanosecond. */
+  s_profile.tsc_ticks_per_ns = rbipc_detect_tsc_ticks_per_ns();
+
+  /* Optional test / benchmark simulation overrides. */
+  rbipc_profile_apply_env_overrides();
 }
 
 RBIPC_LEAF
