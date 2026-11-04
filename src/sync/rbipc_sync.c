@@ -143,6 +143,35 @@ void rbipc_sync_deregister_waiter(_Atomic uint32_t *futex_waiters) {
 }
 
 /**
+ * @brief Compute the remaining futex wait budget for a sync state.
+ *
+ * @param[in]  state        Synchronization state with optional deadline.
+ * @param[in]  now          Current monotonic timestamp.
+ * @param[out] out_remaining Remaining wait budget (capped at the periodic
+ *                           refresh period), valid only when not expired.
+ * @return true if the deadline has already elapsed (caller should time out).
+ */
+RBIPC_INLINE bool rbipc_sync_compute_remaining(const rbipc_sync_state_t *state,
+                                               uint64_t now,
+                                               uint64_t *out_remaining) {
+  if (RBIPC_UNLIKELY(rbipc_sync_is_expired(state, now))) {
+    return true;
+  }
+  uint64_t remaining_ns = RBIPC_FUTEX_PERIOD_NS;
+  if (state->has_deadline) {
+    if (RBIPC_UNLIKELY(now >= state->deadline_ns)) {
+      return true;
+    }
+    remaining_ns = state->deadline_ns - now;
+    if (remaining_ns > RBIPC_FUTEX_PERIOD_NS) {
+      remaining_ns = RBIPC_FUTEX_PERIOD_NS;
+    }
+  }
+  *out_remaining = remaining_ns;
+  return false;
+}
+
+/**
  * @brief Execute futex wait when waiter is already registered, checking cooperative shutdown.
  */
 RBIPC_LEAF
@@ -155,21 +184,10 @@ int rbipc_sync_wait_registered_or_shutdown(
   }
 
   uint64_t now = rbipc_clock_monotonic_ns();
-  if (RBIPC_UNLIKELY(rbipc_sync_is_expired(state, now))) {
+  uint64_t remaining_ns;
+  if (RBIPC_UNLIKELY(rbipc_sync_compute_remaining(state, now, &remaining_ns))) {
     rbipc_sync_deregister_waiter(futex_waiters);
     return RBIPC_ERR_TIMEOUT;
-  }
-
-  uint64_t remaining_ns = RBIPC_FUTEX_PERIOD_NS;
-  if (state->has_deadline) {
-    if (RBIPC_UNLIKELY(now >= state->deadline_ns)) {
-      rbipc_sync_deregister_waiter(futex_waiters);
-      return RBIPC_ERR_TIMEOUT;
-    }
-    remaining_ns = state->deadline_ns - now;
-    if (remaining_ns > RBIPC_FUTEX_PERIOD_NS) {
-      remaining_ns = RBIPC_FUTEX_PERIOD_NS;
-    }
   }
 
   uint32_t current_val = atomic_load_explicit(futex_word, memory_order_relaxed);
@@ -218,21 +236,10 @@ int rbipc_sync_wait_slot_registered(
   }
 
   uint64_t now = rbipc_clock_monotonic_ns();
-  if (RBIPC_UNLIKELY(rbipc_sync_is_expired(state, now))) {
+  uint64_t remaining_ns;
+  if (RBIPC_UNLIKELY(rbipc_sync_compute_remaining(state, now, &remaining_ns))) {
     rbipc_sync_deregister_waiter(futex_waiters);
     return RBIPC_ERR_TIMEOUT;
-  }
-
-  uint64_t remaining_ns = RBIPC_FUTEX_PERIOD_NS;
-  if (state->has_deadline) {
-    if (RBIPC_UNLIKELY(now >= state->deadline_ns)) {
-      rbipc_sync_deregister_waiter(futex_waiters);
-      return RBIPC_ERR_TIMEOUT;
-    }
-    remaining_ns = state->deadline_ns - now;
-    if (remaining_ns > RBIPC_FUTEX_PERIOD_NS) {
-      remaining_ns = RBIPC_FUTEX_PERIOD_NS;
-    }
   }
 
   int rc = rbipc_futex2_wait_slot_or_proxy_or_shutdown(
