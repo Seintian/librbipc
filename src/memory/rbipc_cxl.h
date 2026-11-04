@@ -51,6 +51,24 @@ extern "C" {
  *
  * @param[in] addr Virtual memory address of the cache line to write back.
  */
+
+/* One helper per flush instruction. Each branch of the dispatch below calls a
+ * distinct helper, so the branch bodies are structurally different in the AST.
+ * clang-tidy's bugprone-branch-clone otherwise flags the three asm statements
+ * as identical clones even though their mnemonics differ (it compares AST
+ * structure, not string literal values). */
+#if defined(__x86_64__) || defined(_M_X64)
+static inline void rbipc_flush_clwb(const void *addr) {
+  __asm__ volatile("clwb (%0)" : : "r"(addr) : "memory");
+}
+static inline void rbipc_flush_clflushopt(const void *addr) {
+  __asm__ volatile("clflushopt (%0)" : : "r"(addr) : "memory");
+}
+static inline void rbipc_flush_clflush(const void *addr) {
+  __asm__ volatile("clflush (%0)" : : "r"(addr) : "memory");
+}
+#endif
+
 static inline void rbipc_clwb(const void *addr) {
 #if defined(__x86_64__) || defined(_M_X64)
   static _Atomic int clwb_cap = -1;
@@ -72,17 +90,15 @@ static inline void rbipc_clwb(const void *addr) {
     atomic_store_explicit(&clwb_cap, cap, memory_order_release);
   }
 
-  /* Dispatch to the strongest available flush instruction. The three asm
-   * statements are written out explicitly (rather than via a macro) so each
-   * branch body carries a distinct single string literal; clang-tidy's
-   * bugprone-branch-clone otherwise treats the macro-expanded asm statements
-   * as identical clones. */
+  /* Dispatch to the strongest available flush instruction. Each branch calls a
+   * distinct helper (see above) so the branch bodies are structurally distinct
+   * to clang-tidy's bugprone-branch-clone. */
   if (RBIPC_LIKELY(cap == 2)) {
-    __asm__ volatile("clwb (%0)" : : "r"(addr) : "memory");
+    rbipc_flush_clwb(addr);
   } else if (cap == 1) {
-    __asm__ volatile("clflushopt (%0)" : : "r"(addr) : "memory");
+    rbipc_flush_clflushopt(addr);
   } else {
-    __asm__ volatile("clflush (%0)" : : "r"(addr) : "memory");
+    rbipc_flush_clflush(addr);
   }
 #elif defined(__aarch64__)
   __asm__ volatile("dc cvac, %0" : : "r"(addr) : "memory");
