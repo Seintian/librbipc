@@ -75,6 +75,29 @@ bool rbipc_audit_is_peer_alive(pid_t pid) {
   return errno != ESRCH;
 }
 
+/**
+ * @brief Poison a slot and publish the recovery to waiting consumers.
+ * @details Poisons the slot (honoring the packed layout), bumps the poisoned
+ *          counter and the given recovery counter, then issues a seq-cst fence
+ *          and wakes all futex waiters.
+ * @return true if the slot was poisoned, false otherwise.
+ */
+RBIPC_INLINE bool rbipc_audit_poison_slot(rbipc_shm_header_t *hdr,
+                                          rbipc_slot_t *slot, uint64_t ticket,
+                                          bool is_packed,
+                                          _Atomic uint64_t *recovery_counter) {
+  bool poisoned = is_packed ? rbipc_slot_poison_packed(slot, ticket)
+                            : rbipc_slot_poison(slot, ticket);
+  if (!poisoned) {
+    return false;
+  }
+  atomic_fetch_add_explicit(&hdr->poisoned_slots_count, 1, memory_order_relaxed);
+  atomic_fetch_add_explicit(recovery_counter, 1, memory_order_relaxed);
+  atomic_thread_fence(memory_order_seq_cst);
+  rbipc_sync_wake_all(&hdr->futex_seq, &hdr->futex_waiters);
+  return true;
+}
+
 RBIPC_LEAF
 bool rbipc_audit_recover_dead_producer(rbipc_shm_header_t *hdr,
                                        rbipc_slot_t *slot, uint64_t ticket) {
@@ -97,20 +120,36 @@ bool rbipc_audit_recover_dead_producer(rbipc_shm_header_t *hdr,
     pid_t ppid =
         (pid_t)atomic_load_explicit(&slot->producer_pid, memory_order_relaxed);
     if (ppid > 0 && !rbipc_audit_is_peer_alive(ppid)) {
-      bool poisoned = is_packed ? rbipc_slot_poison_packed(slot, ticket)
-                                : rbipc_slot_poison(slot, ticket);
-      if (poisoned) {
-        atomic_fetch_add_explicit(&hdr->poisoned_slots_count, 1,
-                                  memory_order_relaxed);
-        atomic_fetch_add_explicit(&hdr->dead_producers_recovered, 1,
-                                  memory_order_relaxed);
-        atomic_thread_fence(memory_order_seq_cst);
-        rbipc_sync_wake_all(&hdr->futex_seq, &hdr->futex_waiters);
-        return true;
-      }
+      return rbipc_audit_poison_slot(hdr, slot, ticket, is_packed,
+                                     &hdr->dead_producers_recovered);
     }
   }
   return false;
+}
+
+/**
+ * @brief Iterate a ticket range and recover slots that fail the given predicate.
+ * @details For each ticket in [t, t+count), loads the slot sequence and skips
+ *          slots that satisfy @p skip_pred (ready for producers, vacant for
+ *          consumers); otherwise invokes @p recover on the slot.
+ */
+RBIPC_INLINE void rbipc_audit_recover_range(
+    rbipc_shm_header_t *hdr, rbipc_slot_t *slots, uint64_t t, uint32_t count,
+    bool is_packed, bool (*skip_pred)(uint64_t seq, uint64_t ticket,
+                                      bool is_packed),
+    bool (*recover)(rbipc_shm_header_t *hdr, rbipc_slot_t *slot,
+                    uint64_t ticket)) {
+  const uint32_t mask = hdr->capacity_mask;
+  for (uint32_t i = 0; i < count; ++i) {
+    uint64_t ticket_i = t + (uint64_t)i;
+    rbipc_slot_t *slot_i = &slots[ticket_i & mask];
+    uint64_t seq =
+        atomic_load_explicit(&slot_i->sequence, memory_order_acquire);
+    if (skip_pred(seq, ticket_i, is_packed)) {
+      continue;
+    }
+    recover(hdr, slot_i, ticket_i);
+  }
 }
 
 RBIPC_LEAF
@@ -120,17 +159,21 @@ void rbipc_audit_recover_dead_producer_range(rbipc_shm_header_t *hdr,
   if (RBIPC_UNLIKELY(!hdr || !slots))
     return;
   bool is_packed = (le32toh(hdr->flags) & RBIPC_FLAG_PACKED) != 0;
-  const uint32_t mask = hdr->capacity_mask;
-  for (uint32_t i = 0; i < count; ++i) {
-    uint64_t ticket_i = t + (uint64_t)i;
-    rbipc_slot_t *slot_i = &slots[ticket_i & mask];
-    uint64_t seq =
-        atomic_load_explicit(&slot_i->sequence, memory_order_acquire);
-    if (rbipc_slot_is_ready_any(seq, ticket_i, is_packed)) {
-      continue;
-    }
-    rbipc_audit_recover_dead_producer(hdr, slot_i, ticket_i);
-  }
+  rbipc_audit_recover_range(hdr, slots, t, count, is_packed,
+                            rbipc_slot_is_ready_any,
+                            rbipc_audit_recover_dead_producer);
+}
+
+/**
+ * @brief Publish a consumer recovery and wake all write waiters.
+ * @details Bumps the given recovery counter, issues a seq-cst fence, and wakes
+ *          all futex waiters on the write sequence.
+ */
+RBIPC_INLINE void rbipc_audit_wake_write_waiters(rbipc_shm_header_t *hdr,
+                                                 _Atomic uint64_t *counter) {
+  atomic_fetch_add_explicit(counter, 1, memory_order_relaxed);
+  atomic_thread_fence(memory_order_seq_cst);
+  rbipc_sync_wake_all(&hdr->write_futex_seq, &hdr->write_waiters);
 }
 
 RBIPC_LEAF
@@ -145,18 +188,12 @@ bool rbipc_audit_recover_dead_consumer(rbipc_shm_header_t *hdr,
     uint64_t now_ns = rbipc_clock_monotonic_ns();
     if (rbipc_slot_recover_expired_lease_ex(slot, ticket, lease_ns, now_ns,
                                             is_packed)) {
-      atomic_fetch_add_explicit(&hdr->leases_revoked_count, 1,
-                                memory_order_relaxed);
-      atomic_thread_fence(memory_order_seq_cst);
-      rbipc_sync_wake_all(&hdr->write_futex_seq, &hdr->write_waiters);
+      rbipc_audit_wake_write_waiters(hdr, &hdr->leases_revoked_count);
       return true;
     }
   }
   if (rbipc_slot_recover_dead_consumer_ex(slot, ticket, is_packed)) {
-    atomic_fetch_add_explicit(&hdr->dead_consumers_recovered, 1,
-                              memory_order_relaxed);
-    atomic_thread_fence(memory_order_seq_cst);
-    rbipc_sync_wake_all(&hdr->write_futex_seq, &hdr->write_waiters);
+    rbipc_audit_wake_write_waiters(hdr, &hdr->dead_consumers_recovered);
     return true;
   }
   return false;
@@ -169,17 +206,9 @@ void rbipc_audit_recover_dead_consumer_range(rbipc_shm_header_t *hdr,
   if (RBIPC_UNLIKELY(!hdr || !slots))
     return;
   bool is_packed = (le32toh(hdr->flags) & RBIPC_FLAG_PACKED) != 0;
-  const uint32_t mask = hdr->capacity_mask;
-  for (uint32_t i = 0; i < count; ++i) {
-    uint64_t ticket_i = t + (uint64_t)i;
-    rbipc_slot_t *slot_i = &slots[ticket_i & mask];
-    uint64_t seq =
-        atomic_load_explicit(&slot_i->sequence, memory_order_acquire);
-    if (rbipc_slot_is_vacant_any(seq, ticket_i, is_packed)) {
-      continue;
-    }
-    rbipc_audit_recover_dead_consumer(hdr, slot_i, ticket_i);
-  }
+  rbipc_audit_recover_range(hdr, slots, t, count, is_packed,
+                            rbipc_slot_is_vacant_any,
+                            rbipc_audit_recover_dead_consumer);
 }
 
 RBIPC_LEAF
@@ -204,17 +233,8 @@ bool rbipc_audit_check_and_heal_ticket_hole(rbipc_shm_header_t *hdr,
           (sync_state->hole_first_seen_ns != 0 &&
            now_ts - sync_state->hole_first_seen_ns >=
                RBIPC_TICKET_HOLE_GRACE_NS)) {
-        bool poisoned = is_packed ? rbipc_slot_poison_packed(slot, ticket)
-                                  : rbipc_slot_poison(slot, ticket);
-        if (poisoned) {
-          atomic_fetch_add_explicit(&hdr->poisoned_slots_count, 1,
-                                    memory_order_relaxed);
-          atomic_fetch_add_explicit(&hdr->ticket_holes_healed, 1,
-                                    memory_order_relaxed);
-          atomic_thread_fence(memory_order_seq_cst);
-          rbipc_sync_wake_all(&hdr->futex_seq, &hdr->futex_waiters);
-          return true;
-        }
+        return rbipc_audit_poison_slot(hdr, slot, ticket, is_packed,
+                                       &hdr->ticket_holes_healed);
       } else if (sync_state->hole_first_seen_ns == 0) {
         sync_state->hole_first_seen_ns = now_ts;
       }
