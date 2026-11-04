@@ -29,25 +29,25 @@
 
 /**
  * @brief Checks if host system has accessible CXL memory devices or DAX mappings.
+ * @details Cached capability probe. _Atomic since rbipc_cxl_available() may be
+ *          invoked concurrently by multiple threads; the idempotent write (1 or 0)
+ *          converges so relaxed ordering is sufficient.
  */
 bool rbipc_cxl_available(void) {
-  static int cached = -1;
-  if (cached != -1) {
-    return cached == 1;
+  static _Atomic int cached = -1;
+  const int cd = atomic_load_explicit(&cached, memory_order_relaxed);
+  if (cd != -1) {
+    return cd == 1;
   }
 
   const char *env = getenv("RBIPC_CXL_DAX_PATH");
-  if (env && env[0] != 0 && access(env, F_OK) == 0) {
-    cached = 1;
-    return true;
-  }
-  if (access("/sys/bus/cxl", F_OK) == 0 || access("/dev/dax0.0", F_OK) == 0) {
-    cached = 1;
-    return true;
-  }
+  const bool env_ok = env && env[0] != 0 && access(env, F_OK) == 0;
+  const bool sys_ok = access("/sys/bus/cxl", F_OK) == 0 ||
+                      access("/dev/dax0.0", F_OK) == 0;
+  const int supported = (env_ok || sys_ok) ? 1 : 0;
 
-  cached = 0;
-  return false;
+  atomic_store_explicit(&cached, supported, memory_order_relaxed);
+  return supported == 1;
 }
 
 /**

@@ -131,21 +131,25 @@ int rbipc_mpk_init(rbipc_ring_t *ring) {
 }
 
 /**
+ * @brief Releases a hardware protection key if it was allocated by this ring.
+ * @details Resets the key to -1 after freeing so it is never released twice.
+ */
+RBIPC_INLINE void rbipc_mpk_free_key(int *pkey, bool is_creator) {
+  if (*pkey > 0 && is_creator) {
+    pkey_free(*pkey);
+    *pkey = -1;
+  }
+}
+
+/**
  * @brief Releases hardware protection keys allocated for an isolated ring.
  */
 void rbipc_mpk_destroy(rbipc_ring_t *ring) {
   if (!ring) {
     return;
   }
-
-  if (ring->data_pkey > 0 && ring->is_creator) {
-    pkey_free(ring->data_pkey);
-    ring->data_pkey = -1;
-  }
-  if (ring->ctrl_pkey > 0 && ring->is_creator) {
-    pkey_free(ring->ctrl_pkey);
-    ring->ctrl_pkey = -1;
-  }
+  rbipc_mpk_free_key(&ring->data_pkey, ring->is_creator);
+  rbipc_mpk_free_key(&ring->ctrl_pkey, ring->is_creator);
 }
 
 /*

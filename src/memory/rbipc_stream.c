@@ -106,6 +106,29 @@ RBIPC_LEAF size_t rbipc_stream_threshold(void) {
   return (prof && prof->stream_threshold > 0) ? prof->stream_threshold : RBIPC_STREAM_THRESHOLD_DEFAULT;
 }
 
+/**
+ * @brief Copies the unaligned head of a buffer up to the next power-of-two
+ *        alignment boundary.
+ * @details Uses the two's-complement boundary identity
+ *          \f$ \text{align\_offset} = (-d) \ \& \ (A - 1) \f$ to advance the
+ *          destination to the next multiple of @p align with a single neg+and
+ *          (Hacker's Delight §3.1). Advances @p d, @p s and shrinks @p size by
+ *          the copied head bytes.
+ */
+RBIPC_INLINE void rbipc_stream_align_head(uint8_t **RBIPC_RESTRICT d,
+                                          const uint8_t **RBIPC_RESTRICT s,
+                                          size_t *RBIPC_RESTRICT size,
+                                          size_t align) {
+  uintptr_t d_addr = (uintptr_t)*d;
+  size_t align_offset = (-d_addr) & (align - 1U);
+  if (align_offset > 0 && align_offset <= *size) {
+    memcpy(*d, *s, align_offset);
+    *d += align_offset;
+    *s += align_offset;
+    *size -= align_offset;
+  }
+}
+
 int rbipc_stream_copy(void *RBIPC_RESTRICT dst, const void *RBIPC_RESTRICT src,
                       size_t size) {
   if (RBIPC_UNLIKELY(!dst || !src)) {
@@ -117,31 +140,7 @@ int rbipc_stream_copy(void *RBIPC_RESTRICT dst, const void *RBIPC_RESTRICT src,
 #if defined(__x86_64__) || defined(_M_X64)
   size_t stream_thresh = rbipc_stream_threshold();
   if (size >= stream_thresh) {
-    uintptr_t d_addr = (uintptr_t)d;
-    size_t align = RBIPC_CACHE_LINE;
-    /*
-     * Microarchitectural Optimization: Two's Complement Boundary Alignment.
-     *
-     * In two's complement arithmetic, for any power-of-two alignment boundary A,
-     * the number of bytes required to advance an address d to the next multiple of A
-     * is given by the algebraic identity:
-     * \f[
-     *   \text{align\_offset} = (-d) \ \& \ (A - 1)
-     * \f]
-     * This replaces a multi-instruction dependency chain `(A - (d & (A - 1))) & (A - 1)`
-     * with a single negation (`neg`) and bitwise AND (`and`), reducing register pressure
-     * and ALU latency before streaming memory operations.
-     *
-     * Reference:
-     * - Henry S. Warren, Jr., "Hacker's Delight" (2nd ed., Addison-Wesley), §3.1.
-     */
-    size_t align_offset = (-d_addr) & (align - 1U);
-    if (align_offset > 0 && align_offset <= size) {
-      memcpy(d, s, align_offset);
-      d += align_offset;
-      s += align_offset;
-      size -= align_offset;
-    }
+    rbipc_stream_align_head(&d, &s, &size, RBIPC_CACHE_LINE);
 
 #if defined(__GNUC__) || defined(__clang__)
     if (__builtin_cpu_supports("avx512f") && size >= 64) {
@@ -171,14 +170,7 @@ int rbipc_stream_copy(void *RBIPC_RESTRICT dst, const void *RBIPC_RESTRICT src,
   }
 #elif defined(__aarch64__)
   if (size >= RBIPC_STREAM_THRESHOLD) {
-    uintptr_t d_addr = (uintptr_t)d;
-    size_t align_offset = (-d_addr) & 15U;
-    if (align_offset > 0 && align_offset <= size) {
-      memcpy(d, s, align_offset);
-      d += align_offset;
-      s += align_offset;
-      size -= align_offset;
-    }
+    rbipc_stream_align_head(&d, &s, &size, 16);
     if (size >= 64) {
       size_t blocks = size / 64;
       rbipc_stream_copy_arm64_blocks(d, s, blocks);

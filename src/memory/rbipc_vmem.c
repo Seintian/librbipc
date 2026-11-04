@@ -21,6 +21,27 @@
 #include <unistd.h>
 
 /**
+ * @brief Maps a shared, read-write region of the given size at a file offset.
+ * @details Invokes @c mmap with @c MAP_SHARED and @c PROT_READ | @c PROT_WRITE,
+ *          then requests huge pages when the region is large enough.
+ */
+RBIPC_INLINE int rbipc_vmem_map_shared(int fd, size_t offset, size_t size,
+                                       void **RBIPC_RESTRICT out_map) {
+  void *map = mmap(NULL, size, PROT_READ | PROT_WRITE, MAP_SHARED, fd,
+                   (off_t)offset);
+  if (map == MAP_FAILED) {
+    return RBIPC_ERR_SYS;
+  }
+#ifdef MADV_HUGEPAGE
+  if (size >= RBIPC_HUGE_PAGE_2MB) {
+    (void)madvise(map, size, MADV_HUGEPAGE);
+  }
+#endif
+  *out_map = map;
+  return RBIPC_OK;
+}
+
+/**
  * @brief Maps the control header and slot descriptor metadata region.
  * @details Invokes @c mmap with flags @c MAP_SHARED and protections @c PROT_READ | @c PROT_WRITE.
  */
@@ -28,20 +49,23 @@ int rbipc_vmem_map_ctrl(int fd, size_t size, void ** RBIPC_RESTRICT out_map) {
     if (RBIPC_UNLIKELY(!rbipc_is_valid_fd(fd) || size == 0 || !out_map)) {
         return RBIPC_ERR_INVAL;
     }
+    return rbipc_vmem_map_shared(fd, 0, size, out_map);
+}
 
-    void *ctrl = mmap(NULL, size, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
-    if (ctrl == MAP_FAILED) {
-        return RBIPC_ERR_SYS;
+/**
+ * @brief Unmaps a region, tolerating a permanent mseal(2) seal.
+ * @details munmap() is blocked on sealed regions; the failure is intentionally
+ *          ignored because the address range stays reserved for the process
+ *          lifetime (documented behavior for sealed isolated rings).
+ */
+RBIPC_LEAF
+void rbipc_vmem_unmap_tolerate_sealed(void *map, size_t size) {
+    if (map && size > 0) {
+        if (RBIPC_UNLIKELY(munmap(map, size) != 0 &&
+                           (errno == EPERM || errno == EINVAL))) {
+            /* Region was permanently sealed via mseal(2): munmap() is blocked. */
+        }
     }
-
-#ifdef MADV_HUGEPAGE
-    if (size >= RBIPC_HUGE_PAGE_2MB) {
-        (void)madvise(ctrl, size, MADV_HUGEPAGE);
-    }
-#endif
-
-    *out_map = ctrl;
-    return RBIPC_OK;
 }
 
 /**
@@ -50,16 +74,7 @@ int rbipc_vmem_map_ctrl(int fd, size_t size, void ** RBIPC_RESTRICT out_map) {
  */
 RBIPC_LEAF
 void rbipc_vmem_unmap_ctrl(void *map, size_t size) {
-    if (map && size > 0) {
-        if (RBIPC_UNLIKELY(munmap(map, size) != 0 &&
-                           (errno == EPERM || errno == EINVAL))) {
-            /*
-             * Region was permanently sealed via mseal(2): munmap() is blocked.
-             * Ignore the failure; the address range stays reserved for the
-             * process lifetime (documented behavior for sealed isolated rings).
-             */
-        }
-    }
+    rbipc_vmem_unmap_tolerate_sealed(map, size);
 }
 
 /**
@@ -69,20 +84,7 @@ int rbipc_vmem_map_data(int fd, size_t offset, size_t data_size, void ** RBIPC_R
     if (RBIPC_UNLIKELY(!rbipc_is_valid_fd(fd) || data_size == 0 || !out_data_map)) {
         return RBIPC_ERR_INVAL;
     }
-
-    void *data = mmap(NULL, data_size, PROT_READ | PROT_WRITE, MAP_SHARED, fd, (off_t)offset);
-    if (data == MAP_FAILED) {
-        return RBIPC_ERR_SYS;
-    }
-
-#ifdef MADV_HUGEPAGE
-    if (data_size >= RBIPC_HUGE_PAGE_2MB) {
-        (void)madvise(data, data_size, MADV_HUGEPAGE);
-    }
-#endif
-
-    *out_data_map = data;
-    return RBIPC_OK;
+    return rbipc_vmem_map_shared(fd, offset, data_size, out_data_map);
 }
 
 /**
@@ -90,12 +92,7 @@ int rbipc_vmem_map_data(int fd, size_t offset, size_t data_size, void ** RBIPC_R
  */
 RBIPC_LEAF
 void rbipc_vmem_unmap_data(void *data_map, size_t data_size) {
-    if (data_map && data_size > 0) {
-        if (RBIPC_UNLIKELY(munmap(data_map, data_size) != 0 &&
-                           (errno == EPERM || errno == EINVAL))) {
-            /* Region sealed via mseal(2): munmap() is intentionally blocked. */
-        }
-    }
+    rbipc_vmem_unmap_tolerate_sealed(data_map, data_size);
 }
 
 /**
@@ -198,20 +195,21 @@ void rbipc_vmem_unmap_double(void *data_map, size_t data_size) {
 
 /**
  * @brief Checks whether the host Linux kernel supports mseal(2) (Linux 6.10+).
+ * @details Cached capability probe. _Atomic since rbipc_mseal_available() may be
+ *          invoked concurrently by multiple threads; the idempotent write (1 or 0)
+ *          converges so relaxed ordering is sufficient.
  */
 bool rbipc_mseal_available(void) {
 #ifdef SYS_mseal
-    static int cached_supported = -1;
-    if (cached_supported != -1) {
-        return cached_supported == 1;
+    static _Atomic int cached_supported = -1;
+    const int cd = atomic_load_explicit(&cached_supported, memory_order_relaxed);
+    if (cd != -1) {
+        return cd == 1;
     }
     long ret = syscall(SYS_mseal, 0, 0, 0);
-    if (ret == 0 || (ret == -1 && errno == EINVAL)) {
-        cached_supported = 1;
-    } else {
-        cached_supported = 0;
-    }
-    return cached_supported == 1;
+    const int supported = (ret == 0 || (ret == -1 && errno == EINVAL)) ? 1 : 0;
+    atomic_store_explicit(&cached_supported, supported, memory_order_relaxed);
+    return supported == 1;
 #else
     return false;
 #endif

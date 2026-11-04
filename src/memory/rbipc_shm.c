@@ -78,6 +78,20 @@ rbipc_shm_calc_aligned_slot_size(uint32_t slot_size,
 }
 
 /**
+ * @brief Compute the effective alignment for a region of the given size.
+ * @details Promotes the alignment to the huge-page size when the region is
+ *          large enough to benefit, otherwise keeps the base page alignment.
+ */
+RBIPC_INLINE size_t rbipc_shm_effective_align(size_t base_align,
+                                              size_t region_size) {
+  size_t hps = rbipc_huge_page_size();
+  if (region_size >= hps && hps > base_align) {
+    return hps;
+  }
+  return base_align;
+}
+
+/**
  * @brief Compute page-aligned single circular data buffer size with
  * multiplication overflow check.
  *
@@ -97,11 +111,7 @@ rbipc_shm_calc_data_geometry(uint32_t capacity, size_t aligned_slot_size,
     return RBIPC_ERR_OVERFLOW;
   }
   size_t raw_data_size = (size_t)capacity * aligned_slot_size;
-  size_t align = page_size;
-  size_t hps = rbipc_huge_page_size();
-  if (raw_data_size >= hps && hps > align) {
-    align = hps;
-  }
+  size_t align = rbipc_shm_effective_align(page_size, raw_data_size);
   size_t data_size = rbipc_align_up(raw_data_size, align);
   if (data_size < raw_data_size) {
     return RBIPC_ERR_OVERFLOW;
@@ -173,11 +183,7 @@ int rbipc_shm_calc_layout_ex(uint32_t capacity, uint32_t slot_size,
   if (RBIPC_UNLIKELY(rc != RBIPC_OK))
     return rc;
 
-  size_t offset_align = page_size;
-  size_t hps = rbipc_huge_page_size();
-  if (data_size >= hps && hps > offset_align) {
-    offset_align = hps;
-  }
+  size_t offset_align = rbipc_shm_effective_align(page_size, data_size);
 
   size_t data_offset = 0;
   rc = rbipc_shm_calc_metadata_geometry_ex(capacity, offset_align, flags, &data_offset);
@@ -231,6 +237,29 @@ bool rbipc_shm_hugetlb_available(void) {
 }
 
 /**
+ * @brief Resolve the effective permission mode for a shared memory object.
+ * @details Falls back to the library default when @p mode is zero, and masks
+ *          to the portable permission bits otherwise.
+ */
+RBIPC_INLINE mode_t rbipc_shm_resolve_mode(mode_t mode) {
+  return (mode == 0) ? RBIPC_DEFAULT_SHM_MODE : (mode & (mode_t)07777U);
+}
+
+/**
+ * @brief Enforce the resolved mode on a descriptor, closing it on failure.
+ * @details Returns @ref RBIPC_ERR_SYS and restores @c errno if @c fchmod fails.
+ */
+RBIPC_INLINE int rbipc_shm_fchmod_or_close(int fd, mode_t mode) {
+  if (fchmod(fd, mode) != 0) {
+    int err = errno;
+    close(fd);
+    errno = err;
+    return RBIPC_ERR_SYS;
+  }
+  return RBIPC_OK;
+}
+
+/**
  * @brief Atomic helper: Create an anonymous memory file descriptor via Linux
  * memfd_create.
  */
@@ -253,13 +282,9 @@ RBIPC_INLINE int rbipc_shm_create_anonymous(const char *name, mode_t mode,
   if (fd < 0) {
     return RBIPC_ERR_SYS;
   }
-  mode_t actual_mode =
-      (mode == 0) ? RBIPC_DEFAULT_SHM_MODE : (mode & (mode_t)07777U);
-  if (fchmod(fd, actual_mode) != 0) {
-    int err = errno;
-    close(fd);
-    errno = err;
-    return RBIPC_ERR_SYS;
+  int rc = rbipc_shm_fchmod_or_close(fd, rbipc_shm_resolve_mode(mode));
+  if (RBIPC_UNLIKELY(rc != RBIPC_OK)) {
+    return rc;
   }
   *out_fd = fd;
   return RBIPC_OK;
@@ -278,8 +303,7 @@ RBIPC_INLINE int rbipc_shm_create_named(const char *RBIPC_RESTRICT name,
   if (flags & RBIPC_CREATE_OVERWRITE) {
     shm_unlink(name);
   }
-  mode_t actual_mode =
-      (mode == 0) ? RBIPC_DEFAULT_SHM_MODE : (mode & (mode_t)07777U);
+  mode_t actual_mode = rbipc_shm_resolve_mode(mode);
   int fd = shm_open(name, O_CREAT | O_EXCL | O_RDWR, actual_mode);
   if (fd < 0) {
     if (errno == EEXIST) {
