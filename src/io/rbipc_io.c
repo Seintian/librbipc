@@ -202,7 +202,7 @@ RBIPC_INLINE bool rbipc_io_hardware_wait(const rbipc_ring_t *ring,
  * full ring.
  */
 static int rbipc_io_handle_write_backoff(
-    const rbipc_ring_t *ring, rbipc_sync_state_t *RBIPC_RESTRICT sync_state,
+    rbipc_ring_t *ring, rbipc_sync_state_t *RBIPC_RESTRICT sync_state,
     rbipc_shm_header_t *hdr, rbipc_slot_t *slot, uint64_t t_ticket,
     uint64_t timeout_ns, uint64_t *RBIPC_RESTRICT t) {
   if (RBIPC_UNLIKELY(timeout_ns == 0)) {
@@ -255,6 +255,18 @@ static int rbipc_io_handle_write_backoff(
   if (RBIPC_UNLIKELY(rbipc_ring_is_shutdown(hdr))) {
     rbipc_sync_deregister_waiter(&hdr->write_waiters);
     return RBIPC_ERR_SHUTDOWN;
+  }
+
+  /* Wait-free (wCQ) slow path: before suspending on the futex, post a READ
+   * help request for the oldest unread slot so a consumer peer can complete
+   * the read and free the slot even if the owning consumer is preempted.
+   * This is what makes the wait-free post path live in production (H2). */
+  if (RBIPC_UNLIKELY(ring->is_wait_free)) {
+    int wf_rc = rbipc_waitfree_post_and_wait(ring, t_ticket, RBIPC_HELP_OP_READ,
+                                             NULL, 0, timeout_ns);
+    /* A timeout/cancellation here is benign: we still fall through to the
+     * futex sleep, which remains the authoritative blocking mechanism. */
+    (void)wf_rc;
   }
 
   int rc = rbipc_sync_wait_slot_registered(
