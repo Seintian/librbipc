@@ -19,6 +19,8 @@
 #include "rbipc_internal.h"
 #include "rbipc_dma.h"
 #include "rbipc_stream.h"
+#include "rbipc_arch.h"
+#include "rbipc_sync.h"
 
 #include <fcntl.h>
 #include <stdatomic.h>
@@ -134,12 +136,19 @@ static rbipc_dsa_wq_t *rbipc_dsa_wq_get(void) {
     return &g_dsa_wq;
   }
 
-  /* Another thread is initializing; spin briefly for the result. */
-  while (atomic_load_explicit(&g_dsa_wq_state, memory_order_acquire) == 0) {
+  /* Another thread is initializing; wait for the result. The initializer
+   * publishes either 1 (ready) or -1 (failed), so the spin terminates. A
+   * bounded micro-pause reduces cache-line contention while polling. */
+  int result;
+  for (uint32_t spin = 0;
+       (result = atomic_load_explicit(&g_dsa_wq_state, memory_order_acquire)) == 0 &&
+       spin < RBIPC_SPIN_COUNT_DEFAULT;
+       ++spin) {
+    rbipc_cpu_pause();
   }
-  return atomic_load_explicit(&g_dsa_wq_state, memory_order_acquire) == 1
-             ? &g_dsa_wq
-             : NULL;
+  /* Branchless selection: result is 1 (ready) or -1 (failed). */
+  static rbipc_dsa_wq_t *const k_result[2] = {NULL, &g_dsa_wq};
+  return k_result[result == 1];
 }
 
 /**
