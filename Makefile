@@ -25,7 +25,9 @@ endif
 
 CSTD ?= $(shell echo '' | $(CC) -std=c23 -E -x c - >/dev/null 2>&1 && echo -std=c23 || (echo '' | $(CC) -std=c2x -E -x c - >/dev/null 2>&1 && echo -std=c2x || echo -std=c11))
 CFLAGS ?= $(CSTD) -Wall -Wextra -Wpedantic -Werror -O3 -march=native -flto -fPIC -fvisibility=hidden -MMD -MP -Iinclude -Isrc -Isrc/core -Isrc/memory -Isrc/sync -Isrc/io -Isrc/ipc -Isrc/audit -Isrc/platform -pthread -D_GNU_SOURCE $(EXTRA_CFLAGS)
-LDFLAGS ?= -flto -pthread -lrt -lm
+# -lrt is unnecessary on glibc >= 2.17 (clock_gettime/shm_open are in libc);
+# -lm is retained for the latency benchmarks/tests that use sqrt().
+LDFLAGS ?= -flto -pthread -lm
 
 VERSION_MAJOR ?= 1
 VERSION_MINOR ?= 0
