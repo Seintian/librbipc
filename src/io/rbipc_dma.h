@@ -43,6 +43,50 @@ extern "C" {
 #define RBIPC_DMA_OFFLOAD_THRESHOLD 16384U
 
 /**
+ * @def RBIPC_DMA_COMPLETION_STATUS_SUCCESS
+ * @brief DSA completion record status value indicating a successful operation.
+ */
+#define RBIPC_DMA_COMPLETION_STATUS_SUCCESS 0x01U
+
+/**
+ * @def RBIPC_DMA_COMPLETION_STATUS_PAGE_FAULT
+ * @brief DSA completion record status value indicating a page fault during transfer.
+ */
+#define RBIPC_DMA_COMPLETION_STATUS_PAGE_FAULT 0x02U
+
+/**
+ * @def RBIPC_DMA_COMPLETION_STATUS_BATCH_PAGE_FAULT
+ * @brief DSA completion record status value indicating a batch page fault.
+ */
+#define RBIPC_DMA_COMPLETION_STATUS_BATCH_PAGE_FAULT 0x03U
+
+/**
+ * @def RBIPC_DMA_COMPLETION_STATUS_INVALID
+ * @brief DSA completion record status value indicating an invalid descriptor.
+ */
+#define RBIPC_DMA_COMPLETION_STATUS_INVALID 0x04U
+
+/**
+ * @def RBIPC_DMA_COMPLETION_STATUS_RSVD
+ * @brief DSA completion record status value indicating a reserved/unsupported operation.
+ */
+#define RBIPC_DMA_COMPLETION_STATUS_RSVD 0x05U
+
+/**
+ * @def RBIPC_DMA_COMPLETION_STATUS_CRC_ERR
+ * @brief DSA completion record status value indicating a CRC error.
+ */
+#define RBIPC_DMA_COMPLETION_STATUS_CRC_ERR 0x06U
+
+/**
+ * @def RBIPC_DMA_COMPLETION_STATUS_CRC_ERR_RSVD
+ * @brief DSA completion record status value indicating a CRC error on a reserved field.
+ */
+#define RBIPC_DMA_COMPLETION_STATUS_CRC_ERR_RSVD 0x07U
+/* NOTE: completion status values 0x08-0xFF are reserved by the Intel DSA spec
+ * and are intentionally not enumerated here. */
+
+/**
  * @struct rbipc_dma_desc
  * @brief Intel Data Streaming Accelerator (DSA) 64-byte hardware descriptor layout.
  */
@@ -62,6 +106,52 @@ static_assert(sizeof(rbipc_dma_desc_t) == RBIPC_DSA_DESC_SIZE,
               "rbipc_dma_desc_t must be exactly 64 bytes for MOVDIR64B / ENQCMD per Intel DSA spec");
 static_assert(alignof(rbipc_dma_desc_t) == RBIPC_DSA_DESC_SIZE,
               "rbipc_dma_desc_t must be 64-byte aligned per Intel DSA spec");
+
+/**
+ * @struct rbipc_dma_completion
+ * @brief Intel DSA completion record (32 bytes) written by the hardware when an
+ *        operation completes. The first byte holds the status; the hardware
+ *        writes 0x01 (success) or an error code on completion.
+ */
+typedef struct rbipc_dma_completion {
+  uint8_t  status;                 /**< Completion status (0x01 = success, else error) */
+  uint8_t  reserved[7];            /**< Reserved */
+  uint64_t bytes_completed;        /**< Bytes successfully transferred */
+  uint64_t reserved2;              /**< Reserved */
+  uint64_t reserved3;              /**< Reserved */
+} rbipc_dma_completion_t;
+
+static_assert(sizeof(rbipc_dma_completion_t) == 32U,
+              "rbipc_dma_completion_t must be exactly 32 bytes per Intel DSA spec");
+
+/**
+ * @brief Dispatch a 64-byte DSA descriptor to a work queue portal via MOVDIR64B.
+ * @details Executes the MOVDIR64B instruction, which writes the descriptor to the
+ *          WQ's MMIO portal. Returns 0 on successful submission (descriptor accepted)
+ *          or non-zero if the WQ is full.
+ * @param[in] portal  MMIO portal address of the shared work queue.
+ * @param[in] desc    Pointer to the 64-byte aligned descriptor.
+ * @return 0 on successful submission, non-zero if the WQ is full.
+ */
+RBIPC_INLINE int rbipc_dma_movdir64b(void *RBIPC_RESTRICT portal,
+                                     const rbipc_dma_desc_t *RBIPC_RESTRICT desc) {
+#if defined(__x86_64__)
+  int rc;
+  __asm__ volatile(
+      "movdir64b (%1), %0\n\t"
+      "setz %b2\n\t"
+      : "+r"(portal), "+r"(desc), "=r"(rc)
+      :
+      : "memory");
+  /* MOVDIR64B sets ZF=1 when the descriptor is accepted, ZF=0 when the WQ is
+   * full. setz captures that flag into the low byte of rc. */
+  return rc ? 0 : -1;
+#else
+  (void)portal;
+  (void)desc;
+  return -1;
+#endif
+}
 
 #ifdef __cplusplus
 }
