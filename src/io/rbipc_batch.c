@@ -168,7 +168,8 @@ rbipc_batch_commit_slots(rbipc_ring_t *RBIPC_RESTRICT ring, uint32_t count,
     for (uint32_t i = 0; i < count; ++i) {
       uint64_t ticket = tickets[i];
       rbipc_slot_t *slot = &slots[ticket & mask];
-      atomic_store_explicit(&slot->state, RBIPC_SLOT_COMMITTED, memory_order_relaxed);
+      /* Packed mode encodes state in the sequence word; no separate state
+       * store (matches rbipc_slot_commit_packed single-slot path). */
       uint64_t packed = rbipc_slot_pack(ticket + 1, written_lens[i], RBIPC_SLOT_COMMITTED);
       atomic_store_explicit(&slot->sequence, packed, memory_order_relaxed);
     }
