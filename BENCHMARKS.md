@@ -65,9 +65,9 @@ The single-producer / single-consumer (1P-1C) streaming benchmark measures the s
 | Transport / Library Mode | Configuration / Flags | Throughput (Mops/s) | Bandwidth (MB/s) | Relative vs DPDK rte_ring |
 | :--- | :--- | :--- | :--- | :--- |
 | **`librbipc` (Zero-Trust Default)** | `0` (Process Isolation & PID Auditing) | **10.07** | **614.44** | **+47.4% (FASTER)** |
-| **`librbipc` (Trusted 8B Pointer)**| `RBIPC_FLAG_TRUSTED \| RBIPC_FLAG_PACKED` | **9.66** | 589.45 | **+41.4% (FASTER)** |
-| **`librbipc` (Trusted 64B Copy)** | `RBIPC_FLAG_TRUSTED` | **9.58** | 584.80 | **+40.3% (FASTER)** |
-| **`librbipc` (Combined Mode)** | `RBIPC_FLAG_TRUSTED \| RBIPC_FLAG_PACKED` | **7.39** | 451.15 | **+8.2% (FASTER)** |
+| **`librbipc` (Trusted 8B Pointer)**| `RBIPC_FLAG_TRUSTED \| RBIPC_FLAG_PACKED` (8B reference passing) | **9.66** | 589.45 | **+41.4% (FASTER)** |
+| **`librbipc` (Trusted 64B Copy)** | `RBIPC_FLAG_TRUSTED` (64B value copy) | **9.58** | 584.80 | **+40.3% (FASTER)** |
+| **`librbipc` (Combined Mode)** | `RBIPC_FLAG_TRUSTED \| RBIPC_FLAG_PACKED` (64B value copy) | **7.39** | 451.15 | **+8.2% (FASTER)** |
 | **DPDK `rte_ring`** | In-Memory Spin Ring (Pointer Passing) | 6.83 | 416.72 | Baseline (1.00×) |
 | **LMAX Disruptor** | Multi-WaitStrategy Ring (Value Copy) | 5.47 | 333.87 | -19.9% |
 | **POSIX `mqueue`** | Kernel IPC Message Queue | 0.38 | 23.31 | **-94.4% (18× SLOWER)** |
