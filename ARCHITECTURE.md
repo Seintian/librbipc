@@ -40,10 +40,10 @@ All inter-process state in `librbipc` resides in a single, contiguous shared-mem
 |     - Exactly 64 Bytes per Slot (static_assert(sizeof(...) == 64))      |
 |     - sequence (64-bit atomic sequence turn counter)                    |
 |     - state (32-bit atomic slot state machine: EMPTY/RESERVED/COMMITTED)|
-|     - length (32-bit payload byte count)                                |
-|     - producer_pid, consumer_pid (PID attribution & crash recovery)    |
+|     - producer_pid (PID attribution & crash recovery)                   |
+|     - len (32-bit payload byte count)                                   |
+|     - consumer_pid (PID attribution & crash recovery)                   |
 |     - acquire_timestamp_ns (Lease expiration tracking)                  |
-|     - offset (64-bit payload data buffer offset)                        |
 |     - _pad (Cache-line padding ensuring no adjacent slot overlap)       |
 +-------------------------------------------------------------------------+
 | [3] Payload Data Buffer Array (uint8_t[capacity * slot_size])           |
@@ -56,10 +56,10 @@ All inter-process state in `librbipc` resides in a single, contiguous shared-mem
 
 The control header occupies exactly 256 bytes (4 cache lines) and is placed at the start of the shared memory region:
 
-- **Cache Line 0 (Static Metadata & Verification)**: Contains the 32-bit magic identifier (`RBIPC_MAGIC = 0x52424950`), ABI version, capacity (must be a power of two), slot data size, memory layout offsets, hardware CRC32C checksum of initial parameters, and `init_state` publication flag (`RBIPC_HEADER_INIT_DONE`).
+- **Cache Line 0 (Static Metadata & Verification)**: Contains the 64-bit magic identifier (`RBIPC_MAGIC = 0x5242495043323032ULL`, ASCII `'RBIPC202'`), ABI version, capacity (must be a power of two), slot data size, memory layout offsets, hardware CRC32C checksum of initial parameters, and `init_state` publication flag (`RBIPC_HEADER_INIT_DONE`).
 - **Cache Line 1 (Monotonic Fast-Path Tickets)**: Houses the 64-bit monotonic `write_ticket` and `read_ticket` counters, modified via atomic fetch-and-add instructions, alongside the atomic cooperative `shutdown_flag`.
 - **Cache Line 2 (Producer Waiting Subsystem)**: Contains `write_futex_seq` (32-bit proxy sequence word) and `write_waiters` (count of blocked producers waiting for ring vacancy), alongside thread-local backoff thresholds.
-- **Cache Line 3 (Consumer Waiting Subsystem)**: Contains `read_futex_seq` (32-bit proxy sequence word) and `read_waiters` (count of blocked consumers waiting for ready messages).
+- **Cache Line 3 (Consumer Waiting Subsystem)**: Contains `futex_seq` (32-bit proxy sequence word) and `futex_waiters` (count of blocked consumers waiting for ready messages).
 
 Separating write tickets, read tickets, producer waiters, and consumer waiters into distinct cache lines ensures that producer updates do not invalidate consumer cache lines, completely avoiding cross-core cache-line ping-pong during steady-state streaming.
 
@@ -68,19 +68,18 @@ Separating write tickets, read tickets, producer waiters, and consumer waiters i
 Each slot descriptor is padded and aligned to exactly 64 bytes (`static_assert(sizeof(rbipc_slot_t) == 64)`):
 
 ```c
-typedef struct rbipc_slot {
+typedef struct {
   _Alignas(RBIPC_CACHE_LINE) _Atomic uint64_t sequence;
   _Atomic uint32_t state;
-  uint32_t length;
-  _Atomic pid_t producer_pid;
-  _Atomic pid_t consumer_pid;
+  _Atomic uint32_t producer_pid;
+  _Atomic uint32_t len;
+  _Atomic uint32_t consumer_pid;
   _Atomic uint64_t acquire_timestamp_ns;
-  uint64_t offset;
-  uint8_t _pad[24];
+  uint8_t _pad[RBIPC_CACHE_LINE - 32U];
 } rbipc_slot_t;
 ```
 
-- In **Tier 1 (Zero-Trust)**: Producers and consumers verify both `sequence` turn progression and the explicit `state` transition (`EMPTY` $\to$ `RESERVING` $\to$ `RESERVED` $\to$ `COMMITTED`), recording process IDs and acquisition timestamps for audit and recovery.
+- In **Tier 1 (Zero-Trust)**: Producers and consumers verify both `sequence` turn progression and the explicit `state` transition (`EMPTY` $\to$ `RESERVED` $\to$ `COMMITTED`), recording process IDs and acquisition timestamps for audit and recovery. (The intermediate `RESERVING` state exists in the enum and is exercised by crash-recovery tests, but the production fast path transitions directly from `EMPTY` to `RESERVED`.)
 - In **Tier 2 (Trusted Mode)**: `state`, PIDs, and timestamps are bypassed. Slot lifecycle is governed strictly by the monotonic `sequence` turn counter.
 - In **Tier 3 (Packed Mode)**: Sequence turn (48 bits), payload length (12 bits), and slot state (4 bits) are compressed into the single 64-bit `sequence` word.
 
@@ -208,13 +207,13 @@ If the micro-spin loop expires and hardware support is detected:
 
 To eliminate hardware memory fence instructions (`MFENCE`) on the high-frequency commit/release fast paths, `librbipc` implements asymmetric memory barriers:
 - **Fast Path (Commit & Release)**: Uses lightweight release semantics (`memory_order_release`). No expensive full memory barrier instructions are executed.
-- **Slow Path (Waiter Sleep)**: Before sleeping, the waiting thread registers itself in `hdr->read_waiters` or `hdr->write_waiters` and invokes Linux `sys_membarrier(MEMBARRIER_CMD_GLOBAL_EXPEDITED, 0, 0)`. This system call forces a hardware memory barrier across all active CPU cores running threads of the process, ensuring sequential consistency without penalizing producers and consumers on the fast path.
+- **Slow Path (Waiter Sleep)**: Before sleeping, the waiting thread registers itself in `hdr->futex_waiters` or `hdr->write_waiters` and invokes Linux `sys_membarrier(MEMBARRIER_CMD_GLOBAL_EXPEDITED, 0, 0)`. This system call forces a hardware memory barrier across all active CPU cores running threads of the process, ensuring sequential consistency without penalizing producers and consumers on the fast path.
 
 ### 4.4 Tier 3: Vectorized `sys_futex_waitv` & `SYS_futex`
 
 When a thread must enter deep suspension:
 - **Linux 5.16+ `futex2` (`sys_futex_waitv`)**: Wakes up directly on slot sequence changes. Vectorized monitoring checks the slot sequence turn (`slot->sequence`), the cooperative `shutdown_flag`, and proxy sequence counters simultaneously in a single system call.
-- **Legacy Linux 2.6+ `SYS_futex`**: Falls back to 32-bit proxy words (`hdr->read_futex_seq`, `hdr->write_futex_seq`) with `FUTEX_WAKE_OP` atomic wakeups, preventing 32-bit integer wrap-around and ABA aliasing.
+- **Legacy Linux 2.6+ `SYS_futex`**: Falls back to 32-bit proxy words (`hdr->futex_seq`, `hdr->write_futex_seq`) with `FUTEX_WAKE_OP` atomic wakeups, preventing 32-bit integer wrap-around and ABA aliasing.
 - **Result**: CPU utilization drops to **0.3%** when the ring is idle, scaling smoothly from quiescent power-saving states to tens of millions of messages per second.
 
 ---
