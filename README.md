@@ -105,8 +105,8 @@ librbipc/
 | `rbipc_attach` / `rbipc_attach_ex` | Attach to an existing named shared-memory ring buffer with CRC32C and layout verification. |
 | `rbipc_attach_fd` / `rbipc_attach_fd_ex` | Attach directly to an inherited or socket-received (`SCM_RIGHTS`) shared-memory file descriptor. |
 | `rbipc_detach` / `rbipc_destroy` | Detach handle, decrement active role counters, close descriptors, or unlink shared-memory segments. |
-| `rbipc_signal_shutdown` / `rbipc_shutdown`| Set atomic shutdown flag and wake all blocked producers and consumers via `sys_futex_waitv`. |
-| `rbipc_set_wait_policy` / `_get_wait_policy`| Configure wait policy (`RBIPC_WAIT_ADAPTIVE`, `RBIPC_WAIT_ZERO_SPIN`, `RBIPC_WAIT_HW_MONITOR`). |
+| `rbipc_signal_shutdown` / `rbipc_shutdown` | Set atomic shutdown flag and wake all blocked producers and consumers via `sys_futex_waitv`. |
+| `rbipc_set_wait_policy` / `_get_wait_policy` | Configure wait policy (`RBIPC_WAIT_ADAPTIVE`, `RBIPC_WAIT_ZERO_SPIN`, `RBIPC_WAIT_HW_MONITOR`). |
 
 ### 2. Zero-Copy Single-Slot I/O (`include/rbipc.h`)
 
@@ -197,11 +197,11 @@ Measured empirically on reference hardware (**Intel Core i5-6300U @ 2.40 GHz**, 
 | **1P-1C 64B Streaming (Zero-Trust)** | **10.07 Mops/s** (614.4 MB/s) | N/A (No isolation) | N/A (No isolation) | 0.38 Mops/s | 0.50 Mops/s |
 | **1P-1C 64B Streaming (Trusted)** | **9.58–9.66 Mops/s** (589.5 MB/s) | 6.83 Mops/s | 5.47 Mops/s | 0.38 Mops/s | 0.50 Mops/s |
 | **B-Queue Vector Batch (Batch 32)** | **55.54 Mops/s** (7,627.0 MB/s) | N/A | N/A | N/A | N/A |
-| **E2E Fork Multi-Process (Batch 32)**| **48.15 Mops/s** (20.77 ns/msg) | N/A | N/A | N/A | N/A |
-| **Half-RTT Ping-Pong Latency ($p50$)**| **92 ns** (Trusted) / **93 ns** (ZT) | 201 ns | 123 ns | 4,217 ns (45× slower) | 4,934 ns (53× slower) |
+| **E2E Fork Multi-Process (Batch 32)** | **48.15 Mops/s** (20.77 ns/msg) | N/A | N/A | N/A | N/A |
+| **Half-RTT Ping-Pong Latency ($p50$)** | **92 ns** (Trusted) / **93 ns** (ZT) | 201 ns | 123 ns | 4,217 ns (45× slower) | 4,934 ns (53× slower) |
 | **Half-RTT Ping-Pong Latency (Min)** | **66 ns** (ZT) / **68 ns** (Trusted) | 127 ns | 111 ns | 3,485 ns | 3,748 ns |
 | **Tail Latency ($p99.9$ / Max)** | **5.67 µs / 59.8 µs** (Combined) | 1.02 µs / 325 µs | 3.51 µs / 43.8 µs | 52.2 µs / 584 µs | 28.7 µs / 456 µs |
-| **Contention Robustness (4P-4C)** | **0.98 Mops/s** (Sustained) | **0.02 Mops/s (Collapsed)**| **0.07 Mops/s (Collapsed)**| < 0.2 Mops/s | < 0.2 Mops/s |
+| **Contention Robustness (4P-4C)** | **0.98 Mops/s** (Sustained) | **0.02 Mops/s (Collapsed)** | **0.07 Mops/s (Collapsed)** | < 0.2 Mops/s | < 0.2 Mops/s |
 | **Idle CPU Utilization** | **0.2% CPU** (Green Compute) | 97.6% (Busy-Spin) | 97.4% (Busy-Spin) | VFS Dependent | VFS Dependent |
 | **Hardware perf IPC** | **1.59 IPC** (Batch 32) | ~0.70 IPC | ~1.10 IPC | < 0.30 IPC | < 0.30 IPC |
 | **Branch Misprediction Rate** | **0.03%** | ~0.5% | ~0.4% | > 2.0% | > 2.5% |
