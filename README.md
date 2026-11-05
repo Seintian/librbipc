@@ -82,7 +82,7 @@ librbipc/
 │   ├── deep_dive/           # Deep dive feature benchmarks (SIMD, leases, reactor, streaming)
 │   ├── idle/                # Idle strategy benchmarks (passive futex vs busy-spin polling)
 │   └── suite/               # Streaming throughput, payload scaling, and MPMC contention suites
-├── tests/                   # 31 automated verification suites across 8 subsystems (100% pass)
+├── tests/                   # 38 automated verification suites across 8 subsystems (100% pass)
 ├── tools/                   # Diagnostic and monitoring utilities (rbipc_stat, rbipc_telemetry_stress)
 ├── scripts/                 # Benchmarking harnesses, documentation bundlers, and symbol maps
 ├── ARCHITECTURE.md          # Comprehensive architectural specification and subsystem blueprints
