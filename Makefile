@@ -235,7 +235,7 @@ compile_commands.json: Makefile $(SRCS) $(TEST_SRCS) $(BENCH_SRCS)
 compile_commands: compile_commands.json
 
 docs:
-	@which doxygen > /dev/null 2>&1 && doxygen Doxyfile && python3 scripts/postprocess_docs.py || echo "doxygen is not installed in the environment; install doxygen to generate HTML documentation."
+	@which doxygen > /dev/null 2>&1 && sed -e 's|@VERSION@|$(VERSION)|g' Doxyfile > $(BUILDDIR)/Doxyfile.generated && doxygen $(BUILDDIR)/Doxyfile.generated && python3 scripts/postprocess_docs.py || echo "doxygen is not installed in the environment; install doxygen to generate HTML documentation."
 
 tsan: CFLAGS = $(CSTD) -Wall -Wextra -Wpedantic -Werror -Wno-error=tsan -O1 -march=native -g -fsanitize=thread -fPIC -Iinclude -Isrc -Isrc/core -Isrc/memory -Isrc/sync -Isrc/io -Isrc/ipc -Isrc/audit -Isrc/platform -pthread -D_GNU_SOURCE
 tsan: LDFLAGS += -fsanitize=thread

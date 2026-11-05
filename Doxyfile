@@ -1,6 +1,9 @@
 # Doxyfile for librbipc
+# PROJECT_NUMBER is substituted from the Makefile $(VERSION) by the `docs`
+# target (single source of truth). The literal @VERSION@ placeholder is
+# replaced at generation time.
 PROJECT_NAME           = "librbipc"
-PROJECT_NUMBER         = "2.0.0"
+PROJECT_NUMBER         = "@VERSION@"
 PROJECT_BRIEF          = "Lock-Free Shared-Memory Ring Buffer IPC Library in ISO C23"
 OUTPUT_DIRECTORY       = docs
 CREATE_SUBDIRS         = NO
