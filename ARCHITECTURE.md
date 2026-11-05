@@ -26,7 +26,7 @@ The architecture is built on six fundamental design pillars:
 
 All inter-process state in `librbipc` resides in a single, contiguous shared-memory segment. The memory layout is strictly partitioned and cache-line aligned (64 bytes on x86-64 and ARM64) to eliminate false sharing between independent cores and CPU sockets.
 
-```
+```txt
 +-------------------------------------------------------------------------+
 |                  Shared Memory Segment Layout (64-Byte Aligned)         |
 +-------------------------------------------------------------------------+
@@ -86,6 +86,7 @@ typedef struct {
 ### 2.3 Transparent HugePages & Virtual Memory Mirroring
 
 To minimize Translation Lookaside Buffer (TLB) misses:
+
 - **Autonomous Dynamic THP**: `librbipc` aligns allocations to 2 MB boundaries and advises the Linux virtual memory subsystem via `madvise(addr, len, MADV_HUGEPAGE)`. On modern Linux kernels, the Transparent Hugepage daemon (khugepaged) promotes these anonymous shared mappings to 2 MB Page Middle Directory (PMD) entries.
 - **HugeTLB Static Pages (`RBIPC_FLAG_HUGETLB`)**: Applications requiring deterministic latency can pass `RBIPC_FLAG_HUGETLB` to allocate backed 2 MB or 1 GB HugeTLB pages via `memfd_create(..., MFD_HUGETLB | MFD_HUGE_2MB)`, reducing TLB lookups by 512×.
 - **Virtual Memory Double-Mapping**: Contiguous ring buffer mirroring creates two consecutive virtual address mappings of the same physical payload pages. This allows linear zero-copy scatter-gather operations across circular buffer wrap-around boundaries without manual chunk splitting.
@@ -96,7 +97,7 @@ To minimize Translation Lookaside Buffer (TLB) misses:
 
 `librbipc` supports distinct execution tiers configured via creation flags (`RBIPC_FLAG_*`). This allows developers to select the exact balance of performance, process isolation, and payload packing required for their deployment environment.
 
-```
+```txt
 +-------------------------------------------------------------------------------+
 |                        librbipc Execution Mode Hierarchy                      |
 +-------------------------------------------------------------------------------+
@@ -127,6 +128,7 @@ To minimize Translation Lookaside Buffer (TLB) misses:
 ### 3.1 Tier 1: Zero-Trust Multi-Process Isolation (Default, `0`)
 
 In adversarial multi-tenant deployments or multi-process architectures where processes may crash, stall, or terminate unexpectedly, Tier 1 enforces zero-trust safety:
+
 - **CAS-Elided Validation**: Uses monotonic ticket reservation paired with slot state transitions.
 - **Process PID Attribution**: The reserving producer writes its PID into `slot->producer_pid`. If the producer crashes before committing, background consumers detect the dead process via `pidfd_open(2)` or `kill(pid, 0)` and mark the slot as `RBIPC_SLOT_POISONED`.
 - **Consumer Lease Tracking**: Consumers update `slot->acquire_timestamp_ns`. If a consumer stalls or crashes past the configured lease duration (`rbipc_set_lease_timeout`), the supervisory audit engine revokes the slot and restores ring availability.
@@ -134,6 +136,7 @@ In adversarial multi-tenant deployments or multi-process architectures where pro
 ### 3.2 Tier 2: Trusted Mode (`RBIPC_FLAG_TRUSTED`)
 
 When processes run within a mutually trusted perimeter (such as microservices in the same security enclave or high-performance financial execution engines), the overhead of PID recording, lease timestamps, and multi-field state machines can be safely eliminated:
+
 - Slot transitions rely entirely on Dmitry Vyukov's MPMC turn algorithm:
   - **Slot Vacant for Producer**: `sequence == ticket`
   - **Slot Ready for Consumer**: `sequence == ticket + 1`
@@ -153,6 +156,7 @@ $$\text{sequence\_word} = (\text{sequence} \ll 16) \mid ((\text{length} \ \& \ 0
 ### 3.4 Combined Mode (`RBIPC_FLAG_TRUSTED | RBIPC_FLAG_PACKED`)
 
 Combining Tier 2 and Tier 3 delivers the optimal configuration for small, ultra-low-latency IPC:
+
 - Single-instruction publication via packed 64-bit descriptors.
 - Zero PID or lease bookkeeping overhead.
 - Direct turn sequence progression achieving sub-100 ns round-trip latency.
@@ -160,6 +164,7 @@ Combining Tier 2 and Tier 3 delivers the optimal configuration for small, ultra-
 ### 3.5 Bounded Wait-Free Helping Mode (`RBIPC_FLAG_WAIT_FREE`)
 
 For systems running under strict real-time deadlines or extreme core oversubscription, `librbipc` implements the **Nikolaev wCQ (Wait-Free Cyclic Queue)** helping algorithm:
+
 - Every active thread is assigned a slot in a shared announcement array of size $\mathcal{O}(P)$, where $P$ is the maximum concurrent thread count.
 - When a thread fails to advance after a bounded number of CAS attempts, it publishes its request descriptor into the announcement array.
 - Concurrent peer threads inspect the announcement array and cooperatively execute pending reservations on behalf of stalled threads before fulfilling their own requests.
@@ -173,7 +178,7 @@ Traditional IPC mechanisms face a strict dilemma: busy-spinning yields sub-micro
 
 `librbipc` resolves this trade-off through an adaptive 4-tier synchronization hierarchy:
 
-```
+```txt
 Fast Path: Slot Available
    │
    ├──► User-Space Direct Access (0 Syscalls, 0 Fences)
@@ -194,24 +199,28 @@ Slow Path: Contention or Starvation
 ### 4.1 Tier 0: Bounded Micro-Spin
 
 When a thread encounters a slot whose sequence turn is in-flight, it enters a short, calibrated pause loop (`RBIPC_WAIT_ADAPTIVE`):
+
 - Executes up to 48 iterations of `rbipc_cpu_pause()` (`_mm_pause` on x86-64, `isb`/`yield` on ARM64).
 - Catches near-instantaneous memory publication from adjacent cores without relinquishing CPU pipeline slots or incurring OS scheduling overhead.
 
 ### 4.2 Tier 1: Hardware-Assisted Monitor Wait
 
 If the micro-spin loop expires and hardware support is detected:
+
 - **Intel WAITPKG (`UMONITOR` + `UMWAIT`)**: Arms hardware cache-line monitoring on the sequence address (`UMONITOR`) and enters the low-latency C0.1 optimized power state (`UMWAIT`). When the remote core writes to the monitored cache line, the CPU wakes up in 40–70 ns without kernel intervention.
 - **ARM64 FEAT_WFxT (`WFET`)**: Leverages timed event wait instructions matched against virtual counter `CNTVCT_EL0`, pausing execution until cache-line invalidation or timer expiration.
 
 ### 4.3 Tier 2: Asymmetric Dekker Synchronization (`sys_membarrier`)
 
 To eliminate hardware memory fence instructions (`MFENCE`) on the high-frequency commit/release fast paths, `librbipc` implements asymmetric memory barriers:
+
 - **Fast Path (Commit & Release)**: Uses lightweight release semantics (`memory_order_release`). No expensive full memory barrier instructions are executed.
 - **Slow Path (Waiter Sleep)**: Before sleeping, the waiting thread registers itself in `hdr->futex_waiters` or `hdr->write_waiters` and invokes Linux `sys_membarrier(MEMBARRIER_CMD_GLOBAL_EXPEDITED, 0, 0)`. This system call forces a hardware memory barrier across all active CPU cores running threads of the process, ensuring sequential consistency without penalizing producers and consumers on the fast path.
 
 ### 4.4 Tier 3: Vectorized `sys_futex_waitv` & `SYS_futex`
 
 When a thread must enter deep suspension:
+
 - **Linux 5.16+ `futex2` (`sys_futex_waitv`)**: Wakes up directly on slot sequence changes. Vectorized monitoring checks the slot sequence turn (`slot->sequence`), the cooperative `shutdown_flag`, and proxy sequence counters simultaneously in a single system call.
 - **Legacy Linux 2.6+ `SYS_futex`**: Falls back to 32-bit proxy words (`hdr->futex_seq`, `hdr->write_futex_seq`) with `FUTEX_WAKE_OP` atomic wakeups, preventing 32-bit integer wrap-around and ABA aliasing.
 - **Result**: CPU utilization drops to **0.3%** when the ring is idle, scaling smoothly from quiescent power-saving states to tens of millions of messages per second.
@@ -250,6 +259,7 @@ if (rc == RBIPC_OK) {
 ### 5.2 B-Queue Vector Batching & SIMD Scanning
 
 Single-slot operations incur atomic instruction overhead for every message. For maximum throughput, `librbipc` provides **B-Queue Scatter-Gather Vector Batching**:
+
 - **Atomic Reservation Amortization**: `rbipc_reserve_write_batch` reserves up to $K$ contiguous slots with a single `atomic_fetch_add` on `write_ticket`.
 - **Batched Waiter Notification**: Producers commit all $K$ slots and issue a single waiter check and futex wakeup.
 - **SIMD Sequence Scanning**: Available slot sequences are scanned using 512-bit AVX-512 (`_mm512_cmpeq_epi64_mask`, checking 8 slots per CPU cycle), 256-bit AVX2 (`_mm256_cmpeq_epi64`, checking 4 slots per CPU cycle), SSE4.1, or ARM64 NEON intrinsics.
@@ -257,6 +267,7 @@ Single-slot operations incur atomic instruction overhead for every message. For 
 ### 5.3 Non-Temporal Streaming Stores
 
 For bulk payloads, `librbipc` provides cache-bypassing non-temporal streaming copies (`rbipc_stream_copy`):
+
 - **Hardware-Calibrated Threshold**: Activates dynamically when payload size exceeds 3/4 of L3 cache size (with a calibrated 256 KiB minimum floor) to avoid cache thrashing.
 - **Microarchitectural Acceleration**: Employs 512-bit AVX-512 (`_mm512_stream_si512`), 256-bit AVX2 (`_mm256_stream_si256`), 128-bit SSE2 (`_mm_stream_si128`), or ARM64 non-temporal pairs (`stnp`).
 - Bypasses L1, L2, and L3 caches, writing directly to DRAM via CPU Write-Combining buffers.
@@ -266,6 +277,7 @@ For bulk payloads, `librbipc` provides cache-bypassing non-temporal streaming co
 ### 5.4 Asynchronous Eventfd Reactor
 
 For integration into event loops (`epoll`, `poll`, `io_uring`):
+
 - `rbipc_enable_eventfd(ring, &out_fd)` binds an internal non-blocking `eventfd(2)` descriptor to ring buffer notifications.
 - When consumers are waiting, producers write to the eventfd, waking up threads blocked in `epoll_wait(2)` or `io_uring`.
 - `rbipc_eventfd_drain(ring)` resets the descriptor counter with non-blocking reads.
@@ -274,6 +286,7 @@ For integration into event loops (`epoll`, `poll`, `io_uring`):
 ### 5.5 Lock-Free 1-to-N Multicast Publish-Subscribe
 
 `librbipc` extends the ring buffer into a lock-free multicast topic broker (`rbipc_pubsub.h`):
+
 - A single publisher broadcasts messages across $N$ independent consumers.
 - Each subscriber maintains an independent `rbipc_sub_t` handle tracking its local cursor sequence.
 - **Wait-Free Polling**: Subscribers read messages non-destructively without modifying ring state.
@@ -282,6 +295,7 @@ For integration into event loops (`epoll`, `poll`, `io_uring`):
 ### 5.6 UNIX Domain Socket SCM_RIGHTS FD Passing
 
 For capability-based security architectures:
+
 - Anonymous shared memory rings created via `memfd_create` possess no `/dev/shm` filesystem path.
 - `rbipc_ipc_send_fds` and `rbipc_ipc_recv_fds` transmit up to 8 file descriptors (ring buffer memory, eventfds, synchronization descriptors) across UNIX domain sockets via `SCM_RIGHTS`.
 - Allows completely unprivileged processes running inside Linux namespaces/containers to share memory without shared filesystem mounts.
@@ -316,12 +330,14 @@ Conditional jump instructions (`jcc` on x86, `b.cond` on ARM) introduce speculat
 1. **Branchless Power-of-Two Rounding with Operand Clamping**:
    In `rbipc_round_up_pow2_32` and `rbipc_round_up_pow2_64` (`src/platform/rbipc_math.h`), the boundary condition $v \le 1$ must be evaluated before invoking hardware leading-zero count intrinsics (`__builtin_clz`/`__builtin_clzll`), because counting leading zeros of zero yields undefined behavior on older x86 instruction encodings (BSR flag undefinedness).
    Rather than emitting a conditional jump, the operand is clamped using a predicated ternary expression:
+
    ```c
    uint32_t sub = (v > 1U) ? (v - 1U) : 1U;
    uint32_t clz = (uint32_t)__builtin_clz(sub);
    uint32_t res = 1U << (32U - clz);
    return (v <= 1U) ? 1U : res;
    ```
+
    Compilers lower this sequence directly to `sub`, `bsr`/`lzcnt`, and predicated conditional moves (`cmovbe`/`cmovnb`), entirely eliminating conditional branch instructions from the machine code.
 
 2. **Branchless Capacity Range Folding**:
@@ -335,9 +351,11 @@ Conditional jump instructions (`jcc` on x86, `b.cond` on ARM) introduce speculat
 3. **Arithmetic Shift Selection in Descriptor Unpacking**:
    In `rbipc_slot_is_vacant_any`, `rbipc_slot_is_ready_any`, and `rbipc_seq_is_behind_any`, slot sequences are extracted from either 64-bit sequence words (Tiers 1 and 2) or packed 48-bit bitfields (Tier 3).
    Rather than branching on `is_packed`, the extraction computes:
+
    ```c
    uint64_t seq = word >> ((unsigned int)is_packed * RBIPC_PACKED_SEQ_SHIFT);
    ```
+
    Because `RBIPC_PACKED_SEQ_SHIFT` is 16, the product is folded into a single bitwise shift (`shll $4`), producing deterministic straight-line execution across heterogeneous slot formats.
 
 ### 7.2 Multi-Table Slicing-by-8 CRC32C Engine

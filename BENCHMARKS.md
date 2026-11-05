@@ -32,6 +32,7 @@ A frequent pitfall in systems benchmarking is comparing systems with mismatched 
 ### 2.1 The Trust Boundary Mismatch
 
 Reference high-performance in-memory queues—specifically **DPDK `rte_ring`** and **LMAX Disruptor**—were architected under the strict assumption of single-tenant, cooperative, in-process execution:
+
 - They assume all threads reside in the same address space and share mutual trust.
 - They execute **no process isolation checks**, record **no producer/consumer PIDs**, enforce **no lease deadlines**, and possess **no mechanism to recover from a crashed peer** (if a thread crashes mid-operation, the entire ring is corrupted permanently).
 - They rely entirely on busy-spinning loops (`pause` instructions in tight loops) that consume 100% of CPU cores.
@@ -65,7 +66,7 @@ The single-producer / single-consumer (1P-1C) streaming benchmark measures the s
 | Transport / Library Mode | Configuration / Flags | Throughput (Mops/s) | Bandwidth (MB/s) | Relative vs DPDK rte_ring |
 | :--- | :--- | :--- | :--- | :--- |
 | **`librbipc` (Zero-Trust Default)** | `0` (Process Isolation & PID Auditing) | **10.07** | **614.44** | **+47.4% (FASTER)** |
-| **`librbipc` (Trusted 8B Pointer)**| `RBIPC_FLAG_TRUSTED \| RBIPC_FLAG_PACKED` (8B reference passing) | **9.66** | 589.45 | **+41.4% (FASTER)** |
+| **`librbipc` (Trusted 8B Pointer)** | `RBIPC_FLAG_TRUSTED \| RBIPC_FLAG_PACKED` (8B reference passing) | **9.66** | 589.45 | **+41.4% (FASTER)** |
 | **`librbipc` (Trusted 64B Copy)** | `RBIPC_FLAG_TRUSTED` (64B value copy) | **9.58** | 584.80 | **+40.3% (FASTER)** |
 | **`librbipc` (Combined Mode)** | `RBIPC_FLAG_TRUSTED \| RBIPC_FLAG_PACKED` (64B value copy) | **7.39** | 451.15 | **+8.2% (FASTER)** |
 | **DPDK `rte_ring`** | In-Memory Spin Ring (Pointer Passing) | 6.83 | 416.72 | Baseline (1.00×) |
@@ -171,6 +172,7 @@ B-Queue scatter-gather vector batching amortizes atomic ticket claims, memory fe
 | **Batch Size 128** | 32.85 | 2,005.00 | 2.29× |
 
 In isolated multi-process fork benchmarks:
+
 - **Combined Tier 2+3 (Batch Size 32)**: Reaches **48.15 Mops/s (6,611.75 MB/s)** with an average latency of **20.77 ns/message**.
 - **Tier 1 Zero-Trust (Batch Size 32)**: Reaches **38.02 Mops/s (5,220.64 MB/s)** with an average latency of **26.31 ns/message**.
 
@@ -234,6 +236,7 @@ Using Linux `perf stat` and `perf c2c` hardware performance counters, low-level 
 ### 8.3 Cache Contention & False Sharing Analysis (`perf c2c`)
 
 A `perf c2c` (Cache-to-Cache) memory access trace was captured during high-throughput B-Queue batching to detect false sharing:
+
 - **Total Shared Cache Lines**: 12
 - **Load HITM (Modified in another core's cache)**:
   - Local HITM: 12 (transfers across cores on the same socket via LLC)
@@ -248,6 +251,7 @@ This verifies that `librbipc`'s 64-byte alignment and strict separation of produ
 ### 8.4 Full Flamegraph & Profiling Investigation
 
 For the complete microarchitectural flamegraph breakdown, function-level on-CPU cycle distributions, and comparative analysis of normal versus stressed workloads (including 4P-4C saturation contention and fault-injection telemetry), see **[`PROFILING_ANALYSIS.md`](PROFILING_ANALYSIS.md)**:
+
 - [Normal 1P-1C 64B Streaming Flamegraph](benchmarks/profiling/flamegraph_normal_streaming.svg)
 - [Normal B-Queue Vector Batching Flamegraph](benchmarks/profiling/flamegraph_normal_batch.svg)
 - [Stressed 4P-4C MPMC Contention Flamegraph](benchmarks/profiling/flamegraph_stressed_mpmc.svg)
@@ -291,7 +295,7 @@ Following the systemic application of branchless arithmetic, multi-table slicing
 
 The baseline software CRC32C engine implemented the Sarwate lookup algorithm, requiring 8 sequential single-byte lookups per 64-bit integer. Each lookup depended strictly on the outcome of the preceding XOR operation:
 $$\text{crc}_{i+1} = T[(\text{crc}_i \oplus b_i) \ \& \ \text{0xFF}] \oplus (\text{crc}_i \gg 8)$$
-On modern superscalar pipelines (such as Intel Skylake), this loop incurred an unavoidable latency chain across load and ALU ports. 
+On modern superscalar pipelines (such as Intel Skylake), this loop incurred an unavoidable latency chain across load and ALU ports.
 
 Replacing this loop with Kounavis & Berry's 8-table decomposition (`src/platform/rbipc_crc32c_tables.h`) allows the CPU's out-of-order execution engine to calculate memory addresses for all 8 lookups simultaneously. Because the total table footprint is exactly 8 KiB (8 tables $\times$ 256 entries $\times$ 4 bytes), the entire working set resides continuously in the 32 KiB L1 Data Cache. As measured by `bin/bench_crc32c`, software processing bandwidth rose from 320.1 MB/s to **1,821.5–2,262.0 MB/s**, reducing verification latency for 4 KiB frames from 12.72 µs to **2.25 µs**.
 
@@ -300,6 +304,7 @@ Replacing this loop with Kounavis & Berry's 8-table decomposition (`src/platform
 In high-frequency queue streaming, small branch prediction perturbations accumulate into severe latency tails. Prior to refactoring, `rbipc_slot_is_vacant_any`, `rbipc_slot_is_ready_any`, and `rbipc_round_up_pow2_32` contained conditional jump sequences.
 
 The refactored implementations:
+
 1. Replaced ternary descriptor shifts with arithmetic multiplication-shifts (`shll $4`), generating deterministic straight-line execution across packed and unpacked slot formats.
 2. Clamped count-leading-zero operands to non-zero values using conditional move instructions (`cmov`), completely avoiding branch mispredictions and the 14–20 cycle pipeline flush cost.
 3. Substituted multi-branch capacity bounds checks with unsigned arithmetic range folding:
@@ -318,7 +323,7 @@ By hoisting these invariants outside the loops (loop unswitching), each loop var
 The addition of `-march=native` to the compilation pipeline directs the compiler (GCC and Clang) to leverage the exact instruction extensions of the host processor (Intel Core i5-6300U Skylake: AVX2, FMA3, BMI1, BMI2, POPCNT, CLFLUSHOPT).
 
 Under native compiler code generation:
+
 1. **B-Queue Vector Batching Throughput**: Scaled from 45.07 Mops/s to **55.53 Mops/s (7,626.96 MB/s)** under GCC and **60.20 Mops/s (8,268.07 MB/s)** under Clang for 32-slot batches—a **90.9% to 106.8% speedup** over the 29.10 Mops/s baseline.
 2. **Batch Transfer Latency**: Dropped from 34.36 ns/msg down to **18.01 ns/msg (GCC)** and **16.61 ns/msg (Clang)**.
 3. **Streaming Single-Slot IPC**: Sustained **24.42 Mops/s (1,490.38 MB/sec)** at **40.95 ns/msg**, operating at the physical hardware cache coherence transfer limit.
-
