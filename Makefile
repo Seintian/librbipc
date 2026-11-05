@@ -30,7 +30,7 @@ CFLAGS ?= $(CSTD) -Wall -Wextra -Wpedantic -Werror -O3 -march=native -flto -fPIC
 LDFLAGS ?= -flto -pthread -lm
 
 VERSION_MAJOR ?= 1
-VERSION_MINOR ?= 0
+VERSION_MINOR ?= 1
 VERSION_PATCH ?= 0
 VERSION ?= $(VERSION_MAJOR).$(VERSION_MINOR).$(VERSION_PATCH)
 
@@ -318,7 +318,7 @@ clean:
 # ---------------------------------------------------------------------------
 # Release system
 # ---------------------------------------------------------------------------
-# VERSION is the single source of truth (default 1.0.0). The release targets
+# VERSION is the single source of truth (default 1.1.0). The release targets
 # build a source tarball, generate a changelog from conventional commits, and
 # create a signed git tag. CI (.github/workflows/release.yml) turns a pushed
 # v* tag into a GitHub Release with the tarball and SHA-256 checksums.

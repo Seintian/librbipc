@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-11-05
+
 ### Added
 
 - Real Intel DSA MOVDIR64B dispatch in the DMA write path. The DMA engine now
@@ -25,6 +27,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `clock_gettime`/`shm_open` in libc).
 - `gen_compile_commands.py` now emits complete entries for multi-source
   benchmark binaries.
+- Bounded the DSA work-queue initialization wait with the library's
+  `RBIPC_SPIN_COUNT_DEFAULT` spin budget and portable `rbipc_cpu_pause()`,
+  replacing an unbounded spin with a branchless result selection.
 
 ### Fixed
 
@@ -33,6 +38,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `BENCHMARKS.md` data inconsistency between "Trusted 8B Pointer" and
   "Combined Mode" rows.
 - Redundant `slot->state` store in the packed-mode batch commit path.
+- `README.md` formatting for clarity and consistency.
 
 ## [1.0.0] - 2026-11-05
 
@@ -52,5 +58,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - UINTR (user interrupts), io_uring, and eventfd integration.
 - Comprehensive test suite (38 binaries) and benchmark suite.
 
-[Unreleased]: https://github.com/Seintian/librbipc/compare/v1.0.0...HEAD
+[Unreleased]: https://github.com/Seintian/librbipc/compare/v1.1.0...HEAD
+[1.1.0]: https://github.com/Seintian/librbipc/releases/tag/v1.1.0
 [1.0.0]: https://github.com/Seintian/librbipc/releases/tag/v1.0.0
