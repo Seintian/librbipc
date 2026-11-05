@@ -27,5 +27,9 @@ benchmarks/results/.*
 __pycache__/
 *.pyc
 
+# Release artifacts
+librbipc-*.tar.gz
+SHA256SUMS
+
 # IDE
 .vscode

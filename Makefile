@@ -68,7 +68,7 @@ TOOLDIR = tools
 TOOL_SRCS = $(wildcard $(TOOLDIR)/*.c)
 TOOL_BINS = $(patsubst $(TOOLDIR)/%.c, $(BINDIR)/%, $(TOOL_SRCS))
 
-.PHONY: all clean test bench bench-laptop bench-laptop-powersave bench-home-pc monitor monitor-live coverage valgrind clang-tidy compile_commands docs tsan asan install uninstall format docker-image docker-build docker-test docker-asan docker-tsan docker-clang-tidy docker-shell
+.PHONY: all clean test bench bench-laptop bench-laptop-powersave bench-home-pc monitor monitor-live coverage valgrind clang-tidy compile_commands docs tsan asan install uninstall format docker-image docker-build docker-test docker-asan docker-tsan docker-clang-tidy docker-shell version dist release changelog
 
 all: $(STATIC_LIB) $(SHARED_LIB) librbipc.pc $(TEST_BINS) $(TOOL_BINS) compile_commands.json
 
@@ -314,3 +314,94 @@ format:
 
 clean:
 	rm -rf $(BUILDDIR) $(BINDIR) $(LIBDIR) compile_commands.json librbipc.pc *.gcda *.gcno *.gcov docs
+
+# ---------------------------------------------------------------------------
+# Release system
+# ---------------------------------------------------------------------------
+# VERSION is the single source of truth (default 1.0.0). The release targets
+# build a source tarball, generate a changelog from conventional commits, and
+# create a signed git tag. CI (.github/workflows/release.yml) turns a pushed
+# v* tag into a GitHub Release with the tarball and SHA-256 checksums.
+
+DIST_NAME = librbipc-$(VERSION)
+DIST_DIR  = $(BUILDDIR)/$(DIST_NAME)
+DIST_TAR  = $(DIST_NAME).tar.gz
+
+# Files bundled into the source distribution tarball.
+DIST_FILES = \
+	Makefile \
+	README.md \
+	ARCHITECTURE.md \
+	BENCHMARKS.md \
+	PROFILING_ANALYSIS.md \
+	CHANGELOG.md \
+	LICENSE \
+	Doxyfile \
+	librbipc.pc.in \
+	compile_flags.txt \
+	$(INCDIR) \
+	$(SRCDIR) \
+	$(TESTDIR) \
+	$(BENCHDIR) \
+	$(TOOLDIR) \
+	scripts \
+	.github
+
+.PHONY: version dist release changelog
+
+version:
+	@echo "$(VERSION)"
+
+# Build a source distribution tarball (no build artifacts).
+dist: $(DIST_TAR)
+
+$(DIST_TAR): $(DIST_FILES)
+	@echo "Building source distribution $(DIST_TAR) ..."
+	@rm -rf $(DIST_DIR)
+	@mkdir -p $(DIST_DIR)
+	@for f in $(DIST_FILES); do \
+		cp -r $$f $(DIST_DIR)/; \
+	done
+	@rm -rf $(DIST_DIR)/$(BUILDDIR) $(DIST_DIR)/$(BINDIR) $(DIST_DIR)/$(LIBDIR)
+	@find $(DIST_DIR) -name '*.o' -o -name '*.d' -o -name '*.gcda' -o -name '*.gcno' -o -name '*.gcov' | xargs -r rm -f
+	@find $(DIST_DIR) -type d -name '__pycache__' -exec rm -rf {} + 2>/dev/null || true
+	@tar -czf $(DIST_TAR) -C $(BUILDDIR) $(DIST_NAME)
+	@rm -rf $(DIST_DIR)
+	@echo "Created $(DIST_TAR)"
+	@sha256sum $(DIST_TAR)
+
+# Generate CHANGELOG.md from conventional-commit history since the last tag.
+# Falls back to the full history when no tag exists yet.
+changelog:
+	@echo "Generating CHANGELOG.md from git history ..."
+	@LAST_TAG=$$(git describe --tags --abbrev=0 2>/dev/null || echo ""); \
+	if [ -n "$$LAST_TAG" ]; then \
+		RANGE="$$LAST_TAG..HEAD"; \
+	else \
+		RANGE="HEAD"; \
+	fi; \
+	echo "# Changelog" > CHANGELOG.md; \
+	echo "" >> CHANGELOG.md; \
+	echo "All notable changes to this project are documented in this file." >> CHANGELOG.md; \
+	echo "" >> CHANGELOG.md; \
+	echo "## [Unreleased]" >> CHANGELOG.md; \
+	echo "" >> CHANGELOG.md; \
+	git log --pretty=format:'- %s' $$RANGE | sed 's/^/  /' >> CHANGELOG.md; \
+	echo "" >> CHANGELOG.md; \
+	echo "Changelog regenerated from commits in range '$$RANGE'."
+
+# Verify the tree is clean, run the full test suite, and create a v$(VERSION) tag.
+release: test
+	@echo "=================================================="
+	@echo "           Preparing Release v$(VERSION)          "
+	@echo "=================================================="
+	@if [ -n "$$(git status --porcelain)" ]; then \
+		echo "ERROR: working tree is not clean. Commit or stash changes first."; \
+		exit 1; \
+	fi; \
+	if git rev-parse "v$(VERSION)" >/dev/null 2>&1; then \
+		echo "ERROR: tag v$(VERSION) already exists."; \
+		exit 1; \
+	fi; \
+	git tag -a "v$(VERSION)" -m "librbipc v$(VERSION)"; \
+	echo "Created annotated tag v$(VERSION). Push with: git push origin v$(VERSION)"

@@ -6,5 +6,5 @@ includedir=@INCLUDEDIR@
 Name: librbipc
 Description: High-Throughput, Zero-Idle-CPU, Crash-Resilient MPMC Shared-Memory IPC Engine in ISO C23
 Version: @VERSION@
-Libs: -L${libdir} -lrbipc -pthread -lrt -lm
+Libs: -L${libdir} -lrbipc -pthread -lm
 Cflags: -I${includedir}

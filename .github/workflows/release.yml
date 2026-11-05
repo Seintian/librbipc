@@ -1,0 +1,69 @@
+name: librbipc Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Build, Test & Publish Release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install Toolchain & Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc pkg-config
+
+      - name: Build All Targets
+        run: make clean all
+
+      - name: Execute Full Test Suite
+        run: make test
+
+      - name: Verify Installation & Pkg-Config
+        run: |
+          make install DESTDIR=/tmp/rbipc_inst
+          test -f /tmp/rbipc_inst/usr/local/lib/librbipc.a
+          test -f /tmp/rbipc_inst/usr/local/lib/librbipc.so.1.0.0
+          test -L /tmp/rbipc_inst/usr/local/lib/librbipc.so.1
+          test -L /tmp/rbipc_inst/usr/local/lib/librbipc.so
+          test -f /tmp/rbipc_inst/usr/local/include/rbipc.h
+          test -f /tmp/rbipc_inst/usr/local/include/rbipc_ipc.h
+          test -f /tmp/rbipc_inst/usr/local/include/rbipc_pubsub.h
+          test -f /tmp/rbipc_inst/usr/local/lib/pkgconfig/librbipc.pc
+          PKG_CONFIG_PATH=/tmp/rbipc_inst/usr/local/lib/pkgconfig pkg-config --validate librbipc || true
+
+      - name: Build Source Distribution Tarball
+        run: make dist
+
+      - name: Generate SHA-256 Checksums
+        run: |
+          sha256sum librbipc-*.tar.gz > SHA256SUMS
+          cat SHA256SUMS
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: librbipc ${{ github.ref_name }}
+          body: |
+            ## librbipc ${{ github.ref_name }}
+
+            See [CHANGELOG.md](CHANGELOG.md) for the full list of changes.
+
+            ### Artifacts
+            - Source tarball: `librbipc-*.tar.gz`
+            - SHA-256 checksums: `SHA256SUMS`
+          files: |
+            librbipc-*.tar.gz
+            SHA256SUMS
+          generate_release_notes: true
