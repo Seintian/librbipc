@@ -554,7 +554,7 @@ void rbipc_ring_unmap_regions(rbipc_ring_t *ring) {
     return;
 
   /*
-   * If the regions were permanently sealed via mseal(2) (H8), munmap() must be
+   * If the regions were permanently sealed via mseal(2), munmap() must be
    * skipped: mseal makes the VMA permanently un-unmappable and munmap() would
    * fail with EPERM. The sealed virtual address range is reserved for the
    * process lifetime by design; we only release the ring handle below.

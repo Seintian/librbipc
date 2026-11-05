@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+
 - Real Intel DSA MOVDIR64B dispatch in the DMA write path. The DMA engine now
   builds a 64-byte hardware descriptor, submits it to a work-queue portal via
   `MOVDIR64B`, and polls the completion record, falling back to the
@@ -17,6 +18,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   before sleeping, reducing wake latency for wait-free consumers.
 
 ### Changed
+
 - Doxyfile version now derives from the Makefile `VERSION` single source of
   truth instead of a hardcoded value.
 - Dropped the unnecessary `-lrt` from `LDFLAGS` (glibc >= 2.17 provides
@@ -25,6 +27,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   benchmark binaries.
 
 ### Fixed
+
 - `ARCHITECTURE.md` header/slot layout drift vs the actual ABI.
 - `README.md` automated test suite count (31 -> 38).
 - `BENCHMARKS.md` data inconsistency between "Trusted 8B Pointer" and
@@ -34,6 +37,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [1.0.0] - 2026-11-05
 
 ### Added
+
 - Lock-free, zero-dependency shared-memory ring buffer IPC library in ISO C23.
 - Single-slot zero-copy I/O (`rbipc_reserve_write` / `rbipc_commit_write` /
   `rbipc_read`).

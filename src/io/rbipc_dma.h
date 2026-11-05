@@ -5,7 +5,7 @@
  * @details Implements memory operation offloading via on-chip Intel Data Streaming
  *          Accelerator (DSA) using unprivileged user-mode work queues and single-instruction
  *          descriptor dispatch (ENQCMD / MOVDIR64B). Bypasses CPU load-store unit saturation
- *          for large payloads (>= 4 KiB), with zero-overhead streaming store fallback.
+ *          for large payloads (>= 16 KiB), with zero-overhead streaming store fallback.
  *
  * @author Seintian
  * @date 2026
@@ -37,8 +37,8 @@ extern "C" {
 /**
  * @def RBIPC_DMA_OFFLOAD_THRESHOLD
  * @brief Minimum payload byte size where hardware DMA offload outperforms CPU vector registers.
- * @details Updated from 4,096 to 16,384 bytes (16 KB) based on real-world PCIe/MMIO portal
- * dispatch latency (~150-400 ns) break-even against in-core AVX-512/AVX2 memcpy.
+ * @details Set to 16,384 bytes (16 KB), the break-even point where PCIe/MMIO portal
+ * dispatch latency (~150-400 ns) is amortized against in-core AVX-512/AVX2 memcpy.
  */
 #define RBIPC_DMA_OFFLOAD_THRESHOLD 16384U
 

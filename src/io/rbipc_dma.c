@@ -3,7 +3,7 @@
  * @brief Implementation of hardware-assisted asynchronous DMA offload engine (Intel DSA).
  *
  * @details Probes Intel DSA capabilities, dispatches descriptors via ENQCMD/MOVDIR64B
- *          for large payloads (>= 4 KiB), and falls back seamlessly to AVX-512/AVX2
+ *          for large payloads (>= 16 KiB), and falls back seamlessly to AVX-512/AVX2
  *          non-temporal streaming stores on systems without DSA hardware.
  *
  * @author Seintian
@@ -136,7 +136,6 @@ static rbipc_dsa_wq_t *rbipc_dsa_wq_get(void) {
 
   /* Another thread is initializing; spin briefly for the result. */
   while (atomic_load_explicit(&g_dsa_wq_state, memory_order_acquire) == 0) {
-    /* spin */
   }
   return atomic_load_explicit(&g_dsa_wq_state, memory_order_acquire) == 1
              ? &g_dsa_wq
@@ -179,7 +178,6 @@ static int rbipc_dma_dispatch(rbipc_dsa_wq_t *wq, void *dst, const void *src,
   /* Poll the completion record. The hardware writes a non-zero status byte
    * when the operation completes. */
   while (wq->completion.status == 0U) {
-    /* spin on completion record */
   }
 
   return (wq->completion.status == RBIPC_DMA_COMPLETION_STATUS_SUCCESS) ? 0 : -1;

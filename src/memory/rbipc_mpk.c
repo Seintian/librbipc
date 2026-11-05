@@ -99,13 +99,12 @@ int rbipc_mpk_init(rbipc_ring_t *ring) {
   /*
    * Permanently seal virtual memory mappings (Linux 6.10+ mseal).
    *
-   * NOTE (H8): mseal(2) is irreversible — it prevents later munmap()/mprotect()
-   * on the sealed VMAs. To avoid a per-detach virtual address leak and a
-   * silent munmap() failure on teardown, we record the fact that the regions
-   * were actually sealed in ring->is_sealed. Teardown then deliberately skips
-   * the impossible munmap(), releasing only the ring handle (and MPK keys);
-   * the sealed address range remains reserved for the process lifetime by
-   * design.
+   * mseal(2) is irreversible — it prevents later munmap()/mprotect() on the
+   * sealed VMAs. To avoid a per-detach virtual address leak and a silent
+   * munmap() failure on teardown, we record the fact that the regions were
+   * actually sealed in ring->is_sealed. Teardown then deliberately skips the
+   * impossible munmap(), releasing only the ring handle (and MPK keys); the
+   * sealed address range remains reserved for the process lifetime by design.
    *
    * rbipc_vmem_seal() returns RBIPC_OK even when mseal is unavailable (it
    * becomes a no-op), so is_sealed is only raised when the kernel actually

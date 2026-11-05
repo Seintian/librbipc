@@ -260,7 +260,8 @@ static int rbipc_io_handle_write_backoff(
   /* Wait-free (wCQ) slow path: before suspending on the futex, post a READ
    * help request for the oldest unread slot so a consumer peer can complete
    * the read and free the slot even if the owning consumer is preempted.
-   * This is what makes the wait-free post path live in production (H2). */
+   * This cooperative-help mechanism is what makes the wait-free post path
+   * live in production. */
   if (RBIPC_UNLIKELY(ring->is_wait_free)) {
     int wf_rc = rbipc_waitfree_post_and_wait(ring, t_ticket, RBIPC_HELP_OP_READ,
                                              NULL, 0, timeout_ns);
