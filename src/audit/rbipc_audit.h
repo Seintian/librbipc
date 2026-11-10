@@ -45,7 +45,8 @@
  * @param[in] pid Process identifier to audit.
  * @return true if process exists; false if confirmed terminated (ESRCH).
  */
-RBIPC_INTERNAL RBIPC_NODISCARD RBIPC_LEAF bool rbipc_audit_is_peer_alive(pid_t pid);
+RBIPC_INTERNAL RBIPC_NODISCARD RBIPC_LEAF bool rbipc_audit_is_peer_alive(
+    pid_t pid);
 
 /**
  * @brief Inspect slot for dead producer crash and poison if producer
@@ -57,9 +58,8 @@ RBIPC_INTERNAL RBIPC_NODISCARD RBIPC_LEAF bool rbipc_audit_is_peer_alive(pid_t p
  *
  * @return true if slot was recovered and poisoned; false otherwise.
  */
-RBIPC_INTERNAL RBIPC_LEAF
-bool rbipc_audit_recover_dead_producer(rbipc_shm_header_t *hdr,
-                                       rbipc_slot_t *slot, uint64_t ticket);
+RBIPC_INTERNAL RBIPC_LEAF bool rbipc_audit_recover_dead_producer(
+    rbipc_shm_header_t *hdr, rbipc_slot_t *slot, uint64_t ticket);
 
 /**
  * @brief Audit a contiguous range of slots for dead producer crashes.
@@ -69,10 +69,8 @@ bool rbipc_audit_recover_dead_producer(rbipc_shm_header_t *hdr,
  * @param[in]     t     Starting ticket.
  * @param[in]     count Number of slots to audit.
  */
-RBIPC_INTERNAL RBIPC_LEAF
-void rbipc_audit_recover_dead_producer_range(rbipc_shm_header_t *hdr,
-                                             rbipc_slot_t *slots, uint64_t t,
-                                             uint32_t count);
+RBIPC_INTERNAL RBIPC_LEAF void rbipc_audit_recover_dead_producer_range(
+    rbipc_shm_header_t *hdr, rbipc_slot_t *slots, uint64_t t, uint32_t count);
 
 /**
  * @brief Inspect slot for dead consumer crash or expired lease and recycle
@@ -84,9 +82,8 @@ void rbipc_audit_recover_dead_producer_range(rbipc_shm_header_t *hdr,
  *
  * @return true if slot was recovered; false otherwise.
  */
-RBIPC_INTERNAL RBIPC_LEAF
-bool rbipc_audit_recover_dead_consumer(rbipc_shm_header_t *hdr,
-                                       rbipc_slot_t *slot, uint64_t ticket);
+RBIPC_INTERNAL RBIPC_LEAF bool rbipc_audit_recover_dead_consumer(
+    rbipc_shm_header_t *hdr, rbipc_slot_t *slot, uint64_t ticket);
 
 /**
  * @brief Audit a contiguous range of slots for dead consumer crashes.
@@ -96,10 +93,8 @@ bool rbipc_audit_recover_dead_consumer(rbipc_shm_header_t *hdr,
  * @param[in]     t     Starting ticket.
  * @param[in]     count Number of slots to audit.
  */
-RBIPC_INTERNAL RBIPC_LEAF
-void rbipc_audit_recover_dead_consumer_range(rbipc_shm_header_t *hdr,
-                                             rbipc_slot_t *slots, uint64_t t,
-                                             uint32_t count);
+RBIPC_INTERNAL RBIPC_LEAF void rbipc_audit_recover_dead_consumer_range(
+    rbipc_shm_header_t *hdr, rbipc_slot_t *slots, uint64_t t, uint32_t count);
 
 /**
  * @brief Detect and heal orphaned ticket allocations (ticket holes) where
@@ -114,10 +109,9 @@ void rbipc_audit_recover_dead_consumer_range(rbipc_shm_header_t *hdr,
  * @return true if ticket hole was diagnosed and healed via poisoning; false
  * otherwise.
  */
-RBIPC_INTERNAL RBIPC_LEAF
-bool rbipc_audit_check_and_heal_ticket_hole(rbipc_shm_header_t *hdr,
-                                            rbipc_slot_t *slot, uint64_t ticket,
-                                            rbipc_sync_state_t *sync_state);
+RBIPC_INTERNAL RBIPC_LEAF bool rbipc_audit_check_and_heal_ticket_hole(
+    rbipc_shm_header_t *hdr, rbipc_slot_t *slot, uint64_t ticket,
+    rbipc_sync_state_t *sync_state);
 
 /**
  * @brief Proactively audit entire ring slot table and revoke all expired
@@ -128,8 +122,7 @@ bool rbipc_audit_check_and_heal_ticket_hole(rbipc_shm_header_t *hdr,
  *
  * @return Number of expired leases successfully revoked and recycled.
  */
-RBIPC_INTERNAL RBIPC_LEAF
-int rbipc_audit_revoke_expired_leases(rbipc_shm_header_t *hdr,
-                                      rbipc_slot_t *slots);
+RBIPC_INTERNAL RBIPC_LEAF int rbipc_audit_revoke_expired_leases(
+    rbipc_shm_header_t *hdr, rbipc_slot_t *slots);
 
 #endif /* RBIPC_AUDIT_H */

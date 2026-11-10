@@ -38,9 +38,12 @@ static void test_round_up_pow2(void) {
     assert(rbipc_round_up_pow2_64(0x80000001ULL) == 0x100000000ULL);
     assert(rbipc_round_up_pow2_64(0x100000000ULL) == 0x100000000ULL);
     assert(rbipc_round_up_pow2_64(0x100000001ULL) == 0x200000000ULL);
-    assert(rbipc_round_up_pow2_64(0x4000000000000000ULL) == 0x4000000000000000ULL);
-    assert(rbipc_round_up_pow2_64(0x7FFFFFFFFFFFFFFFULL) == 0x8000000000000000ULL);
-    assert(rbipc_round_up_pow2_64(0x8000000000000000ULL) == 0x8000000000000000ULL);
+    assert(rbipc_round_up_pow2_64(0x4000000000000000ULL) ==
+           0x4000000000000000ULL);
+    assert(rbipc_round_up_pow2_64(0x7FFFFFFFFFFFFFFFULL) ==
+           0x8000000000000000ULL);
+    assert(rbipc_round_up_pow2_64(0x8000000000000000ULL) ==
+           0x8000000000000000ULL);
     /* 64-bit overflow cases */
     assert(rbipc_round_up_pow2_64(0x8000000000000001ULL) == 0);
     assert(rbipc_round_up_pow2_64(UINT64_MAX) == 0);

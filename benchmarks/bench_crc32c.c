@@ -3,12 +3,14 @@
  * @brief Platform-Agnostic Micro-Benchmark for Hardware vs Table-Based CRC32C.
  *
  * Compares the performance of:
- *  1. Hardware-Accelerated Castagnoli CRC32C (x86 SSE4.2 crc32q/crc32b, ARMv8-A CRC32)
+ *  1. Hardware-Accelerated Castagnoli CRC32C (x86 SSE4.2 crc32q/crc32b, ARMv8-A
+ * CRC32)
  *  2. Direct x86 SSE4.2 Intrinsics (zero dispatch overhead)
  *  3. Table-Based 256-Entry Fallback (rbipc_crc32c_sw)
  *
- * Evaluates performance across buffer geometries from tiny metadata headers (16B, 60B header)
- * to 1MB bulk transfers, evaluating both 64-byte aligned and unaligned memory offsets.
+ * Evaluates performance across buffer geometries from tiny metadata headers
+ * (16B, 60B header) to 1MB bulk transfers, evaluating both 64-byte aligned and
+ * unaligned memory offsets.
  */
 
 #ifndef _GNU_SOURCE
@@ -59,8 +61,8 @@ static inline uint32_t bench_crc32c_hw(const void *data, size_t len) {
 }
 
 #if defined(__x86_64__) || defined(__i386__)
-__attribute__((target("sse4.2")))
-static inline uint32_t bench_crc32c_direct_sse42(const void *data, size_t len) {
+__attribute__((target("sse4.2"))) static inline uint32_t
+bench_crc32c_direct_sse42(const void *data, size_t len) {
     return ~rbipc_crc32c_sse42(0xFFFFFFFFU, data, len);
 }
 #endif
@@ -90,8 +92,9 @@ typedef struct {
 /* Benchmarking execution for a specific implementation */
 typedef uint32_t (*crc_fn_t)(const void *data, size_t len);
 
-static void run_single_benchmark(crc_fn_t fn, const void *data, size_t len, uint64_t iters,
-                                 double *out_mb_s, double *out_ns_per_op) {
+static void run_single_benchmark(crc_fn_t fn, const void *data, size_t len,
+                                 uint64_t iters, double *out_mb_s,
+                                 double *out_ns_per_op) {
     /* Warm up cache and CPU frequency scaling */
     for (uint64_t i = 0; i < (iters > 1000 ? 500 : iters / 2); i++) {
         uint32_t c = fn(data, len);
@@ -104,7 +107,8 @@ static void run_single_benchmark(crc_fn_t fn, const void *data, size_t len, uint
         bench_do_not_optimize(c);
     }
     uint64_t elapsed_ns = rbipc_clock_monotonic_ns() - start_ns;
-    if (elapsed_ns == 0) elapsed_ns = 1;
+    if (elapsed_ns == 0)
+        elapsed_ns = 1;
 
     double total_bytes = (double)len * (double)iters;
     double elapsed_sec = (double)elapsed_ns / 1e9;
@@ -113,9 +117,12 @@ static void run_single_benchmark(crc_fn_t fn, const void *data, size_t len, uint
 }
 
 int main(void) {
-    printf("========================================================================================\n");
-    printf("            librbipc Castagnoli CRC32C Micro-Benchmark (HW vs. Table)                  \n");
-    printf("========================================================================================\n");
+    printf("==================================================================="
+           "=====================\n");
+    printf("            librbipc Castagnoli CRC32C Micro-Benchmark (HW vs. "
+           "Table)                  \n");
+    printf("==================================================================="
+           "=====================\n");
 
     bench_hardware_info_t hw_info;
     bench_get_hardware_info(&hw_info);
@@ -125,14 +132,18 @@ int main(void) {
 
     printf("Hardware Context:\n");
     printf("  CPU Model        : %s\n", hw_info.cpu_model);
-    printf("  Logical Cores    : %d threads (%d physical)\n", hw_info.logical_threads, hw_info.physical_cores);
+    printf("  Logical Cores    : %d threads (%d physical)\n",
+           hw_info.logical_threads, hw_info.physical_cores);
     printf("  Kernel           : %s\n", hw_info.kernel);
     printf("  Profile          : %s\n", hw_info.profile_name);
     printf("  HW CRC32 Engine  : %s\n", engine);
-    printf("  HW Acceleration  : %s\n", hw_supported ? "SUPPORTED (Active)" : "UNSUPPORTED (Fallback only)");
-    printf("----------------------------------------------------------------------------------------\n\n");
+    printf("  HW Acceleration  : %s\n",
+           hw_supported ? "SUPPORTED (Active)" : "UNSUPPORTED (Fallback only)");
+    printf("-------------------------------------------------------------------"
+           "---------------------\n\n");
 
-    /* Allocate 1 MiB (+ 64-byte padding for unaligned offsets) 64-byte aligned buffer */
+    /* Allocate 1 MiB (+ 64-byte padding for unaligned offsets) 64-byte aligned
+     * buffer */
     size_t max_buf_size = 1024 * 1024 + 64;
     uint8_t *raw_buf = NULL;
     int ret = posix_memalign((void **)&raw_buf, 64, max_buf_size);
@@ -154,35 +165,39 @@ int main(void) {
         uint64_t default_iters;
         uint64_t laptop_iters;
     } configs[] = {
-        { 16,        "16 B (Ticket/Slot Mini)",     false, 20000000, 5000000 },
-        { 16,        "16 B [Unaligned +1]",         true,  20000000, 5000000 },
-        { 60,        "60 B (Control Header Zone)",  false, 15000000, 4000000 },
-        { 60,        "60 B [Unaligned +1]",         true,  15000000, 4000000 },
-        { 64,        "64 B (1 Cache Line)",         false, 15000000, 4000000 },
-        { 256,       "256 B (Ring Slot Payload)",   false, 10000000, 2000000 },
-        { 256,       "256 B [Unaligned +3]",        true,  10000000, 2000000 },
-        { 1024,      "1 KiB Buffer",                false,  3000000,  800000 },
-        { 4096,      "4 KiB (OS Memory Page)",      false,  1000000,  300000 },
-        { 4096,      "4 KiB [Unaligned +1]",        true,   1000000,  300000 },
-        { 16384,     "16 KiB Buffer",               false,   300000,   80000 },
-        { 65536,     "64 KiB Buffer",               false,    80000,   20000 },
-        { 1048576,   "1 MiB Bulk Segment",          false,     5000,    1200 },
+        {16, "16 B (Ticket/Slot Mini)", false, 20000000, 5000000},
+        {16, "16 B [Unaligned +1]", true, 20000000, 5000000},
+        {60, "60 B (Control Header Zone)", false, 15000000, 4000000},
+        {60, "60 B [Unaligned +1]", true, 15000000, 4000000},
+        {64, "64 B (1 Cache Line)", false, 15000000, 4000000},
+        {256, "256 B (Ring Slot Payload)", false, 10000000, 2000000},
+        {256, "256 B [Unaligned +3]", true, 10000000, 2000000},
+        {1024, "1 KiB Buffer", false, 3000000, 800000},
+        {4096, "4 KiB (OS Memory Page)", false, 1000000, 300000},
+        {4096, "4 KiB [Unaligned +1]", true, 1000000, 300000},
+        {16384, "16 KiB Buffer", false, 300000, 80000},
+        {65536, "64 KiB Buffer", false, 80000, 20000},
+        {1048576, "1 MiB Bulk Segment", false, 5000, 1200},
     };
 
     size_t num_configs = sizeof(configs) / sizeof(configs[0]);
-    crc_bench_result_t *results = calloc(num_configs, sizeof(crc_bench_result_t));
+    crc_bench_result_t *results =
+        calloc(num_configs, sizeof(crc_bench_result_t));
     if (!results) {
         free(raw_buf);
         return 1;
     }
 
-    printf("Executing benchmark runs across %zu buffer geometries...\n\n", num_configs);
+    printf("Executing benchmark runs across %zu buffer geometries...\n\n",
+           num_configs);
 
     for (size_t i = 0; i < num_configs; i++) {
         size_t size = configs[i].size;
         bool unaligned = configs[i].unaligned;
-        const uint8_t *ptr = unaligned ? (raw_buf + (size == 256 ? 3 : 1)) : raw_buf;
-        uint64_t iters = bench_scale_iterations(configs[i].default_iters, configs[i].laptop_iters);
+        const uint8_t *ptr =
+            unaligned ? (raw_buf + (size == 256 ? 3 : 1)) : raw_buf;
+        uint64_t iters = bench_scale_iterations(configs[i].default_iters,
+                                                configs[i].laptop_iters);
 
         results[i].size = size;
         results[i].label = configs[i].label;
@@ -193,7 +208,10 @@ int main(void) {
         uint32_t val_table = bench_crc32c_table(ptr, size);
         uint32_t val_hw = bench_crc32c_hw(ptr, size);
         if (val_table != val_hw) {
-            fprintf(stderr, "CORRUPTION ERROR for size %zu: Table=0x%08X vs HW=0x%08X\n", size, val_table, val_hw);
+            fprintf(
+                stderr,
+                "CORRUPTION ERROR for size %zu: Table=0x%08X vs HW=0x%08X\n",
+                size, val_table, val_hw);
             assert(val_table == val_hw);
         }
 
@@ -202,7 +220,8 @@ int main(void) {
             uint32_t val_direct = bench_crc32c_direct_sse42(ptr, size);
             assert(val_direct == val_hw);
             run_single_benchmark(bench_crc32c_direct_sse42, ptr, size, iters,
-                                 &results[i].direct_hw_mb_s, &results[i].direct_hw_ns_per_op);
+                                 &results[i].direct_hw_mb_s,
+                                 &results[i].direct_hw_ns_per_op);
         }
 #endif
 
@@ -215,41 +234,46 @@ int main(void) {
         }
 
         run_single_benchmark(bench_crc32c_table, ptr, size, iters,
-                             &results[i].table_mb_s, &results[i].table_ns_per_op);
+                             &results[i].table_mb_s,
+                             &results[i].table_ns_per_op);
 
         if (hw_supported && results[i].table_mb_s > 0.0) {
-            results[i].speedup_ratio = results[i].hw_mb_s / results[i].table_mb_s;
+            results[i].speedup_ratio =
+                results[i].hw_mb_s / results[i].table_mb_s;
         } else {
             results[i].speedup_ratio = 1.0;
         }
     }
 
     /* Print Comparative Table */
-    printf("+------------------------------+---------------+-------------------+-------------------+----------+\n");
-    printf("| Buffer Configuration         | Size (Bytes)  | HW SSE4.2 (MB/s)  | Table SW (MB/s)   | Speedup  |\n");
-    printf("+------------------------------+---------------+-------------------+-------------------+----------+\n");
+    printf("+------------------------------+---------------+-------------------"
+           "+-------------------+----------+\n");
+    printf("| Buffer Configuration         | Size (Bytes)  | HW SSE4.2 (MB/s)  "
+           "| Table SW (MB/s)   | Speedup  |\n");
+    printf("+------------------------------+---------------+-------------------"
+           "+-------------------+----------+\n");
     for (size_t i = 0; i < num_configs; i++) {
         printf("| %-28s | %13zu | %14.2f MB/s | %14.2f MB/s | %7.2fx |\n",
-               results[i].label,
-               results[i].size,
-               results[i].hw_mb_s,
-               results[i].table_mb_s,
-               results[i].speedup_ratio);
+               results[i].label, results[i].size, results[i].hw_mb_s,
+               results[i].table_mb_s, results[i].speedup_ratio);
     }
-    printf("+------------------------------+---------------+-------------------+-------------------+----------+\n\n");
+    printf("+------------------------------+---------------+-------------------"
+           "+-------------------+----------+\n\n");
 
     /* Print Latency Breakdown Table */
-    printf("+------------------------------+---------------+-------------------+-------------------+\n");
-    printf("| Buffer Configuration         | Size (Bytes)  | HW Latency (ns)   | SW Latency (ns)   |\n");
-    printf("+------------------------------+---------------+-------------------+-------------------+\n");
+    printf("+------------------------------+---------------+-------------------"
+           "+-------------------+\n");
+    printf("| Buffer Configuration         | Size (Bytes)  | HW Latency (ns)   "
+           "| SW Latency (ns)   |\n");
+    printf("+------------------------------+---------------+-------------------"
+           "+-------------------+\n");
     for (size_t i = 0; i < num_configs; i++) {
         printf("| %-28s | %13zu | %14.2f ns   | %14.2f ns   |\n",
-               results[i].label,
-               results[i].size,
-               results[i].hw_ns_per_op,
+               results[i].label, results[i].size, results[i].hw_ns_per_op,
                results[i].table_ns_per_op);
     }
-    printf("+------------------------------+---------------+-------------------+-------------------+\n\n");
+    printf("+------------------------------+---------------+-------------------"
+           "+-------------------+\n\n");
 
     /* Write JSON Results */
     char json_path[256];
@@ -262,21 +286,30 @@ int main(void) {
         fprintf(fp, "    \"kernel\": \"%s\",\n", hw_info.kernel);
         fprintf(fp, "    \"profile\": \"%s\",\n", hw_info.profile_name);
         fprintf(fp, "    \"hw_engine\": \"%s\",\n", engine);
-        fprintf(fp, "    \"hw_supported\": %s\n", hw_supported ? "true" : "false");
+        fprintf(fp, "    \"hw_supported\": %s\n",
+                hw_supported ? "true" : "false");
         fprintf(fp, "  },\n");
         fprintf(fp, "  \"benchmarks\": [\n");
         for (size_t i = 0; i < num_configs; i++) {
             fprintf(fp, "    {\n");
             fprintf(fp, "      \"label\": \"%s\",\n", results[i].label);
             fprintf(fp, "      \"size_bytes\": %zu,\n", results[i].size);
-            fprintf(fp, "      \"unaligned\": %s,\n", results[i].is_unaligned ? "true" : "false");
-            fprintf(fp, "      \"iterations\": %lu,\n", (unsigned long)results[i].iterations);
-            fprintf(fp, "      \"hw_throughput_mb_s\": %.2f,\n", results[i].hw_mb_s);
-            fprintf(fp, "      \"hw_latency_ns\": %.2f,\n", results[i].hw_ns_per_op);
-            fprintf(fp, "      \"direct_hw_throughput_mb_s\": %.2f,\n", results[i].direct_hw_mb_s);
-            fprintf(fp, "      \"direct_hw_latency_ns\": %.2f,\n", results[i].direct_hw_ns_per_op);
-            fprintf(fp, "      \"table_throughput_mb_s\": %.2f,\n", results[i].table_mb_s);
-            fprintf(fp, "      \"table_latency_ns\": %.2f,\n", results[i].table_ns_per_op);
+            fprintf(fp, "      \"unaligned\": %s,\n",
+                    results[i].is_unaligned ? "true" : "false");
+            fprintf(fp, "      \"iterations\": %lu,\n",
+                    (unsigned long)results[i].iterations);
+            fprintf(fp, "      \"hw_throughput_mb_s\": %.2f,\n",
+                    results[i].hw_mb_s);
+            fprintf(fp, "      \"hw_latency_ns\": %.2f,\n",
+                    results[i].hw_ns_per_op);
+            fprintf(fp, "      \"direct_hw_throughput_mb_s\": %.2f,\n",
+                    results[i].direct_hw_mb_s);
+            fprintf(fp, "      \"direct_hw_latency_ns\": %.2f,\n",
+                    results[i].direct_hw_ns_per_op);
+            fprintf(fp, "      \"table_throughput_mb_s\": %.2f,\n",
+                    results[i].table_mb_s);
+            fprintf(fp, "      \"table_latency_ns\": %.2f,\n",
+                    results[i].table_ns_per_op);
             fprintf(fp, "      \"speedup\": %.2f\n", results[i].speedup_ratio);
             fprintf(fp, "    }%s\n", (i + 1 < num_configs) ? "," : "");
         }

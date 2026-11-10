@@ -34,9 +34,8 @@
  * @return RBIPC_OK on success, RBIPC_ERR_INVAL if parameters invalid,
  * RBIPC_ERR_SYS on syscall failure.
  */
-RBIPC_INTERNAL RBIPC_NODISCARD RBIPC_LEAF int
-rbipc_reactor_enable(rbipc_ring_t *RBIPC_RESTRICT ring,
-                     int *RBIPC_RESTRICT out_fd);
+RBIPC_INTERNAL RBIPC_NODISCARD RBIPC_LEAF int rbipc_reactor_enable(
+    rbipc_ring_t *RBIPC_RESTRICT ring, int *RBIPC_RESTRICT out_fd);
 
 /**
  * @brief Bind an external eventfd file descriptor to the ring buffer instance.
@@ -46,8 +45,8 @@ rbipc_reactor_enable(rbipc_ring_t *RBIPC_RESTRICT ring,
  *
  * @return RBIPC_OK on success, or RBIPC_ERR_INVAL if arguments invalid.
  */
-RBIPC_INTERNAL RBIPC_NODISCARD RBIPC_LEAF int
-rbipc_reactor_set_fd(rbipc_ring_t *RBIPC_RESTRICT ring, int event_fd);
+RBIPC_INTERNAL RBIPC_NODISCARD RBIPC_LEAF int rbipc_reactor_set_fd(
+    rbipc_ring_t *RBIPC_RESTRICT ring, int event_fd);
 
 /**
  * @brief Query currently bound eventfd file descriptor from ring buffer
@@ -58,9 +57,8 @@ rbipc_reactor_set_fd(rbipc_ring_t *RBIPC_RESTRICT ring, int event_fd);
  *
  * @return RBIPC_OK on success, RBIPC_ERR_NOTSUP if no eventfd is enabled.
  */
-RBIPC_INTERNAL RBIPC_NODISCARD RBIPC_LEAF int
-rbipc_reactor_get_fd(const rbipc_ring_t *RBIPC_RESTRICT ring,
-                     int *RBIPC_RESTRICT out_fd);
+RBIPC_INTERNAL RBIPC_NODISCARD RBIPC_LEAF int rbipc_reactor_get_fd(
+    const rbipc_ring_t *RBIPC_RESTRICT ring, int *RBIPC_RESTRICT out_fd);
 
 /**
  * @brief Drain accumulated eventfd counter to reset readiness state.
@@ -70,8 +68,8 @@ rbipc_reactor_get_fd(const rbipc_ring_t *RBIPC_RESTRICT ring,
  * @return RBIPC_OK on success, RBIPC_ERR_NOTSUP if disabled, RBIPC_ERR_SYS on
  * failure.
  */
-RBIPC_INTERNAL RBIPC_LEAF
-int rbipc_reactor_drain(const rbipc_ring_t *RBIPC_RESTRICT ring);
+RBIPC_INTERNAL RBIPC_LEAF int rbipc_reactor_drain(
+    const rbipc_ring_t *RBIPC_RESTRICT ring);
 
 /**
  * @brief Dispatch an asynchronous readiness signal via the bound eventfd if
@@ -80,14 +78,14 @@ int rbipc_reactor_drain(const rbipc_ring_t *RBIPC_RESTRICT ring);
  * @param[in] ring Ring buffer handle.
  */
 RBIPC_INLINE void rbipc_reactor_signal(const rbipc_ring_t *ring) {
-  if (RBIPC_UNLIKELY(ring && ring->event_fd >= 0)) {
-    if (ring->hdr && atomic_load_explicit(&ring->hdr->eventfd_waiters,
-                                          memory_order_relaxed) > 0) {
-      uint64_t val = 1;
-      ssize_t ret = write(ring->event_fd, &val, sizeof(val));
-      (void)ret;
+    if (RBIPC_UNLIKELY(ring && ring->event_fd >= 0)) {
+        if (ring->hdr && atomic_load_explicit(&ring->hdr->eventfd_waiters,
+                                              memory_order_relaxed) > 0) {
+            uint64_t val = 1;
+            ssize_t ret = write(ring->event_fd, &val, sizeof(val));
+            (void)ret;
+        }
     }
-  }
 }
 
 /**
@@ -96,7 +94,6 @@ RBIPC_INLINE void rbipc_reactor_signal(const rbipc_ring_t *ring) {
  *
  * @param[in,out] ring Ring buffer handle being detached.
  */
-RBIPC_INTERNAL RBIPC_LEAF
-void rbipc_reactor_cleanup(rbipc_ring_t *ring);
+RBIPC_INTERNAL RBIPC_LEAF void rbipc_reactor_cleanup(rbipc_ring_t *ring);
 
 #endif /* RBIPC_REACTOR_H */

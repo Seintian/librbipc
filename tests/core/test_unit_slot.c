@@ -39,7 +39,6 @@ static void test_slot_state_lifecycle(void) {
     assert(atomic_load(&slots[0].state) == RBIPC_SLOT_EMPTY);
     assert(atomic_load(&slots[0].sequence) == 4);
 
-    
     /* Test mark acquired and consumer crash recovery */
     rbipc_slot_mark_acquired(&slots[0], getpid(), 123456);
     assert(atomic_load(&slots[0].consumer_pid) == (uint32_t)getpid());

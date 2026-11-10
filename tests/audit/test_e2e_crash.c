@@ -72,8 +72,8 @@ static void test_batch_crash_recovery(void) {
     assert(w_res == 2);
     strcpy((char *)w_iovecs[0].buf, "BATCH_MSG_0");
     strcpy((char *)w_iovecs[1].buf, "BATCH_MSG_1");
-    uint64_t w_tickets[2] = { w_iovecs[0].ticket, w_iovecs[1].ticket };
-    uint32_t w_lens[2] = { 12, 12 };
+    uint64_t w_tickets[2] = {w_iovecs[0].ticket, w_iovecs[1].ticket};
+    uint32_t w_lens[2] = {12, 12};
     rc = rbipc_commit_write_batch(ring, 2, w_tickets, w_lens);
     assert(rc == RBIPC_OK);
 
@@ -82,9 +82,11 @@ static void test_batch_crash_recovery(void) {
     rc = rbipc_read_acquire_batch(ring, 2, r_rovecs, &r_acq);
     assert(rc == RBIPC_OK);
     assert(r_acq == 2);
-    assert(r_rovecs[0].buf != NULL && strcmp((const char *)r_rovecs[0].buf, "BATCH_MSG_0") == 0);
-    assert(r_rovecs[1].buf != NULL && strcmp((const char *)r_rovecs[1].buf, "BATCH_MSG_1") == 0);
-    uint64_t r_tickets[2] = { r_rovecs[0].ticket, r_rovecs[1].ticket };
+    assert(r_rovecs[0].buf != NULL &&
+           strcmp((const char *)r_rovecs[0].buf, "BATCH_MSG_0") == 0);
+    assert(r_rovecs[1].buf != NULL &&
+           strcmp((const char *)r_rovecs[1].buf, "BATCH_MSG_1") == 0);
+    uint64_t r_tickets[2] = {r_rovecs[0].ticket, r_rovecs[1].ticket};
     rc = rbipc_read_release_batch(ring, 2, r_tickets);
     assert(rc == RBIPC_OK);
 
@@ -134,7 +136,8 @@ static void test_consumer_crash_recovery(void) {
     int status;
     waitpid(pid, &status, 0);
 
-    /* Producer attempts to produce message 5 (ticket 4), which wraps to slot 0 */
+    /* Producer attempts to produce message 5 (ticket 4), which wraps to slot 0
+     */
     void *w_buf = NULL;
     uint64_t w_ticket = 0;
     rc = rbipc_reserve_write(ring, 16, &w_buf, &w_ticket);
@@ -162,11 +165,13 @@ static void test_ticket_hole_crash_recovery(void) {
         int c_rc = rbipc_attach(shm_name, &child_ring);
         assert(c_rc == RBIPC_OK);
 
-        /* Simulates dead producer crash: marks RESERVING, claims ticket CAS, and dies */
+        /* Simulates dead producer crash: marks RESERVING, claims ticket CAS,
+         * and dies */
         rbipc_slot_t *slots = (rbipc_slot_t *)child_ring->slots;
         rbipc_slot_mark_reserving(&slots[0], getpid());
         uint64_t t = 0;
-        bool claimed = atomic_compare_exchange_strong(&child_ring->hdr->write_ticket, &t, 1);
+        bool claimed = atomic_compare_exchange_strong(
+            &child_ring->hdr->write_ticket, &t, 1);
         assert(claimed == true);
 
         kill(getpid(), SIGKILL);
@@ -277,6 +282,7 @@ int main(void) {
     test_consumer_crash_recovery();
     test_ticket_hole_crash_recovery();
 
-    printf("[test_e2e_crash] Dead-peer crash recovery test passed successfully.\n");
+    printf("[test_e2e_crash] Dead-peer crash recovery test passed "
+           "successfully.\n");
     return 0;
 }

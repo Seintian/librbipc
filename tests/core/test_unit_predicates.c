@@ -26,20 +26,26 @@ static void test_pointer_and_descriptor_predicates(void) {
     assert(rbipc_is_valid_fd(-99) == false);
 
     assert(rbipc_is_valid_shm_name("/my_ring") == true);
-    assert(rbipc_is_valid_shm_name("/") == false);               /* Empty identifier after leading slash rejected */
-    assert(rbipc_is_valid_shm_name("/nested/ring") == false);     /* Nested slashes prohibited by POSIX standard */
-    assert(rbipc_is_valid_shm_name("/dev/shm/ring") == false);    /* Filesystem path with multiple slashes prohibited */
-    assert(rbipc_is_valid_shm_name("my_ring") == false);          /* Missing leading slash */
+    assert(rbipc_is_valid_shm_name("/") ==
+           false); /* Empty identifier after leading slash rejected */
+    assert(rbipc_is_valid_shm_name("/nested/ring") ==
+           false); /* Nested slashes prohibited by POSIX standard */
+    assert(rbipc_is_valid_shm_name("/dev/shm/ring") ==
+           false); /* Filesystem path with multiple slashes prohibited */
+    assert(rbipc_is_valid_shm_name("my_ring") ==
+           false); /* Missing leading slash */
     assert(rbipc_is_valid_shm_name(NULL) == false);
 
     char long_name[NAME_MAX + 2];
     long_name[0] = '/';
     memset(long_name + 1, 'a', NAME_MAX);
     long_name[NAME_MAX + 1] = '\0';
-    assert(rbipc_is_valid_shm_name(long_name) == false);          /* Exceeds NAME_MAX characters */
+    assert(rbipc_is_valid_shm_name(long_name) ==
+           false); /* Exceeds NAME_MAX characters */
 
     long_name[NAME_MAX] = '\0';
-    assert(rbipc_is_valid_shm_name(long_name) == true);           /* Exactly NAME_MAX characters */
+    assert(rbipc_is_valid_shm_name(long_name) ==
+           true); /* Exactly NAME_MAX characters */
 }
 
 static void test_arithmetic_and_geometry_predicates(void) {
@@ -64,7 +70,6 @@ static void test_arithmetic_and_geometry_predicates(void) {
     assert(rbipc_is_valid_slot_size(RBIPC_MAX_SLOT_SIZE) == true);
     assert(rbipc_is_valid_slot_size(RBIPC_MAX_SLOT_SIZE + 1) == false);
     assert(rbipc_is_valid_slot_size(UINT32_MAX) == false);
-
 
     assert(rbipc_is_valid_page_size(0) == false);
     assert(rbipc_is_valid_page_size(4096) == true);
@@ -173,10 +178,10 @@ static void test_header_and_sync_predicates(void) {
     assert(rbipc_sync_has_deadline(&sync_state) == false);
     assert(rbipc_sync_is_expired(&sync_state, RBIPC_NSEC_PER_SEC) == false);
 
-
     rbipc_sync_state_init(&sync_state, 100);
     assert(rbipc_sync_has_deadline(&sync_state) == true);
-    assert(rbipc_sync_is_expired(&sync_state, sync_state.deadline_ns - 1) == false);
+    assert(rbipc_sync_is_expired(&sync_state, sync_state.deadline_ns - 1) ==
+           false);
     assert(rbipc_sync_is_expired(&sync_state, sync_state.deadline_ns) == true);
 
     _Atomic uint32_t waiters;

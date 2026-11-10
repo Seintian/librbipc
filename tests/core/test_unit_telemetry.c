@@ -1,6 +1,7 @@
 /**
  * @file test_unit_telemetry.c
- * @brief Unit tests for enhanced ADS telemetry, disaggregated waiters, and slot histogram.
+ * @brief Unit tests for enhanced ADS telemetry, disaggregated waiters, and slot
+ * histogram.
  */
 
 #ifndef _GNU_SOURCE
@@ -21,10 +22,8 @@
 #define TEST_RING_NAME "/rbipc_telemetry_test_shm"
 
 static void sleep_ms(int ms) {
-    struct timespec ts = {
-        .tv_sec = ms / 1000,
-        .tv_nsec = (ms % 1000) * 1000000L
-    };
+    struct timespec ts = {.tv_sec = ms / 1000,
+                          .tv_nsec = (ms % 1000) * 1000000L};
     nanosleep(&ts, NULL);
 }
 
@@ -199,8 +198,10 @@ static void test_audit_recovery_counters(void) {
     /* Recover dead producer */
     bool recovered = rbipc_audit_recover_dead_producer(&hdr, &slot, 0);
     assert(recovered == true);
-    assert(atomic_load_explicit(&hdr.poisoned_slots_count, memory_order_relaxed) == 1);
-    assert(atomic_load_explicit(&hdr.dead_producers_recovered, memory_order_relaxed) == 1);
+    assert(atomic_load_explicit(&hdr.poisoned_slots_count,
+                                memory_order_relaxed) == 1);
+    assert(atomic_load_explicit(&hdr.dead_producers_recovered,
+                                memory_order_relaxed) == 1);
 
     /* Recover dead consumer */
     atomic_init(&slot.state, RBIPC_SLOT_COMMITTED);
@@ -208,7 +209,8 @@ static void test_audit_recovery_counters(void) {
     atomic_init(&slot.acquire_timestamp_ns, 100);
     bool c_recovered = rbipc_audit_recover_dead_consumer(&hdr, &slot, 0);
     assert(c_recovered == true);
-    assert(atomic_load_explicit(&hdr.dead_consumers_recovered, memory_order_relaxed) == 1);
+    assert(atomic_load_explicit(&hdr.dead_consumers_recovered,
+                                memory_order_relaxed) == 1);
 
     /* Heal ticket hole */
     rbipc_sync_state_t sync_state;
@@ -217,10 +219,13 @@ static void test_audit_recovery_counters(void) {
     atomic_init(&hdr.write_ticket, 5);
     atomic_init(&hdr.active_producers, 0); /* Triggers immediate hole healing */
 
-    bool healed = rbipc_audit_check_and_heal_ticket_hole(&hdr, &slot, 0, &sync_state);
+    bool healed =
+        rbipc_audit_check_and_heal_ticket_hole(&hdr, &slot, 0, &sync_state);
     assert(healed == true);
-    assert(atomic_load_explicit(&hdr.poisoned_slots_count, memory_order_relaxed) == 2);
-    assert(atomic_load_explicit(&hdr.ticket_holes_healed, memory_order_relaxed) == 1);
+    assert(atomic_load_explicit(&hdr.poisoned_slots_count,
+                                memory_order_relaxed) == 2);
+    assert(atomic_load_explicit(&hdr.ticket_holes_healed,
+                                memory_order_relaxed) == 1);
 }
 
 static void test_slot_stats_histogram(void) {
@@ -366,6 +371,7 @@ int main(void) {
     test_audit_recovery_counters();
     test_slot_stats_histogram();
     test_slot_stats_histogram_packed();
-    printf("[test_unit_telemetry] All telemetry unit tests passed successfully.\n");
+    printf("[test_unit_telemetry] All telemetry unit tests passed "
+           "successfully.\n");
     return 0;
 }

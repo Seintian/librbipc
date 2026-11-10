@@ -33,7 +33,8 @@ int main(void) {
 
     /* 3. Wrap-around boundary scanning */
     atomic_store_explicit(&slots[6].sequence, 6, memory_order_relaxed);
-    /* For tickets 16 and 17, slots 0 and 1 must advance their sequence to cycle 1 (seq = ticket) */
+    /* For tickets 16 and 17, slots 0 and 1 must advance their sequence to cycle
+     * 1 (seq = ticket) */
     atomic_store_explicit(&slots[0].sequence, 16, memory_order_relaxed);
     atomic_store_explicit(&slots[1].sequence, 17, memory_order_relaxed);
     /* Slots 14, 15, 0, 1 ... */

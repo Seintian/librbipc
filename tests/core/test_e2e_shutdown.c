@@ -62,7 +62,8 @@ int main(void) {
     pthread_t p_th;
     pthread_create(&p_th, NULL, producer_thread, ring2);
 
-    usleep(50000); /* 50ms to ensure producer filled ring and is sleeping on futex */
+    usleep(50000); /* 50ms to ensure producer filled ring and is sleeping on
+                      futex */
     rbipc_signal_shutdown(ring2);
     pthread_join(p_th, NULL);
     rbipc_detach(ring2);

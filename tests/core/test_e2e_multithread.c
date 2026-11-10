@@ -51,14 +51,17 @@ static void *producer_worker(void *arg) {
 static void *consumer_worker(void *arg) {
     rbipc_ring_t *ring = (rbipc_ring_t *)arg;
 
-    while (atomic_load_explicit(&g_consumed_count, memory_order_relaxed) < TOTAL_MSGS) {
+    while (atomic_load_explicit(&g_consumed_count, memory_order_relaxed) <
+           TOTAL_MSGS) {
         const void *buf = NULL;
         uint32_t len = 0;
         uint64_t ticket = 0;
 
-        int rc = rbipc_read_acquire_timeout(ring, 100 * RBIPC_NSEC_PER_MSEC, &buf, &len, &ticket);
+        int rc = rbipc_read_acquire_timeout(ring, 100 * RBIPC_NSEC_PER_MSEC,
+                                            &buf, &len, &ticket);
         if (rc == RBIPC_ERR_TIMEOUT || rc == RBIPC_ERR_SHUTDOWN) {
-            if (atomic_load_explicit(&g_consumed_count, memory_order_relaxed) >= TOTAL_MSGS) {
+            if (atomic_load_explicit(&g_consumed_count, memory_order_relaxed) >=
+                TOTAL_MSGS) {
                 break;
             }
             continue;
@@ -74,7 +77,8 @@ static void *consumer_worker(void *arg) {
 }
 
 int main(void) {
-    printf("[test_e2e_multithread] Running MPMC concurrency test (%d msgs across %d producers, %d consumers)...\n",
+    printf("[test_e2e_multithread] Running MPMC concurrency test (%d msgs "
+           "across %d producers, %d consumers)...\n",
            TOTAL_MSGS, NUM_PRODUCERS, NUM_CONSUMERS);
 
     atomic_init(&g_consumed_count, 0);
@@ -108,6 +112,7 @@ int main(void) {
     assert(atomic_load(&g_consumed_count) == TOTAL_MSGS);
 
     rbipc_detach(ring);
-    printf("[test_e2e_multithread] MPMC concurrency test passed successfully.\n");
+    printf(
+        "[test_e2e_multithread] MPMC concurrency test passed successfully.\n");
     return 0;
 }

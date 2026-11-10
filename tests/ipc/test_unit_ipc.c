@@ -1,6 +1,7 @@
 /**
  * @file test_unit_ipc.c
- * @brief Unit tests for UNIX domain socket SCM_RIGHTS descriptor passing utilities.
+ * @brief Unit tests for UNIX domain socket SCM_RIGHTS descriptor passing
+ * utilities.
  */
 
 #include "rbipc.h"
@@ -102,20 +103,24 @@ static void test_ipc_peer_credentials_and_auth(void) {
     assert(rbipc_ipc_verify_peer(sv[0], cred.uid, cred.gid) == RBIPC_OK);
     assert(rbipc_ipc_verify_peer(sv[0], cred.uid, (gid_t)-1) == RBIPC_OK);
     assert(rbipc_ipc_verify_peer(sv[0], (uid_t)-1, cred.gid) == RBIPC_OK);
-    assert(rbipc_ipc_verify_peer(sv[0], cred.uid + 9999, cred.gid) == RBIPC_ERR_INVAL);
-    assert(rbipc_ipc_verify_peer(sv[0], cred.uid, cred.gid + 9999) == RBIPC_ERR_INVAL);
+    assert(rbipc_ipc_verify_peer(sv[0], cred.uid + 9999, cred.gid) ==
+           RBIPC_ERR_INVAL);
+    assert(rbipc_ipc_verify_peer(sv[0], cred.uid, cred.gid + 9999) ==
+           RBIPC_ERR_INVAL);
 
     rbipc_ring_t *ring = NULL;
     assert(rbipc_create(NULL, 64, 256, &ring) == RBIPC_OK);
 
     /* Failed send due to wrong expected peer UID */
-    assert(rbipc_send_fd_auth(sv[0], ring, cred.uid + 9999, cred.gid) == RBIPC_ERR_INVAL);
+    assert(rbipc_send_fd_auth(sv[0], ring, cred.uid + 9999, cred.gid) ==
+           RBIPC_ERR_INVAL);
 
     /* Successful authenticated send and receive */
     assert(rbipc_send_fd_auth(sv[0], ring, cred.uid, cred.gid) == RBIPC_OK);
 
     rbipc_ring_t *recv_ring = NULL;
-    assert(rbipc_recv_fd_auth(sv[1], RBIPC_ROLE_CONSUMER, cred.uid, cred.gid, &recv_ring) == RBIPC_OK);
+    assert(rbipc_recv_fd_auth(sv[1], RBIPC_ROLE_CONSUMER, cred.uid, cred.gid,
+                              &recv_ring) == RBIPC_OK);
     assert(recv_ring != NULL);
 
     rbipc_detach(recv_ring);
@@ -132,10 +137,10 @@ static void test_ipc_multi_fds(void) {
     assert(pipe(p1) == 0);
     assert(pipe(p2) == 0);
 
-    int send_fds[3] = { p1[0], p1[1], p2[0] };
+    int send_fds[3] = {p1[0], p1[1], p2[0]};
     assert(rbipc_ipc_send_fds(sv[0], send_fds, 3) == RBIPC_OK);
 
-    int recv_fds[4] = { -1, -1, -1, -1 };
+    int recv_fds[4] = {-1, -1, -1, -1};
     size_t recv_count = 0;
     assert(rbipc_ipc_recv_fds(sv[1], recv_fds, 4, &recv_count) == RBIPC_OK);
     assert(recv_count == 3);
@@ -171,7 +176,8 @@ static void test_ipc_auto_eventfd_binding(void) {
     assert(rbipc_enable_eventfd(sender_ring, &s_efd) == RBIPC_OK);
     assert(s_efd >= 0);
 
-    /* 2. Send ring across socket: rbipc_send_fd bundles both shm_fd and event_fd */
+    /* 2. Send ring across socket: rbipc_send_fd bundles both shm_fd and
+     * event_fd */
     assert(rbipc_send_fd(sv[0], sender_ring) == RBIPC_OK);
 
     /* 3. Receive ring on peer end */

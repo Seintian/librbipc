@@ -10,13 +10,14 @@
 #include <assert.h>
 
 #define BATCH_RING_NAME "/rbipc_test_batch"
-#define BATCH_CAPACITY  64
+#define BATCH_CAPACITY 64
 #define BATCH_SLOT_SIZE 128
 
 static void test_batch_validation(void) {
     rbipc_destroy(BATCH_RING_NAME);
     rbipc_ring_t *ring = NULL;
-    int rc = rbipc_create(BATCH_RING_NAME, BATCH_CAPACITY, BATCH_SLOT_SIZE, &ring);
+    int rc =
+        rbipc_create(BATCH_RING_NAME, BATCH_CAPACITY, BATCH_SLOT_SIZE, &ring);
     assert(rc == RBIPC_OK);
 
     rbipc_iovec_t iovecs[16];
@@ -27,9 +28,12 @@ static void test_batch_validation(void) {
     uint32_t lens[16] = {};
 
     /* NULL / invalid argument tests */
-    assert(rbipc_reserve_write_batch(NULL, 4, iovecs, &reserved) == RBIPC_ERR_INVAL);
-    assert(rbipc_reserve_write_batch(ring, 0, iovecs, &reserved) == RBIPC_ERR_INVAL);
-    assert(rbipc_reserve_write_batch(ring, 4, NULL, &reserved) == RBIPC_ERR_INVAL);
+    assert(rbipc_reserve_write_batch(NULL, 4, iovecs, &reserved) ==
+           RBIPC_ERR_INVAL);
+    assert(rbipc_reserve_write_batch(ring, 0, iovecs, &reserved) ==
+           RBIPC_ERR_INVAL);
+    assert(rbipc_reserve_write_batch(ring, 4, NULL, &reserved) ==
+           RBIPC_ERR_INVAL);
     assert(rbipc_reserve_write_batch(ring, 4, iovecs, NULL) == RBIPC_ERR_INVAL);
 
     assert(rbipc_commit_write_batch(NULL, 4, tickets, lens) == RBIPC_ERR_INVAL);
@@ -37,9 +41,12 @@ static void test_batch_validation(void) {
     assert(rbipc_commit_write_batch(ring, 4, NULL, lens) == RBIPC_ERR_INVAL);
     assert(rbipc_commit_write_batch(ring, 4, tickets, NULL) == RBIPC_ERR_INVAL);
 
-    assert(rbipc_read_acquire_batch(NULL, 4, rovecs, &acquired) == RBIPC_ERR_INVAL);
-    assert(rbipc_read_acquire_batch(ring, 0, rovecs, &acquired) == RBIPC_ERR_INVAL);
-    assert(rbipc_read_acquire_batch(ring, 4, NULL, &acquired) == RBIPC_ERR_INVAL);
+    assert(rbipc_read_acquire_batch(NULL, 4, rovecs, &acquired) ==
+           RBIPC_ERR_INVAL);
+    assert(rbipc_read_acquire_batch(ring, 0, rovecs, &acquired) ==
+           RBIPC_ERR_INVAL);
+    assert(rbipc_read_acquire_batch(ring, 4, NULL, &acquired) ==
+           RBIPC_ERR_INVAL);
     assert(rbipc_read_acquire_batch(ring, 4, rovecs, NULL) == RBIPC_ERR_INVAL);
 
     assert(rbipc_read_release_batch(NULL, 4, tickets) == RBIPC_ERR_INVAL);
@@ -56,7 +63,8 @@ static void test_batch_validation(void) {
 
 static void test_batch_roundtrip(void) {
     rbipc_ring_t *ring = NULL;
-    int rc = rbipc_create(BATCH_RING_NAME, BATCH_CAPACITY, BATCH_SLOT_SIZE, &ring);
+    int rc =
+        rbipc_create(BATCH_RING_NAME, BATCH_CAPACITY, BATCH_SLOT_SIZE, &ring);
     assert(rc == RBIPC_OK);
 
     const uint32_t batch_size = 16;
@@ -160,7 +168,8 @@ static void test_batch_nonblock_and_timeout(void) {
     rbipc_destroy(BATCH_RING_NAME);
 
     rbipc_ring_t *ring = NULL;
-    int rc = rbipc_create(BATCH_RING_NAME, BATCH_CAPACITY, BATCH_SLOT_SIZE, &ring);
+    int rc =
+        rbipc_create(BATCH_RING_NAME, BATCH_CAPACITY, BATCH_SLOT_SIZE, &ring);
     assert(rc == RBIPC_OK);
 
     rbipc_rovec_t rovecs[BATCH_CAPACITY];
@@ -169,21 +178,28 @@ static void test_batch_nonblock_and_timeout(void) {
     uint32_t reserved = 0;
 
     /* 1. On empty ring, nonblock acquire must return RBIPC_ERR_EMPTY */
-    assert(rbipc_read_acquire_batch_nonblock(ring, 4, rovecs, &acquired) == RBIPC_ERR_EMPTY);
+    assert(rbipc_read_acquire_batch_nonblock(ring, 4, rovecs, &acquired) ==
+           RBIPC_ERR_EMPTY);
 
-    /* 2. On empty ring, timeout acquire with 1ms timeout must return RBIPC_ERR_TIMEOUT */
-    assert(rbipc_read_acquire_batch_timeout(ring, 4, 1000000ULL, rovecs, &acquired) == RBIPC_ERR_TIMEOUT);
+    /* 2. On empty ring, timeout acquire with 1ms timeout must return
+     * RBIPC_ERR_TIMEOUT */
+    assert(rbipc_read_acquire_batch_timeout(ring, 4, 1000000ULL, rovecs,
+                                            &acquired) == RBIPC_ERR_TIMEOUT);
 
     /* 3. Reserve entire buffer using batch nonblock */
-    rc = rbipc_reserve_write_batch_nonblock(ring, BATCH_CAPACITY, iovecs, &reserved);
+    rc = rbipc_reserve_write_batch_nonblock(ring, BATCH_CAPACITY, iovecs,
+                                            &reserved);
     assert(rc == RBIPC_OK);
     assert(reserved == BATCH_CAPACITY);
 
     /* 4. When full, nonblock write must return RBIPC_ERR_FULL */
-    assert(rbipc_reserve_write_batch_nonblock(ring, 1, iovecs, &reserved) == RBIPC_ERR_FULL);
+    assert(rbipc_reserve_write_batch_nonblock(ring, 1, iovecs, &reserved) ==
+           RBIPC_ERR_FULL);
 
-    /* 5. When full, timeout write with 1ms timeout must return RBIPC_ERR_TIMEOUT */
-    assert(rbipc_reserve_write_batch_timeout(ring, 1, 1000000ULL, iovecs, &reserved) == RBIPC_ERR_TIMEOUT);
+    /* 5. When full, timeout write with 1ms timeout must return
+     * RBIPC_ERR_TIMEOUT */
+    assert(rbipc_reserve_write_batch_timeout(ring, 1, 1000000ULL, iovecs,
+                                             &reserved) == RBIPC_ERR_TIMEOUT);
 
     /* 6. Commit all reserved slots */
     uint64_t tickets[BATCH_CAPACITY];
@@ -192,10 +208,12 @@ static void test_batch_nonblock_and_timeout(void) {
         tickets[i] = iovecs[i].ticket;
         lens[i] = 16;
     }
-    assert(rbipc_commit_write_batch(ring, BATCH_CAPACITY, tickets, lens) == RBIPC_OK);
+    assert(rbipc_commit_write_batch(ring, BATCH_CAPACITY, tickets, lens) ==
+           RBIPC_OK);
 
     /* 7. Acquire using batch timeout */
-    rc = rbipc_read_acquire_batch_timeout(ring, 16, 1000000ULL, rovecs, &acquired);
+    rc = rbipc_read_acquire_batch_timeout(ring, 16, 1000000ULL, rovecs,
+                                          &acquired);
     assert(rc == RBIPC_OK);
     assert(acquired == 16);
 
@@ -206,7 +224,8 @@ static void test_batch_nonblock_and_timeout(void) {
     assert(rbipc_read_release_batch(ring, 16, rel_tickets) == RBIPC_OK);
 
     /* Clean up remaining unread */
-    rc = rbipc_read_acquire_batch_nonblock(ring, BATCH_CAPACITY, rovecs, &acquired);
+    rc = rbipc_read_acquire_batch_nonblock(ring, BATCH_CAPACITY, rovecs,
+                                           &acquired);
     assert(rc == RBIPC_OK);
     for (uint32_t i = 0; i < acquired; ++i) {
         rel_tickets[i] = rovecs[i].ticket;
@@ -220,7 +239,8 @@ static void test_batch_nonblock_and_timeout(void) {
 static void test_batch_vector_scanning(void) {
     rbipc_destroy(BATCH_RING_NAME);
     rbipc_ring_t *ring = NULL;
-    int rc = rbipc_create(BATCH_RING_NAME, BATCH_CAPACITY, BATCH_SLOT_SIZE, &ring);
+    int rc =
+        rbipc_create(BATCH_RING_NAME, BATCH_CAPACITY, BATCH_SLOT_SIZE, &ring);
     assert(rc == RBIPC_OK);
 
     rbipc_iovec_t iovecs[BATCH_CAPACITY];
@@ -230,7 +250,7 @@ static void test_batch_vector_scanning(void) {
 
     /* Test various batch counts: 1, 3, 4, 7, 12, 16, 20 */
     uint32_t test_sizes[] = {1, 3, 4, 7, 12, 16, 20};
-    for (size_t s = 0; s < sizeof(test_sizes)/sizeof(test_sizes[0]); ++s) {
+    for (size_t s = 0; s < sizeof(test_sizes) / sizeof(test_sizes[0]); ++s) {
         uint32_t sz = test_sizes[s];
         rc = rbipc_reserve_write_batch(ring, sz, iovecs, &reserved);
         assert(rc == RBIPC_OK);

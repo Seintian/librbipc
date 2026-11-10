@@ -29,7 +29,8 @@
 
 /**
  * @def RBIPC_STREAM_THRESHOLD_DEFAULT
- * @brief Conservative default streaming threshold (256 KB) when dynamic cache discovery is unavailable.
+ * @brief Conservative default streaming threshold (256 KB) when dynamic cache
+ * discovery is unavailable.
  */
 #define RBIPC_STREAM_THRESHOLD_DEFAULT (256ULL * 1024ULL)
 
@@ -37,7 +38,8 @@
 
 /**
  * @brief Retrieve dynamic optimal non-temporal streaming store threshold.
- * @details Evaluates L3/L2 cache size dynamically (defaulting to 3/4 L3 or 512 KB, minimum 256 KB).
+ * @details Evaluates L3/L2 cache size dynamically (defaulting to 3/4 L3 or 512
+ * KB, minimum 256 KB).
  */
 RBIPC_NODISCARD RBIPC_LEAF size_t rbipc_stream_threshold(void);
 
@@ -66,7 +68,8 @@ RBIPC_NODISCARD RBIPC_LEAF int rbipc_stream_copy(void *RBIPC_RESTRICT dst,
                                                  size_t size);
 
 /**
- * @brief Automatically select streaming copy or standard memcpy based on dynamic cache threshold.
+ * @brief Automatically select streaming copy or standard memcpy based on
+ * dynamic cache threshold.
  *
  * @param[out] dst  Destination memory buffer.
  * @param[in]  src  Source memory buffer.
@@ -75,12 +78,12 @@ RBIPC_NODISCARD RBIPC_LEAF int rbipc_stream_copy(void *RBIPC_RESTRICT dst,
 RBIPC_INLINE void rbipc_stream_copy_auto(void *RBIPC_RESTRICT dst,
                                          const void *RBIPC_RESTRICT src,
                                          size_t size) {
-  if (size >= rbipc_stream_threshold()) {
-    int rc = rbipc_stream_copy(dst, src, size);
-    (void)rc;
-  } else {
-    memcpy(dst, src, size);
-  }
+    if (size >= rbipc_stream_threshold()) {
+        int rc = rbipc_stream_copy(dst, src, size);
+        (void)rc;
+    } else {
+        memcpy(dst, src, size);
+    }
 }
 
 /**
@@ -110,10 +113,9 @@ RBIPC_NODISCARD RBIPC_LEAF int rbipc_write_stream_timeout(
  *
  * @return RBIPC_OK on success, or appropriate error code.
  */
-RBIPC_NODISCARD RBIPC_LEAF int
-rbipc_write_stream(rbipc_ring_t *RBIPC_RESTRICT ring,
-                   const void *RBIPC_RESTRICT src, uint32_t len,
-                   uint64_t *RBIPC_RESTRICT out_ticket);
+RBIPC_NODISCARD RBIPC_LEAF int rbipc_write_stream(
+    rbipc_ring_t *RBIPC_RESTRICT ring, const void *RBIPC_RESTRICT src,
+    uint32_t len, uint64_t *RBIPC_RESTRICT out_ticket);
 
 /**
  * @brief Transmit payload via non-temporal streaming stores (Non-blocking).
@@ -125,9 +127,8 @@ rbipc_write_stream(rbipc_ring_t *RBIPC_RESTRICT ring,
  *
  * @return RBIPC_OK on success, or appropriate error code.
  */
-RBIPC_NODISCARD RBIPC_LEAF int
-rbipc_write_stream_nonblock(rbipc_ring_t *RBIPC_RESTRICT ring,
-                            const void *RBIPC_RESTRICT src, uint32_t len,
-                            uint64_t *RBIPC_RESTRICT out_ticket);
+RBIPC_NODISCARD RBIPC_LEAF int rbipc_write_stream_nonblock(
+    rbipc_ring_t *RBIPC_RESTRICT ring, const void *RBIPC_RESTRICT src,
+    uint32_t len, uint64_t *RBIPC_RESTRICT out_ticket);
 
 #endif /* RBIPC_STREAM_H */

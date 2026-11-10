@@ -24,7 +24,8 @@ int main(void) {
     assert(rbipc_stream_copy(NULL, NULL, 100) == RBIPC_ERR_INVAL);
 
     /* Test sizes: 1 B, 63 B, 64 B, 255 B, 256 B, 512 B, 4096 B, 65536 B */
-    const size_t test_sizes[] = { 1, 15, 16, 31, 32, 63, 64, 127, 255, 256, 512, 1024, 4096, 65536 };
+    const size_t test_sizes[] = {1,   15,  16,  31,  32,   63,   64,
+                                 127, 255, 256, 512, 1024, 4096, 65536};
     const size_t num_tests = sizeof(test_sizes) / sizeof(test_sizes[0]);
 
     for (size_t t = 0; t < num_tests; ++t) {
@@ -75,23 +76,30 @@ static void test_stream_ring_integration(void) {
     memset(payload, 0x42, sizeof(payload));
 
     /* Negative parameter validation */
-    assert(rbipc_write_stream_timeout(NULL, payload, 32, 0, &ticket) == RBIPC_ERR_INVAL);
-    assert(rbipc_write_stream_timeout(ring, NULL, 32, 0, &ticket) == RBIPC_ERR_INVAL);
-    assert(rbipc_write_stream_timeout(ring, payload, 32, 0, NULL) == RBIPC_ERR_INVAL);
-    assert(rbipc_write_stream_nonblock(NULL, payload, 32, &ticket) == RBIPC_ERR_INVAL);
+    assert(rbipc_write_stream_timeout(NULL, payload, 32, 0, &ticket) ==
+           RBIPC_ERR_INVAL);
+    assert(rbipc_write_stream_timeout(ring, NULL, 32, 0, &ticket) ==
+           RBIPC_ERR_INVAL);
+    assert(rbipc_write_stream_timeout(ring, payload, 32, 0, NULL) ==
+           RBIPC_ERR_INVAL);
+    assert(rbipc_write_stream_nonblock(NULL, payload, 32, &ticket) ==
+           RBIPC_ERR_INVAL);
     assert(rbipc_write_stream(NULL, payload, 32, &ticket) == RBIPC_ERR_INVAL);
     assert(rbipc_write_stream(ring, payload, 300, &ticket) == RBIPC_ERR_INVAL);
 
     /* Fill ring using stream writes */
     for (int i = 0; i < 4; ++i) {
         payload[0] = (char)i;
-        assert(rbipc_write_stream(ring, payload, sizeof(payload), &ticket) == RBIPC_OK);
+        assert(rbipc_write_stream(ring, payload, sizeof(payload), &ticket) ==
+               RBIPC_OK);
         assert(ticket == (uint64_t)i);
     }
 
     /* Ring is now full */
-    assert(rbipc_write_stream_nonblock(ring, payload, 64, &ticket) == RBIPC_ERR_FULL);
-    assert(rbipc_write_stream_timeout(ring, payload, 64, 5000000ULL /* 5ms */, &ticket) == RBIPC_ERR_TIMEOUT);
+    assert(rbipc_write_stream_nonblock(ring, payload, 64, &ticket) ==
+           RBIPC_ERR_FULL);
+    assert(rbipc_write_stream_timeout(ring, payload, 64, 5000000ULL /* 5ms */,
+                                      &ticket) == RBIPC_ERR_TIMEOUT);
 
     /* Consume slots and verify payload */
     for (int i = 0; i < 4; ++i) {

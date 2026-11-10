@@ -1,9 +1,11 @@
 /**
  * @file rbipc_cxl.c
- * @brief Implementation of Compute Express Link (CXL) coherent memory fabric integration.
+ * @brief Implementation of Compute Express Link (CXL) coherent memory fabric
+ * integration.
  *
- * @details Detects CXL bus topology, creates shared memory rings over DAX devices,
- *          and applies cache-line writeback (CLWB) to ensure low-latency snoop coherency.
+ * @details Detects CXL bus topology, creates shared memory rings over DAX
+ * devices, and applies cache-line writeback (CLWB) to ensure low-latency snoop
+ * coherency.
  *
  * @author Seintian
  * @date 2026
@@ -28,34 +30,36 @@
 #include <stdlib.h>
 
 /**
- * @brief Checks if host system has accessible CXL memory devices or DAX mappings.
+ * @brief Checks if host system has accessible CXL memory devices or DAX
+ * mappings.
  * @details Cached capability probe. _Atomic since rbipc_cxl_available() may be
- *          invoked concurrently by multiple threads; the idempotent write (1 or 0)
- *          converges so relaxed ordering is sufficient.
+ *          invoked concurrently by multiple threads; the idempotent write (1 or
+ * 0) converges so relaxed ordering is sufficient.
  */
 bool rbipc_cxl_available(void) {
-  static _Atomic int cached = -1;
-  const int cd = atomic_load_explicit(&cached, memory_order_relaxed);
-  if (cd != -1) {
-    return cd == 1;
-  }
+    static _Atomic int cached = -1;
+    const int cd = atomic_load_explicit(&cached, memory_order_relaxed);
+    if (cd != -1) {
+        return cd == 1;
+    }
 
-  const char *env = getenv("RBIPC_CXL_DAX_PATH");
-  const bool env_ok = env && env[0] != 0 && access(env, F_OK) == 0;
-  const bool sys_ok = access(RBIPC_CXL_SYSFS_PATH, F_OK) == 0 ||
-                      access(RBIPC_CXL_DAX_DEV, F_OK) == 0;
-  const int supported = (env_ok || sys_ok) ? 1 : 0;
+    const char *env = getenv("RBIPC_CXL_DAX_PATH");
+    const bool env_ok = env && env[0] != 0 && access(env, F_OK) == 0;
+    const bool sys_ok = access(RBIPC_CXL_SYSFS_PATH, F_OK) == 0 ||
+                        access(RBIPC_CXL_DAX_DEV, F_OK) == 0;
+    const int supported = (env_ok || sys_ok) ? 1 : 0;
 
-  atomic_store_explicit(&cached, supported, memory_order_relaxed);
-  return supported == 1;
+    atomic_store_explicit(&cached, supported, memory_order_relaxed);
+    return supported == 1;
 }
 
 /**
- * @brief Checks whether the ring operates over a CXL disaggregated memory fabric.
+ * @brief Checks whether the ring operates over a CXL disaggregated memory
+ * fabric.
  */
 RBIPC_LEAF
 bool rbipc_ring_is_cxl(const rbipc_ring_t *ring) {
-  return (ring != NULL) && ring->is_cxl;
+    return (ring != NULL) && ring->is_cxl;
 }
 
 /**
@@ -63,63 +67,66 @@ bool rbipc_ring_is_cxl(const rbipc_ring_t *ring) {
  */
 int rbipc_create_cxl(const char *dax_path, size_t capacity, size_t slot_size,
                      uint32_t flags, rbipc_ring_t **out_ring) {
-  if (RBIPC_UNLIKELY(!out_ring || capacity == 0 || slot_size == 0)) {
-    return RBIPC_ERR_INVAL;
-  }
-  if (RBIPC_UNLIKELY(!rbipc_is_power_of_two(capacity) ||
-                     capacity < RBIPC_MIN_CAPACITY ||
-                     capacity > RBIPC_MAX_CAPACITY)) {
-    return RBIPC_ERR_INVAL;
-  }
-
-  /* If no explicit path provided, check environment variable or default DAX character device */
-  const char *path = dax_path;
-  if (!path) {
-    const char *env = getenv("RBIPC_CXL_DAX_PATH");
-    if (env && env[0] != 0) {
-      path = env;
-    } else if (access(RBIPC_CXL_DAX_DEV, F_OK) == 0) {
-      path = RBIPC_CXL_DAX_DEV;
-    } else {
-      return RBIPC_ERR_NOTSUP;
+    if (RBIPC_UNLIKELY(!out_ring || capacity == 0 || slot_size == 0)) {
+        return RBIPC_ERR_INVAL;
     }
-  }
+    if (RBIPC_UNLIKELY(!rbipc_is_power_of_two(capacity) ||
+                       capacity < RBIPC_MIN_CAPACITY ||
+                       capacity > RBIPC_MAX_CAPACITY)) {
+        return RBIPC_ERR_INVAL;
+    }
 
-  int fd = open(path, O_RDWR | O_CREAT, RBIPC_CXL_DEV_MODE);
-  if (fd < 0) {
-    return RBIPC_ERR_SYS;
-  }
+    /* If no explicit path provided, check environment variable or default DAX
+     * character device */
+    const char *path = dax_path;
+    if (!path) {
+        const char *env = getenv("RBIPC_CXL_DAX_PATH");
+        if (env && env[0] != 0) {
+            path = env;
+        } else if (access(RBIPC_CXL_DAX_DEV, F_OK) == 0) {
+            path = RBIPC_CXL_DAX_DEV;
+        } else {
+            return RBIPC_ERR_NOTSUP;
+        }
+    }
 
-  flags |= RBIPC_FLAG_CXL;
-  uint32_t roles = flags & (RBIPC_ROLE_PRODUCER | RBIPC_ROLE_CONSUMER | RBIPC_ROLE_MONITOR);
-  if (roles == 0) {
-    roles = RBIPC_ROLE_PRODUCER | RBIPC_ROLE_CONSUMER;
-  }
-
-  size_t page_sz = rbipc_page_size();
-  rbipc_layout_t layout;
-  int rc = rbipc_shm_calc_layout_ex((uint32_t)capacity, (uint32_t)slot_size, page_sz, flags, &layout);
-  if (RBIPC_UNLIKELY(rc != RBIPC_OK)) {
-    close(fd);
-    return rc;
-  }
-
-  struct stat st;
-  if (fstat(fd, &st) == 0 && S_ISREG(st.st_mode)) {
-    if ((size_t)st.st_size < layout.total_shm_size) {
-      if (ftruncate(fd, (off_t)layout.total_shm_size) != 0) {
-        close(fd);
+    int fd = open(path, O_RDWR | O_CREAT, RBIPC_CXL_DEV_MODE);
+    if (fd < 0) {
         return RBIPC_ERR_SYS;
-      }
     }
-  }
 
-  rc = rbipc_ring_init_and_format_fd(fd, path, capacity, (uint32_t)slot_size,
-                                     flags, roles, page_sz, out_ring);
-  if (rc != RBIPC_OK) {
-    close(fd);
-    return rc;
-  }
+    flags |= RBIPC_FLAG_CXL;
+    uint32_t roles = flags & (RBIPC_ROLE_PRODUCER | RBIPC_ROLE_CONSUMER |
+                              RBIPC_ROLE_MONITOR);
+    if (roles == 0) {
+        roles = RBIPC_ROLE_PRODUCER | RBIPC_ROLE_CONSUMER;
+    }
 
-  return RBIPC_OK;
+    size_t page_sz = rbipc_page_size();
+    rbipc_layout_t layout;
+    int rc = rbipc_shm_calc_layout_ex((uint32_t)capacity, (uint32_t)slot_size,
+                                      page_sz, flags, &layout);
+    if (RBIPC_UNLIKELY(rc != RBIPC_OK)) {
+        close(fd);
+        return rc;
+    }
+
+    struct stat st;
+    if (fstat(fd, &st) == 0 && S_ISREG(st.st_mode)) {
+        if ((size_t)st.st_size < layout.total_shm_size) {
+            if (ftruncate(fd, (off_t)layout.total_shm_size) != 0) {
+                close(fd);
+                return RBIPC_ERR_SYS;
+            }
+        }
+    }
+
+    rc = rbipc_ring_init_and_format_fd(fd, path, capacity, (uint32_t)slot_size,
+                                       flags, roles, page_sz, out_ring);
+    if (rc != RBIPC_OK) {
+        close(fd);
+        return rc;
+    }
+
+    return RBIPC_OK;
 }

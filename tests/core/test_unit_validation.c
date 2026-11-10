@@ -23,7 +23,8 @@ static void test_create_and_attach_validation(void) {
 
     /* Capacity validation */
     assert(rbipc_create(NULL, 0, 64, &ring) == RBIPC_ERR_INVAL);
-    assert(rbipc_create(NULL, (size_t)RBIPC_MAX_CAPACITY + 1, 64, &ring) == RBIPC_ERR_OVERFLOW);
+    assert(rbipc_create(NULL, (size_t)RBIPC_MAX_CAPACITY + 1, 64, &ring) ==
+           RBIPC_ERR_OVERFLOW);
     assert(rbipc_create(NULL, SIZE_MAX, 64, &ring) == RBIPC_ERR_OVERFLOW);
 
     /* Slot size validation */
@@ -40,13 +41,15 @@ static void test_create_and_attach_validation(void) {
     assert(rbipc_create("/", 64, 64, &ring) == RBIPC_ERR_INVAL);
 
     /* Invalid creation flags */
-    assert(rbipc_create_ex(NULL, 64, 64, 0xFFFFFFFFU, 0660, &ring) == RBIPC_ERR_INVAL);
+    assert(rbipc_create_ex(NULL, 64, 64, 0xFFFFFFFFU, 0660, &ring) ==
+           RBIPC_ERR_INVAL);
 
     /* Attach invalid arguments */
     assert(rbipc_attach(NULL, &ring) == RBIPC_ERR_INVAL);
     assert(rbipc_attach("invalid_no_slash", &ring) == RBIPC_ERR_INVAL);
     assert(rbipc_attach("/valid_name", NULL) == RBIPC_ERR_INVAL);
-    assert(rbipc_attach("/non_existent_shm_ring_rbipc_xyz", &ring) == RBIPC_ERR_SYS);
+    assert(rbipc_attach("/non_existent_shm_ring_rbipc_xyz", &ring) ==
+           RBIPC_ERR_SYS);
 
     /* Attach fd invalid arguments */
     assert(rbipc_attach_fd(-1, &ring) == RBIPC_ERR_INVAL);
@@ -73,7 +76,8 @@ static void test_layout_and_vmem_validation(void) {
     assert(rbipc_shm_calc_layout(64, 64, 4096, NULL) == RBIPC_ERR_INVAL);
 
     /* Overflow calculation */
-    assert(rbipc_shm_calc_layout(1024, UINT32_MAX, 4096, &layout) == RBIPC_ERR_OVERFLOW);
+    assert(rbipc_shm_calc_layout(1024, UINT32_MAX, 4096, &layout) ==
+           RBIPC_ERR_OVERFLOW);
 
     /* Valid layout calculation check */
     assert(rbipc_shm_calc_layout(128, 256, 4096, &layout) == RBIPC_OK);
@@ -113,7 +117,8 @@ static void test_telemetry_and_policy_validation(void) {
     assert(rbipc_get_stats(NULL, &stats) == RBIPC_ERR_INVAL);
     assert(rbipc_get_slot_stats(NULL, &slot_stats) == RBIPC_ERR_INVAL);
     assert(rbipc_get_wait_policy(NULL) == RBIPC_WAIT_ADAPTIVE);
-    assert(rbipc_set_wait_policy(NULL, RBIPC_WAIT_ZERO_SPIN) == RBIPC_ERR_INVAL);
+    assert(rbipc_set_wait_policy(NULL, RBIPC_WAIT_ZERO_SPIN) ==
+           RBIPC_ERR_INVAL);
     assert(rbipc_get_lease_timeout(NULL) == 0);
     assert(rbipc_set_lease_timeout(NULL, 1000) == RBIPC_ERR_INVAL);
 
@@ -161,12 +166,21 @@ static void test_reactor_validation(void) {
 }
 
 static void test_strerror_coverage(void) {
-    const int codes[] = {
-        RBIPC_OK, RBIPC_ERR_INVAL, RBIPC_ERR_NOMEM, RBIPC_ERR_SYS,
-        RBIPC_ERR_FULL, RBIPC_ERR_EMPTY, RBIPC_ERR_POISONED, RBIPC_ERR_SHUTDOWN,
-        RBIPC_ERR_TIMEOUT, RBIPC_ERR_BUSY, RBIPC_ERR_OVERFLOW, RBIPC_ERR_EXISTS,
-        RBIPC_ERR_NOTSUP, -999, 999
-    };
+    const int codes[] = {RBIPC_OK,
+                         RBIPC_ERR_INVAL,
+                         RBIPC_ERR_NOMEM,
+                         RBIPC_ERR_SYS,
+                         RBIPC_ERR_FULL,
+                         RBIPC_ERR_EMPTY,
+                         RBIPC_ERR_POISONED,
+                         RBIPC_ERR_SHUTDOWN,
+                         RBIPC_ERR_TIMEOUT,
+                         RBIPC_ERR_BUSY,
+                         RBIPC_ERR_OVERFLOW,
+                         RBIPC_ERR_EXISTS,
+                         RBIPC_ERR_NOTSUP,
+                         -999,
+                         999};
     const size_t num_codes = sizeof(codes) / sizeof(codes[0]);
     for (size_t i = 0; i < num_codes; ++i) {
         const char *msg = rbipc_strerror(codes[i]);
@@ -176,7 +190,8 @@ static void test_strerror_coverage(void) {
 }
 
 int main(void) {
-    printf("[test_unit_validation] Running defensive validation and boundary tests...\n");
+    printf("[test_unit_validation] Running defensive validation and boundary "
+           "tests...\n");
     test_create_and_attach_validation();
     test_layout_and_vmem_validation();
     test_telemetry_and_policy_validation();

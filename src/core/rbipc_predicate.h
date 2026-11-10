@@ -1,9 +1,11 @@
 /**
  * @file rbipc_predicate.h
- * @brief Domain predicates pattern: Pure, composable invariants and state inspection
+ * @brief Domain predicates pattern: Pure, composable invariants and state
+ * inspection
  *
- * Implements the Predicates Pattern to isolate state queries, invariant contracts,
- * and boundary conditions into pure, highly readable, single-responsibility functions.
+ * Implements the Predicates Pattern to isolate state queries, invariant
+ * contracts, and boundary conditions into pure, highly readable,
+ * single-responsibility functions.
  */
 
 #ifndef RBIPC_PREDICATE_H
@@ -20,10 +22,10 @@
 #include <stdint.h>
 #include <limits.h>
 
-
 /* ============================================================================
  * Pointer & Descriptor Validation Predicates
- * ============================================================================ */
+ * ============================================================================
+ */
 
 /**
  * @brief Evaluate whether a given memory pointer is non-null.
@@ -46,7 +48,8 @@ RBIPC_INLINE RBIPC_CONST bool rbipc_is_null(const void *ptr) {
 }
 
 /**
- * @brief Evaluate whether a file descriptor represents a non-negative open descriptor.
+ * @brief Evaluate whether a file descriptor represents a non-negative open
+ * descriptor.
  *
  * @param[in] fd File descriptor integer.
  * @return true if @p fd >= 0, false if negative.
@@ -58,11 +61,12 @@ RBIPC_INLINE RBIPC_CONST bool rbipc_is_valid_fd(int fd) {
 /**
  * @brief Evaluate whether a string is a valid POSIX shared memory name.
  *
- * @details Conforming to POSIX.1-2008 / shm_open(3), a portable shared memory object
- * identifier must begin with an initial forward slash ('/'), contain at least one
- * character following the slash, contain no additional slashes, and not exceed
- * NAME_MAX (255 characters). On Linux, these objects reside in the RAM tmpfs filesystem
- * mounted at /dev/shm, and are not filesystem paths on the root filesystem (/).
+ * @details Conforming to POSIX.1-2008 / shm_open(3), a portable shared memory
+ * object identifier must begin with an initial forward slash ('/'), contain at
+ * least one character following the slash, contain no additional slashes, and
+ * not exceed NAME_MAX (255 characters). On Linux, these objects reside in the
+ * RAM tmpfs filesystem mounted at /dev/shm, and are not filesystem paths on the
+ * root filesystem (/).
  *
  * @param[in] name NUL-terminated shared memory name string.
  * @return true if valid, false otherwise.
@@ -80,13 +84,14 @@ RBIPC_INLINE RBIPC_PURE bool rbipc_is_valid_shm_name(const char *name) {
     return len <= NAME_MAX;
 }
 
-
 /* ============================================================================
  * Arithmetic, Geometry, and Capacity Predicates
- * ============================================================================ */
+ * ============================================================================
+ */
 
 /**
- * @brief Evaluate whether an unsigned 32-bit integer is strictly a non-zero power of two.
+ * @brief Evaluate whether an unsigned 32-bit integer is strictly a non-zero
+ * power of two.
  *
  * @param[in] val Integer value to test.
  * @return true if @p val is a power of two, false otherwise.
@@ -96,28 +101,32 @@ RBIPC_INLINE RBIPC_CONST bool rbipc_is_power_of_two(uint32_t val) {
 }
 
 /**
- * @brief Evaluate whether a ring buffer capacity satisfies architectural constraints.
+ * @brief Evaluate whether a ring buffer capacity satisfies architectural
+ * constraints.
  *
- * @details Valid capacity must be a power of two, at least @ref RBIPC_MIN_CAPACITY slots,
- * and at most @ref RBIPC_MAX_CAPACITY slots.
+ * @details Valid capacity must be a power of two, at least @ref
+ * RBIPC_MIN_CAPACITY slots, and at most @ref RBIPC_MAX_CAPACITY slots.
  *
  * Microarchitectural Optimization:
  * Employs branchless unsigned range folding:
  * \f[
  *   (capacity - \text{MIN}) \le (\text{MAX} - \text{MIN})
  * \f]
- * Combined with the power-of-two invariant \f$capacity \ \& \ (capacity - 1) == 0\f$ via bitwise
- * conjunction (`&`), this replaces three conditional branches with single-cycle subtraction,
- * comparison, and bitwise masking, eliminating pipeline bubbles caused by branch predictor pressure.
+ * Combined with the power-of-two invariant \f$capacity \ \& \ (capacity - 1) ==
+ * 0\f$ via bitwise conjunction (`&`), this replaces three conditional branches
+ * with single-cycle subtraction, comparison, and bitwise masking, eliminating
+ * pipeline bubbles caused by branch predictor pressure.
  *
  * Reference:
- * - Henry S. Warren, Jr., "Hacker's Delight" (2nd ed., Addison-Wesley), §4.2 (Range Test).
+ * - Henry S. Warren, Jr., "Hacker's Delight" (2nd ed., Addison-Wesley), §4.2
+ * (Range Test).
  *
  * @param[in] capacity Slot capacity count to validate.
  * @return true if within admissible operational bounds, false otherwise.
  */
 RBIPC_INLINE RBIPC_CONST bool rbipc_is_valid_capacity(size_t capacity) {
-    return ((capacity - RBIPC_MIN_CAPACITY) <= (RBIPC_MAX_CAPACITY - RBIPC_MIN_CAPACITY)) &&
+    return ((capacity - RBIPC_MIN_CAPACITY) <=
+            (RBIPC_MAX_CAPACITY - RBIPC_MIN_CAPACITY)) &&
            ((capacity & (capacity - 1U)) == 0);
 }
 
@@ -125,15 +134,16 @@ RBIPC_INLINE RBIPC_CONST bool rbipc_is_valid_capacity(size_t capacity) {
  * @brief Evaluate whether a per-slot payload size is within valid limits.
  *
  * @param[in] slot_size Maximum payload capacity in bytes.
- * @return true if @p slot_size > 0 and does not risk integer overflow, false otherwise.
+ * @return true if @p slot_size > 0 and does not risk integer overflow, false
+ * otherwise.
  */
 RBIPC_INLINE RBIPC_CONST bool rbipc_is_valid_slot_size(uint32_t slot_size) {
     return (slot_size > 0) && (slot_size <= RBIPC_MAX_SLOT_SIZE);
 }
 
-
 /**
- * @brief Evaluate whether system virtual memory page size is a valid power-of-two.
+ * @brief Evaluate whether system virtual memory page size is a valid
+ * power-of-two.
  *
  * @param[in] page_size Memory page size in bytes (typically 4096).
  * @return true if non-zero power of two, false otherwise.
@@ -144,10 +154,12 @@ RBIPC_INLINE RBIPC_CONST bool rbipc_is_valid_page_size(size_t page_size) {
 
 /* ============================================================================
  * Sequence Arithmetic Predicates
- * ============================================================================ */
+ * ============================================================================
+ */
 
 /**
- * @brief Evaluate whether two monotonic sequence numbers are equal under modulo-2^64 arithmetic.
+ * @brief Evaluate whether two monotonic sequence numbers are equal under
+ * modulo-2^64 arithmetic.
  *
  * @param[in] a Sequence number A.
  * @param[in] b Sequence number B.
@@ -158,7 +170,8 @@ RBIPC_INLINE RBIPC_CONST bool rbipc_seq_is_equal(uint64_t a, uint64_t b) {
 }
 
 /**
- * @brief Evaluate whether sequence number @p a is strictly ahead of sequence number @p b.
+ * @brief Evaluate whether sequence number @p a is strictly ahead of sequence
+ * number @p b.
  *
  * @param[in] a Sequence number A.
  * @param[in] b Sequence number B.
@@ -169,7 +182,8 @@ RBIPC_INLINE RBIPC_CONST bool rbipc_seq_is_ahead(uint64_t a, uint64_t b) {
 }
 
 /**
- * @brief Evaluate whether sequence number @p a is strictly behind sequence number @p b.
+ * @brief Evaluate whether sequence number @p a is strictly behind sequence
+ * number @p b.
  *
  * @param[in] a Sequence number A.
  * @param[in] b Sequence number B.
@@ -181,52 +195,63 @@ RBIPC_INLINE RBIPC_CONST bool rbipc_seq_is_behind(uint64_t a, uint64_t b) {
 
 /* ============================================================================
  * Slot State Machine Predicates
- * ============================================================================ */
+ * ============================================================================
+ */
 
 /**
- * @brief Evaluate whether a slot descriptor sequence matches vacant state for ticket @p ticket.
+ * @brief Evaluate whether a slot descriptor sequence matches vacant state for
+ * ticket @p ticket.
  *
  * @param[in] seq    Current sequence word loaded from slot descriptor.
  * @param[in] ticket Reserving producer ticket number.
  * @return true if slot is ready for producer reservation, false otherwise.
  */
-RBIPC_INLINE RBIPC_CONST bool rbipc_slot_is_vacant(uint64_t seq, uint64_t ticket) {
+RBIPC_INLINE RBIPC_CONST bool rbipc_slot_is_vacant(uint64_t seq,
+                                                   uint64_t ticket) {
     return rbipc_seq_diff(seq, ticket) == 0;
 }
 
 /**
- * @brief Evaluate whether a slot descriptor sequence matches ready state for ticket @p ticket.
+ * @brief Evaluate whether a slot descriptor sequence matches ready state for
+ * ticket @p ticket.
  *
  * @param[in] seq    Current sequence word loaded from slot descriptor.
  * @param[in] ticket Acquiring consumer ticket number.
  * @return true if slot payload has been committed by producer, false otherwise.
  */
-RBIPC_INLINE RBIPC_CONST bool rbipc_slot_is_ready(uint64_t seq, uint64_t ticket) {
+RBIPC_INLINE RBIPC_CONST bool rbipc_slot_is_ready(uint64_t seq,
+                                                  uint64_t ticket) {
     return rbipc_seq_diff(seq, ticket + 1) == 0;
 }
 
-RBIPC_INLINE RBIPC_CONST bool rbipc_slot_is_vacant_packed(uint64_t packed, uint64_t ticket) {
-    return rbipc_seq_diff(packed >> RBIPC_PACKED_SEQ_SHIFT, ticket & RBIPC_PACKED_SEQ_TURN_MASK) == 0;
+RBIPC_INLINE RBIPC_CONST bool rbipc_slot_is_vacant_packed(uint64_t packed,
+                                                          uint64_t ticket) {
+    return rbipc_seq_diff(packed >> RBIPC_PACKED_SEQ_SHIFT,
+                          ticket & RBIPC_PACKED_SEQ_TURN_MASK) == 0;
 }
 
-RBIPC_INLINE RBIPC_CONST bool rbipc_slot_is_ready_packed(uint64_t packed, uint64_t ticket) {
-    return rbipc_seq_diff(packed >> RBIPC_PACKED_SEQ_SHIFT, (ticket + 1) & RBIPC_PACKED_SEQ_TURN_MASK) == 0;
+RBIPC_INLINE RBIPC_CONST bool rbipc_slot_is_ready_packed(uint64_t packed,
+                                                         uint64_t ticket) {
+    return rbipc_seq_diff(packed >> RBIPC_PACKED_SEQ_SHIFT,
+                          (ticket + 1) & RBIPC_PACKED_SEQ_TURN_MASK) == 0;
 }
 
 /**
  * @brief Extract the sequence turn from a slot word across descriptor layouts.
  *
- * @details In packed mode the 48-bit turn occupies the high bits of the descriptor
- * word; otherwise the word is the plain sequence. Employs branchless arithmetic
- * shift selection: because @ref RBIPC_PACKED_SEQ_SHIFT is a power of two (16), the
- * compiler lowers `(unsigned)is_packed * RBIPC_PACKED_SEQ_SHIFT` to a single shift,
- * avoiding conditional branches on high-frequency polling paths.
+ * @details In packed mode the 48-bit turn occupies the high bits of the
+ * descriptor word; otherwise the word is the plain sequence. Employs branchless
+ * arithmetic shift selection: because @ref RBIPC_PACKED_SEQ_SHIFT is a power of
+ * two (16), the compiler lowers `(unsigned)is_packed * RBIPC_PACKED_SEQ_SHIFT`
+ * to a single shift, avoiding conditional branches on high-frequency polling
+ * paths.
  *
  * @param[in] word      Current sequence/descriptor word loaded from slot.
  * @param[in] is_packed True if ring operates in packed 64-bit descriptor mode.
  * @return The sequence turn value.
  */
-RBIPC_INLINE RBIPC_CONST uint64_t rbipc_slot_seq_from_word(uint64_t word, bool is_packed) {
+RBIPC_INLINE RBIPC_CONST uint64_t rbipc_slot_seq_from_word(uint64_t word,
+                                                           bool is_packed) {
     return word >> ((unsigned int)is_packed * RBIPC_PACKED_SEQ_SHIFT);
 }
 
@@ -235,41 +260,54 @@ RBIPC_INLINE RBIPC_CONST uint64_t rbipc_slot_seq_from_word(uint64_t word, bool i
  *
  * @details In packed mode the stored turn occupies only the low 48 bits, so the
  * comparing ticket is masked to 48 bits. Without this mask, once tickets exceed
- * 2^48 the wrapped stored turn can never match the full ticket and the ring deadlocks.
+ * 2^48 the wrapped stored turn can never match the full ticket and the ring
+ * deadlocks.
  *
  * @param[in] ticket    Ticket number to compare.
  * @param[in] is_packed True if ring operates in packed 64-bit descriptor mode.
  * @return The ticket masked to the stored turn width.
  */
-RBIPC_INLINE RBIPC_CONST uint64_t rbipc_slot_ticket_masked(uint64_t ticket, bool is_packed) {
+RBIPC_INLINE RBIPC_CONST uint64_t rbipc_slot_ticket_masked(uint64_t ticket,
+                                                           bool is_packed) {
     return is_packed ? (ticket & RBIPC_PACKED_SEQ_TURN_MASK) : ticket;
 }
 
 /**
- * @brief Evaluate whether a slot descriptor sequence matches vacant state across descriptor layouts.
+ * @brief Evaluate whether a slot descriptor sequence matches vacant state
+ * across descriptor layouts.
  *
  * @param[in] word      Current sequence/descriptor word loaded from slot.
  * @param[in] ticket    Reserving producer ticket number.
- * @param[in] is_packed True if ring operates in packed 64-bit descriptor mode; false otherwise.
- * @return true if slot sequence equals ticket under modulo arithmetic, false otherwise.
+ * @param[in] is_packed True if ring operates in packed 64-bit descriptor mode;
+ * false otherwise.
+ * @return true if slot sequence equals ticket under modulo arithmetic, false
+ * otherwise.
  */
-RBIPC_INLINE RBIPC_CONST bool rbipc_slot_is_vacant_any(uint64_t word, uint64_t ticket, bool is_packed) {
+RBIPC_INLINE RBIPC_CONST bool rbipc_slot_is_vacant_any(uint64_t word,
+                                                       uint64_t ticket,
+                                                       bool is_packed) {
     return rbipc_seq_diff(rbipc_slot_seq_from_word(word, is_packed),
                           rbipc_slot_ticket_masked(ticket, is_packed)) == 0;
 }
 
 /**
- * @brief Evaluate whether a slot descriptor sequence matches ready state across descriptor layouts.
+ * @brief Evaluate whether a slot descriptor sequence matches ready state across
+ * descriptor layouts.
  */
-RBIPC_INLINE RBIPC_CONST bool rbipc_slot_is_ready_any(uint64_t word, uint64_t ticket, bool is_packed) {
+RBIPC_INLINE RBIPC_CONST bool rbipc_slot_is_ready_any(uint64_t word,
+                                                      uint64_t ticket,
+                                                      bool is_packed) {
     return rbipc_seq_diff(rbipc_slot_seq_from_word(word, is_packed),
                           rbipc_slot_ticket_masked(ticket + 1, is_packed)) == 0;
 }
 
 /**
- * @brief Evaluate whether sequence in word is strictly behind target across descriptor layouts.
+ * @brief Evaluate whether sequence in word is strictly behind target across
+ * descriptor layouts.
  */
-RBIPC_INLINE RBIPC_CONST bool rbipc_seq_is_behind_any(uint64_t word, uint64_t target, bool is_packed) {
+RBIPC_INLINE RBIPC_CONST bool rbipc_seq_is_behind_any(uint64_t word,
+                                                      uint64_t target,
+                                                      bool is_packed) {
     return rbipc_seq_diff(rbipc_slot_seq_from_word(word, is_packed),
                           rbipc_slot_ticket_masked(target, is_packed)) < 0;
 }
@@ -326,59 +364,78 @@ RBIPC_INLINE RBIPC_CONST bool rbipc_slot_state_is_poisoned(uint32_t state) {
 
 /* ============================================================================
  * Header & Ring Invariant Predicates
- * ============================================================================ */
+ * ============================================================================
+ */
 
 /**
- * @brief Computes the hardware-accelerated CRC32C of immutable layout geometry fields.
+ * @brief Computes the hardware-accelerated CRC32C of immutable layout geometry
+ * fields.
  *
  * @param[in] hdr Shared memory control header.
  * @return 32-bit CRC32C checksum.
  */
 RBIPC_INLINE uint32_t rbipc_header_calc_crc(const rbipc_shm_header_t *hdr) {
-    const uint8_t *start = ((const uint8_t *)hdr) + offsetof(rbipc_shm_header_t, version);
-    size_t len = offsetof(rbipc_shm_header_t, header_crc) - offsetof(rbipc_shm_header_t, version);
+    const uint8_t *start =
+        ((const uint8_t *)hdr) + offsetof(rbipc_shm_header_t, version);
+    size_t len = offsetof(rbipc_shm_header_t, header_crc) -
+                 offsetof(rbipc_shm_header_t, version);
     return rbipc_crc32c(start, len);
 }
 
 /**
- * @brief Validate all structural control header invariants, CRC32C checksum, and geometric parameters.
+ * @brief Validate all structural control header invariants, CRC32C checksum,
+ * and geometric parameters.
  *
  * @param[in] hdr Shared memory control header.
- * @return true if header matches magic signature, version, CRC32C, and power-of-two constraints; false otherwise.
+ * @return true if header matches magic signature, version, CRC32C, and
+ * power-of-two constraints; false otherwise.
  */
 RBIPC_INLINE bool rbipc_header_is_valid(const rbipc_shm_header_t *hdr) {
-    if (!hdr) return false;
+    if (!hdr)
+        return false;
     uint64_t magic = atomic_load_explicit(&hdr->magic, memory_order_acquire);
-    if (le64toh(magic) != RBIPC_MAGIC) return false;
-    if (le32toh(hdr->version) != RBIPC_VERSION) return false;
-    if (le32toh(hdr->header_crc) != rbipc_header_calc_crc(hdr)) return false;
-    if (!rbipc_is_valid_capacity(hdr->capacity)) return false;
-    if (!rbipc_is_valid_slot_size(hdr->slot_size) || hdr->data_size == 0) return false;
-    if (hdr->data_offset == 0 || hdr->total_shm_size <= hdr->data_offset) return false;
+    if (le64toh(magic) != RBIPC_MAGIC)
+        return false;
+    if (le32toh(hdr->version) != RBIPC_VERSION)
+        return false;
+    if (le32toh(hdr->header_crc) != rbipc_header_calc_crc(hdr))
+        return false;
+    if (!rbipc_is_valid_capacity(hdr->capacity))
+        return false;
+    if (!rbipc_is_valid_slot_size(hdr->slot_size) || hdr->data_size == 0)
+        return false;
+    if (hdr->data_offset == 0 || hdr->total_shm_size <= hdr->data_offset)
+        return false;
     return true;
 }
 
 /**
- * @brief Evaluate whether the ring buffer has entered cooperative shutdown state.
+ * @brief Evaluate whether the ring buffer has entered cooperative shutdown
+ * state.
  *
  * @param[in] hdr Shared memory control header.
  * @return true if shutdown flag is set, false otherwise.
  */
 RBIPC_INLINE bool rbipc_ring_is_shutdown(const rbipc_shm_header_t *hdr) {
-    if (RBIPC_UNLIKELY(!hdr)) return true;
+    if (RBIPC_UNLIKELY(!hdr))
+        return true;
     return atomic_load_explicit(&hdr->shutdown_flag, memory_order_relaxed) != 0;
 }
 
 /**
- * @brief Evaluate whether the ring buffer is shut down and all committed data has been drained.
+ * @brief Evaluate whether the ring buffer is shut down and all committed data
+ * has been drained.
  *
  * @param[in] hdr         Shared memory control header.
  * @param[in] read_ticket Current reader ticket being processed.
- * @return true if shutdown is signaled and all published messages are consumed, false otherwise.
+ * @return true if shutdown is signaled and all published messages are consumed,
+ * false otherwise.
  */
-RBIPC_INLINE bool rbipc_ring_is_drained_on_shutdown(const rbipc_shm_header_t *hdr, uint64_t read_ticket) {
+RBIPC_INLINE bool rbipc_ring_is_drained_on_shutdown(
+    const rbipc_shm_header_t *hdr, uint64_t read_ticket) {
     if (RBIPC_UNLIKELY(rbipc_ring_is_shutdown(hdr))) {
-        uint64_t cur_write = atomic_load_explicit(&hdr->write_ticket, memory_order_relaxed);
+        uint64_t cur_write =
+            atomic_load_explicit(&hdr->write_ticket, memory_order_relaxed);
         return read_ticket >= cur_write;
     }
     return false;
@@ -386,7 +443,8 @@ RBIPC_INLINE bool rbipc_ring_is_drained_on_shutdown(const rbipc_shm_header_t *hd
 
 /* ============================================================================
  * Synchronization & Waiter Predicates
- * ============================================================================ */
+ * ============================================================================
+ */
 
 /**
  * @brief Evaluate whether a synchronization state has an active deadline.
@@ -394,37 +452,44 @@ RBIPC_INLINE bool rbipc_ring_is_drained_on_shutdown(const rbipc_shm_header_t *hd
  * @param[in] state Pointer to sync state.
  * @return true if deadline is configured, false otherwise.
  */
-RBIPC_INLINE RBIPC_PURE bool rbipc_sync_has_deadline(const rbipc_sync_state_t *state) {
+RBIPC_INLINE RBIPC_PURE bool rbipc_sync_has_deadline(
+    const rbipc_sync_state_t *state) {
     return state != NULL && state->has_deadline;
 }
 
 /**
- * @brief Evaluate whether the synchronization state deadline has expired relative to current time.
+ * @brief Evaluate whether the synchronization state deadline has expired
+ * relative to current time.
  *
  * @param[in] state  Pointer to sync state.
  * @param[in] now_ns Current monotonic timestamp in nanoseconds.
  * @return true if expired, false otherwise.
  */
-RBIPC_INLINE RBIPC_PURE bool rbipc_sync_is_expired(const rbipc_sync_state_t *state, uint64_t now_ns) {
-    if (!state || !state->has_deadline) return false;
+RBIPC_INLINE RBIPC_PURE bool rbipc_sync_is_expired(
+    const rbipc_sync_state_t *state, uint64_t now_ns) {
+    if (!state || !state->has_deadline)
+        return false;
     return now_ns >= state->deadline_ns;
 }
 
 /**
- * @brief Evaluate whether any threads are actively suspended waiting on a futex word.
+ * @brief Evaluate whether any threads are actively suspended waiting on a futex
+ * word.
  *
  * @param[in] waiters Atomic counter of active futex waiters.
  * @return true if waiter count > 0, false otherwise.
  */
 RBIPC_INLINE bool rbipc_sync_has_waiters(const _Atomic uint32_t *waiters) {
-    return waiters != NULL && atomic_load_explicit(waiters, memory_order_acquire) > 0;
+    return waiters != NULL &&
+           atomic_load_explicit(waiters, memory_order_acquire) > 0;
 }
 
 /**
  * @brief Determine whether a futex wakeup kernel syscall should be dispatched.
  *
  * @param[in] waiters Atomic counter of active futex waiters (may be NULL).
- * @return true if @p waiters is NULL (defensive fallback) or waiter count > 0; false if 0 waiters.
+ * @return true if @p waiters is NULL (defensive fallback) or waiter count > 0;
+ * false if 0 waiters.
  */
 RBIPC_INLINE bool rbipc_sync_should_wake(const _Atomic uint32_t *waiters) {
     return !waiters || atomic_load_explicit(waiters, memory_order_acquire) > 0;

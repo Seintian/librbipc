@@ -36,8 +36,9 @@
 #define SYS_futex_waitv 4449
 #elif defined(__alpha__)
 #define SYS_futex_waitv 559
-#elif defined(__x86_64__) || defined(__aarch64__) || defined(__i386__) ||        \
-    defined(__arm__) || defined(__riscv) || defined(__powerpc__) || defined(__s390x__)
+#elif defined(__x86_64__) || defined(__aarch64__) || defined(__i386__) ||      \
+    defined(__arm__) || defined(__riscv) || defined(__powerpc__) ||            \
+    defined(__s390x__)
 #define SYS_futex_waitv 449
 #endif
 #endif
@@ -63,7 +64,8 @@
 
 /**
  * @def RBIPC_U64_LOW32_OFFSET
- * @brief Byte offset of the low 32 bits within a 64-bit word on big-endian hosts.
+ * @brief Byte offset of the low 32 bits within a 64-bit word on big-endian
+ * hosts.
  */
 #define RBIPC_U64_LOW32_OFFSET 4U
 
@@ -141,10 +143,10 @@
  * @brief Descriptor for vectorized futex wait operations (Linux 5.16+).
  */
 struct futex_waitv {
-  uint64_t val;        /**< Expected value at uaddr. */
-  uint64_t uaddr;      /**< User-space pointer to wait on. */
-  uint32_t flags;      /**< Flags: FUTEX2_SIZE_U32, etc. */
-  uint32_t __reserved; /**< Reserved, must be 0. */
+    uint64_t val;        /**< Expected value at uaddr. */
+    uint64_t uaddr;      /**< User-space pointer to wait on. */
+    uint32_t flags;      /**< Flags: FUTEX2_SIZE_U32, etc. */
+    uint32_t __reserved; /**< Reserved, must be 0. */
 };
 #endif
 
@@ -154,8 +156,8 @@ struct futex_waitv {
  * @param[in]  ns Duration in nanoseconds.
  * @param[out] ts Pointer to caller-allocated struct timespec to populate.
  */
-RBIPC_INTERNAL RBIPC_LEAF
-void rbipc_ns_to_timespec(uint64_t ns, struct timespec *RBIPC_RESTRICT ts);
+RBIPC_INTERNAL RBIPC_LEAF void rbipc_ns_to_timespec(
+    uint64_t ns, struct timespec *RBIPC_RESTRICT ts);
 
 /**
  * @brief Suspend the calling thread on a process-shared futex word until
@@ -179,9 +181,9 @@ void rbipc_ns_to_timespec(uint64_t ns, struct timespec *RBIPC_RESTRICT ts);
  * @retval -EINTR       if interrupted by a POSIX signal.
  * @retval -EINVAL      if @p uaddr is null or misaligned.
  */
-RBIPC_INTERNAL RBIPC_LEAF
-int rbipc_futex_wait(_Atomic uint32_t *uaddr, uint32_t val,
-                     const struct timespec *RBIPC_RESTRICT timeout);
+RBIPC_INTERNAL RBIPC_LEAF int rbipc_futex_wait(
+    _Atomic uint32_t *uaddr, uint32_t val,
+    const struct timespec *RBIPC_RESTRICT timeout);
 
 /**
  * @brief Awaken waiting threads or processes currently suspended on the given
@@ -199,50 +201,53 @@ int rbipc_futex_wait(_Atomic uint32_t *uaddr, uint32_t val,
  * @retval -EINVAL if @p uaddr is null or misaligned.
  * @retval -errno  if underlying futex syscall returns failure.
  */
-RBIPC_INTERNAL RBIPC_LEAF
-int rbipc_futex_wake(_Atomic uint32_t *uaddr, int count);
+RBIPC_INTERNAL RBIPC_LEAF int rbipc_futex_wake(_Atomic uint32_t *uaddr,
+                                               int count);
 
 /**
- * @brief Awaken waiting threads currently suspended on a 64-bit slot sequence word.
+ * @brief Awaken waiting threads currently suspended on a 64-bit slot sequence
+ * word.
  *
- * @details Dispatches SYS_futex with FUTEX_WAKE targeting the appropriate 32-bit word
- * boundary of the 64-bit slot sequence based on target machine endianness.
+ * @details Dispatches SYS_futex with FUTEX_WAKE targeting the appropriate
+ * 32-bit word boundary of the 64-bit slot sequence based on target machine
+ * endianness.
  *
- * @param[in] slot_seq Direct pointer to 64-bit atomic sequence word in shared memory.
+ * @param[in] slot_seq Direct pointer to 64-bit atomic sequence word in shared
+ * memory.
  * @param[in] count    Maximum number of waiters to awaken.
  *
  * @return Non-negative count of successfully awakened waiters on success.
  * @retval -EINVAL if @p slot_seq is null.
  * @retval -errno  if underlying futex syscall returns failure.
  */
-RBIPC_INTERNAL RBIPC_LEAF
-int rbipc_futex_wake_slot(const _Atomic uint64_t *slot_seq, int count);
+RBIPC_INTERNAL RBIPC_LEAF int rbipc_futex_wake_slot(
+    const _Atomic uint64_t *slot_seq, int count);
 
 /**
  * @brief Checks if Linux 5.16+ sys_futex_waitv is supported by the host kernel.
  *
  * @return true if sys_futex_waitv is available, false otherwise.
  */
-RBIPC_INTERNAL RBIPC_LEAF
-bool rbipc_futex_has_waitv(void);
+RBIPC_INTERNAL RBIPC_LEAF bool rbipc_futex_has_waitv(void);
 
 /**
- * @brief Checks if Linux 5.16+ sys_futex_waitv supports 64-bit futex words (FUTEX2_SIZE_U64).
+ * @brief Checks if Linux 5.16+ sys_futex_waitv supports 64-bit futex words
+ * (FUTEX2_SIZE_U64).
  *
- * @details Probes kernel capability via non-blocking sys_futex_waitv probe and memoizes
- * the result to eliminate repeated kernel syscall overhead.
+ * @details Probes kernel capability via non-blocking sys_futex_waitv probe and
+ * memoizes the result to eliminate repeated kernel syscall overhead.
  *
  * @return true if FUTEX2_SIZE_U64 is supported by the kernel, false otherwise.
  */
-RBIPC_INTERNAL RBIPC_LEAF
-bool rbipc_futex2_has_u64(void);
+RBIPC_INTERNAL RBIPC_LEAF bool rbipc_futex2_has_u64(void);
 
 /**
  * @brief Wait on multiple futex words via Linux 5.16+ sys_futex_waitv.
  *
  * @param[in] waiters    Array of futex_waitv descriptors.
  * @param[in] nr_waiters Number of futex entries to monitor (1 to 128).
- * @param[in] timeout_ns Relative timeout duration in nanoseconds (UINT64_MAX for unbounded).
+ * @param[in] timeout_ns Relative timeout duration in nanoseconds (UINT64_MAX
+ * for unbounded).
  *
  * @return Non-negative index of the awakened futex entry on success.
  * @retval -EWOULDBLOCK / -EAGAIN if a futex value did not match expected value.
@@ -251,89 +256,103 @@ bool rbipc_futex2_has_u64(void);
  * @retval -EINVAL      if parameters are invalid.
  * @retval -errno       on other system call errors.
  */
-RBIPC_INTERNAL RBIPC_LEAF
-int rbipc_futex_waitv(const struct futex_waitv *waiters, unsigned int nr_waiters,
-                      uint64_t timeout_ns);
+RBIPC_INTERNAL RBIPC_LEAF int rbipc_futex_waitv(
+    const struct futex_waitv *waiters, unsigned int nr_waiters,
+    uint64_t timeout_ns);
 
 /**
- * @brief Wait on a 32-bit primary futex word or cooperative shutdown flag via sys_futex_waitv.
+ * @brief Wait on a 32-bit primary futex word or cooperative shutdown flag via
+ * sys_futex_waitv.
  *
- * @details Atomically monitors both @p uaddr and @p shutdown_flag. If sys_futex_waitv is
- * available, both are registered in the kernel wait-queue; a wake on either or an update to
- * either awakens the caller immediately. If sys_futex_waitv is unsupported, falls back to
- * legacy rbipc_futex_wait on @p uaddr.
+ * @details Atomically monitors both @p uaddr and @p shutdown_flag. If
+ * sys_futex_waitv is available, both are registered in the kernel wait-queue; a
+ * wake on either or an update to either awakens the caller immediately. If
+ * sys_futex_waitv is unsupported, falls back to legacy rbipc_futex_wait on @p
+ * uaddr.
  *
  * @param[in] uaddr         Primary 32-bit atomic futex sequence word.
  * @param[in] val           Expected value at @p uaddr.
- * @param[in] shutdown_flag Optional pointer to cooperative shutdown flag (expected 0).
- * @param[in] timeout_ns    Relative timeout duration in nanoseconds (UINT64_MAX for unbounded).
+ * @param[in] shutdown_flag Optional pointer to cooperative shutdown flag
+ * (expected 0).
+ * @param[in] timeout_ns    Relative timeout duration in nanoseconds (UINT64_MAX
+ * for unbounded).
  *
- * @return 0 on successful wake or condition change, RBIPC_ERR_TIMEOUT on expiration, or error.
+ * @return 0 on successful wake or condition change, RBIPC_ERR_TIMEOUT on
+ * expiration, or error.
  */
-RBIPC_INTERNAL RBIPC_LEAF
-int rbipc_futex_wait_or_shutdown(_Atomic uint32_t *uaddr, uint32_t val,
-                                 const _Atomic uint32_t *shutdown_flag,
-                                 uint64_t timeout_ns);
+RBIPC_INTERNAL RBIPC_LEAF int rbipc_futex_wait_or_shutdown(
+    _Atomic uint32_t *uaddr, uint32_t val,
+    const _Atomic uint32_t *shutdown_flag, uint64_t timeout_ns);
 
 /**
- * @brief Wait directly on 64-bit slot sequence or shutdown flag via Linux 5.16+ futex_waitv.
+ * @brief Wait directly on 64-bit slot sequence or shutdown flag via Linux 5.16+
+ * futex_waitv.
  *
- * @details Probes kernel support for FUTEX2_SIZE_U64. If supported, passes 64-bit slot sequence.
- * If FUTEX2_SIZE_U64 returns -EINVAL (current upstream Linux), monitors the low 32-bit word of
- * slot sequence and the 32-bit shutdown flag using FUTEX2_SIZE_U32.
- * If sys_futex_waitv is unsupported (-ENOSYS), falls back to legacy sys_futex on low 32 bits.
+ * @details Probes kernel support for FUTEX2_SIZE_U64. If supported, passes
+ * 64-bit slot sequence. If FUTEX2_SIZE_U64 returns -EINVAL (current upstream
+ * Linux), monitors the low 32-bit word of slot sequence and the 32-bit shutdown
+ * flag using FUTEX2_SIZE_U32. If sys_futex_waitv is unsupported (-ENOSYS),
+ * falls back to legacy sys_futex on low 32 bits.
  *
  * @param[in] slot_seq      Pointer to 64-bit atomic sequence word.
  * @param[in] expected_seq  Expected 64-bit sequence value.
- * @param[in] shutdown_flag Pointer to 32-bit cooperative shutdown flag (expected 0).
- * @param[in] timeout_ns    Relative timeout in nanoseconds (UINT64_MAX for unbounded).
+ * @param[in] shutdown_flag Pointer to 32-bit cooperative shutdown flag
+ * (expected 0).
+ * @param[in] timeout_ns    Relative timeout in nanoseconds (UINT64_MAX for
+ * unbounded).
  *
- * @return 0 on success / condition satisfied, RBIPC_ERR_TIMEOUT on expiration, or error.
+ * @return 0 on success / condition satisfied, RBIPC_ERR_TIMEOUT on expiration,
+ * or error.
  */
-RBIPC_INTERNAL RBIPC_LEAF
-int rbipc_futex2_wait_slot_or_shutdown(const _Atomic uint64_t *slot_seq,
-                                       uint64_t expected_seq,
-                                       const _Atomic uint32_t *shutdown_flag,
-                                       uint64_t timeout_ns);
+RBIPC_INTERNAL RBIPC_LEAF int rbipc_futex2_wait_slot_or_shutdown(
+    const _Atomic uint64_t *slot_seq, uint64_t expected_seq,
+    const _Atomic uint32_t *shutdown_flag, uint64_t timeout_ns);
 
 /**
- * @brief Adaptive futex wait: monitors 64-bit slot sequence directly (using FUTEX2_SIZE_U64
- *        or FUTEX2_SIZE_U32), proxy sequence, and shutdown flag via Linux 5.16+ sys_futex_waitv,
- *        or seamlessly falls back to classical 32-bit SYS_futex proxy waiting on older kernels.
+ * @brief Adaptive futex wait: monitors 64-bit slot sequence directly (using
+ * FUTEX2_SIZE_U64 or FUTEX2_SIZE_U32), proxy sequence, and shutdown flag via
+ * Linux 5.16+ sys_futex_waitv, or seamlessly falls back to classical 32-bit
+ * SYS_futex proxy waiting on older kernels.
  *
  * @param[in] slot_seq      Pointer to 64-bit atomic sequence word.
  * @param[in] expected_seq  Expected 64-bit sequence value.
  * @param[in] proxy_seq     Shared proxy 32-bit sequence word.
- * @param[in] shutdown_flag Pointer to 32-bit cooperative shutdown flag (expected 0).
- * @param[in] timeout_ns    Relative timeout in nanoseconds (UINT64_MAX for unbounded).
+ * @param[in] shutdown_flag Pointer to 32-bit cooperative shutdown flag
+ * (expected 0).
+ * @param[in] timeout_ns    Relative timeout in nanoseconds (UINT64_MAX for
+ * unbounded).
  *
- * @return 0 on success / condition satisfied, RBIPC_ERR_TIMEOUT on expiration, or error.
+ * @return 0 on success / condition satisfied, RBIPC_ERR_TIMEOUT on expiration,
+ * or error.
  */
-RBIPC_INTERNAL RBIPC_LEAF
-int rbipc_futex2_wait_slot_or_proxy_or_shutdown(
+RBIPC_INTERNAL RBIPC_LEAF int rbipc_futex2_wait_slot_or_proxy_or_shutdown(
     const _Atomic uint64_t *slot_seq, uint64_t expected_seq,
     _Atomic uint32_t *proxy_seq, const _Atomic uint32_t *shutdown_flag,
     uint64_t timeout_ns);
 
 /**
- * @brief Atomically modify a secondary futex word and wake waiters on two distinct
- * futex words in a single kernel syscall via FUTEX_WAKE_OP.
+ * @brief Atomically modify a secondary futex word and wake waiters on two
+ * distinct futex words in a single kernel syscall via FUTEX_WAKE_OP.
  *
- * @param[in,out] uaddr1 First futex word to unconditionally wake up to @p val1 waiters on.
+ * @param[in,out] uaddr1 First futex word to unconditionally wake up to @p val1
+ * waiters on.
  * @param[in]     val1   Maximum number of waiters to wake on @p uaddr1.
- * @param[in,out] uaddr2 Second futex word to atomically modify and conditionally wake on.
- * @param[in]     val2   Maximum number of waiters to wake on @p uaddr2 if condition holds.
- * @param[in]     op     Arithmetic operation to apply to @p uaddr2 (e.g. FUTEX_OP_ADD).
+ * @param[in,out] uaddr2 Second futex word to atomically modify and
+ * conditionally wake on.
+ * @param[in]     val2   Maximum number of waiters to wake on @p uaddr2 if
+ * condition holds.
+ * @param[in]     op     Arithmetic operation to apply to @p uaddr2 (e.g.
+ * FUTEX_OP_ADD).
  * @param[in]     oparg  Argument for @p op (e.g. 1).
- * @param[in]     cmp    Comparison operator against old value of @p uaddr2 (e.g. FUTEX_OP_CMP_GT).
+ * @param[in]     cmp    Comparison operator against old value of @p uaddr2
+ * (e.g. FUTEX_OP_CMP_GT).
  * @param[in]     cmparg Value to compare old value against (e.g. 0).
  *
- * @return Total number of awakened waiters on success, or negative errno on error.
+ * @return Total number of awakened waiters on success, or negative errno on
+ * error.
  */
-RBIPC_INTERNAL RBIPC_LEAF
-int rbipc_futex_wake_op(_Atomic uint32_t *uaddr1, int val1,
-                        _Atomic uint32_t *uaddr2, int val2,
-                        uint32_t op, uint32_t oparg,
-                        uint32_t cmp, uint32_t cmparg);
+RBIPC_INTERNAL RBIPC_LEAF int rbipc_futex_wake_op(
+    _Atomic uint32_t *uaddr1, int val1, _Atomic uint32_t *uaddr2, int val2,
+    uint32_t op, uint32_t oparg, uint32_t cmp, uint32_t cmparg);
 
 #endif /* RBIPC_FUTEX_H */

@@ -1,10 +1,12 @@
 /**
  * @file rbipc_uring.h
- * @brief Unified Linux io_uring asynchronous kernel-bypass zero-copy interfaces.
+ * @brief Unified Linux io_uring asynchronous kernel-bypass zero-copy
+ * interfaces.
  *
- * @details Implements direct fixed-buffer registration (IORING_REGISTER_BUFFERS)
- *          and submission queue polling (IORING_SETUP_SQPOLL) between librbipc shared
- *          memory rings and the Linux kernel, enabling zero-copy network/disk ingestion.
+ * @details Implements direct fixed-buffer registration
+ * (IORING_REGISTER_BUFFERS) and submission queue polling (IORING_SETUP_SQPOLL)
+ * between librbipc shared memory rings and the Linux kernel, enabling zero-copy
+ * network/disk ingestion.
  *
  * @author Seintian
  * @date 2026
@@ -27,7 +29,8 @@ extern "C" {
 
 /**
  * @def RBIPC_URING_DEFAULT_ENTRIES
- * @brief Default submission queue depth used when probing io_uring availability.
+ * @brief Default submission queue depth used when probing io_uring
+ * availability.
  */
 #define RBIPC_URING_DEFAULT_ENTRIES 2U
 

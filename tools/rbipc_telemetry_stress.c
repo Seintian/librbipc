@@ -1,10 +1,12 @@
 /**
  * @file rbipc_telemetry_stress.c
- * @brief High-contention multi-threaded workload generator for stress testing and telemetry demonstration.
+ * @brief High-contention multi-threaded workload generator for stress testing
+ * and telemetry demonstration.
  *
- * @details Spawns concurrent producers and consumers with dynamic backlog oscillation,
- * controlled write aborts (poisoned slots), simulated consumer stall leases, and periodic audits
- * to showcase comprehensive shared memory telemetry under realistic production-grade stress.
+ * @details Spawns concurrent producers and consumers with dynamic backlog
+ * oscillation, controlled write aborts (poisoned slots), simulated consumer
+ * stall leases, and periodic audits to showcase comprehensive shared memory
+ * telemetry under realistic production-grade stress.
  *
  * @author Seintian
  * @date 2026
@@ -31,11 +33,11 @@
 #include <errno.h>
 
 #define DEFAULT_RING_NAME "/rbipc_telemetry_demo"
-#define DEFAULT_CAPACITY  256U
+#define DEFAULT_CAPACITY 256U
 #define DEFAULT_SLOT_SIZE 128U
-#define NUM_PRODUCERS     4
-#define NUM_CONSUMERS     4
-#define LEASE_TIMEOUT_NS  (50ULL * 1000ULL * 1000ULL) /* 50 ms */
+#define NUM_PRODUCERS 4
+#define NUM_CONSUMERS 4
+#define LEASE_TIMEOUT_NS (50ULL * 1000ULL * 1000ULL) /* 50 ms */
 
 static volatile sig_atomic_t g_stop = 0;
 static _Atomic uint64_t g_msgs_produced = 0;
@@ -65,13 +67,16 @@ static void *producer_worker(void *arg) {
         void *wbuf = NULL;
         uint64_t ticket = 0;
         int rc = rbipc_reserve_write(ring, len, &wbuf, &ticket);
-        if (rc == RBIPC_ERR_SHUTDOWN) break;
+        if (rc == RBIPC_ERR_SHUTDOWN)
+            break;
         if (rc != RBIPC_OK) {
-            if (g_stop) break;
+            if (g_stop)
+                break;
             continue;
         }
 
-        /* Simulated 0.2% producer abort rate to populate poisoned_slots_count telemetry */
+        /* Simulated 0.2% producer abort rate to populate poisoned_slots_count
+         * telemetry */
         if ((counter % 500) == 0) {
             rbipc_abort_write(ring, ticket);
             continue;
@@ -80,7 +85,8 @@ static void *producer_worker(void *arg) {
         memcpy(wbuf, payload, len);
         rc = rbipc_commit_write(ring, ticket, len);
         if (rc == RBIPC_OK) {
-            atomic_fetch_add_explicit(&g_msgs_produced, 1, memory_order_relaxed);
+            atomic_fetch_add_explicit(&g_msgs_produced, 1,
+                                      memory_order_relaxed);
         }
     }
     return NULL;
@@ -96,9 +102,12 @@ static void *consumer_worker(void *arg) {
         const void *rbuf = NULL;
         uint32_t rlen = 0;
         uint64_t ticket = 0;
-        int rc = rbipc_read_acquire_timeout(ring, 10ULL * 1000ULL * 1000ULL, &rbuf, &rlen, &ticket);
-        if (rc == RBIPC_ERR_SHUTDOWN || (g_stop && rc == RBIPC_ERR_TIMEOUT)) break;
-        if (rc == RBIPC_ERR_TIMEOUT) continue;
+        int rc = rbipc_read_acquire_timeout(ring, 10ULL * 1000ULL * 1000ULL,
+                                            &rbuf, &rlen, &ticket);
+        if (rc == RBIPC_ERR_SHUTDOWN || (g_stop && rc == RBIPC_ERR_TIMEOUT))
+            break;
+        if (rc == RBIPC_ERR_TIMEOUT)
+            continue;
 
         if (rc == RBIPC_ERR_POISONED) {
             /* Safely bypass and recycle poisoned slot */
@@ -108,15 +117,20 @@ static void *consumer_worker(void *arg) {
 
         if (rc == RBIPC_OK) {
             consumed++;
-            /* Occasionally simulate consumer stall on worker 0 exceeding lease duration */
+            /* Occasionally simulate consumer stall on worker 0 exceeding lease
+             * duration */
             if (tid == 0 && (consumed % 400) == 0) {
-                struct timespec ts = { .tv_sec = 0, .tv_nsec = 70L * 1000L * 1000L }; /* 70 ms > 50 ms lease */
+                struct timespec ts = {
+                    .tv_sec = 0,
+                    .tv_nsec = 70L * 1000L * 1000L}; /* 70 ms > 50 ms lease */
                 nanosleep(&ts, NULL);
             }
 
-            /* Release slot; if lease expired, rbipc_read_release returns RBIPC_ERR_TIMEOUT */
+            /* Release slot; if lease expired, rbipc_read_release returns
+             * RBIPC_ERR_TIMEOUT */
             rbipc_read_release(ring, ticket);
-            atomic_fetch_add_explicit(&g_msgs_consumed, 1, memory_order_relaxed);
+            atomic_fetch_add_explicit(&g_msgs_consumed, 1,
+                                      memory_order_relaxed);
         }
     }
     return NULL;
@@ -125,9 +139,12 @@ static void *consumer_worker(void *arg) {
 static void *auditor_worker(void *arg) {
     rbipc_ring_t *ring = (rbipc_ring_t *)arg;
     while (!g_stop) {
-        struct timespec ts = { .tv_sec = 0, .tv_nsec = 25L * 1000L * 1000L }; /* Audit every 25 ms */
+        struct timespec ts = {
+            .tv_sec = 0,
+            .tv_nsec = 25L * 1000L * 1000L}; /* Audit every 25 ms */
         nanosleep(&ts, NULL);
-        if (g_stop) break;
+        if (g_stop)
+            break;
         int revoked = rbipc_revoke_expired_leases(ring);
         (void)revoked;
     }
@@ -135,7 +152,8 @@ static void *auditor_worker(void *arg) {
 }
 
 int main(int argc, char **argv) {
-    const char *shm_name = (argc > 1 && argv[1][0] != '-') ? argv[1] : DEFAULT_RING_NAME;
+    const char *shm_name =
+        (argc > 1 && argv[1][0] != '-') ? argv[1] : DEFAULT_RING_NAME;
     double duration_sec = 3.0;
 
     if (argc > 2) {
@@ -143,28 +161,35 @@ int main(int argc, char **argv) {
         errno = 0;
         double val = strtod(argv[2], &endptr);
         if (errno != 0 || endptr == argv[2] || *endptr != '\0' || val <= 0.0) {
-            fprintf(stderr, "Error: Invalid duration '%s'. Expected positive number.\n", argv[2]);
+            fprintf(stderr,
+                    "Error: Invalid duration '%s'. Expected positive number.\n",
+                    argv[2]);
             return 1;
         }
         duration_sec = val;
     }
 
-    printf("[rbipc_telemetry_stress] Initializing ring '%s' (Capacity: %u, Lease: %lu ms)...\n",
-           shm_name, DEFAULT_CAPACITY, (unsigned long)(LEASE_TIMEOUT_NS / 1000000ULL));
+    printf("[rbipc_telemetry_stress] Initializing ring '%s' (Capacity: %u, "
+           "Lease: %lu ms)...\n",
+           shm_name, DEFAULT_CAPACITY,
+           (unsigned long)(LEASE_TIMEOUT_NS / 1000000ULL));
 
     rbipc_destroy(shm_name);
 
     rbipc_ring_t *creator_ring = NULL;
     int rc = rbipc_create_ex(shm_name, DEFAULT_CAPACITY, DEFAULT_SLOT_SIZE,
-                             RBIPC_ROLE_PRODUCER | RBIPC_ROLE_CONSUMER, 0660, &creator_ring);
+                             RBIPC_ROLE_PRODUCER | RBIPC_ROLE_CONSUMER, 0660,
+                             &creator_ring);
     if (rc != RBIPC_OK) {
-        fprintf(stderr, "Error creating ring '%s': %s (code %d)\n", shm_name, rbipc_strerror(rc), rc);
+        fprintf(stderr, "Error creating ring '%s': %s (code %d)\n", shm_name,
+                rbipc_strerror(rc), rc);
         return 1;
     }
 
     rc = rbipc_set_lease_timeout(creator_ring, LEASE_TIMEOUT_NS);
     if (rc != RBIPC_OK) {
-        fprintf(stderr, "Error setting lease timeout: %s\n", rbipc_strerror(rc));
+        fprintf(stderr, "Error setting lease timeout: %s\n",
+                rbipc_strerror(rc));
         rbipc_destroy(shm_name);
         return 1;
     }
@@ -208,14 +233,15 @@ int main(int argc, char **argv) {
 
     pthread_create(&audit_thread, NULL, auditor_worker, creator_ring);
 
-    printf("[rbipc_telemetry_stress] Running %d Producers and %d Consumers for %.1f seconds...\n",
+    printf("[rbipc_telemetry_stress] Running %d Producers and %d Consumers for "
+           "%.1f seconds...\n",
            NUM_PRODUCERS, NUM_CONSUMERS, duration_sec);
 
     if (duration_sec > 0.0) {
         struct timespec ts = {
             .tv_sec = (time_t)duration_sec,
-            .tv_nsec = (long)((duration_sec - (double)(time_t)duration_sec) * 1e9)
-        };
+            .tv_nsec =
+                (long)((duration_sec - (double)(time_t)duration_sec) * 1e9)};
         nanosleep(&ts, NULL);
     } else {
         while (!g_stop) {
@@ -237,9 +263,12 @@ int main(int argc, char **argv) {
     }
     pthread_join(audit_thread, NULL);
 
-    uint64_t total_p = atomic_load_explicit(&g_msgs_produced, memory_order_relaxed);
-    uint64_t total_c = atomic_load_explicit(&g_msgs_consumed, memory_order_relaxed);
-    printf("[rbipc_telemetry_stress] Execution complete: %lu messages produced, %lu messages consumed.\n",
+    uint64_t total_p =
+        atomic_load_explicit(&g_msgs_produced, memory_order_relaxed);
+    uint64_t total_c =
+        atomic_load_explicit(&g_msgs_consumed, memory_order_relaxed);
+    printf("[rbipc_telemetry_stress] Execution complete: %lu messages "
+           "produced, %lu messages consumed.\n",
            (unsigned long)total_p, (unsigned long)total_c);
 
     rbipc_detach(creator_ring);

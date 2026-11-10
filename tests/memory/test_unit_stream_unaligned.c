@@ -17,11 +17,10 @@
 #include <string.h>
 
 static void test_streaming_exhaustive_sizes(void) {
-    const size_t sizes[] = {
-        0, 1, 2, 3, 7, 15, 16, 23, 31, 32, 47, 63, 64, 79, 95,
-        127, 128, 191, 255, 256, 257, 287, 319, 351, 383, 415,
-        511, 512, 1024, 2048, 4096
-    };
+    const size_t sizes[] = {0,   1,   2,   3,   7,    15,   16,  23,
+                            31,  32,  47,  63,  64,   79,   95,  127,
+                            128, 191, 255, 256, 257,  287,  319, 351,
+                            383, 415, 511, 512, 1024, 2048, 4096};
     const size_t num_sizes = sizeof(sizes) / sizeof(sizes[0]);
     const size_t max_align_pad = 128;
 
@@ -46,11 +45,13 @@ static void test_streaming_exhaustive_sizes(void) {
                 size_t src_off = offsets[soff_idx];
 
                 memset(dst_buf, 0xCC, sz + max_align_pad);
-                int rc = rbipc_stream_copy(dst_buf + dst_off, src_buf + src_off, sz);
+                int rc =
+                    rbipc_stream_copy(dst_buf + dst_off, src_buf + src_off, sz);
                 assert(rc == RBIPC_OK);
 
                 if (sz > 0) {
-                    assert(memcmp(dst_buf + dst_off, src_buf + src_off, sz) == 0);
+                    assert(memcmp(dst_buf + dst_off, src_buf + src_off, sz) ==
+                           0);
                 }
             }
         }
@@ -90,7 +91,8 @@ static void test_write_stream_lifecycle(void) {
     const void *empty_data = NULL;
     uint32_t empty_len = 999;
     uint64_t empty_ticket = 999;
-    assert(rbipc_read_acquire(ring, &empty_data, &empty_len, &empty_ticket) == RBIPC_OK);
+    assert(rbipc_read_acquire(ring, &empty_data, &empty_len, &empty_ticket) ==
+           RBIPC_OK);
     assert(empty_len == 0);
     assert(empty_ticket == 0);
     assert(rbipc_read_release(ring, empty_ticket) == RBIPC_OK);
@@ -113,7 +115,8 @@ static void test_write_stream_lifecycle(void) {
 }
 
 int main(void) {
-    printf("[test_unit_stream_unaligned] Running unaligned streaming copy tests...\n");
+    printf("[test_unit_stream_unaligned] Running unaligned streaming copy "
+           "tests...\n");
     test_streaming_defensive_nulls();
     test_streaming_exhaustive_sizes();
     test_write_stream_lifecycle();

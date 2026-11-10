@@ -39,7 +39,8 @@ static void test_vmem_double_map(void) {
     assert(data_map != NULL);
 
     /* Verify mirroring property.
-     * Writing bytes at the start of buffer 1 must immediately be reflected at buffer 2.
+     * Writing bytes at the start of buffer 1 must immediately be reflected at
+     * buffer 2.
      */
     char *buf1 = (char *)data_map;
     char *buf2 = (char *)data_map + data_size;
@@ -48,7 +49,8 @@ static void test_vmem_double_map(void) {
     size_t test_len = strlen(test_str) + 1;
 
     memcpy(buf1, test_str, test_len);
-    /* Compiler memory barrier: inform optimizer of external OS virtual memory aliasing */
+    /* Compiler memory barrier: inform optimizer of external OS virtual memory
+     * aliasing */
     __asm__ __volatile__("" ::: "memory");
     assert(memcmp(buf2, test_str, test_len) == 0);
 
@@ -56,7 +58,8 @@ static void test_vmem_double_map(void) {
     size_t boundary_offset = data_size - 10;
     memcpy(buf1 + boundary_offset, "STRADDLE_OK", 11);
     __asm__ __volatile__("" ::: "memory");
-    /* Contiguous reading from buf1 + boundary_offset reads across border without wrap-around splitting */
+    /* Contiguous reading from buf1 + boundary_offset reads across border
+     * without wrap-around splitting */
     assert(memcmp(buf1 + boundary_offset, "STRADDLE_OK", 11) == 0);
     assert(buf1[0] == 'K');
     assert(buf2[0] == 'K');

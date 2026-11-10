@@ -23,19 +23,23 @@ extern "C" {
 
 /**
  * @def RBIPC_IPC_MAX_FDS
- * @brief Maximum count of file descriptors that can be transmitted in a single SCM_RIGHTS message (253).
+ * @brief Maximum count of file descriptors that can be transmitted in a single
+ * SCM_RIGHTS message (253).
  */
-#define RBIPC_IPC_MAX_FDS 253U /**< Maximum fds transmissible via SCM_RIGHTS (Linux SCM_MAX_FD). */
+#define RBIPC_IPC_MAX_FDS                                                      \
+    253U /**< Maximum fds transmissible via SCM_RIGHTS (Linux SCM_MAX_FD). */
 
 /**
  * @def RBIPC_IPC_STACK_FDS
- * @brief Maximum number of fds handled on the stack before heap allocation is used.
+ * @brief Maximum number of fds handled on the stack before heap allocation is
+ * used.
  */
 #define RBIPC_IPC_STACK_FDS 8U
 
 /**
  * @def RBIPC_IPC_MAX_FDS_PER_MSG
- * @brief Maximum number of fds transmitted per ring descriptor message (shm + eventfd).
+ * @brief Maximum number of fds transmitted per ring descriptor message (shm +
+ * eventfd).
  */
 #define RBIPC_IPC_MAX_FDS_PER_MSG 2U
 
@@ -50,21 +54,25 @@ extern "C" {
  * @retval RBIPC_ERR_INVAL if @p socket_fd or @p fd_to_send is negative.
  * @retval RBIPC_ERR_SYS   if sendmsg fails.
  */
-RBIPC_API RBIPC_NODISCARD RBIPC_LEAF int rbipc_ipc_send_fd(int socket_fd, int fd_to_send);
+RBIPC_API RBIPC_NODISCARD RBIPC_LEAF int rbipc_ipc_send_fd(int socket_fd,
+                                                           int fd_to_send);
 
 /**
- * @brief Transmit multiple file descriptors across a UNIX domain socket via SCM_RIGHTS.
+ * @brief Transmit multiple file descriptors across a UNIX domain socket via
+ * SCM_RIGHTS.
  *
  * @param[in] socket_fd An open, connected UNIX domain socket (AF_UNIX).
  * @param[in] fds       Array of open file descriptors to transmit.
- * @param[in] count     Number of file descriptors in @p fds array (must be > 0 and <= @ref RBIPC_IPC_MAX_FDS).
+ * @param[in] count     Number of file descriptors in @p fds array (must be > 0
+ * and <= @ref RBIPC_IPC_MAX_FDS).
  *
  * @return @ref RBIPC_OK on success.
  * @retval RBIPC_ERR_INVAL if arguments are invalid or any fd is negative.
  * @retval RBIPC_ERR_SYS   if sendmsg fails.
  */
-RBIPC_API RBIPC_NODISCARD RBIPC_LEAF int
-rbipc_ipc_send_fds(int socket_fd, const int *fds, size_t count);
+RBIPC_API RBIPC_NODISCARD RBIPC_LEAF int rbipc_ipc_send_fds(int socket_fd,
+                                                            const int *fds,
+                                                            size_t count);
 
 /**
  * @brief Receive a raw file descriptor from a UNIX domain stream or datagram
@@ -79,23 +87,29 @@ rbipc_ipc_send_fds(int socket_fd, const int *fds, size_t count);
  * @retval RBIPC_ERR_SYS   if recvmsg fails or ancillary SCM_RIGHTS payload is
  * missing.
  */
-RBIPC_API RBIPC_NODISCARD RBIPC_LEAF int rbipc_ipc_recv_fd(int socket_fd,
-                                                 int *out_received_fd);
+RBIPC_API RBIPC_NODISCARD RBIPC_LEAF int rbipc_ipc_recv_fd(
+    int socket_fd, int *out_received_fd);
 
 /**
- * @brief Receive multiple file descriptors from a UNIX domain socket via SCM_RIGHTS.
+ * @brief Receive multiple file descriptors from a UNIX domain socket via
+ * SCM_RIGHTS.
  *
  * @param[in]  socket_fd An open, connected UNIX domain socket (AF_UNIX).
  * @param[out] out_fds   Array to store received file descriptors.
- * @param[in]  max_count Maximum number of file descriptors that can be stored in @p out_fds.
- * @param[out] out_count Pointer to store actual count of received file descriptors.
+ * @param[in]  max_count Maximum number of file descriptors that can be stored
+ * in @p out_fds.
+ * @param[out] out_count Pointer to store actual count of received file
+ * descriptors.
  *
  * @return @ref RBIPC_OK on success.
  * @retval RBIPC_ERR_INVAL if arguments are invalid or max_count is 0.
- * @retval RBIPC_ERR_SYS   if recvmsg fails or ancillary SCM_RIGHTS payload is missing.
+ * @retval RBIPC_ERR_SYS   if recvmsg fails or ancillary SCM_RIGHTS payload is
+ * missing.
  */
-RBIPC_API RBIPC_NODISCARD RBIPC_LEAF int
-rbipc_ipc_recv_fds(int socket_fd, int *out_fds, size_t max_count, size_t *out_count);
+RBIPC_API RBIPC_NODISCARD RBIPC_LEAF int rbipc_ipc_recv_fds(int socket_fd,
+                                                            int *out_fds,
+                                                            size_t max_count,
+                                                            size_t *out_count);
 
 /**
  * @brief Transmit the underlying shared memory descriptor of a ring buffer
@@ -108,8 +122,8 @@ rbipc_ipc_recv_fds(int socket_fd, int *out_fds, size_t max_count, size_t *out_co
  * @retval RBIPC_ERR_INVAL if @p socket_fd is negative or @p ring is NULL.
  * @retval RBIPC_ERR_SYS   if sendmsg fails.
  */
-RBIPC_API RBIPC_NODISCARD RBIPC_LEAF int rbipc_send_fd(int socket_fd,
-                                             const rbipc_ring_t *ring);
+RBIPC_API RBIPC_NODISCARD RBIPC_LEAF int rbipc_send_fd(
+    int socket_fd, const rbipc_ring_t *ring);
 
 /**
  * @brief Receive a ring buffer file descriptor across a UNIX domain socket with
@@ -125,8 +139,8 @@ RBIPC_API RBIPC_NODISCARD RBIPC_LEAF int rbipc_send_fd(int socket_fd,
  * invalid, or @p out_ring is NULL.
  * @retval RBIPC_ERR_SYS   if recvmsg fails or attachment fails.
  */
-RBIPC_API RBIPC_NODISCARD RBIPC_LEAF int
-rbipc_recv_fd_ex(int socket_fd, uint32_t role_flags, rbipc_ring_t **out_ring);
+RBIPC_API RBIPC_NODISCARD RBIPC_LEAF int rbipc_recv_fd_ex(
+    int socket_fd, uint32_t role_flags, rbipc_ring_t **out_ring);
 
 /**
  * @brief Receive a ring buffer file descriptor across a UNIX domain socket and
@@ -140,20 +154,22 @@ rbipc_recv_fd_ex(int socket_fd, uint32_t role_flags, rbipc_ring_t **out_ring);
  * @retval RBIPC_ERR_SYS   if recvmsg fails or attachment fails.
  */
 RBIPC_API RBIPC_NODISCARD RBIPC_LEAF int rbipc_recv_fd(int socket_fd,
-                                             rbipc_ring_t **out_ring);
+                                                       rbipc_ring_t **out_ring);
 
 /**
  * @struct rbipc_peer_cred_t
- * @brief Kernel-authenticated credentials of a connected UNIX domain socket peer (SO_PEERCRED).
+ * @brief Kernel-authenticated credentials of a connected UNIX domain socket
+ * peer (SO_PEERCRED).
  */
 typedef struct {
-  pid_t pid; /**< Process ID of the remote peer. */
-  uid_t uid; /**< Real User ID of the remote peer. */
-  gid_t gid; /**< Real Group ID of the remote peer. */
+    pid_t pid; /**< Process ID of the remote peer. */
+    uid_t uid; /**< Real User ID of the remote peer. */
+    gid_t gid; /**< Real Group ID of the remote peer. */
 } rbipc_peer_cred_t;
 
 /**
- * @brief Retrieve kernel-authenticated credentials of a connected UNIX domain socket peer.
+ * @brief Retrieve kernel-authenticated credentials of a connected UNIX domain
+ * socket peer.
  *
  * @param[in]  socket_fd An open, connected UNIX domain socket (AF_UNIX).
  * @param[out] out_cred  Location to store authenticated peer credentials.
@@ -162,11 +178,12 @@ typedef struct {
  * @retval RBIPC_ERR_INVAL if @p socket_fd is negative or @p out_cred is NULL.
  * @retval RBIPC_ERR_SYS   if getsockopt fails.
  */
-RBIPC_API RBIPC_NODISCARD RBIPC_LEAF int
-rbipc_ipc_get_peer_cred(int socket_fd, rbipc_peer_cred_t *out_cred);
+RBIPC_API RBIPC_NODISCARD RBIPC_LEAF int rbipc_ipc_get_peer_cred(
+    int socket_fd, rbipc_peer_cred_t *out_cred);
 
 /**
- * @brief Verify that the UNIX domain socket peer matches expected UID and GID before descriptor transfer.
+ * @brief Verify that the UNIX domain socket peer matches expected UID and GID
+ * before descriptor transfer.
  *
  * @param[in] socket_fd    An open, connected UNIX domain socket (AF_UNIX).
  * @param[in] expected_uid Expected User ID (or (uid_t)-1 to ignore UID check).
@@ -176,11 +193,12 @@ rbipc_ipc_get_peer_cred(int socket_fd, rbipc_peer_cred_t *out_cred);
  * @retval RBIPC_ERR_INVAL if credentials do not match or arguments are invalid.
  * @retval RBIPC_ERR_SYS   if getsockopt fails.
  */
-RBIPC_API RBIPC_NODISCARD RBIPC_LEAF int
-rbipc_ipc_verify_peer(int socket_fd, uid_t expected_uid, gid_t expected_gid);
+RBIPC_API RBIPC_NODISCARD RBIPC_LEAF int rbipc_ipc_verify_peer(
+    int socket_fd, uid_t expected_uid, gid_t expected_gid);
 
 /**
- * @brief Authenticate the connected peer and transmit the ring buffer descriptor across a UNIX domain socket.
+ * @brief Authenticate the connected peer and transmit the ring buffer
+ * descriptor across a UNIX domain socket.
  *
  * @param[in] socket_fd    An open, connected UNIX domain socket (AF_UNIX).
  * @param[in] ring         Ring buffer instance whose backing fd will be passed.
@@ -191,12 +209,13 @@ rbipc_ipc_verify_peer(int socket_fd, uid_t expected_uid, gid_t expected_gid);
  * @retval RBIPC_ERR_INVAL if verification fails or parameters are invalid.
  * @retval RBIPC_ERR_SYS   if system calls fail.
  */
-RBIPC_API RBIPC_NODISCARD RBIPC_LEAF int
-rbipc_send_fd_auth(int socket_fd, const rbipc_ring_t *ring, uid_t expected_uid,
-                   gid_t expected_gid);
+RBIPC_API RBIPC_NODISCARD RBIPC_LEAF int rbipc_send_fd_auth(
+    int socket_fd, const rbipc_ring_t *ring, uid_t expected_uid,
+    gid_t expected_gid);
 
 /**
- * @brief Authenticate the sending peer and receive a ring buffer descriptor across a UNIX domain socket.
+ * @brief Authenticate the sending peer and receive a ring buffer descriptor
+ * across a UNIX domain socket.
  *
  * @param[in]  socket_fd    An open, connected UNIX domain socket (AF_UNIX).
  * @param[in]  role_flags   Bitmask of role flags (RBIPC_ROLE_PRODUCER, etc.).
@@ -208,9 +227,9 @@ rbipc_send_fd_auth(int socket_fd, const rbipc_ring_t *ring, uid_t expected_uid,
  * @retval RBIPC_ERR_INVAL if verification fails or parameters are invalid.
  * @retval RBIPC_ERR_SYS   if system calls fail.
  */
-RBIPC_API RBIPC_NODISCARD RBIPC_LEAF int
-rbipc_recv_fd_auth(int socket_fd, uint32_t role_flags, uid_t expected_uid,
-                   gid_t expected_gid, rbipc_ring_t **out_ring);
+RBIPC_API RBIPC_NODISCARD RBIPC_LEAF int rbipc_recv_fd_auth(
+    int socket_fd, uint32_t role_flags, uid_t expected_uid, gid_t expected_gid,
+    rbipc_ring_t **out_ring);
 
 #ifdef __cplusplus
 }

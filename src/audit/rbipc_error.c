@@ -1,7 +1,8 @@
 /**
  * @file rbipc_error.c
  * @brief Implementation of error string translation for librbipc.
- * @details Implements a branch-table mapping of status codes to human-readable strings.
+ * @details Implements a branch-table mapping of status codes to human-readable
+ * strings.
  */
 
 #include "rbipc.h"
@@ -13,8 +14,8 @@
 /**
  * @brief Maps an error code to a static description string.
  */
-RBIPC_RETURNS_NONNULL RBIPC_CONST RBIPC_COLD RBIPC_LEAF
-const char *rbipc_strerror(int err) {
+RBIPC_RETURNS_NONNULL RBIPC_CONST RBIPC_COLD RBIPC_LEAF const char *
+rbipc_strerror(int err) {
     switch (err) {
         case RBIPC_OK:
             return "Success";
@@ -86,10 +87,10 @@ static void rbipc_strerror_sys(int sys_errno, char *out, size_t out_size) {
 }
 
 /**
- * @brief Translate a Linux system errno code to corresponding librbipc error code.
+ * @brief Translate a Linux system errno code to corresponding librbipc error
+ * code.
  */
-RBIPC_PURE RBIPC_LEAF
-int rbipc_errno_to_status(int err) {
+RBIPC_PURE RBIPC_LEAF int rbipc_errno_to_status(int err) {
     switch (err) {
         case 0:
             return RBIPC_OK;
@@ -113,14 +114,16 @@ int rbipc_errno_to_status(int err) {
 }
 
 /**
- * @brief Format a composite diagnostic message combining status and system errno.
+ * @brief Format a composite diagnostic message combining status and system
+ * errno.
  *
  * @details Uses strerror_r() (the thread-safe per-thread buffer variant)
  * instead of strerror() so concurrent callers from multiple threads/processes
  * cannot corrupt a shared static buffer.
  */
 RBIPC_LEAF
-char *rbipc_error_format(int status, int sys_errno, char *buf, size_t buf_size) {
+char *rbipc_error_format(int status, int sys_errno, char *buf,
+                         size_t buf_size) {
     if (RBIPC_UNLIKELY(!buf || buf_size == 0)) {
         return buf;
     }
@@ -134,8 +137,8 @@ char *rbipc_error_format(int status, int sys_errno, char *buf, size_t buf_size) 
          */
         char sys_str[128];
         rbipc_strerror_sys(sys_errno, sys_str, sizeof(sys_str));
-        snprintf(buf, buf_size, "%s (system errno %d: %s)",
-                 status_str, sys_errno, sys_str);
+        snprintf(buf, buf_size, "%s (system errno %d: %s)", status_str,
+                 sys_errno, sys_str);
     } else {
         snprintf(buf, buf_size, "%s", status_str);
     }

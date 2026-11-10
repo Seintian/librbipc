@@ -94,12 +94,14 @@ static void test_pubsub_lapped_subscriber(void) {
         assert(rbipc_publish(ring, msg, (uint32_t)strlen(msg) + 1) == RBIPC_OK);
     }
 
-    /* Subscriber was lapped: oldest available in 4-slot ring is message 6 (10 - 4 = 6) */
+    /* Subscriber was lapped: oldest available in 4-slot ring is message 6 (10 -
+     * 4 = 6) */
     const void *buf = NULL;
     uint32_t len = 0;
     uint64_t seq = 0;
 
-    /* First poll detects lag overrun, clamps cursor to 6, and notifies caller via RBIPC_ERR_OVERFLOW */
+    /* First poll detects lag overrun, clamps cursor to 6, and notifies caller
+     * via RBIPC_ERR_OVERFLOW */
     assert(rbipc_sub_poll(sub, &buf, &len, &seq) == RBIPC_ERR_OVERFLOW);
 
     /* Subsequent poll reads the oldest valid message (seq 6) */
@@ -119,9 +121,12 @@ static void test_pubsub_lapped_subscriber(void) {
     uint32_t batch_lens[4];
     uint64_t batch_seqs[4];
     uint32_t batch_polled = 0;
-    assert(rbipc_sub_poll_batch(sub_batch, 4, batch_bufs, batch_lens, batch_seqs, &batch_polled) == RBIPC_ERR_OVERFLOW);
+    assert(rbipc_sub_poll_batch(sub_batch, 4, batch_bufs, batch_lens,
+                                batch_seqs,
+                                &batch_polled) == RBIPC_ERR_OVERFLOW);
     assert(batch_polled == 0);
-    assert(rbipc_sub_poll_batch(sub_batch, 4, batch_bufs, batch_lens, batch_seqs, &batch_polled) == RBIPC_OK);
+    assert(rbipc_sub_poll_batch(sub_batch, 4, batch_bufs, batch_lens,
+                                batch_seqs, &batch_polled) == RBIPC_OK);
     assert(batch_polled == 4);
     assert(batch_seqs[0] == 16);
     assert(batch_seqs[3] == 19);
@@ -135,7 +140,8 @@ static void test_pubsub_lapped_subscriber(void) {
         snprintf(msg, sizeof(msg), "msg %d", i);
         assert(rbipc_publish(ring, msg, (uint32_t)strlen(msg) + 1) == RBIPC_OK);
     }
-    assert(rbipc_sub_read(sub_timed, 1000000ULL, &buf, &len, &seq) == RBIPC_ERR_OVERFLOW);
+    assert(rbipc_sub_read(sub_timed, 1000000ULL, &buf, &len, &seq) ==
+           RBIPC_ERR_OVERFLOW);
     assert(rbipc_sub_read(sub_timed, 1000000ULL, &buf, &len, &seq) == RBIPC_OK);
     assert(seq == 26);
     assert(strcmp((const char *)buf, "msg 26") == 0);
@@ -172,7 +178,8 @@ static void test_pubsub_batch_and_streaming(void) {
     uint64_t polled_seqs[8];
     uint32_t polled_count = 0;
 
-    assert(rbipc_sub_poll_batch(sub, 8, polled_bufs, polled_lens, polled_seqs, &polled_count) == RBIPC_OK);
+    assert(rbipc_sub_poll_batch(sub, 8, polled_bufs, polled_lens, polled_seqs,
+                                &polled_count) == RBIPC_OK);
     assert(polled_count == 8);
     for (uint32_t i = 0; i < 8; ++i) {
         assert(polled_seqs[i] == (uint64_t)i);
@@ -186,7 +193,8 @@ static void test_pubsub_batch_and_streaming(void) {
     memset(large_payload, 0x5A, sizeof(large_payload));
     large_payload[sizeof(large_payload) - 1] = '\0';
 
-    assert(rbipc_publish(ring, large_payload, sizeof(large_payload)) == RBIPC_OK);
+    assert(rbipc_publish(ring, large_payload, sizeof(large_payload)) ==
+           RBIPC_OK);
     assert(rbipc_sub_get_lag(sub) == 1);
 
     const void *recv_large = NULL;
@@ -213,7 +221,8 @@ static void test_pubsub_from_oldest_and_validation(void) {
 
     assert(rbipc_publish(NULL, "a", 1) == RBIPC_ERR_INVAL);
     assert(rbipc_publish(ring, NULL, 1) == RBIPC_ERR_INVAL);
-    assert(rbipc_publish(ring, "a", rbipc_get_slot_size(ring) + 1) == RBIPC_ERR_INVAL);
+    assert(rbipc_publish(ring, "a", rbipc_get_slot_size(ring) + 1) ==
+           RBIPC_ERR_INVAL);
 
     const void *bufs[2] = {"a", "b"};
     uint32_t lens[2] = {1, 1};
@@ -231,7 +240,8 @@ static void test_pubsub_from_oldest_and_validation(void) {
     assert(rbipc_sub_create_ex(NULL, true, &sub) == RBIPC_ERR_INVAL);
     assert(rbipc_sub_create_ex(ring, true, NULL) == RBIPC_ERR_INVAL);
     assert(rbipc_sub_poll(NULL, &buf, &len, &seq) == RBIPC_ERR_INVAL);
-    assert(rbipc_sub_poll_batch(NULL, 1, &buf, &len, &seq, &len) == RBIPC_ERR_INVAL);
+    assert(rbipc_sub_poll_batch(NULL, 1, &buf, &len, &seq, &len) ==
+           RBIPC_ERR_INVAL);
     assert(rbipc_sub_read(NULL, 1000, &buf, &len, &seq) == RBIPC_ERR_INVAL);
     assert(rbipc_sub_get_lag(NULL) == 0);
     rbipc_sub_destroy(NULL);
@@ -282,9 +292,11 @@ static void test_pubsub_from_oldest_and_validation(void) {
     /* Test D: Empty poll batch */
     assert(rbipc_sub_create(ring, &sub_latest) == RBIPC_OK);
     uint32_t polled = 999;
-    assert(rbipc_sub_poll_batch(sub_latest, 4, &buf, &len, &seq, &polled) == RBIPC_OK);
+    assert(rbipc_sub_poll_batch(sub_latest, 4, &buf, &len, &seq, &polled) ==
+           RBIPC_OK);
     assert(polled == 0);
-    assert(rbipc_sub_poll_batch(sub_latest, 0, &buf, &len, &seq, &polled) == RBIPC_ERR_INVAL);
+    assert(rbipc_sub_poll_batch(sub_latest, 0, &buf, &len, &seq, &polled) ==
+           RBIPC_ERR_INVAL);
     rbipc_sub_destroy(sub_latest);
 
     rbipc_detach(ring);
@@ -325,16 +337,15 @@ static void test_pubsub_concurrent_wait_wakeup_and_shutdown(void) {
     assert(rbipc_sub_read(sub, 0, &buf, &len, &seq) == RBIPC_ERR_EMPTY);
 
     /* 2. Finite timeout expiration returns RBIPC_ERR_TIMEOUT */
-    assert(rbipc_sub_read(sub, 5000000ULL /* 5ms */, &buf, &len, &seq) == RBIPC_ERR_TIMEOUT);
+    assert(rbipc_sub_read(sub, 5000000ULL /* 5ms */, &buf, &len, &seq) ==
+           RBIPC_ERR_TIMEOUT);
 
     /* 3. Concurrent waiter wakeup via rbipc_publish */
-    pubsub_thread_arg_t arg1 = {
-        .sub = sub,
-        .timeout_ns = 2000000000ULL, /* 2s */
-        .rc = -999,
-        .payload = {},
-        .seq = 0
-    };
+    pubsub_thread_arg_t arg1 = {.sub = sub,
+                                .timeout_ns = 2000000000ULL, /* 2s */
+                                .rc = -999,
+                                .payload = {},
+                                .seq = 0};
     pthread_t th1;
     assert(pthread_create(&th1, NULL, pubsub_waiter_thread, &arg1) == 0);
 
@@ -342,7 +353,8 @@ static void test_pubsub_concurrent_wait_wakeup_and_shutdown(void) {
     usleep(20000); /* 20ms */
 
     const char *wake_msg = "Wakeup multicast payload";
-    assert(rbipc_publish(ring, wake_msg, (uint32_t)strlen(wake_msg) + 1) == RBIPC_OK);
+    assert(rbipc_publish(ring, wake_msg, (uint32_t)strlen(wake_msg) + 1) ==
+           RBIPC_OK);
 
     pthread_join(th1, NULL);
     assert(arg1.rc == RBIPC_OK);
@@ -350,13 +362,11 @@ static void test_pubsub_concurrent_wait_wakeup_and_shutdown(void) {
     assert(arg1.seq == 0);
 
     /* 4. Concurrent waiter awakened by shutdown */
-    pubsub_thread_arg_t arg2 = {
-        .sub = sub,
-        .timeout_ns = 2000000000ULL, /* 2s */
-        .rc = -999,
-        .payload = {},
-        .seq = 0
-    };
+    pubsub_thread_arg_t arg2 = {.sub = sub,
+                                .timeout_ns = 2000000000ULL, /* 2s */
+                                .rc = -999,
+                                .payload = {},
+                                .seq = 0};
     pthread_t th2;
     assert(pthread_create(&th2, NULL, pubsub_waiter_thread, &arg2) == 0);
 
@@ -368,7 +378,8 @@ static void test_pubsub_concurrent_wait_wakeup_and_shutdown(void) {
     assert(arg2.rc == RBIPC_ERR_SHUTDOWN);
 
     /* 5. Read on shutdown topic returns RBIPC_ERR_SHUTDOWN immediately */
-    assert(rbipc_sub_read(sub, 1000000ULL, &buf, &len, &seq) == RBIPC_ERR_SHUTDOWN);
+    assert(rbipc_sub_read(sub, 1000000ULL, &buf, &len, &seq) ==
+           RBIPC_ERR_SHUTDOWN);
 
     rbipc_sub_destroy(sub);
     rbipc_detach(ring);
@@ -415,7 +426,8 @@ static void test_pubsub_packed_multicast(void) {
     uint32_t lens[8];
     uint64_t seqs[8];
     uint32_t polled = 0;
-    assert(rbipc_sub_poll_batch(sub2, 8, bufs, lens, seqs, &polled) == RBIPC_OK);
+    assert(rbipc_sub_poll_batch(sub2, 8, bufs, lens, seqs, &polled) ==
+           RBIPC_OK);
     assert(polled == 8);
     for (uint32_t i = 0; i < 8; ++i) {
         char expected[64];
@@ -444,7 +456,8 @@ static void test_pubsub_zero_copy_and_abort(void) {
     assert(rbipc_publish_reserve(ring, 64, &wbuf, &ticket) == RBIPC_OK);
     assert(ticket == 0);
     snprintf((char *)wbuf, 64, "Zero-copy multicast payload 1");
-    assert(rbipc_publish_commit(ring, ticket, (uint32_t)strlen((char *)wbuf) + 1) == RBIPC_OK);
+    assert(rbipc_publish_commit(
+               ring, ticket, (uint32_t)strlen((char *)wbuf) + 1) == RBIPC_OK);
 
     const void *rbuf = NULL;
     uint32_t rlen = 0;
@@ -466,7 +479,8 @@ static void test_pubsub_zero_copy_and_abort(void) {
     assert(rbipc_publish_reserve(ring, 64, &wbuf, &ticket) == RBIPC_OK);
     assert(ticket == 2);
     snprintf((char *)wbuf, 64, "Zero-copy multicast payload 3");
-    assert(rbipc_publish_commit(ring, ticket, (uint32_t)strlen((char *)wbuf) + 1) == RBIPC_OK);
+    assert(rbipc_publish_commit(
+               ring, ticket, (uint32_t)strlen((char *)wbuf) + 1) == RBIPC_OK);
 
     assert(rbipc_sub_poll(sub, &rbuf, &rlen, &rseq) == RBIPC_OK);
     assert(rseq == 2);
@@ -483,17 +497,14 @@ static void test_pubsub_wait_policies(void) {
     rbipc_sub_t *sub = NULL;
     assert(rbipc_sub_create(ring, &sub) == RBIPC_OK);
 
-    const uint32_t policies[] = {
-        RBIPC_WAIT_ZERO_SPIN,
-        RBIPC_WAIT_ADAPTIVE,
-        RBIPC_WAIT_HW_MONITOR
-    };
+    const uint32_t policies[] = {RBIPC_WAIT_ZERO_SPIN, RBIPC_WAIT_ADAPTIVE,
+                                 RBIPC_WAIT_HW_MONITOR};
 
     const void *buf = NULL;
     uint32_t len = 0;
     uint64_t seq = 0;
 
-    for (size_t p = 0; p < sizeof(policies)/sizeof(policies[0]); ++p) {
+    for (size_t p = 0; p < sizeof(policies) / sizeof(policies[0]); ++p) {
         assert(rbipc_set_wait_policy(ring, policies[p]) == RBIPC_OK);
         assert(rbipc_get_wait_policy(ring) == policies[p]);
 
@@ -515,7 +526,8 @@ static void test_pubsub_wait_policies(void) {
 }
 
 int main(void) {
-    printf("[test_unit_pubsub] Running 1-to-N multicast publish-subscribe tests...\n");
+    printf("[test_unit_pubsub] Running 1-to-N multicast publish-subscribe "
+           "tests...\n");
     test_pubsub_basic_multicast();
     test_pubsub_lapped_subscriber();
     test_pubsub_batch_and_streaming();

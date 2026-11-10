@@ -40,13 +40,13 @@ typedef bool (*rbipc_spin_pred_t)(void *arg);
  * @brief Dynamic optimal spin pause count query from hardware profile.
  */
 RBIPC_INLINE uint32_t rbipc_sync_spin_count(void) {
-  return (uint32_t)rbipc_get_hardware_profile()->calibrated_spin_count;
+    return (uint32_t)rbipc_get_hardware_profile()->calibrated_spin_count;
 }
 
 RBIPC_INLINE void rbipc_sync_spin_pause(uint32_t count) {
-  for (uint32_t i = 0; i < count; ++i) {
-    rbipc_cpu_pause();
-  }
+    for (uint32_t i = 0; i < count; ++i) {
+        rbipc_cpu_pause();
+    }
 }
 #include <stdatomic.h>
 #include <stdbool.h>
@@ -55,7 +55,8 @@ RBIPC_INLINE void rbipc_sync_spin_pause(uint32_t count) {
 
 /**
  * @def RBIPC_HW_WAIT_TIMEOUT_NS
- * @brief Default maximum duration in nanoseconds for hardware monitor wait (UMWAIT / WFET).
+ * @brief Default maximum duration in nanoseconds for hardware monitor wait
+ * (UMWAIT / WFET).
  */
 #define RBIPC_HW_WAIT_TIMEOUT_NS 5000ULL
 
@@ -65,12 +66,12 @@ RBIPC_INLINE void rbipc_sync_spin_pause(uint32_t count) {
  * timeout management.
  */
 typedef struct {
-  uint64_t deadline_ns; /**< Monotonic timestamp deadline in nanoseconds (valid
-                           when @ref has_deadline is true). */
-  bool has_deadline;    /**< Boolean flag indicating if an explicit operation
-                           timeout deadline is active. */
-  uint64_t hole_first_seen_ns; /**< Monotonic timestamp when an empty
-                                  ticket-hole was first observed. */
+    uint64_t deadline_ns; /**< Monotonic timestamp deadline in nanoseconds
+                             (valid when @ref has_deadline is true). */
+    bool has_deadline;    /**< Boolean flag indicating if an explicit operation
+                             timeout deadline is active. */
+    uint64_t hole_first_seen_ns; /**< Monotonic timestamp when an empty
+                                    ticket-hole was first observed. */
 } rbipc_sync_state_t;
 
 /**
@@ -82,41 +83,41 @@ typedef struct {
  * @param[in]  timeout_ns Requested timeout in nanoseconds (0 for non-blocking,
  * UINT64_MAX for unbounded).
  */
-RBIPC_INTERNAL RBIPC_LEAF
-void rbipc_sync_state_init(rbipc_sync_state_t *RBIPC_RESTRICT state,
-                           uint64_t timeout_ns);
+RBIPC_INTERNAL RBIPC_LEAF void rbipc_sync_state_init(
+    rbipc_sync_state_t *RBIPC_RESTRICT state, uint64_t timeout_ns);
 
 /**
- * @brief Initialize process-level synchronization capabilities (e.g. sys_membarrier registration).
+ * @brief Initialize process-level synchronization capabilities (e.g.
+ * sys_membarrier registration).
  */
-RBIPC_INTERNAL RBIPC_LEAF
-void rbipc_sync_init_process(void);
+RBIPC_INTERNAL RBIPC_LEAF void rbipc_sync_init_process(void);
 
 /**
- * @brief Execute an asymmetric memory barrier on the slow wait path (Linux sys_membarrier).
+ * @brief Execute an asymmetric memory barrier on the slow wait path (Linux
+ * sys_membarrier).
  *
- * @details Shifts the sequential consistency ordering tax away from the high-frequency
- * producer/consumer commit and release fast paths onto this slow kernel sleep path.
- * Forces a hardware memory barrier across all active execution cores/threads on the system.
+ * @details Shifts the sequential consistency ordering tax away from the
+ * high-frequency producer/consumer commit and release fast paths onto this slow
+ * kernel sleep path. Forces a hardware memory barrier across all active
+ * execution cores/threads on the system.
  */
-RBIPC_INTERNAL RBIPC_LEAF
-void rbipc_sync_asymmetric_barrier(void);
+RBIPC_INTERNAL RBIPC_LEAF void rbipc_sync_asymmetric_barrier(void);
 
 /**
  * @brief Increment active waiter counter and execute asymmetric memory barrier.
  *
  * @param[in,out] futex_waiters Atomic counter in shared memory.
  */
-RBIPC_INTERNAL RBIPC_LEAF
-void rbipc_sync_register_waiter(_Atomic uint32_t *futex_waiters);
+RBIPC_INTERNAL RBIPC_LEAF void rbipc_sync_register_waiter(
+    _Atomic uint32_t *futex_waiters);
 
 /**
  * @brief Decrement active waiter counter using sequential consistency.
  *
  * @param[in,out] futex_waiters Atomic counter in shared memory.
  */
-RBIPC_INTERNAL RBIPC_LEAF
-void rbipc_sync_deregister_waiter(_Atomic uint32_t *futex_waiters);
+RBIPC_INTERNAL RBIPC_LEAF void rbipc_sync_deregister_waiter(
+    _Atomic uint32_t *futex_waiters);
 
 /**
  * @brief Execute a passive futex wait when a waiter is already registered.
@@ -134,17 +135,18 @@ void rbipc_sync_deregister_waiter(_Atomic uint32_t *futex_waiters);
  * @return 0 on continued wait / successful wake.
  * @retval RBIPC_ERR_TIMEOUT if deadline timestamp has been exceeded.
  */
-RBIPC_INTERNAL RBIPC_NODISCARD RBIPC_LEAF int
-rbipc_sync_wait_registered(rbipc_sync_state_t *RBIPC_RESTRICT state,
-                           _Atomic uint32_t *futex_word,
-                           _Atomic uint32_t *futex_waiters);
+RBIPC_INTERNAL RBIPC_NODISCARD RBIPC_LEAF int rbipc_sync_wait_registered(
+    rbipc_sync_state_t *RBIPC_RESTRICT state, _Atomic uint32_t *futex_word,
+    _Atomic uint32_t *futex_waiters);
 
 /**
- * @brief Execute a passive futex wait when a waiter is already registered, checking
- * cooperative shutdown via vectorized sys_futex_waitv.
+ * @brief Execute a passive futex wait when a waiter is already registered,
+ * checking cooperative shutdown via vectorized sys_futex_waitv.
  *
- * @param[in,out] state         Thread-local synchronization state tracking deadline.
- * @param[in]     futex_word    Pointer to atomic futex sequence word in shared memory.
+ * @param[in,out] state         Thread-local synchronization state tracking
+ * deadline.
+ * @param[in]     futex_word    Pointer to atomic futex sequence word in shared
+ * memory.
  * @param[in,out] futex_waiters Pointer to atomic waiter count in shared memory.
  * @param[in]     shutdown_flag Pointer to cooperative shutdown flag (or NULL).
  *
@@ -152,24 +154,27 @@ rbipc_sync_wait_registered(rbipc_sync_state_t *RBIPC_RESTRICT state,
  * @retval RBIPC_ERR_TIMEOUT if deadline timestamp has been exceeded.
  */
 RBIPC_INTERNAL RBIPC_NODISCARD RBIPC_LEAF int
-rbipc_sync_wait_registered_or_shutdown(
-    rbipc_sync_state_t *RBIPC_RESTRICT state, _Atomic uint32_t *futex_word,
-    _Atomic uint32_t *futex_waiters, const _Atomic uint32_t *shutdown_flag);
+rbipc_sync_wait_registered_or_shutdown(rbipc_sync_state_t *RBIPC_RESTRICT state,
+                                       _Atomic uint32_t *futex_word,
+                                       _Atomic uint32_t *futex_waiters,
+                                       const _Atomic uint32_t *shutdown_flag);
 
 /**
- * @brief Execute a passive futex wait on direct slot sequence or proxy sequence via sys_futex_waitv.
+ * @brief Execute a passive futex wait on direct slot sequence or proxy sequence
+ * via sys_futex_waitv.
  *
- * @param[in,out] state         Thread-local synchronization state tracking deadline.
+ * @param[in,out] state         Thread-local synchronization state tracking
+ * deadline.
  * @param[in]     slot_seq      Direct 64-bit slot sequence pointer.
  * @param[in]     expected_seq  Expected 64-bit sequence value.
  * @param[in]     proxy_seq     Shared proxy 32-bit futex sequence word.
  * @param[in,out] futex_waiters Pointer to atomic waiter count in shared memory.
  * @param[in]     shutdown_flag Pointer to cooperative shutdown flag (or NULL).
  *
- * @return 0 on continued wait / successful wake, RBIPC_ERR_TIMEOUT on expiration.
+ * @return 0 on continued wait / successful wake, RBIPC_ERR_TIMEOUT on
+ * expiration.
  */
-RBIPC_INTERNAL RBIPC_NODISCARD RBIPC_LEAF int
-rbipc_sync_wait_slot_registered(
+RBIPC_INTERNAL RBIPC_NODISCARD RBIPC_LEAF int rbipc_sync_wait_slot_registered(
     rbipc_sync_state_t *RBIPC_RESTRICT state, const _Atomic uint64_t *slot_seq,
     uint64_t expected_seq, _Atomic uint32_t *proxy_seq,
     _Atomic uint32_t *futex_waiters, const _Atomic uint32_t *shutdown_flag);
@@ -190,10 +195,9 @@ rbipc_sync_wait_slot_registered(
  * @return 0 on continued wait / successful wake.
  * @retval RBIPC_ERR_TIMEOUT if deadline timestamp has been exceeded.
  */
-RBIPC_INTERNAL RBIPC_NODISCARD RBIPC_LEAF int
-rbipc_sync_backoff(rbipc_sync_state_t *RBIPC_RESTRICT state,
-                   _Atomic uint32_t *futex_word,
-                   _Atomic uint32_t *futex_waiters);
+RBIPC_INTERNAL RBIPC_NODISCARD RBIPC_LEAF int rbipc_sync_backoff(
+    rbipc_sync_state_t *RBIPC_RESTRICT state, _Atomic uint32_t *futex_word,
+    _Atomic uint32_t *futex_waiters);
 
 /**
  * @brief Execute adaptive backoff with spin-then-wait policy.
@@ -219,34 +223,40 @@ RBIPC_INTERNAL RBIPC_NODISCARD RBIPC_LEAF int rbipc_sync_backoff_adaptive(
     rbipc_spin_pred_t predicate, void *arg);
 
 /**
- * @brief Execute a hardware-assisted monitor-wait (Tier 1: Intel WAITPKG / ARM64 WFET).
+ * @brief Execute a hardware-assisted monitor-wait (Tier 1: Intel WAITPKG /
+ * ARM64 WFET).
  *
  * @param[in] monitored_addr Memory address to monitor for stores.
- * @param[in] timeout_ns     Maximum wait duration in nanoseconds (capped to 5000 ns).
+ * @param[in] timeout_ns     Maximum wait duration in nanoseconds (capped to
+ * 5000 ns).
  * @param[in] predicate      Optional predicate callback to verify completion.
  * @param[in] arg            User argument passed to predicate.
  *
- * @return 0 on condition met, RBIPC_ERR_TIMEOUT on deadline, or -ENOSYS if unsupported.
+ * @return 0 on condition met, RBIPC_ERR_TIMEOUT on deadline, or -ENOSYS if
+ * unsupported.
  */
-RBIPC_INTERNAL RBIPC_NODISCARD RBIPC_LEAF int
-rbipc_sync_hardware_wait(const void *monitored_addr, uint64_t timeout_ns,
-                         rbipc_spin_pred_t predicate, void *arg);
+RBIPC_INTERNAL RBIPC_NODISCARD RBIPC_LEAF int rbipc_sync_hardware_wait(
+    const void *monitored_addr, uint64_t timeout_ns,
+    rbipc_spin_pred_t predicate, void *arg);
 
 /**
- * @brief Execute a hardware-assisted monitor-wait with explicit CPU power substate.
+ * @brief Execute a hardware-assisted monitor-wait with explicit CPU power
+ * substate.
  *
  * @param[in] monitored_addr Memory address to monitor for stores.
- * @param[in] timeout_ns     Maximum wait duration in nanoseconds (capped to 5000 ns).
+ * @param[in] timeout_ns     Maximum wait duration in nanoseconds (capped to
+ * 5000 ns).
  * @param[in] predicate      Optional predicate callback to verify completion.
  * @param[in] arg            User argument passed to predicate.
- * @param[in] substate       Hardware power substate: 0 = C0.2 (deep power saving), 1 = C0.1 (low latency).
+ * @param[in] substate       Hardware power substate: 0 = C0.2 (deep power
+ * saving), 1 = C0.1 (low latency).
  *
- * @return 0 on condition met, RBIPC_ERR_TIMEOUT on deadline, or -ENOSYS if unsupported.
+ * @return 0 on condition met, RBIPC_ERR_TIMEOUT on deadline, or -ENOSYS if
+ * unsupported.
  */
-RBIPC_INTERNAL RBIPC_NODISCARD RBIPC_LEAF int
-rbipc_sync_hardware_wait_substate(const void *monitored_addr, uint64_t timeout_ns,
-                                  rbipc_spin_pred_t predicate, void *arg,
-                                  uint32_t substate);
+RBIPC_INTERNAL RBIPC_NODISCARD RBIPC_LEAF int rbipc_sync_hardware_wait_substate(
+    const void *monitored_addr, uint64_t timeout_ns,
+    rbipc_spin_pred_t predicate, void *arg, uint32_t substate);
 
 /**
  * @brief Wake up to @p count waiting threads on the specified futex word.
@@ -256,9 +266,9 @@ rbipc_sync_hardware_wait_substate(const void *monitored_addr, uint64_t timeout_n
  * @param[in] futex_waiters Pointer to atomic waiter count in shared memory.
  * @param[in] count         Maximum number of waiting threads to awaken.
  */
-RBIPC_INTERNAL RBIPC_LEAF
-void rbipc_sync_wake_n(_Atomic uint32_t *futex_word,
-                       _Atomic uint32_t *futex_waiters, uint32_t count);
+RBIPC_INTERNAL RBIPC_LEAF void rbipc_sync_wake_n(
+    _Atomic uint32_t *futex_word, _Atomic uint32_t *futex_waiters,
+    uint32_t count);
 
 /**
  * @brief Wake one waiting thread on the specified futex word after state
@@ -272,9 +282,8 @@ void rbipc_sync_wake_n(_Atomic uint32_t *futex_word,
  * memory.
  * @param[in] futex_waiters Pointer to atomic waiter count in shared memory.
  */
-RBIPC_INTERNAL RBIPC_LEAF
-void rbipc_sync_wake_one(_Atomic uint32_t *futex_word,
-                         _Atomic uint32_t *futex_waiters);
+RBIPC_INTERNAL RBIPC_LEAF void rbipc_sync_wake_one(
+    _Atomic uint32_t *futex_word, _Atomic uint32_t *futex_waiters);
 
 /**
  * @brief Wake all waiting threads on the specified futex word (e.g. for
@@ -287,8 +296,7 @@ void rbipc_sync_wake_one(_Atomic uint32_t *futex_word,
  * memory.
  * @param[in] futex_waiters Pointer to atomic waiter count in shared memory.
  */
-RBIPC_INTERNAL RBIPC_LEAF
-void rbipc_sync_wake_all(_Atomic uint32_t *futex_word,
-                         _Atomic uint32_t *futex_waiters);
+RBIPC_INTERNAL RBIPC_LEAF void rbipc_sync_wake_all(
+    _Atomic uint32_t *futex_word, _Atomic uint32_t *futex_waiters);
 
 #endif /* RBIPC_SYNC_H */

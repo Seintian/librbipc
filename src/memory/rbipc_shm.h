@@ -33,15 +33,16 @@
  * @brief Precomputed geometric memory layout offsets and partition boundaries.
  */
 typedef struct {
-  uint32_t capacity; /**< Validated slot count (strictly a power of two). */
-  uint32_t aligned_slot_size; /**< Payload capacity per slot aligned to
-                                 cache-line boundary (64 bytes). */
-  size_t data_offset; /**< Page-aligned byte offset within file where payload
-                         data begins. */
-  size_t data_size;   /**< Page-aligned byte size of the single circular payload
+    uint32_t capacity; /**< Validated slot count (strictly a power of two). */
+    uint32_t aligned_slot_size; /**< Payload capacity per slot aligned to
+                                   cache-line boundary (64 bytes). */
+    size_t data_offset; /**< Page-aligned byte offset within file where payload
+                           data begins. */
+    size_t data_size; /**< Page-aligned byte size of the single circular payload
                          buffer. */
-  size_t total_shm_size; /**< Total shared memory file allocation size (metadata
-                            + data). */
+    size_t
+        total_shm_size; /**< Total shared memory file allocation size (metadata
+                           + data). */
 } rbipc_layout_t;
 
 /**
@@ -62,9 +63,9 @@ typedef struct {
  * page_size is invalid.
  * @retval RBIPC_ERR_OVERFLOW if arithmetic multiplication overflows size_t.
  */
-RBIPC_INTERNAL RBIPC_NODISCARD RBIPC_LEAF int
-rbipc_shm_calc_layout(uint32_t capacity, uint32_t slot_size, size_t page_size,
-                      rbipc_layout_t *RBIPC_RESTRICT layout);
+RBIPC_INTERNAL RBIPC_NODISCARD RBIPC_LEAF int rbipc_shm_calc_layout(
+    uint32_t capacity, uint32_t slot_size, size_t page_size,
+    rbipc_layout_t *RBIPC_RESTRICT layout);
 
 /**
  * @brief Extended layout calculator taking operational mode flags into account.
@@ -72,16 +73,18 @@ rbipc_shm_calc_layout(uint32_t capacity, uint32_t slot_size, size_t page_size,
  * @param[in]  capacity  Requested slot capacity (must be power of two).
  * @param[in]  slot_size Requested payload byte capacity per slot.
  * @param[in]  page_size Host virtual memory page size in bytes.
- * @param[in]  flags     Operational mode flags (e.g. @ref RBIPC_FLAG_WAIT_FREE).
+ * @param[in]  flags     Operational mode flags (e.g. @ref
+ * RBIPC_FLAG_WAIT_FREE).
  * @param[out] layout    Precomputed layout geometry descriptor to populate.
  *
  * @return @ref RBIPC_OK on success.
- * @retval RBIPC_ERR_INVAL    if capacity is invalid, slot_size is zero, or page_size is invalid.
+ * @retval RBIPC_ERR_INVAL    if capacity is invalid, slot_size is zero, or
+ * page_size is invalid.
  * @retval RBIPC_ERR_OVERFLOW if arithmetic multiplication overflows size_t.
  */
-RBIPC_INTERNAL RBIPC_NODISCARD RBIPC_LEAF int
-rbipc_shm_calc_layout_ex(uint32_t capacity, uint32_t slot_size, size_t page_size,
-                         uint32_t flags, rbipc_layout_t *RBIPC_RESTRICT layout);
+RBIPC_INTERNAL RBIPC_NODISCARD RBIPC_LEAF int rbipc_shm_calc_layout_ex(
+    uint32_t capacity, uint32_t slot_size, size_t page_size, uint32_t flags,
+    rbipc_layout_t *RBIPC_RESTRICT layout);
 
 /**
  * @brief Create and truncate a new shared memory file descriptor.
@@ -93,18 +96,19 @@ rbipc_shm_calc_layout_ex(uint32_t capacity, uint32_t slot_size, size_t page_size
  *
  * @param[in]  name       POSIX shared memory name, or NULL for anonymous memfd.
  * @param[in]  total_size Allocation byte size to truncate file to.
- * @param[in]  flags      Creation behavior flags (e.g. @ref RBIPC_CREATE_EXCL or @ref RBIPC_CREATE_OVERWRITE).
- * @param[in]  mode       POSIX file permission mode bits (or 0 for default @c 0600).
+ * @param[in]  flags      Creation behavior flags (e.g. @ref RBIPC_CREATE_EXCL
+ * or @ref RBIPC_CREATE_OVERWRITE).
+ * @param[in]  mode       POSIX file permission mode bits (or 0 for default @c
+ * 0600).
  * @param[out] out_fd     Location to store the opened file descriptor.
  *
  * @return @ref RBIPC_OK on success.
  * @retval RBIPC_ERR_INVAL if @p out_fd is NULL or @p total_size is zero.
  * @retval RBIPC_ERR_SYS   if shm_open, memfd_create, or ftruncate fails.
  */
-RBIPC_INTERNAL RBIPC_NODISCARD
-int rbipc_shm_create_ex(const char *RBIPC_RESTRICT name, size_t total_size,
-                        uint32_t flags, mode_t mode,
-                        int *RBIPC_RESTRICT out_fd);
+RBIPC_INTERNAL RBIPC_NODISCARD int rbipc_shm_create_ex(
+    const char *RBIPC_RESTRICT name, size_t total_size, uint32_t flags,
+    mode_t mode, int *RBIPC_RESTRICT out_fd);
 
 /**
  * @brief Create a new shared memory file descriptor with default exclusive
@@ -123,7 +127,7 @@ int rbipc_shm_create_ex(const char *RBIPC_RESTRICT name, size_t total_size,
 RBIPC_INLINE int rbipc_shm_create(const char *RBIPC_RESTRICT name,
                                   size_t total_size,
                                   int *RBIPC_RESTRICT out_fd) {
-  return rbipc_shm_create_ex(name, total_size, RBIPC_CREATE_EXCL, 0, out_fd);
+    return rbipc_shm_create_ex(name, total_size, RBIPC_CREATE_EXCL, 0, out_fd);
 }
 
 /**
@@ -136,8 +140,8 @@ RBIPC_INLINE int rbipc_shm_create(const char *RBIPC_RESTRICT name,
  * @retval RBIPC_ERR_INVAL if @p name or @p out_fd is NULL.
  * @retval RBIPC_ERR_SYS   if shm_open fails.
  */
-RBIPC_INTERNAL RBIPC_NODISCARD
-int rbipc_shm_open(const char *RBIPC_RESTRICT name, int *RBIPC_RESTRICT out_fd);
+RBIPC_INTERNAL RBIPC_NODISCARD int rbipc_shm_open(
+    const char *RBIPC_RESTRICT name, int *RBIPC_RESTRICT out_fd);
 
 /**
  * @brief Apply Linux file seals to prevent file resizing or truncation.
@@ -150,8 +154,7 @@ int rbipc_shm_open(const char *RBIPC_RESTRICT name, int *RBIPC_RESTRICT out_fd);
  * @return @ref RBIPC_OK on success or if sealing is unsupported by kernel.
  * @retval RBIPC_ERR_SYS if sealing fails unexpectedly.
  */
-RBIPC_INTERNAL RBIPC_LEAF
-int rbipc_shm_seal(int fd);
+RBIPC_INTERNAL RBIPC_LEAF int rbipc_shm_seal(int fd);
 
 /**
  * @brief Unlink a named POSIX shared memory object.
@@ -162,15 +165,13 @@ int rbipc_shm_seal(int fd);
  * @retval RBIPC_ERR_INVAL if @p name is NULL.
  * @retval RBIPC_ERR_SYS   if shm_unlink fails.
  */
-RBIPC_INTERNAL RBIPC_LEAF
-int rbipc_shm_unlink(const char *name);
+RBIPC_INTERNAL RBIPC_LEAF int rbipc_shm_unlink(const char *name);
 
 /**
  * @brief Close an open file descriptor defensively.
  *
  * @param[in] fd File descriptor to close.
  */
-RBIPC_INTERNAL RBIPC_LEAF
-void rbipc_shm_close(int fd);
+RBIPC_INTERNAL RBIPC_LEAF void rbipc_shm_close(int fd);
 
 #endif /* RBIPC_SHM_H */

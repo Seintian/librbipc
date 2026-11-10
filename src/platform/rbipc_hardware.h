@@ -1,10 +1,11 @@
 /**
  * @file rbipc_hardware.h
- * @brief Dynamic hardware topology discovery, page geometry, and microarchitectural calibration.
+ * @brief Dynamic hardware topology discovery, page geometry, and
+ * microarchitectural calibration.
  *
  * @details Discovers CPU cache hierarchy, page sizes, HugeTLB configurations,
- *          and microarchitectural timing parameters dynamically at runtime with zero-overhead
- *          atomic caching on subsequent accesses.
+ *          and microarchitectural timing parameters dynamically at runtime with
+ * zero-overhead atomic caching on subsequent accesses.
  *
  * @author Seintian
  * @date 2026
@@ -39,7 +40,8 @@ extern "C" {
 
 /**
  * @def RBIPC_TSC_CALIBRATION_LOOPS
- * @brief PAUSE iterations used to calibrate TSC frequency against CLOCK_MONOTONIC.
+ * @brief PAUSE iterations used to calibrate TSC frequency against
+ * CLOCK_MONOTONIC.
  */
 #define RBIPC_TSC_CALIBRATION_LOOPS 2000
 
@@ -87,7 +89,8 @@ extern "C" {
 
 /**
  * @def RBIPC_STREAM_THRESHOLD_FLOOR
- * @brief Minimum non-temporal streaming threshold (bytes) to avoid L1/L2 thrashing.
+ * @brief Minimum non-temporal streaming threshold (bytes) to avoid L1/L2
+ * thrashing.
  */
 #define RBIPC_STREAM_THRESHOLD_FLOOR (256ULL * 1024ULL)
 

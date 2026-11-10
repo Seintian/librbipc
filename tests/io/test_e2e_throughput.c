@@ -12,9 +12,9 @@
 #include <unistd.h>
 #include <sys/wait.h>
 
-#define BENCH_SHM_NAME   "/rbipc_bench_shm"
-#define BENCH_CAPACITY   1024
-#define BENCH_SLOT_SIZE  256
+#define BENCH_SHM_NAME "/rbipc_bench_shm"
+#define BENCH_CAPACITY 1024
+#define BENCH_SLOT_SIZE 256
 #define BENCH_ITERATIONS 200000
 
 typedef struct {
@@ -107,8 +107,8 @@ static void run_consumer(const char *mode_name, int expected_iterations) {
     printf("\n=== librbipc Throughput Benchmark: %s ===\n", mode_name);
     printf("Total Messages : %d\n", received_count);
     printf("Elapsed Time   : %.4f seconds\n", elapsed_sec);
-    printf("Throughput     : %.2f msgs/sec (%.2f MB/sec)\n",
-           throughput, (throughput * sizeof(bench_msg_t)) / (1024.0 * 1024.0));
+    printf("Throughput     : %.2f msgs/sec (%.2f MB/sec)\n", throughput,
+           (throughput * sizeof(bench_msg_t)) / (1024.0 * 1024.0));
     printf("Average Latency: %.2f ns/message\n", avg_latency_ns);
 
     rbipc_detach(ring);
@@ -129,7 +129,8 @@ static void run_producer_batch(int iterations, uint32_t batch_size) {
     int sent = 0;
     while (sent < iterations) {
         uint32_t req = (uint32_t)(iterations - sent);
-        if (req > batch_size) req = batch_size;
+        if (req > batch_size)
+            req = batch_size;
 
         uint32_t reserved = 0;
         rc = rbipc_reserve_write_batch(ring, req, iovecs, &reserved);
@@ -160,7 +161,8 @@ static void run_producer_batch(int iterations, uint32_t batch_size) {
     _exit(0);
 }
 
-static void run_consumer_batch(const char *mode_name, int expected_iterations, uint32_t batch_size) {
+static void run_consumer_batch(const char *mode_name, int expected_iterations,
+                               uint32_t batch_size) {
     rbipc_ring_t *ring = NULL;
     int rc = rbipc_attach(BENCH_SHM_NAME, &ring);
     if (rc != RBIPC_OK) {
@@ -176,7 +178,8 @@ static void run_consumer_batch(const char *mode_name, int expected_iterations, u
 
     while (received_count < expected_iterations) {
         uint32_t req = (uint32_t)(expected_iterations - received_count);
-        if (req > batch_size) req = batch_size;
+        if (req > batch_size)
+            req = batch_size;
 
         uint32_t acquired = 0;
         rc = rbipc_read_acquire_batch(ring, req, rovecs, &acquired);
@@ -204,17 +207,19 @@ static void run_consumer_batch(const char *mode_name, int expected_iterations, u
     double throughput = (double)received_count / elapsed_sec;
     double avg_latency_ns = (double)elapsed_ns / (double)received_count;
 
-    printf("\n=== librbipc B-Queue Batch Benchmark: %s (Batch Size: %u) ===\n", mode_name, batch_size);
+    printf("\n=== librbipc B-Queue Batch Benchmark: %s (Batch Size: %u) ===\n",
+           mode_name, batch_size);
     printf("Total Messages : %d\n", received_count);
     printf("Elapsed Time   : %.4f seconds\n", elapsed_sec);
-    printf("Throughput     : %.2f msgs/sec (%.2f MB/sec)\n",
-           throughput, (throughput * sizeof(bench_msg_t)) / (1024.0 * 1024.0));
+    printf("Throughput     : %.2f msgs/sec (%.2f MB/sec)\n", throughput,
+           (throughput * sizeof(bench_msg_t)) / (1024.0 * 1024.0));
     printf("Average Latency: %.2f ns/message\n\n", avg_latency_ns);
 
     rbipc_detach(ring);
 }
 
-static void run_bench_mode(const char *mode_name, uint32_t flags, int iterations) {
+static void run_bench_mode(const char *mode_name, uint32_t flags,
+                           int iterations) {
     rbipc_destroy(BENCH_SHM_NAME);
 
     rbipc_ring_t *creator = NULL;
@@ -239,7 +244,8 @@ static void run_bench_mode(const char *mode_name, uint32_t flags, int iterations
     rbipc_destroy(BENCH_SHM_NAME);
 }
 
-static void run_batch_bench_mode(const char *mode_name, uint32_t flags, int iterations, uint32_t batch_size) {
+static void run_batch_bench_mode(const char *mode_name, uint32_t flags,
+                                 int iterations, uint32_t batch_size) {
     rbipc_destroy(BENCH_SHM_NAME);
 
     rbipc_ring_t *creator = NULL;
@@ -266,17 +272,23 @@ static void run_batch_bench_mode(const char *mode_name, uint32_t flags, int iter
 
 int main(void) {
     /* 1. Single-Message Benchmarks across all Modes */
-    run_bench_mode("Tier 1 Zero-Trust (Default / CAS-Elided)", 0, BENCH_ITERATIONS);
-    run_bench_mode("Tier 2 Trusted Mode (Pure Vyukov Sequence)", RBIPC_FLAG_TRUSTED, BENCH_ITERATIONS);
-    run_bench_mode("Tier 3 Packed Descriptor Mode", RBIPC_FLAG_PACKED, BENCH_ITERATIONS);
-    run_bench_mode("Combined Tier 2 + Tier 3 (Trusted & Packed)", RBIPC_FLAG_TRUSTED | RBIPC_FLAG_PACKED, BENCH_ITERATIONS);
-    run_bench_mode("Nikolaev wCQ Bounded Wait-Free Helping Mode", RBIPC_FLAG_WAIT_FREE, BENCH_ITERATIONS);
+    run_bench_mode("Tier 1 Zero-Trust (Default / CAS-Elided)", 0,
+                   BENCH_ITERATIONS);
+    run_bench_mode("Tier 2 Trusted Mode (Pure Vyukov Sequence)",
+                   RBIPC_FLAG_TRUSTED, BENCH_ITERATIONS);
+    run_bench_mode("Tier 3 Packed Descriptor Mode", RBIPC_FLAG_PACKED,
+                   BENCH_ITERATIONS);
+    run_bench_mode("Combined Tier 2 + Tier 3 (Trusted & Packed)",
+                   RBIPC_FLAG_TRUSTED | RBIPC_FLAG_PACKED, BENCH_ITERATIONS);
+    run_bench_mode("Nikolaev wCQ Bounded Wait-Free Helping Mode",
+                   RBIPC_FLAG_WAIT_FREE, BENCH_ITERATIONS);
 
     /* 2. B-Queue Batch Benchmarks */
     const int batch_iterations = 500000;
     run_batch_bench_mode("Tier 1 Zero-Trust", 0, batch_iterations, 32);
     run_batch_bench_mode("Combined Tier 2 + Tier 3 (Trusted & Packed)",
-                         RBIPC_FLAG_TRUSTED | RBIPC_FLAG_PACKED, batch_iterations, 32);
+                         RBIPC_FLAG_TRUSTED | RBIPC_FLAG_PACKED,
+                         batch_iterations, 32);
 
     return 0;
 }

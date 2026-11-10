@@ -25,108 +25,108 @@
 RBIPC_LEAF
 int rbipc_reactor_enable(rbipc_ring_t *RBIPC_RESTRICT ring,
                          int *RBIPC_RESTRICT out_fd) {
-  if (RBIPC_UNLIKELY(!ring || !out_fd)) {
-    return RBIPC_ERR_INVAL;
-  }
-  if (ring->event_fd >= 0) {
-    *out_fd = ring->event_fd;
+    if (RBIPC_UNLIKELY(!ring || !out_fd)) {
+        return RBIPC_ERR_INVAL;
+    }
+    if (ring->event_fd >= 0) {
+        *out_fd = ring->event_fd;
+        return RBIPC_OK;
+    }
+    int fd = eventfd(0, EFD_NONBLOCK | EFD_CLOEXEC);
+    if (RBIPC_UNLIKELY(fd < 0)) {
+        return RBIPC_ERR_SYS;
+    }
+    ring->event_fd = fd;
+    ring->owns_eventfd = true;
+    if (ring->hdr) {
+        atomic_fetch_add_explicit(&ring->hdr->eventfd_waiters, 1,
+                                  memory_order_release);
+    }
+    *out_fd = fd;
     return RBIPC_OK;
-  }
-  int fd = eventfd(0, EFD_NONBLOCK | EFD_CLOEXEC);
-  if (RBIPC_UNLIKELY(fd < 0)) {
-    return RBIPC_ERR_SYS;
-  }
-  ring->event_fd = fd;
-  ring->owns_eventfd = true;
-  if (ring->hdr) {
-    atomic_fetch_add_explicit(&ring->hdr->eventfd_waiters, 1,
-                              memory_order_release);
-  }
-  *out_fd = fd;
-  return RBIPC_OK;
 }
 
 /**
- * @brief Release the current eventfd's waiter contribution and close it if owned.
+ * @brief Release the current eventfd's waiter contribution and close it if
+ * owned.
  * @details Decrements eventfd_waiters (if a header is present) and closes the
  *          descriptor only when this handle created it. Leaves ring->event_fd
  *          untouched so callers can assign the replacement value.
  */
 static void rbipc_reactor_release_fd(rbipc_ring_t *ring) {
-  if (ring->event_fd < 0) {
-    return;
-  }
-  if (ring->hdr) {
-    atomic_fetch_sub_explicit(&ring->hdr->eventfd_waiters, 1,
-                              memory_order_release);
-  }
-  if (ring->owns_eventfd) {
-    close(ring->event_fd);
-  }
+    if (ring->event_fd < 0) {
+        return;
+    }
+    if (ring->hdr) {
+        atomic_fetch_sub_explicit(&ring->hdr->eventfd_waiters, 1,
+                                  memory_order_release);
+    }
+    if (ring->owns_eventfd) {
+        close(ring->event_fd);
+    }
 }
 
 RBIPC_LEAF
 int rbipc_reactor_set_fd(rbipc_ring_t *RBIPC_RESTRICT ring, int event_fd) {
-  if (RBIPC_UNLIKELY(!ring || event_fd < 0)) {
-    return RBIPC_ERR_INVAL;
-  }
-  /*
-   * If this handle already carries a counted eventfd, release its waiter
-   * contribution before switching to the new one. This holds regardless of
-   * ownership so that re-setting an externally supplied fd does not drift
-   * eventfd_waiters upward by 1 per call (M13). Only close the descriptor if
-   * this handle created it.
-   */
-  rbipc_reactor_release_fd(ring);
-  ring->event_fd = event_fd;
-  ring->owns_eventfd = false;
-  if (ring->hdr) {
-    atomic_fetch_add_explicit(&ring->hdr->eventfd_waiters, 1,
-                              memory_order_release);
-  }
-  return RBIPC_OK;
+    if (RBIPC_UNLIKELY(!ring || event_fd < 0)) {
+        return RBIPC_ERR_INVAL;
+    }
+    /*
+     * If this handle already carries a counted eventfd, release its waiter
+     * contribution before switching to the new one. This holds regardless of
+     * ownership so that re-setting an externally supplied fd does not drift
+     * eventfd_waiters upward by 1 per call (M13). Only close the descriptor if
+     * this handle created it.
+     */
+    rbipc_reactor_release_fd(ring);
+    ring->event_fd = event_fd;
+    ring->owns_eventfd = false;
+    if (ring->hdr) {
+        atomic_fetch_add_explicit(&ring->hdr->eventfd_waiters, 1,
+                                  memory_order_release);
+    }
+    return RBIPC_OK;
 }
 
 RBIPC_LEAF
 int rbipc_reactor_get_fd(const rbipc_ring_t *RBIPC_RESTRICT ring,
                          int *RBIPC_RESTRICT out_fd) {
-  if (RBIPC_UNLIKELY(!ring || !out_fd)) {
-    return RBIPC_ERR_INVAL;
-  }
-  if (ring->event_fd < 0) {
-    return RBIPC_ERR_NOTSUP;
-  }
-  *out_fd = ring->event_fd;
-  return RBIPC_OK;
+    if (RBIPC_UNLIKELY(!ring || !out_fd)) {
+        return RBIPC_ERR_INVAL;
+    }
+    if (ring->event_fd < 0) {
+        return RBIPC_ERR_NOTSUP;
+    }
+    *out_fd = ring->event_fd;
+    return RBIPC_OK;
 }
 
 RBIPC_LEAF
 int rbipc_reactor_drain(const rbipc_ring_t *RBIPC_RESTRICT ring) {
-  if (RBIPC_UNLIKELY(!ring)) {
-    return RBIPC_ERR_INVAL;
-  }
-  if (ring->event_fd < 0) {
-    return RBIPC_ERR_NOTSUP;
-  }
-  uint64_t val = 0;
-  ssize_t n = read(ring->event_fd, &val, sizeof(val));
-  if (n < 0) {
-    if (errno == EAGAIN || errno == EWOULDBLOCK) {
-      return RBIPC_OK;
+    if (RBIPC_UNLIKELY(!ring)) {
+        return RBIPC_ERR_INVAL;
     }
-    return RBIPC_ERR_SYS;
-  }
-  return (n == sizeof(val)) ? RBIPC_OK : RBIPC_ERR_SYS;
+    if (ring->event_fd < 0) {
+        return RBIPC_ERR_NOTSUP;
+    }
+    uint64_t val = 0;
+    ssize_t n = read(ring->event_fd, &val, sizeof(val));
+    if (n < 0) {
+        if (errno == EAGAIN || errno == EWOULDBLOCK) {
+            return RBIPC_OK;
+        }
+        return RBIPC_ERR_SYS;
+    }
+    return (n == sizeof(val)) ? RBIPC_OK : RBIPC_ERR_SYS;
 }
-
 
 RBIPC_LEAF
 void rbipc_reactor_cleanup(rbipc_ring_t *ring) {
-  if (!ring)
-    return;
-  rbipc_reactor_release_fd(ring);
-  ring->event_fd = -1;
-  ring->owns_eventfd = false;
+    if (!ring)
+        return;
+    rbipc_reactor_release_fd(ring);
+    ring->event_fd = -1;
+    ring->owns_eventfd = false;
 }
 
 /* ============================================================================
@@ -137,21 +137,21 @@ void rbipc_reactor_cleanup(rbipc_ring_t *ring) {
 RBIPC_LEAF
 int rbipc_enable_eventfd(rbipc_ring_t *RBIPC_RESTRICT ring,
                          int *RBIPC_RESTRICT out_fd) {
-  return rbipc_reactor_enable(ring, out_fd);
+    return rbipc_reactor_enable(ring, out_fd);
 }
 
 RBIPC_LEAF
 int rbipc_set_eventfd(rbipc_ring_t *RBIPC_RESTRICT ring, int event_fd) {
-  return rbipc_reactor_set_fd(ring, event_fd);
+    return rbipc_reactor_set_fd(ring, event_fd);
 }
 
 RBIPC_LEAF
 int rbipc_get_eventfd(const rbipc_ring_t *RBIPC_RESTRICT ring,
                       int *RBIPC_RESTRICT out_fd) {
-  return rbipc_reactor_get_fd(ring, out_fd);
+    return rbipc_reactor_get_fd(ring, out_fd);
 }
 
 RBIPC_LEAF
 int rbipc_eventfd_drain(const rbipc_ring_t *RBIPC_RESTRICT ring) {
-  return rbipc_reactor_drain(ring);
+    return rbipc_reactor_drain(ring);
 }

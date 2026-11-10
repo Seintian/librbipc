@@ -42,9 +42,9 @@
 RBIPC_INTERNAL RBIPC_NODISCARD RBIPC_LEAF uint32_t rbipc_simd_scan_vacant_slots(
     const rbipc_slot_t *slots, uint32_t mask, uint64_t t, uint32_t count);
 
-RBIPC_INTERNAL RBIPC_NODISCARD RBIPC_LEAF uint32_t rbipc_simd_scan_vacant_slots_ex(
-    const rbipc_slot_t *slots, uint32_t mask, uint64_t t, uint32_t count,
-    bool is_packed);
+RBIPC_INTERNAL RBIPC_NODISCARD RBIPC_LEAF uint32_t
+rbipc_simd_scan_vacant_slots_ex(const rbipc_slot_t *slots, uint32_t mask,
+                                uint64_t t, uint32_t count, bool is_packed);
 
 /**
  * @brief Scan up to @p count contiguous slots starting at ticket @p t for read
@@ -64,9 +64,9 @@ RBIPC_INTERNAL RBIPC_NODISCARD RBIPC_LEAF uint32_t rbipc_simd_scan_vacant_slots_
 RBIPC_INTERNAL RBIPC_NODISCARD RBIPC_LEAF uint32_t rbipc_simd_scan_ready_slots(
     const rbipc_slot_t *slots, uint32_t mask, uint64_t t, uint32_t count);
 
-RBIPC_INTERNAL RBIPC_NODISCARD RBIPC_LEAF uint32_t rbipc_simd_scan_ready_slots_ex(
-    const rbipc_slot_t *slots, uint32_t mask, uint64_t t, uint32_t count,
-    bool is_packed);
+RBIPC_INTERNAL RBIPC_NODISCARD RBIPC_LEAF uint32_t
+rbipc_simd_scan_ready_slots_ex(const rbipc_slot_t *slots, uint32_t mask,
+                               uint64_t t, uint32_t count, bool is_packed);
 
 #if defined(__x86_64__) || defined(_M_X64)
 RBIPC_INTERNAL RBIPC_NODISCARD RBIPC_LEAF uint32_t

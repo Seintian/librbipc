@@ -1,9 +1,11 @@
 /**
  * @file bench_librbipc_isolated.c
- * @brief Standalone benchmarking harness for librbipc to enable high-resolution Linux perf profiling.
+ * @brief Standalone benchmarking harness for librbipc to enable high-resolution
+ * Linux perf profiling.
  *
  * Evaluates:
- * 1. Pointer-only / 8-byte value exchange (direct reference-passing comparison with DPDK and Disruptor)
+ * 1. Pointer-only / 8-byte value exchange (direct reference-passing comparison
+ * with DPDK and Disruptor)
  * 2. Full 64-byte payload memcpy exchange
  * 3. B-Queue vector batching (batch size 32)
  *
@@ -26,8 +28,8 @@
 #include <assert.h>
 
 #define BENCH_SHM_NAME "/rbench_isolated"
-#define RING_CAPACITY  2048
-#define NSEC_PER_SEC   1000000000ULL
+#define RING_CAPACITY 2048
+#define NSEC_PER_SEC 1000000000ULL
 
 static inline uint64_t get_ns(void) {
     struct timespec ts;
@@ -52,16 +54,16 @@ static int parse_positive_int(const char *s, int def) {
 }
 
 typedef enum {
-    BENCH_MODE_PTR = 0,    /* 8-byte pointer/scalar exchange */
-    BENCH_MODE_COPY = 1,   /* 64-byte full payload memcpy */
-    BENCH_MODE_BATCH = 2   /* B-Queue vector batching (32 items) */
+    BENCH_MODE_PTR = 0,  /* 8-byte pointer/scalar exchange */
+    BENCH_MODE_COPY = 1, /* 64-byte full payload memcpy */
+    BENCH_MODE_BATCH = 2 /* B-Queue vector batching (32 items) */
 } bench_mode_t;
 
 typedef struct {
     rbipc_ring_t *ring;
-    uint64_t      iters;
-    bench_mode_t  mode;
-    uint32_t      batch_size;
+    uint64_t iters;
+    bench_mode_t mode;
+    uint32_t batch_size;
 } bench_ctx_t;
 
 /* --- Consumer Worker --- */
@@ -78,9 +80,11 @@ static void *consumer_fn(void *arg) {
 
         while (count < iters) {
             uint32_t req = (uint32_t)(iters - count);
-            if (req > bsize) req = bsize;
+            if (req > bsize)
+                req = bsize;
             uint32_t acquired = 0;
-            while (rbipc_read_acquire_batch(r, req, rovs, &acquired) != RBIPC_OK) {
+            while (rbipc_read_acquire_batch(r, req, rovs, &acquired) !=
+                   RBIPC_OK) {
                 __asm__ volatile("pause" ::: "memory");
             }
             for (uint32_t k = 0; k < acquired; k++) {
@@ -123,9 +127,11 @@ static void *producer_fn(void *arg) {
 
         while (sent < iters) {
             uint32_t req = (uint32_t)(iters - sent);
-            if (req > bsize) req = bsize;
+            if (req > bsize)
+                req = bsize;
             uint32_t reserved = 0;
-            while (rbipc_reserve_write_batch(r, req, iovs, &reserved) != RBIPC_OK) {
+            while (rbipc_reserve_write_batch(r, req, iovs, &reserved) !=
+                   RBIPC_OK) {
                 __asm__ volatile("pause" ::: "memory");
             }
             for (uint32_t k = 0; k < reserved; k++) {
@@ -254,47 +260,62 @@ int main(int argc, char **argv) {
         } else if (strcmp(argv[i], "--mpmc") == 0 && i + 2 < argc) {
             num_prods = parse_positive_int(argv[++i], 1);
             num_cons = parse_positive_int(argv[++i], 1);
-            if (num_prods < 1) num_prods = 1;
-            if (num_cons < 1) num_cons = 1;
+            if (num_prods < 1)
+                num_prods = 1;
+            if (num_cons < 1)
+                num_cons = 1;
         } else if (strcmp(argv[i], "--prods") == 0 && i + 1 < argc) {
             num_prods = parse_positive_int(argv[++i], 1);
-            if (num_prods < 1) num_prods = 1;
+            if (num_prods < 1)
+                num_prods = 1;
         } else if (strcmp(argv[i], "--cons") == 0 && i + 1 < argc) {
             num_cons = parse_positive_int(argv[++i], 1);
-            if (num_cons < 1) num_cons = 1;
+            if (num_cons < 1)
+                num_cons = 1;
         }
     }
 
-    const char *mode_str = (mode == BENCH_MODE_PTR) ? "8-Byte Pointer / Scalar Exchange"
-                         : (mode == BENCH_MODE_COPY) ? "64-Byte Payload memcpy"
-                                                     : "B-Queue Vector Batch (32 items)";
-    const char *pol_str  = (policy == RBIPC_WAIT_ADAPTIVE) ? "ADAPTIVE" : "ZERO_SPIN";
+    const char *mode_str =
+        (mode == BENCH_MODE_PTR)    ? "8-Byte Pointer / Scalar Exchange"
+        : (mode == BENCH_MODE_COPY) ? "64-Byte Payload memcpy"
+                                    : "B-Queue Vector Batch (32 items)";
+    const char *pol_str =
+        (policy == RBIPC_WAIT_ADAPTIVE) ? "ADAPTIVE" : "ZERO_SPIN";
 
-    printf("======================================================================\n");
+    printf("==================================================================="
+           "===\n");
     printf("   librbipc Isolated Profiling Harness\n");
-    printf("   Mode       : %s%s%s\n", mode_str, trusted ? " [TRUSTED]" : "", packed ? " [PACKED]" : "");
+    printf("   Mode       : %s%s%s\n", mode_str, trusted ? " [TRUSTED]" : "",
+           packed ? " [PACKED]" : "");
     printf("   Policy     : %s\n", pol_str);
     printf("   Iterations : %lu\n", (unsigned long)iters);
     if (num_prods > 1 || num_cons > 1) {
         printf("   Topology   : MPMC (%dP - %dC)\n", num_prods, num_cons);
     }
-    printf("   Model      : %s\n", use_fork ? "Multi-Process (fork)" : "Multi-Thread (pthread)");
-    printf("======================================================================\n");
+    printf("   Model      : %s\n",
+           use_fork ? "Multi-Process (fork)" : "Multi-Thread (pthread)");
+    printf("==================================================================="
+           "===\n");
 
     rbipc_destroy(BENCH_SHM_NAME);
     rbipc_ring_t *rp = NULL, *rc = NULL;
     uint32_t flags = RBIPC_SHM_NAMED;
-    if (trusted) flags |= RBIPC_FLAG_TRUSTED;
-    if (packed) flags |= RBIPC_FLAG_PACKED;
-    int rc1 = rbipc_create_ex(BENCH_SHM_NAME, RING_CAPACITY, 128, flags, 0660, &rp);
+    if (trusted)
+        flags |= RBIPC_FLAG_TRUSTED;
+    if (packed)
+        flags |= RBIPC_FLAG_PACKED;
+    int rc1 =
+        rbipc_create_ex(BENCH_SHM_NAME, RING_CAPACITY, 128, flags, 0660, &rp);
     int rc2 = rbipc_attach(BENCH_SHM_NAME, &rc);
     assert(rc1 == RBIPC_OK && rc2 == RBIPC_OK);
 
     rbipc_set_wait_policy(rp, policy);
     rbipc_set_wait_policy(rc, policy);
 
-    bench_ctx_t prod_ctx = { .ring = rp, .iters = iters, .mode = mode, .batch_size = 32 };
-    bench_ctx_t cons_ctx = { .ring = rc, .iters = iters, .mode = mode, .batch_size = 32 };
+    bench_ctx_t prod_ctx = {
+        .ring = rp, .iters = iters, .mode = mode, .batch_size = 32};
+    bench_ctx_t cons_ctx = {
+        .ring = rc, .iters = iters, .mode = mode, .batch_size = 32};
 
     uint64_t t0 = get_ns();
 
@@ -335,19 +356,11 @@ int main(int argc, char **argv) {
 
         for (int i = 0; i < num_prods; i++) {
             p_ctxs[i] = (bench_ctx_t){
-                .ring = rp,
-                .iters = iters_p,
-                .mode = mode,
-                .batch_size = 32
-            };
+                .ring = rp, .iters = iters_p, .mode = mode, .batch_size = 32};
         }
         for (int i = 0; i < num_cons; i++) {
             c_ctxs[i] = (bench_ctx_t){
-                .ring = rc,
-                .iters = iters_c,
-                .mode = mode,
-                .batch_size = 32
-            };
+                .ring = rc, .iters = iters_c, .mode = mode, .batch_size = 32};
         }
 
         for (int i = 0; i < num_cons; i++) {
@@ -381,14 +394,17 @@ int main(int argc, char **argv) {
     double ns_per_op = (double)elapsed_ns / (double)iters;
 
     printf("\n--> Result:\n");
-    printf("    Elapsed Time : %.4f seconds (%.2f ns/op)\n", (double)elapsed_ns / 1e9, ns_per_op);
+    printf("    Elapsed Time : %.4f seconds (%.2f ns/op)\n",
+           (double)elapsed_ns / 1e9, ns_per_op);
     printf("    Throughput   : %.2f Mops/s (%.2f ops/sec)\n", ops / 1e6, ops);
-    printf("======================================================================\n");
+    printf("==================================================================="
+           "===\n");
     /* Export JSON Telemetry */
     bench_hardware_info_t hw_info;
     bench_get_hardware_info(&hw_info);
     char json_path[256];
-    bench_get_result_path(json_path, sizeof(json_path), "isolated_benchmark.json");
+    bench_get_result_path(json_path, sizeof(json_path),
+                          "isolated_benchmark.json");
     FILE *fp = fopen(json_path, "w");
     if (fp) {
         fprintf(fp, "{\n");
@@ -398,11 +414,13 @@ int main(int argc, char **argv) {
         fprintf(fp, "    \"profile\": \"%s\",\n", hw_info.profile_name);
         fprintf(fp, "    \"mode\": \"%s\",\n", mode_str);
         fprintf(fp, "    \"policy\": \"%s\",\n", pol_str);
-        fprintf(fp, "    \"model\": \"%s\",\n", use_fork ? "Multi-Process (fork)" : "Multi-Thread (pthread)");
+        fprintf(fp, "    \"model\": \"%s\",\n",
+                use_fork ? "Multi-Process (fork)" : "Multi-Thread (pthread)");
         fprintf(fp, "    \"iterations\": %lu\n", (unsigned long)iters);
         fprintf(fp, "  },\n");
         fprintf(fp, "  \"result\": {\n");
-        fprintf(fp, "    \"elapsed_seconds\": %.6f,\n", (double)elapsed_ns / 1e9);
+        fprintf(fp, "    \"elapsed_seconds\": %.6f,\n",
+                (double)elapsed_ns / 1e9);
         fprintf(fp, "    \"latency_ns_per_op\": %.2f,\n", ns_per_op);
         fprintf(fp, "    \"throughput_mops\": %.2f,\n", ops / 1e6);
         fprintf(fp, "    \"throughput_ops_sec\": %.2f\n", ops);

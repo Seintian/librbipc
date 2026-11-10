@@ -1,11 +1,13 @@
 /**
  * @file test_e2e_chaos.c
- * @brief Automated crash-injection, process stalling, and chaos stress test suite.
+ * @brief Automated crash-injection, process stalling, and chaos stress test
+ * suite.
  *
- * @details Spawns concurrent producer and consumer worker processes exchanging messages
- * across shared memory while a supervisor injects randomized SIGKILL, SIGSTOP, and SIGCONT
- * signals at high frequency. Surviving peers must detect crashes, audit poisoned slots,
- * recover expired leases, and continue streaming without deadlocking.
+ * @details Spawns concurrent producer and consumer worker processes exchanging
+ * messages across shared memory while a supervisor injects randomized SIGKILL,
+ * SIGSTOP, and SIGCONT signals at high frequency. Surviving peers must detect
+ * crashes, audit poisoned slots, recover expired leases, and continue streaming
+ * without deadlocking.
  */
 
 #ifndef _GNU_SOURCE
@@ -48,7 +50,8 @@ static void run_producer(const char *name) {
         if (rc == RBIPC_OK) {
             snprintf(payload, sizeof(payload), "CHAOS_MSG_%" PRIu64, counter++);
             memcpy(buf, payload, strlen(payload) + 1);
-            rc = rbipc_commit_write(ring, ticket, (uint32_t)strlen(payload) + 1);
+            rc =
+                rbipc_commit_write(ring, ticket, (uint32_t)strlen(payload) + 1);
             if (rc != RBIPC_OK) {
                 break;
             }
@@ -56,7 +59,7 @@ static void run_producer(const char *name) {
             break;
         }
         /* Short pause to throttle */
-        struct timespec ts = { .tv_sec = 0, .tv_nsec = 100000 }; /* 100 us */
+        struct timespec ts = {.tv_sec = 0, .tv_nsec = 100000}; /* 100 us */
         nanosleep(&ts, NULL);
     }
 
@@ -95,12 +98,14 @@ int main(void) {
     rbipc_destroy(CHAOS_RING);
 
     rbipc_ring_t *ring = NULL;
-    int rc = rbipc_create_ex(CHAOS_RING, CHAOS_CAPACITY, CHAOS_SLOT_SZ,
-                             RBIPC_CREATE_EXCL | RBIPC_ROLE_MONITOR, 0660, &ring);
+    int rc =
+        rbipc_create_ex(CHAOS_RING, CHAOS_CAPACITY, CHAOS_SLOT_SZ,
+                        RBIPC_CREATE_EXCL | RBIPC_ROLE_MONITOR, 0660, &ring);
     assert(rc == RBIPC_OK);
     assert(ring != NULL);
 
-    /* Enable consumer lease timeouts (30ms) to trigger head-of-line unblocking */
+    /* Enable consumer lease timeouts (30ms) to trigger head-of-line unblocking
+     */
     assert(rbipc_set_lease_timeout(ring, 30000000ULL) == RBIPC_OK);
 
     pid_t producers[CHAOS_PRODUCERS] = {};
@@ -128,7 +133,8 @@ int main(void) {
     uint32_t stalls = 0;
 
     while (time(NULL) - start_time < CHAOS_DURATION_SEC) {
-        struct timespec sleep_ts = { .tv_sec = 0, .tv_nsec = 25000000 }; /* 25 ms */
+        struct timespec sleep_ts = {.tv_sec = 0,
+                                    .tv_nsec = 25000000}; /* 25 ms */
         nanosleep(&sleep_ts, NULL);
 
         /* Check for dead workers and respawn */
@@ -159,8 +165,10 @@ int main(void) {
 
         /* Pick a victim process */
         int r = rand() % (CHAOS_PRODUCERS + CHAOS_CONSUMERS);
-        pid_t victim = (r < CHAOS_PRODUCERS) ? producers[r] : consumers[r - CHAOS_PRODUCERS];
-        if (victim <= 0) continue;
+        pid_t victim = (r < CHAOS_PRODUCERS) ? producers[r]
+                                             : consumers[r - CHAOS_PRODUCERS];
+        if (victim <= 0)
+            continue;
 
         int action = rand() % 3;
         if (action == 0) {
@@ -170,7 +178,8 @@ int main(void) {
         } else {
             /* SIGSTOP + SIGCONT: simulate CPU preemption / hypervisor pause */
             kill(victim, SIGSTOP);
-            struct timespec pause_ts = { .tv_sec = 0, .tv_nsec = 5000000 }; /* 5 ms */
+            struct timespec pause_ts = {.tv_sec = 0,
+                                        .tv_nsec = 5000000}; /* 5 ms */
             nanosleep(&pause_ts, NULL);
             kill(victim, SIGCONT);
             stalls++;
@@ -178,7 +187,8 @@ int main(void) {
         chaos_injections++;
     }
 
-    printf("[test_e2e_chaos] Chaos session complete. Injections: %u (%u SIGKILLs, %u SIGSTOP stalls)\n",
+    printf("[test_e2e_chaos] Chaos session complete. Injections: %u (%u "
+           "SIGKILLs, %u SIGSTOP stalls)\n",
            chaos_injections, kills, stalls);
 
     /* Signal shutdown and terminate all workers */
@@ -198,7 +208,8 @@ int main(void) {
     }
 
     /* Drain any remaining reaped children */
-    while (waitpid(-1, NULL, WNOHANG) > 0) {}
+    while (waitpid(-1, NULL, WNOHANG) > 0) {
+    }
 
     /* Audit and recover expired leases or poisoned slots before cleanup */
     int revoked = rbipc_revoke_expired_leases(ring);

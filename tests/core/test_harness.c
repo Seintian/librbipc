@@ -17,10 +17,10 @@
 #include <signal.h>
 #include <sys/wait.h>
 
-#define TEST_SHM_NAME     "/rbipc_harness_shm"
-#define TEST_CAPACITY     1024
-#define TEST_SLOT_SIZE    256
-#define TEST_ITERATIONS   100000
+#define TEST_SHM_NAME "/rbipc_harness_shm"
+#define TEST_CAPACITY 1024
+#define TEST_SLOT_SIZE 256
+#define TEST_ITERATIONS 100000
 
 typedef struct {
     uint64_t seq_id;
@@ -38,7 +38,8 @@ static void run_producer(int iterations) {
     rbipc_ring_t *ring = NULL;
     int rc = rbipc_attach(TEST_SHM_NAME, &ring);
     if (rc != RBIPC_OK) {
-        fprintf(stderr, "[Producer] Failed to attach: %s (%d)\n", rbipc_strerror(rc), rc);
+        fprintf(stderr, "[Producer] Failed to attach: %s (%d)\n",
+                rbipc_strerror(rc), rc);
         exit(1);
     }
 
@@ -49,7 +50,8 @@ static void run_producer(int iterations) {
 
         rc = rbipc_reserve_write(ring, sizeof(test_msg_t), &buf, &ticket);
         if (rc != RBIPC_OK) {
-            fprintf(stderr, "[Producer] Reservation failed at %d: %s (%d)\n", i, rbipc_strerror(rc), rc);
+            fprintf(stderr, "[Producer] Reservation failed at %d: %s (%d)\n", i,
+                    rbipc_strerror(rc), rc);
             exit(1);
         }
 
@@ -60,7 +62,8 @@ static void run_producer(int iterations) {
 
         rc = rbipc_commit_write(ring, ticket, sizeof(test_msg_t));
         if (rc != RBIPC_OK) {
-            fprintf(stderr, "[Producer] Commit failed at %d: %s (%d)\n", i, rbipc_strerror(rc), rc);
+            fprintf(stderr, "[Producer] Commit failed at %d: %s (%d)\n", i,
+                    rbipc_strerror(rc), rc);
             exit(1);
         }
     }
@@ -75,7 +78,8 @@ static void run_consumer(int expected_iterations) {
     rbipc_ring_t *ring = NULL;
     int rc = rbipc_attach(TEST_SHM_NAME, &ring);
     if (rc != RBIPC_OK) {
-        fprintf(stderr, "[Consumer] Failed to attach: %s (%d)\n", rbipc_strerror(rc), rc);
+        fprintf(stderr, "[Consumer] Failed to attach: %s (%d)\n",
+                rbipc_strerror(rc), rc);
         exit(1);
     }
 
@@ -94,11 +98,13 @@ static void run_consumer(int expected_iterations) {
             printf("[Consumer] Received shutdown signal.\n");
             break;
         } else if (rc == RBIPC_ERR_POISONED) {
-            printf("[Consumer] Skipped poisoned slot (ticket %lu)\n", (unsigned long)ticket);
+            printf("[Consumer] Skipped poisoned slot (ticket %lu)\n",
+                   (unsigned long)ticket);
             rbipc_read_release(ring, ticket);
             continue;
         } else if (rc != RBIPC_OK) {
-            fprintf(stderr, "[Consumer] Read acquire failed: %s (%d)\n", rbipc_strerror(rc), rc);
+            fprintf(stderr, "[Consumer] Read acquire failed: %s (%d)\n",
+                    rbipc_strerror(rc), rc);
             break;
         }
 
@@ -106,7 +112,8 @@ static void run_consumer(int expected_iterations) {
         const test_msg_t *msg = (const test_msg_t *)buf;
 
         if (msg->seq_id != expected_seq) {
-            fprintf(stderr, "[Consumer] Ordering violation: expected %lu, got %lu\n",
+            fprintf(stderr,
+                    "[Consumer] Ordering violation: expected %lu, got %lu\n",
                     expected_seq, msg->seq_id);
             exit(1);
         }
@@ -125,8 +132,8 @@ static void run_consumer(int expected_iterations) {
     printf("\n=== Performance Metrics ===\n");
     printf("Total Messages : %d\n", received_count);
     printf("Elapsed Time   : %.4f seconds\n", elapsed_sec);
-    printf("Throughput     : %.2f msgs/sec (%.2f MB/sec)\n",
-           throughput, (throughput * sizeof(test_msg_t)) / (1024.0 * 1024.0));
+    printf("Throughput     : %.2f msgs/sec (%.2f MB/sec)\n", throughput,
+           (throughput * sizeof(test_msg_t)) / (1024.0 * 1024.0));
     printf("Average Latency: %.2f ns/message\n\n", avg_latency_ns);
 
     rbipc_detach(ring);
@@ -138,9 +145,11 @@ int main(void) {
     rbipc_destroy(TEST_SHM_NAME);
 
     rbipc_ring_t *creator_ring = NULL;
-    int rc = rbipc_create(TEST_SHM_NAME, TEST_CAPACITY, TEST_SLOT_SIZE, &creator_ring);
+    int rc = rbipc_create(TEST_SHM_NAME, TEST_CAPACITY, TEST_SLOT_SIZE,
+                          &creator_ring);
     if (rc != RBIPC_OK) {
-        fprintf(stderr, "Failed to create ring buffer: %s (%d)\n", rbipc_strerror(rc), rc);
+        fprintf(stderr, "Failed to create ring buffer: %s (%d)\n",
+                rbipc_strerror(rc), rc);
         return 1;
     }
     printf("Ring buffer created successfully (Capacity: %d, Slot Size: %d).\n",

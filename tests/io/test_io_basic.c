@@ -26,7 +26,8 @@ static void test_io_param_validation(void) {
     assert(rbipc_reserve_write(NULL, 32, &out_buf, &ticket) == RBIPC_ERR_INVAL);
     assert(rbipc_reserve_write(ring, 32, NULL, &ticket) == RBIPC_ERR_INVAL);
     assert(rbipc_reserve_write(ring, 32, &out_buf, NULL) == RBIPC_ERR_INVAL);
-    assert(rbipc_reserve_write(ring, TEST_SLOT_SZ + 1000, &out_buf, &ticket) == RBIPC_ERR_INVAL);
+    assert(rbipc_reserve_write(ring, TEST_SLOT_SZ + 1000, &out_buf, &ticket) ==
+           RBIPC_ERR_INVAL);
 
     /* Commit validation */
     assert(rbipc_commit_write(NULL, 0, 32) == RBIPC_ERR_INVAL);
@@ -57,10 +58,13 @@ static void test_nonblock_and_timeout(void) {
     uint64_t read_ticket = 0;
 
     /* Read on empty ring (non-blocking) */
-    assert(rbipc_read_acquire_nonblock(ring, &in_buf, &read_len, &read_ticket) == RBIPC_ERR_EMPTY);
+    assert(rbipc_read_acquire_nonblock(ring, &in_buf, &read_len,
+                                       &read_ticket) == RBIPC_ERR_EMPTY);
 
     /* Read on empty ring (timeout) */
-    assert(rbipc_read_acquire_timeout(ring, 10 * RBIPC_NSEC_PER_MSEC, &in_buf, &read_len, &read_ticket) == RBIPC_ERR_TIMEOUT);
+    assert(rbipc_read_acquire_timeout(ring, 10 * RBIPC_NSEC_PER_MSEC, &in_buf,
+                                      &read_len,
+                                      &read_ticket) == RBIPC_ERR_TIMEOUT);
 
     /* Fill all slots */
     void *write_buf = NULL;
@@ -75,14 +79,18 @@ static void test_nonblock_and_timeout(void) {
         assert(rc == RBIPC_OK);
     }
 
-    /* Ring is now full. Next write should fail with RBIPC_ERR_FULL or timeout */
-    assert(rbipc_reserve_write_nonblock(ring, 64, &write_buf, &write_ticket) == RBIPC_ERR_FULL);
-    assert(rbipc_reserve_write_timeout(ring, 64, 10 * RBIPC_NSEC_PER_MSEC, &write_buf, &write_ticket) == RBIPC_ERR_TIMEOUT);
-
+    /* Ring is now full. Next write should fail with RBIPC_ERR_FULL or timeout
+     */
+    assert(rbipc_reserve_write_nonblock(ring, 64, &write_buf, &write_ticket) ==
+           RBIPC_ERR_FULL);
+    assert(rbipc_reserve_write_timeout(ring, 64, 10 * RBIPC_NSEC_PER_MSEC,
+                                       &write_buf,
+                                       &write_ticket) == RBIPC_ERR_TIMEOUT);
 
     /* Consume all slots and verify */
     for (uint32_t i = 0; i < TEST_CAPACITY; ++i) {
-        rc = rbipc_read_acquire_nonblock(ring, &in_buf, &read_len, &read_ticket);
+        rc =
+            rbipc_read_acquire_nonblock(ring, &in_buf, &read_len, &read_ticket);
         assert(rc == RBIPC_OK);
         assert(read_ticket == i);
         char expected[64];
@@ -93,7 +101,8 @@ static void test_nonblock_and_timeout(void) {
     }
 
     /* Now empty again */
-    assert(rbipc_read_acquire_nonblock(ring, &in_buf, &read_len, &read_ticket) == RBIPC_ERR_EMPTY);
+    assert(rbipc_read_acquire_nonblock(ring, &in_buf, &read_len,
+                                       &read_ticket) == RBIPC_ERR_EMPTY);
 
     rbipc_detach(ring);
 }
@@ -133,7 +142,6 @@ static void test_circular_wrap(void) {
     rbipc_detach(ring);
 }
 
-
 static void test_stream_operations(void) {
     /* 1. NULL parameter checks */
     char buf[128] = {};
@@ -147,8 +155,9 @@ static void test_stream_operations(void) {
         src[i] = (uint8_t)(i ^ 0x5A);
     }
 
-    size_t sizes[] = {0, 1, 15, 16, 31, 32, 63, 64, 127, 255, 256, 512, 1024, 2049, 4096};
-    for (size_t s = 0; s < sizeof(sizes)/sizeof(sizes[0]); ++s) {
+    size_t sizes[] = {0,   1,   15,  16,  31,   32,   63,  64,
+                      127, 255, 256, 512, 1024, 2049, 4096};
+    for (size_t s = 0; s < sizeof(sizes) / sizeof(sizes[0]); ++s) {
         size_t sz = sizes[s];
         memset(dst, 0, sizeof(dst));
         assert(rbipc_stream_copy(dst, src, sz) == RBIPC_OK);
@@ -211,14 +220,20 @@ static void test_convenience_copy_io(void) {
 
     assert(rbipc_read(NULL, buf, sizeof(buf), &out_len) == RBIPC_ERR_INVAL);
     assert(rbipc_read(ring, NULL, sizeof(buf), &out_len) == RBIPC_ERR_INVAL);
-    assert(rbipc_read_timeout(NULL, buf, sizeof(buf), &out_len, 1000) == RBIPC_ERR_INVAL);
-    assert(rbipc_read_timeout(ring, NULL, sizeof(buf), &out_len, 1000) == RBIPC_ERR_INVAL);
-    assert(rbipc_read_nonblock(NULL, buf, sizeof(buf), &out_len) == RBIPC_ERR_INVAL);
-    assert(rbipc_read_nonblock(ring, NULL, sizeof(buf), &out_len) == RBIPC_ERR_INVAL);
+    assert(rbipc_read_timeout(NULL, buf, sizeof(buf), &out_len, 1000) ==
+           RBIPC_ERR_INVAL);
+    assert(rbipc_read_timeout(ring, NULL, sizeof(buf), &out_len, 1000) ==
+           RBIPC_ERR_INVAL);
+    assert(rbipc_read_nonblock(NULL, buf, sizeof(buf), &out_len) ==
+           RBIPC_ERR_INVAL);
+    assert(rbipc_read_nonblock(ring, NULL, sizeof(buf), &out_len) ==
+           RBIPC_ERR_INVAL);
 
     /* 2. Empty ring read checks */
-    assert(rbipc_read_nonblock(ring, buf, sizeof(buf), &out_len) == RBIPC_ERR_EMPTY);
-    assert(rbipc_read_timeout(ring, buf, sizeof(buf), &out_len, 1000000ULL) == RBIPC_ERR_TIMEOUT);
+    assert(rbipc_read_nonblock(ring, buf, sizeof(buf), &out_len) ==
+           RBIPC_ERR_EMPTY);
+    assert(rbipc_read_timeout(ring, buf, sizeof(buf), &out_len, 1000000ULL) ==
+           RBIPC_ERR_TIMEOUT);
 
     /* 3. Successful write and read */
     const char *test_msg = "rbipc_io_convenience_payload";
@@ -232,7 +247,8 @@ static void test_convenience_copy_io(void) {
     assert(out_len == msg_len);
     assert(strcmp(buf, test_msg) == 0);
 
-    /* 4. Truncated read returns RBIPC_ERR_OVERFLOW and sets *out_len = actual_len */
+    /* 4. Truncated read returns RBIPC_ERR_OVERFLOW and sets *out_len =
+     * actual_len */
     rc = rbipc_write_nonblock(ring, "1234567890", 10);
     assert(rc == RBIPC_OK);
     char small_buf[5] = {};
@@ -257,7 +273,8 @@ static void test_convenience_copy_io(void) {
     }
     /* Ring full */
     assert(rbipc_write_nonblock(ring, "overflow", 8) == RBIPC_ERR_FULL);
-    assert(rbipc_write_timeout(ring, "overflow", 8, 1000000ULL) == RBIPC_ERR_TIMEOUT);
+    assert(rbipc_write_timeout(ring, "overflow", 8, 1000000ULL) ==
+           RBIPC_ERR_TIMEOUT);
 
     /* Drain all */
     for (uint32_t i = 0; i < TEST_CAPACITY; ++i) {
@@ -268,7 +285,8 @@ static void test_convenience_copy_io(void) {
         snprintf(expected, sizeof(expected), "ITEM_%u", i);
         assert(strcmp(item, expected) == 0);
     }
-    assert(rbipc_read_nonblock(ring, buf, sizeof(buf), NULL) == RBIPC_ERR_EMPTY);
+    assert(rbipc_read_nonblock(ring, buf, sizeof(buf), NULL) ==
+           RBIPC_ERR_EMPTY);
 
     /* 6. Test rbipc_shutdown alias */
     assert(rbipc_shutdown(NULL) == RBIPC_ERR_INVAL);

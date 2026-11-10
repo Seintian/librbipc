@@ -1,6 +1,7 @@
 /**
  * @file test_unit_reactor.c
- * @brief Unit tests for asynchronous eventfd and epoll reactor integration (Point 3.2).
+ * @brief Unit tests for asynchronous eventfd and epoll reactor integration
+ * (Point 3.2).
  */
 
 #ifndef _GNU_SOURCE
@@ -25,7 +26,8 @@ static void test_reactor_eventfd_lifecycle(void) {
     rbipc_destroy(REACTOR_RING_NAME);
 
     rbipc_ring_t *ring = NULL;
-    int rc = rbipc_create(REACTOR_RING_NAME, REACTOR_CAPACITY, REACTOR_SLOT_SIZE, &ring);
+    int rc = rbipc_create(REACTOR_RING_NAME, REACTOR_CAPACITY,
+                          REACTOR_SLOT_SIZE, &ring);
     assert(rc == RBIPC_OK);
 
     int out_fd = -1;
@@ -50,7 +52,8 @@ static void test_reactor_eventfd_lifecycle(void) {
     rc = rbipc_eventfd_drain(ring);
     assert(rc == RBIPC_OK);
 
-    /* Verify eventfd_waiters is tracked in shared memory via public telemetry */
+    /* Verify eventfd_waiters is tracked in shared memory via public telemetry
+     */
     rbipc_ring_t *peer = NULL;
     rc = rbipc_attach(REACTOR_RING_NAME, &peer);
     assert(rc == RBIPC_OK);
@@ -59,7 +62,8 @@ static void test_reactor_eventfd_lifecycle(void) {
     assert(rbipc_get_stats(peer, &stats_before) == RBIPC_OK);
     assert(stats_before.eventfd_waiters == 1);
 
-    /* Detaching the ring with the enabled eventfd should clean up fd and decrement waiters */
+    /* Detaching the ring with the enabled eventfd should clean up fd and
+     * decrement waiters */
     rbipc_detach(ring);
 
     rbipc_stats_t stats_after;
@@ -74,7 +78,8 @@ static void test_reactor_epoll_integration(void) {
     rbipc_destroy(REACTOR_RING_NAME);
 
     rbipc_ring_t *ring = NULL;
-    int rc = rbipc_create(REACTOR_RING_NAME, REACTOR_CAPACITY, REACTOR_SLOT_SIZE, &ring);
+    int rc = rbipc_create(REACTOR_RING_NAME, REACTOR_CAPACITY,
+                          REACTOR_SLOT_SIZE, &ring);
     assert(rc == RBIPC_OK);
 
     int event_fd = -1;
@@ -135,7 +140,8 @@ static void test_reactor_epoll_integration(void) {
     uint32_t reserved = 0;
     rc = rbipc_reserve_write_batch(ring, 4, iovecs, &reserved);
     assert(rc == RBIPC_OK && reserved == 4);
-    uint64_t tickets[4] = {iovecs[0].ticket, iovecs[1].ticket, iovecs[2].ticket, iovecs[3].ticket};
+    uint64_t tickets[4] = {iovecs[0].ticket, iovecs[1].ticket, iovecs[2].ticket,
+                           iovecs[3].ticket};
     uint32_t lens[4] = {8, 8, 8, 8};
     rc = rbipc_commit_write_batch(ring, 4, tickets, lens);
     assert(rc == RBIPC_OK);
@@ -149,7 +155,8 @@ static void test_reactor_epoll_integration(void) {
     uint32_t acquired = 0;
     rc = rbipc_read_acquire_batch(ring, 4, rovecs, &acquired);
     assert(rc == RBIPC_OK && acquired == 4);
-    uint64_t rel_tickets[4] = {rovecs[0].ticket, rovecs[1].ticket, rovecs[2].ticket, rovecs[3].ticket};
+    uint64_t rel_tickets[4] = {rovecs[0].ticket, rovecs[1].ticket,
+                               rovecs[2].ticket, rovecs[3].ticket};
     rc = rbipc_read_release_batch(ring, 4, rel_tickets);
     assert(rc == RBIPC_OK);
 
@@ -171,7 +178,8 @@ static void test_reactor_epoll_integration(void) {
 static void test_reactor_external_eventfd_and_negative_paths(void) {
     rbipc_destroy(REACTOR_RING_NAME);
     rbipc_ring_t *ring = NULL;
-    int rc = rbipc_create(REACTOR_RING_NAME, REACTOR_CAPACITY, REACTOR_SLOT_SIZE, &ring);
+    int rc = rbipc_create(REACTOR_RING_NAME, REACTOR_CAPACITY,
+                          REACTOR_SLOT_SIZE, &ring);
     assert(rc == RBIPC_OK);
 
     int fd = -1;
@@ -191,7 +199,8 @@ static void test_reactor_external_eventfd_and_negative_paths(void) {
 
     assert(rbipc_set_eventfd(ring, ext_fd) == RBIPC_OK);
     int check_fd = -1;
-    assert(rbipc_get_eventfd(ring, &check_fd) == RBIPC_OK && check_fd == ext_fd);
+    assert(rbipc_get_eventfd(ring, &check_fd) == RBIPC_OK &&
+           check_fd == ext_fd);
 
     rbipc_stats_t stats;
     assert(rbipc_get_stats(ring, &stats) == RBIPC_OK);
@@ -243,7 +252,8 @@ static void test_reactor_external_eventfd_and_negative_paths(void) {
 }
 
 int main(void) {
-    printf("[test_unit_reactor] Running asynchronous eventfd reactor tests...\n");
+    printf(
+        "[test_unit_reactor] Running asynchronous eventfd reactor tests...\n");
     test_reactor_eventfd_lifecycle();
     test_reactor_epoll_integration();
     test_reactor_external_eventfd_and_negative_paths();

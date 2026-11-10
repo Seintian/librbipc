@@ -1,6 +1,7 @@
 /**
  * @file rbipc_ipc.c
- * @brief Implementation of UNIX domain socket SCM_RIGHTS descriptor transmission.
+ * @brief Implementation of UNIX domain socket SCM_RIGHTS descriptor
+ * transmission.
  */
 
 #ifndef _GNU_SOURCE
@@ -16,11 +17,13 @@
 #include <errno.h>
 
 /**
- * @brief Transmit multiple file descriptors across a UNIX domain socket via SCM_RIGHTS.
+ * @brief Transmit multiple file descriptors across a UNIX domain socket via
+ * SCM_RIGHTS.
  */
 RBIPC_LEAF
 int rbipc_ipc_send_fds(int socket_fd, const int *fds, size_t count) {
-    if (RBIPC_UNLIKELY(!rbipc_is_valid_fd(socket_fd) || !fds || count == 0 || count > RBIPC_IPC_MAX_FDS)) {
+    if (RBIPC_UNLIKELY(!rbipc_is_valid_fd(socket_fd) || !fds || count == 0 ||
+                       count > RBIPC_IPC_MAX_FDS)) {
         return RBIPC_ERR_INVAL;
     }
     for (size_t i = 0; i < count; ++i) {
@@ -31,10 +34,7 @@ int rbipc_ipc_send_fds(int socket_fd, const int *fds, size_t count) {
 
     struct msghdr msg = {};
     char dummy = 'R';
-    struct iovec iov = {
-        .iov_base = &dummy,
-        .iov_len = sizeof(dummy)
-    };
+    struct iovec iov = {.iov_base = &dummy, .iov_len = sizeof(dummy)};
     msg.msg_iov = &iov;
     msg.msg_iovlen = 1;
 
@@ -72,7 +72,8 @@ int rbipc_ipc_send_fds(int socket_fd, const int *fds, size_t count) {
 }
 
 /**
- * @brief Transmit a raw file descriptor across a UNIX domain socket via SCM_RIGHTS.
+ * @brief Transmit a raw file descriptor across a UNIX domain socket via
+ * SCM_RIGHTS.
  */
 RBIPC_LEAF
 int rbipc_ipc_send_fd(int socket_fd, int fd_to_send) {
@@ -80,11 +81,14 @@ int rbipc_ipc_send_fd(int socket_fd, int fd_to_send) {
 }
 
 /**
- * @brief Receive multiple file descriptors from a UNIX domain socket via SCM_RIGHTS.
+ * @brief Receive multiple file descriptors from a UNIX domain socket via
+ * SCM_RIGHTS.
  */
 RBIPC_LEAF
-int rbipc_ipc_recv_fds(int socket_fd, int *out_fds, size_t max_count, size_t *out_count) {
-    if (RBIPC_UNLIKELY(!rbipc_is_valid_fd(socket_fd) || !out_fds || max_count == 0 || !out_count)) {
+int rbipc_ipc_recv_fds(int socket_fd, int *out_fds, size_t max_count,
+                       size_t *out_count) {
+    if (RBIPC_UNLIKELY(!rbipc_is_valid_fd(socket_fd) || !out_fds ||
+                       max_count == 0 || !out_count)) {
         return RBIPC_ERR_INVAL;
     }
     *out_count = 0;
@@ -94,10 +98,7 @@ int rbipc_ipc_recv_fds(int socket_fd, int *out_fds, size_t max_count, size_t *ou
 
     struct msghdr msg = {};
     char dummy = 0;
-    struct iovec iov = {
-        .iov_base = &dummy,
-        .iov_len = sizeof(dummy)
-    };
+    struct iovec iov = {.iov_base = &dummy, .iov_len = sizeof(dummy)};
     msg.msg_iov = &iov;
     msg.msg_iovlen = 1;
 
@@ -127,12 +128,14 @@ int rbipc_ipc_recv_fds(int socket_fd, int *out_fds, size_t max_count, size_t *ou
     const size_t control_len = (size_t)msg.msg_controllen;
 
     for (struct cmsghdr *cmsg = CMSG_FIRSTHDR(&msg); cmsg != NULL;
-        cmsg = CMSG_NXTHDR(&msg, cmsg)) {
+         cmsg = CMSG_NXTHDR(&msg, cmsg)) {
         /* Validate the header against the actual received control length so a
          * malformed/oversized cmsg_len cannot drive reads past the buffer that
          * the kernel set up. */
         const unsigned char *chdr = (const unsigned char *)cmsg;
-        if ((size_t)(chdr - (const unsigned char *)msg.msg_control) + sizeof(struct cmsghdr) > control_len) {
+        if ((size_t)(chdr - (const unsigned char *)msg.msg_control) +
+                sizeof(struct cmsghdr) >
+            control_len) {
             break;
         }
         if (cmsg->cmsg_level != SOL_SOCKET || cmsg->cmsg_type != SCM_RIGHTS) {
@@ -145,12 +148,18 @@ int rbipc_ipc_recv_fds(int socket_fd, int *out_fds, size_t max_count, size_t *ou
         /* cmsg_len includes header + padding; bound the payload by the space
          * actually present and by CMSG_SPACE for one int per fd. */
         size_t span = (size_t)cmsg->cmsg_len;
-        if (span > control_len - (size_t)(chdr - (const unsigned char *)msg.msg_control)) {
-            span = control_len - (size_t)(chdr - (const unsigned char *)msg.msg_control);
+        if (span >
+            control_len -
+                (size_t)(chdr - (const unsigned char *)msg.msg_control)) {
+            span = control_len -
+                   (size_t)(chdr - (const unsigned char *)msg.msg_control);
         }
-        size_t fds_present = (span >= sizeof(struct cmsghdr)) ? (span - sizeof(struct cmsghdr)) / sizeof(int) : 0;
+        size_t fds_present = (span >= sizeof(struct cmsghdr))
+                                 ? (span - sizeof(struct cmsghdr)) / sizeof(int)
+                                 : 0;
         size_t num_fds = (hdr_sz / sizeof(int));
-        if (num_fds > fds_present) num_fds = fds_present;
+        if (num_fds > fds_present)
+            num_fds = fds_present;
 
         if (num_fds == 0) {
             continue;
@@ -184,7 +193,8 @@ int rbipc_ipc_recv_fds(int socket_fd, int *out_fds, size_t max_count, size_t *ou
     if (!found_rights) {
         /* No usable SCM_RIGHTS block encountered. Any fds the kernel installed
          * are unreachable here because we skipped non-rights blocks; the drain
-         * above accounts for rights blocks. If none existed, nothing to close. */
+         * above accounts for rights blocks. If none existed, nothing to close.
+         */
         *out_count = 0;
         return RBIPC_ERR_SYS;
     }
@@ -194,7 +204,8 @@ int rbipc_ipc_recv_fds(int socket_fd, int *out_fds, size_t max_count, size_t *ou
 }
 
 /**
- * @brief Receive a raw file descriptor from a UNIX domain socket via SCM_RIGHTS.
+ * @brief Receive a raw file descriptor from a UNIX domain socket via
+ * SCM_RIGHTS.
  */
 RBIPC_LEAF
 int rbipc_ipc_recv_fd(int socket_fd, int *out_received_fd) {
@@ -210,7 +221,8 @@ int rbipc_ipc_recv_fd(int socket_fd, int *out_received_fd) {
 }
 
 /**
- * @brief Transmit the backing file descriptor (and optional eventfd reactor) of a ring buffer across a UNIX domain socket.
+ * @brief Transmit the backing file descriptor (and optional eventfd reactor) of
+ * a ring buffer across a UNIX domain socket.
  */
 RBIPC_LEAF
 int rbipc_send_fd(int socket_fd, const rbipc_ring_t *ring) {
@@ -222,32 +234,36 @@ int rbipc_send_fd(int socket_fd, const rbipc_ring_t *ring) {
         return RBIPC_ERR_INVAL;
     }
     int event_fd = -1;
-    if (rbipc_get_eventfd(ring, &event_fd) == RBIPC_OK && rbipc_is_valid_fd(event_fd)) {
-        int fds[RBIPC_IPC_MAX_FDS_PER_MSG] = { shm_fd, event_fd };
+    if (rbipc_get_eventfd(ring, &event_fd) == RBIPC_OK &&
+        rbipc_is_valid_fd(event_fd)) {
+        int fds[RBIPC_IPC_MAX_FDS_PER_MSG] = {shm_fd, event_fd};
         return rbipc_ipc_send_fds(socket_fd, fds, RBIPC_IPC_MAX_FDS_PER_MSG);
     }
     return rbipc_ipc_send_fds(socket_fd, &shm_fd, 1);
 }
 
 /**
- * @brief Receive a ring buffer descriptor across a socket and attach with role flags, auto-binding eventfd if present.
+ * @brief Receive a ring buffer descriptor across a socket and attach with role
+ * flags, auto-binding eventfd if present.
  */
 RBIPC_LEAF
-int rbipc_recv_fd_ex(int socket_fd, uint32_t role_flags, rbipc_ring_t **out_ring) {
+int rbipc_recv_fd_ex(int socket_fd, uint32_t role_flags,
+                     rbipc_ring_t **out_ring) {
     if (RBIPC_UNLIKELY(!rbipc_is_valid_fd(socket_fd) || !out_ring)) {
         return RBIPC_ERR_INVAL;
     }
     *out_ring = NULL;
 
-    uint32_t known_roles = RBIPC_ROLE_PRODUCER | RBIPC_ROLE_CONSUMER | RBIPC_ROLE_MONITOR;
+    uint32_t known_roles =
+        RBIPC_ROLE_PRODUCER | RBIPC_ROLE_CONSUMER | RBIPC_ROLE_MONITOR;
     if (RBIPC_UNLIKELY(role_flags == 0 || (role_flags & ~known_roles) != 0)) {
         return RBIPC_ERR_INVAL;
     }
 
-    int received_fds[RBIPC_IPC_MAX_FDS_PER_MSG] = { -1, -1 };
+    int received_fds[RBIPC_IPC_MAX_FDS_PER_MSG] = {-1, -1};
     size_t received_count = 0;
-    int rc = rbipc_ipc_recv_fds(socket_fd, received_fds, RBIPC_IPC_MAX_FDS_PER_MSG,
-                                &received_count);
+    int rc = rbipc_ipc_recv_fds(socket_fd, received_fds,
+                                RBIPC_IPC_MAX_FDS_PER_MSG, &received_count);
     if (RBIPC_UNLIKELY(rc != RBIPC_OK || received_count == 0)) {
         return (rc != RBIPC_OK) ? rc : RBIPC_ERR_SYS;
     }
@@ -272,11 +288,13 @@ int rbipc_recv_fd_ex(int socket_fd, uint32_t role_flags, rbipc_ring_t **out_ring
 }
 
 /**
- * @brief Receive a ring buffer descriptor across a socket and attach as producer and consumer.
+ * @brief Receive a ring buffer descriptor across a socket and attach as
+ * producer and consumer.
  */
 RBIPC_LEAF
 int rbipc_recv_fd(int socket_fd, rbipc_ring_t **out_ring) {
-    return rbipc_recv_fd_ex(socket_fd, RBIPC_ROLE_PRODUCER | RBIPC_ROLE_CONSUMER, out_ring);
+    return rbipc_recv_fd_ex(
+        socket_fd, RBIPC_ROLE_PRODUCER | RBIPC_ROLE_CONSUMER, out_ring);
 }
 
 RBIPC_LEAF
@@ -300,7 +318,8 @@ int rbipc_ipc_get_peer_cred(int socket_fd, rbipc_peer_cred_t *out_cred) {
 }
 
 RBIPC_LEAF
-int rbipc_ipc_verify_peer(int socket_fd, uid_t expected_uid, gid_t expected_gid) {
+int rbipc_ipc_verify_peer(int socket_fd, uid_t expected_uid,
+                          gid_t expected_gid) {
     rbipc_peer_cred_t cred;
     int rc = rbipc_ipc_get_peer_cred(socket_fd, &cred);
     if (RBIPC_UNLIKELY(rc != RBIPC_OK)) {
@@ -316,8 +335,8 @@ int rbipc_ipc_verify_peer(int socket_fd, uid_t expected_uid, gid_t expected_gid)
 }
 
 RBIPC_LEAF
-int rbipc_send_fd_auth(int socket_fd, const rbipc_ring_t *ring, uid_t expected_uid,
-                       gid_t expected_gid) {
+int rbipc_send_fd_auth(int socket_fd, const rbipc_ring_t *ring,
+                       uid_t expected_uid, gid_t expected_gid) {
     int rc = rbipc_ipc_verify_peer(socket_fd, expected_uid, expected_gid);
     if (RBIPC_UNLIKELY(rc != RBIPC_OK)) {
         return rc;

@@ -1,6 +1,7 @@
 /**
  * @file test_unit_lease.c
- * @brief Unit tests for consumer lease timeouts and head-of-line blocking recovery.
+ * @brief Unit tests for consumer lease timeouts and head-of-line blocking
+ * recovery.
  */
 
 #include "rbipc.h"
@@ -12,10 +13,8 @@
 #include <time.h>
 
 static void sleep_ms(int ms) {
-    struct timespec ts = {
-        .tv_sec = ms / 1000,
-        .tv_nsec = (ms % 1000) * 1000000L
-    };
+    struct timespec ts = {.tv_sec = ms / 1000,
+                          .tv_nsec = (ms % 1000) * 1000000L};
     nanosleep(&ts, NULL);
 }
 
@@ -78,12 +77,14 @@ static void test_lease_revocation_proactive(void) {
     int revoked = rbipc_revoke_expired_leases(ring);
     assert(revoked == 1);
 
-    /* Consumer attempts to release already-revoked slot -> must fail with RBIPC_ERR_TIMEOUT */
+    /* Consumer attempts to release already-revoked slot -> must fail with
+     * RBIPC_ERR_TIMEOUT */
     rc = rbipc_read_release(ring, rticket);
     assert(rc == RBIPC_ERR_TIMEOUT);
 
     /* Verify revoked slot was recycled to target sequence:
-     * Write remaining 15 slots (tickets 1..15), then write ticket 16 which reuses slot 0. */
+     * Write remaining 15 slots (tickets 1..15), then write ticket 16 which
+     * reuses slot 0. */
     for (int i = 1; i < 16; ++i) {
         void *fill_buf = NULL;
         uint64_t fill_ticket = 0;
@@ -94,7 +95,8 @@ static void test_lease_revocation_proactive(void) {
         assert(rc == RBIPC_OK);
     }
 
-    /* Ticket 16 maps to index (16 & 15) == 0 (slot 0). Must be vacant and claimable. */
+    /* Ticket 16 maps to index (16 & 15) == 0 (slot 0). Must be vacant and
+     * claimable. */
     void *next_buf = NULL;
     uint64_t next_ticket = 0;
     rc = rbipc_reserve_write(ring, 32, &next_buf, &next_ticket);
@@ -142,7 +144,8 @@ static void test_lease_auto_recovery_on_write(void) {
 
     /* Ring is full (slot 0 acquired by stalled consumer, slot 1 committed).
      * Producer attempts to reserve write for ticket 2 (which needs slot 0).
-     * Producer backoff must auto-revoke slot 0 expired lease and claim the slot. */
+     * Producer backoff must auto-revoke slot 0 expired lease and claim the
+     * slot. */
     uint64_t t2 = 0;
     rc = rbipc_reserve_write(ring, 32, &wbuf, &t2);
     assert(rc == RBIPC_OK);
@@ -150,7 +153,8 @@ static void test_lease_auto_recovery_on_write(void) {
     rc = rbipc_commit_write(ring, t2, 32);
     assert(rc == RBIPC_OK);
 
-    /* When stalled consumer finally wakes up and calls release on slot 0, it must fail */
+    /* When stalled consumer finally wakes up and calls release on slot 0, it
+     * must fail */
     rc = rbipc_read_release(ring, rticket);
     assert(rc == RBIPC_ERR_TIMEOUT);
 

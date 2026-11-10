@@ -53,7 +53,8 @@ typedef struct {
     uint8_t payload[48];
 } proc_msg_t;
 
-static_assert(sizeof(proc_msg_t) == SLOT_SIZE, "proc_msg_t must match SLOT_SIZE");
+static_assert(sizeof(proc_msg_t) == SLOT_SIZE,
+              "proc_msg_t must match SLOT_SIZE");
 
 typedef struct {
     _Atomic uint32_t start_flag;
@@ -62,7 +63,8 @@ typedef struct {
     _Atomic uint8_t received[NUM_PRODUCERS][MSGS_PER_PRODUCER];
 } proc_coordination_t;
 
-static void run_producer_process(uint32_t producer_id, proc_coordination_t *coord) {
+static void run_producer_process(uint32_t producer_id,
+                                 proc_coordination_t *coord) {
     rbipc_ring_t *ring = NULL;
     int rc = rbipc_attach(SHM_RING_NAME, &ring);
     if (rc != RBIPC_OK) {
@@ -71,7 +73,8 @@ static void run_producer_process(uint32_t producer_id, proc_coordination_t *coor
     }
 
     /* Wait for start signal */
-    while (atomic_load_explicit(&coord->start_flag, memory_order_acquire) == 0) {
+    while (atomic_load_explicit(&coord->start_flag, memory_order_acquire) ==
+           0) {
         sched_yield();
     }
 
@@ -80,8 +83,11 @@ static void run_producer_process(uint32_t producer_id, proc_coordination_t *coor
     volatile uint64_t canary_after = 0xDEADBEEFCAFEBABEULL;
 
     for (uint32_t i = 0; i < MSGS_PER_PRODUCER; ++i) {
-        if (canary_before != 0xDEADBEEFCAFEBABEULL || canary_after != 0xDEADBEEFCAFEBABEULL) {
-            fprintf(stderr, "[producer %u] STACK CANARY TRIPPED at iter %u (before=%llx after=%llx)\n",
+        if (canary_before != 0xDEADBEEFCAFEBABEULL ||
+            canary_after != 0xDEADBEEFCAFEBABEULL) {
+            fprintf(stderr,
+                    "[producer %u] STACK CANARY TRIPPED at iter %u "
+                    "(before=%llx after=%llx)\n",
                     producer_id, i, (unsigned long long)canary_before,
                     (unsigned long long)canary_after);
             atomic_fetch_add(&coord->error_count, 1);
@@ -107,7 +113,8 @@ static void run_producer_process(uint32_t producer_id, proc_coordination_t *coor
         out->seq = i;
         out->timestamp_ns = get_time_ns();
         for (size_t b = 0; b < sizeof(out->payload); ++b) {
-            out->payload[b] = (uint8_t)((producer_id * 37U + i * 17U + b) & 0xFFU);
+            out->payload[b] =
+                (uint8_t)((producer_id * 37U + i * 17U + b) & 0xFFU);
         }
 
         rc = rbipc_commit_write(ring, ticket, sizeof(proc_msg_t));
@@ -130,18 +137,22 @@ static void run_consumer_process(proc_coordination_t *coord) {
     }
 
     /* Wait for start signal */
-    while (atomic_load_explicit(&coord->start_flag, memory_order_acquire) == 0) {
+    while (atomic_load_explicit(&coord->start_flag, memory_order_acquire) ==
+           0) {
         sched_yield();
     }
 
-    while (atomic_load_explicit(&coord->total_consumed, memory_order_relaxed) < TOTAL_MSGS) {
+    while (atomic_load_explicit(&coord->total_consumed, memory_order_relaxed) <
+           TOTAL_MSGS) {
         const void *rbuf = NULL;
         uint32_t rlen = 0;
         uint64_t ticket = 0;
 
-        rc = rbipc_read_acquire_timeout(ring, 50 * RBIPC_NSEC_PER_MSEC, &rbuf, &rlen, &ticket);
+        rc = rbipc_read_acquire_timeout(ring, 50 * RBIPC_NSEC_PER_MSEC, &rbuf,
+                                        &rlen, &ticket);
         if (rc == RBIPC_ERR_TIMEOUT || rc == RBIPC_ERR_SHUTDOWN) {
-            if (atomic_load_explicit(&coord->total_consumed, memory_order_relaxed) >= TOTAL_MSGS) {
+            if (atomic_load_explicit(&coord->total_consumed,
+                                     memory_order_relaxed) >= TOTAL_MSGS) {
                 break;
             }
             continue;
@@ -152,13 +163,16 @@ static void run_consumer_process(proc_coordination_t *coord) {
         }
 
         const proc_msg_t *msg = (const proc_msg_t *)rbuf;
-        if (msg->producer_id >= NUM_PRODUCERS || msg->seq >= MSGS_PER_PRODUCER) {
+        if (msg->producer_id >= NUM_PRODUCERS ||
+            msg->seq >= MSGS_PER_PRODUCER) {
             atomic_fetch_add(&coord->error_count, 1);
         } else {
             /* Verify payload bytes */
             bool payload_ok = true;
             for (size_t b = 0; b < sizeof(msg->payload); ++b) {
-                uint8_t expected = (uint8_t)((msg->producer_id * 37U + msg->seq * 17U + b) & 0xFFU);
+                uint8_t expected =
+                    (uint8_t)((msg->producer_id * 37U + msg->seq * 17U + b) &
+                              0xFFU);
                 if (msg->payload[b] != expected) {
                     payload_ok = false;
                     break;
@@ -170,14 +184,16 @@ static void run_consumer_process(proc_coordination_t *coord) {
 
             /* Record reception */
             uint8_t prev = atomic_exchange_explicit(
-                &coord->received[msg->producer_id][msg->seq], 1, memory_order_relaxed);
+                &coord->received[msg->producer_id][msg->seq], 1,
+                memory_order_relaxed);
             if (prev != 0) {
                 /* Duplicate message received */
                 atomic_fetch_add(&coord->error_count, 1);
             }
         }
 
-        atomic_fetch_add_explicit(&coord->total_consumed, 1, memory_order_relaxed);
+        atomic_fetch_add_explicit(&coord->total_consumed, 1,
+                                  memory_order_relaxed);
         rc = rbipc_read_release(ring, ticket);
         if (rc != RBIPC_OK) {
             atomic_fetch_add(&coord->error_count, 1);
@@ -189,8 +205,10 @@ static void run_consumer_process(proc_coordination_t *coord) {
     _exit(0);
 }
 
-static void test_process_stress_round(uint32_t wait_policy, const char *policy_desc) {
-    printf("  [test_e2e_process_stress] Running round with %s...\n", policy_desc);
+static void test_process_stress_round(uint32_t wait_policy,
+                                      const char *policy_desc) {
+    printf("  [test_e2e_process_stress] Running round with %s...\n",
+           policy_desc);
 
     rbipc_destroy(SHM_RING_NAME);
 
@@ -203,7 +221,8 @@ static void test_process_stress_round(uint32_t wait_policy, const char *policy_d
 
     /* Create shared memory ring */
     rbipc_ring_t *master_ring = NULL;
-    int rc = rbipc_create(SHM_RING_NAME, RING_CAPACITY, SLOT_SIZE, &master_ring);
+    int rc =
+        rbipc_create(SHM_RING_NAME, RING_CAPACITY, SLOT_SIZE, &master_ring);
     assert(rc == RBIPC_OK);
     assert(rbipc_set_wait_policy(master_ring, wait_policy) == RBIPC_OK);
 
@@ -267,12 +286,14 @@ static void test_process_stress_round(uint32_t wait_policy, const char *policy_d
 }
 
 int main(void) {
-    printf("[test_e2e_process_stress] Running multi-process MPMC stress test (%d msgs across %d producers, %d consumers)...\n",
+    printf("[test_e2e_process_stress] Running multi-process MPMC stress test "
+           "(%d msgs across %d producers, %d consumers)...\n",
            TOTAL_MSGS, NUM_PRODUCERS, NUM_CONSUMERS);
 
     test_process_stress_round(RBIPC_WAIT_ZERO_SPIN, "RBIPC_WAIT_ZERO_SPIN");
     test_process_stress_round(RBIPC_WAIT_ADAPTIVE, "RBIPC_WAIT_ADAPTIVE");
 
-    printf("[test_e2e_process_stress] All multi-process stress tests passed successfully.\n");
+    printf("[test_e2e_process_stress] All multi-process stress tests passed "
+           "successfully.\n");
     return 0;
 }
