@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [1.1.0] - 2026-11-05
 
-### Added
+### [1.1.0] - Added
 
 - Real Intel DSA MOVDIR64B dispatch in the DMA write path. The DMA engine now
   builds a 64-byte hardware descriptor, submits it to a work-queue portal via
@@ -19,7 +19,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   full, the producer posts a READ help request for the oldest unread slot
   before sleeping, reducing wake latency for wait-free consumers.
 
-### Changed
+### [1.1.0] - Changed
 
 - Doxyfile version now derives from the Makefile `VERSION` single source of
   truth instead of a hardcoded value.
@@ -31,7 +31,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `RBIPC_SPIN_COUNT_DEFAULT` spin budget and portable `rbipc_cpu_pause()`,
   replacing an unbounded spin with a branchless result selection.
 
-### Fixed
+### [1.1.0] - Fixed
 
 - `ARCHITECTURE.md` header/slot layout drift vs the actual ABI.
 - `README.md` automated test suite count (31 -> 38).
@@ -42,7 +42,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [1.0.0] - 2026-11-05
 
-### Added
+### [1.0.0] - Added
 
 - Lock-free, zero-dependency shared-memory ring buffer IPC library in ISO C23.
 - Single-slot zero-copy I/O (`rbipc_reserve_write` / `rbipc_commit_write` /
