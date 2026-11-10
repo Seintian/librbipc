@@ -42,6 +42,16 @@
 RBIPC_NODISCARD RBIPC_LEAF size_t rbipc_stream_threshold(void);
 
 /**
+ * @brief Retrieve the runtime-detected L1 data cache line size in bytes.
+ * @details Returns the hardware profile's cache line size when available,
+ *          falling back to the compile-time @c RBIPC_CACHE_LINE constant.
+ *          Used to align streaming copy heads to the physical cache line
+ *          boundary, which may differ from the compile-time ABI constant on
+ *          heterogeneous or virtualized hardware.
+ */
+RBIPC_NODISCARD RBIPC_LEAF size_t rbipc_stream_cache_line_size(void);
+
+/**
  * @brief Copy memory buffer using cache-bypassing non-temporal streaming
  * stores.
  *

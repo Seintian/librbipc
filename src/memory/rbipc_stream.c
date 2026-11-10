@@ -106,6 +106,12 @@ RBIPC_LEAF size_t rbipc_stream_threshold(void) {
   return (prof && prof->stream_threshold > 0) ? prof->stream_threshold : RBIPC_STREAM_THRESHOLD_DEFAULT;
 }
 
+RBIPC_LEAF size_t rbipc_stream_cache_line_size(void) {
+  const rbipc_hardware_profile_t *prof = rbipc_get_hardware_profile();
+  return (prof && prof->cache_line_size > 0) ? prof->cache_line_size
+                                             : RBIPC_CACHE_LINE;
+}
+
 /**
  * @brief Copies the unaligned head of a buffer up to the next power-of-two
  *        alignment boundary.
@@ -140,7 +146,7 @@ int rbipc_stream_copy(void *RBIPC_RESTRICT dst, const void *RBIPC_RESTRICT src,
 #if defined(__x86_64__) || defined(_M_X64)
   size_t stream_thresh = rbipc_stream_threshold();
   if (size >= stream_thresh) {
-    rbipc_stream_align_head(&d, &s, &size, RBIPC_CACHE_LINE);
+    rbipc_stream_align_head(&d, &s, &size, rbipc_stream_cache_line_size());
 
 #if defined(__GNUC__) || defined(__clang__)
     if (__builtin_cpu_supports("avx512f") && size >= 64) {
