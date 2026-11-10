@@ -51,7 +51,7 @@ bool rbipc_dma_available(void) {
   if (__get_cpuid_count(7, 0, &eax, &ebx, &ecx, &edx)) {
     /* ECX bit 27: MOVDIR64B */
     /* ECX bit 29: ENQCMD */
-    if ((ecx & (1U << 27)) && (ecx & (1U << 29))) {
+    if ((ecx & (1U << 27U)) && (ecx & (1U << 29U))) {
       /* Verify that /dev/dsa work queues exist */
       if (access("/dev/dsa", F_OK) == 0) {
         supported = 1;

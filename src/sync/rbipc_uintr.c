@@ -42,7 +42,7 @@ bool rbipc_uintr_available(void) {
   bool supported = false;
   if (__get_cpuid_count(7, 0, &eax, &ebx, &ecx, &edx)) {
     /* EDX bit 5: UINTR (User Interrupts) */
-    if (edx & (1U << 5)) {
+    if (edx & (1U << 5U)) {
       supported = true;
     }
   }

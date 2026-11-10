@@ -62,8 +62,8 @@ RBIPC_INTERNAL uint32_t rbipc_simd_scan_avx512(const rbipc_slot_t *slots, uint32
                                                uint64_t t, uint32_t count,
                                                uint64_t offset, bool is_packed) {
   uint32_t avail = 0;
-  long long masked_t = (long long)(t + offset) &
-                       (is_packed ? (long long)RBIPC_PACKED_SEQ_TURN_MASK : -1LL);
+  long long masked_t = (long long)((t + offset) &
+                       (is_packed ? RBIPC_PACKED_SEQ_TURN_MASK : UINT64_MAX));
   long long start_t = masked_t;
   __m512i vtgt = _mm512_set_epi64(start_t + 7, start_t + 6, start_t + 5, start_t + 4,
                                   start_t + 3, start_t + 2, start_t + 1, start_t);
@@ -127,8 +127,8 @@ RBIPC_INTERNAL uint32_t rbipc_simd_scan_avx2(const rbipc_slot_t *slots, uint32_t
                                              uint64_t t, uint32_t count,
                                              uint64_t offset, bool is_packed) {
   uint32_t avail = 0;
-  long long masked_t = (long long)(t + offset) &
-                       (is_packed ? (long long)RBIPC_PACKED_SEQ_TURN_MASK : -1LL);
+  long long masked_t = (long long)((t + offset) &
+                       (is_packed ? RBIPC_PACKED_SEQ_TURN_MASK : UINT64_MAX));
   long long start_t = masked_t;
   __m256i vtgt = _mm256_set_epi64x(start_t + 3, start_t + 2, start_t + 1, start_t);
   const __m256i vstep = _mm256_set1_epi64x(4);
@@ -200,8 +200,8 @@ RBIPC_INTERNAL uint32_t rbipc_simd_scan_avx(const rbipc_slot_t *slots, uint32_t 
                                             uint64_t t, uint32_t count,
                                             uint64_t offset, bool is_packed) {
   uint32_t avail = 0;
-  long long masked_t = (long long)(t + offset) &
-                       (is_packed ? (long long)RBIPC_PACKED_SEQ_TURN_MASK : -1LL);
+  long long masked_t = (long long)((t + offset) &
+                       (is_packed ? RBIPC_PACKED_SEQ_TURN_MASK : UINT64_MAX));
   long long start_t = masked_t;
   __m128i vtgt0 = _mm_set_epi64x(start_t + 1, start_t + 0);
   __m128i vtgt1 = _mm_set_epi64x(start_t + 3, start_t + 2);
@@ -266,8 +266,8 @@ RBIPC_INTERNAL uint32_t rbipc_simd_scan_sse41(const rbipc_slot_t *slots, uint32_
                                               uint64_t t, uint32_t count,
                                               uint64_t offset, bool is_packed) {
   uint32_t avail = 0;
-  long long masked_t = (long long)(t + offset) &
-                       (is_packed ? (long long)RBIPC_PACKED_SEQ_TURN_MASK : -1LL);
+  long long masked_t = (long long)((t + offset) &
+                       (is_packed ? RBIPC_PACKED_SEQ_TURN_MASK : UINT64_MAX));
   long long start_t = masked_t;
   __m128i vtgt = _mm_set_epi64x(start_t + 1, start_t);
   const __m128i vstep = _mm_set1_epi64x(2);

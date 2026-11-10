@@ -54,7 +54,7 @@ bool rbipc_mpk_available(void) {
   if (__get_cpuid_count(7, 0, &eax, &ebx, &ecx, &edx)) {
     /* ECX bit 3: PKU (Protection Keys User pages) */
     /* ECX bit 4: OSPKE (OS has enabled CR4.PKE) */
-    if ((ecx & (1U << 3)) && (ecx & (1U << 4))) {
+    if ((ecx & (1U << 3U)) && (ecx & (1U << 4U))) {
       /* Verify kernel runtime support via pkey_alloc */
       int pkey = pkey_alloc(0, 0);
       if (pkey >= 0) {

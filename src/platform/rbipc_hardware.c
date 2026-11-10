@@ -121,8 +121,8 @@ static uint32_t rbipc_detect_spin_count(void) {
   unsigned int eax = 0, ebx = 0, ecx = 0, edx = 0;
   unsigned int family = 0, model = 0;
   if (__get_cpuid(1, &eax, &ebx, &ecx, &edx)) {
-    family = ((eax >> 8) & 0x0F) + ((eax >> 20) & 0xFF);
-    model = ((eax >> 4) & 0x0F) | ((eax >> 12) & 0xF0);
+    family = ((eax >> 8U) & 0x0FU) + ((eax >> 20U) & 0xFFU);
+    model = ((eax >> 4U) & 0x0FU) | ((eax >> 12U) & 0xF0U);
     if (family == 6 && (model == 0x4E || model == 0x5E || model == 0x8E ||
                         model == 0x9E || model == 0x55)) {
       spin = 16U;

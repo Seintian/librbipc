@@ -117,7 +117,7 @@ RBIPC_INLINE RBIPC_CONST bool rbipc_is_power_of_two(uint32_t val) {
  * @return true if within admissible operational bounds, false otherwise.
  */
 RBIPC_INLINE RBIPC_CONST bool rbipc_is_valid_capacity(size_t capacity) {
-    return ((capacity - RBIPC_MIN_CAPACITY) <= (RBIPC_MAX_CAPACITY - RBIPC_MIN_CAPACITY)) &
+    return ((capacity - RBIPC_MIN_CAPACITY) <= (RBIPC_MAX_CAPACITY - RBIPC_MIN_CAPACITY)) &&
            ((capacity & (capacity - 1U)) == 0);
 }
 

@@ -51,7 +51,7 @@
 #endif
 
 #ifndef IORING_SETUP_SQPOLL
-#define IORING_SETUP_SQPOLL (1U << 1)
+#define IORING_SETUP_SQPOLL (1U << 1U)
 #endif
 
 /* Linux kernel struct io_sqring_offsets */
