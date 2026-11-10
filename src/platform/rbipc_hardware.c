@@ -252,30 +252,18 @@ const rbipc_hardware_profile_t *rbipc_get_hardware_profile(void) {
   return &s_profile;
 }
 
-RBIPC_LEAF size_t rbipc_hardware_cache_line_size(void) {
-  return rbipc_get_hardware_profile()->cache_line_size;
-}
+/* Generates a leaf accessor that returns a single field of the cached
+ * hardware profile. All accessors share the identical shape; the macro
+ * parameterizes only the function name, return type, and profile field. */
+#define RBIPC_HW_ACCESSOR(name, type, field) \
+  RBIPC_LEAF type name(void) { return rbipc_get_hardware_profile()->field; }
 
-RBIPC_LEAF size_t rbipc_hardware_page_size(void) {
-  return rbipc_get_hardware_profile()->page_size;
-}
+RBIPC_HW_ACCESSOR(rbipc_hardware_cache_line_size, size_t, cache_line_size)
+RBIPC_HW_ACCESSOR(rbipc_hardware_page_size, size_t, page_size)
+RBIPC_HW_ACCESSOR(rbipc_hardware_huge_page_size, size_t, huge_page_size)
+RBIPC_HW_ACCESSOR(rbipc_hardware_streaming_threshold, size_t, stream_threshold)
+RBIPC_HW_ACCESSOR(rbipc_hardware_dma_threshold, size_t, dma_offload_threshold)
+RBIPC_HW_ACCESSOR(rbipc_hardware_online_cores, uint32_t, online_cores)
+RBIPC_HW_ACCESSOR(rbipc_hardware_tsc_ticks_per_ns, uint64_t, tsc_ticks_per_ns)
 
-RBIPC_LEAF size_t rbipc_hardware_huge_page_size(void) {
-  return rbipc_get_hardware_profile()->huge_page_size;
-}
-
-RBIPC_LEAF size_t rbipc_hardware_streaming_threshold(void) {
-  return rbipc_get_hardware_profile()->stream_threshold;
-}
-
-RBIPC_LEAF size_t rbipc_hardware_dma_threshold(void) {
-  return rbipc_get_hardware_profile()->dma_offload_threshold;
-}
-
-RBIPC_LEAF uint32_t rbipc_hardware_online_cores(void) {
-  return rbipc_get_hardware_profile()->online_cores;
-}
-
-RBIPC_LEAF uint64_t rbipc_hardware_tsc_ticks_per_ns(void) {
-  return rbipc_get_hardware_profile()->tsc_ticks_per_ns;
-}
+#undef RBIPC_HW_ACCESSOR

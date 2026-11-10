@@ -39,8 +39,7 @@ rbipc_batch_populate_reserved(rbipc_ring_t *RBIPC_RESTRICT ring, uint64_t t,
                               rbipc_iovec_t *RBIPC_RESTRICT iovecs) {
   const uint32_t mask = ring->cached_capacity_mask;
   const uint32_t slot_size = ring->cached_slot_size;
-  rbipc_slot_t *slots =
-      (rbipc_slot_t *)RBIPC_ASSUME_ALIGNED(ring->slots, RBIPC_CACHE_LINE);
+  rbipc_slot_t *slots = RBIPC_SLOTS(ring);
   pid_t my_pid = ring->cached_pid;
 
   if (RBIPC_UNLIKELY(ring->is_isolated)) {
@@ -75,8 +74,7 @@ rbipc_batch_populate_acquired(const rbipc_ring_t *RBIPC_RESTRICT ring,
                               uint64_t t, uint32_t count,
                               rbipc_rovec_t *RBIPC_RESTRICT rovecs) {
   const uint32_t mask = ring->cached_capacity_mask;
-  rbipc_slot_t *slots =
-      (rbipc_slot_t *)RBIPC_ASSUME_ALIGNED(ring->slots, RBIPC_CACHE_LINE);
+  rbipc_slot_t *slots = RBIPC_SLOTS(ring);
   pid_t my_pid = ring->cached_pid;
   uint64_t now_ts = rbipc_clock_monotonic_ns();
 
@@ -156,8 +154,7 @@ rbipc_batch_commit_slots(rbipc_ring_t *RBIPC_RESTRICT ring, uint32_t count,
                          const uint64_t *RBIPC_RESTRICT tickets,
                          const uint32_t *RBIPC_RESTRICT written_lens) {
   const uint32_t mask = ring->cached_capacity_mask;
-  rbipc_slot_t *slots =
-      (rbipc_slot_t *)RBIPC_ASSUME_ALIGNED(ring->slots, RBIPC_CACHE_LINE);
+  rbipc_slot_t *slots = RBIPC_SLOTS(ring);
 
   /* Coalesced release fence: guarantees all prior payload and metadata writes are
    * visible before any slot sequence is published to readers. */
@@ -216,8 +213,7 @@ static int rbipc_batch_release_slots(rbipc_ring_t *RBIPC_RESTRICT ring,
   rbipc_shm_header_t *hdr = ring->hdr;
   const uint32_t mask = ring->cached_capacity_mask;
   const uint32_t cap = ring->cached_capacity;
-  rbipc_slot_t *slots =
-      (rbipc_slot_t *)RBIPC_ASSUME_ALIGNED(ring->slots, RBIPC_CACHE_LINE);
+  rbipc_slot_t *slots = RBIPC_SLOTS(ring);
   pid_t my_pid =
       (atomic_load_explicit(&hdr->lease_timeout_ns, memory_order_relaxed) > 0)
           ? ring->cached_pid
@@ -289,8 +285,7 @@ int rbipc_reserve_write_batch_timeout(rbipc_ring_t *RBIPC_RESTRICT ring,
   rbipc_sync_state_t sync_state;
   rbipc_sync_state_init(&sync_state, timeout_ns);
 
-  rbipc_slot_t *slots =
-      (rbipc_slot_t *)RBIPC_ASSUME_ALIGNED(ring->slots, RBIPC_CACHE_LINE);
+  rbipc_slot_t *slots = RBIPC_SLOTS(ring);
 
   for (;;) {
     if (RBIPC_UNLIKELY(rbipc_ring_is_shutdown(hdr))) {
@@ -438,8 +433,7 @@ int rbipc_read_acquire_batch_timeout(rbipc_ring_t *RBIPC_RESTRICT ring,
   rbipc_sync_state_t sync_state;
   rbipc_sync_state_init(&sync_state, timeout_ns);
 
-  rbipc_slot_t *slots =
-      (rbipc_slot_t *)RBIPC_ASSUME_ALIGNED(ring->slots, RBIPC_CACHE_LINE);
+  rbipc_slot_t *slots = RBIPC_SLOTS(ring);
 
   for (;;) {
     uint32_t avail =

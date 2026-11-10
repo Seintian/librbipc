@@ -57,8 +57,7 @@ static void rbipc_pubsub_commit_slot_payload(rbipc_ring_t *ring,
                                              uint32_t len) {
   rbipc_shm_header_t *hdr = ring->hdr;
   const uint32_t mask = hdr->capacity_mask;
-  rbipc_slot_t *slots =
-      (rbipc_slot_t *)RBIPC_ASSUME_ALIGNED(ring->slots, RBIPC_CACHE_LINE);
+  rbipc_slot_t *slots = RBIPC_SLOTS(ring);
 
   rbipc_slot_t *slot = &slots[ticket & mask];
   rbipc_pubsub_mark_slot_reserved(slot, ring->cached_pid);
@@ -125,8 +124,7 @@ int rbipc_publish_reserve(rbipc_ring_t *ring, uint32_t len, void **out_buf,
   uint64_t ticket =
       atomic_fetch_add_explicit(&hdr->write_ticket, 1, memory_order_relaxed);
   const uint32_t mask = hdr->capacity_mask;
-  rbipc_slot_t *slots =
-      (rbipc_slot_t *)RBIPC_ASSUME_ALIGNED(ring->slots, RBIPC_CACHE_LINE);
+  rbipc_slot_t *slots = RBIPC_SLOTS(ring);
   rbipc_slot_t *slot = &slots[ticket & mask];
 
   rbipc_pubsub_mark_slot_reserved(slot, ring->cached_pid);
@@ -165,8 +163,7 @@ int rbipc_publish_commit(rbipc_ring_t *ring, uint64_t ticket, uint32_t len) {
   }
 
   const uint32_t mask = hdr->capacity_mask;
-  rbipc_slot_t *slots =
-      (rbipc_slot_t *)RBIPC_ASSUME_ALIGNED(ring->slots, RBIPC_CACHE_LINE);
+  rbipc_slot_t *slots = RBIPC_SLOTS(ring);
   rbipc_slot_t *slot = &slots[ticket & mask];
 
   if (ring->is_packed) {
@@ -187,8 +184,7 @@ int rbipc_publish_abort(rbipc_ring_t *ring, uint64_t ticket) {
   }
   rbipc_shm_header_t *hdr = ring->hdr;
   const uint32_t mask = hdr->capacity_mask;
-  rbipc_slot_t *slots =
-      (rbipc_slot_t *)RBIPC_ASSUME_ALIGNED(ring->slots, RBIPC_CACHE_LINE);
+  rbipc_slot_t *slots = RBIPC_SLOTS(ring);
   rbipc_slot_t *slot = &slots[ticket & mask];
 
   bool poisoned = ring->is_packed ? rbipc_slot_poison_packed(slot, ticket)
@@ -306,8 +302,7 @@ int rbipc_sub_poll(rbipc_sub_t *sub, const void **out_buf, uint32_t *out_len,
   }
 
   uint32_t mask = hdr->capacity_mask;
-  const rbipc_slot_t *slots =
-      (const rbipc_slot_t *)RBIPC_ASSUME_ALIGNED(ring->slots, RBIPC_CACHE_LINE);
+  const rbipc_slot_t *slots = RBIPC_SLOTS(ring);
   const rbipc_slot_t *slot = &slots[sub->cursor & mask];
   uint64_t seq = atomic_load_explicit(&slot->sequence, memory_order_acquire);
 
@@ -354,8 +349,7 @@ int rbipc_sub_poll_batch(rbipc_sub_t *sub, uint32_t max_count,
   }
 
   uint32_t mask = hdr->capacity_mask;
-  const rbipc_slot_t *slots =
-      (const rbipc_slot_t *)RBIPC_ASSUME_ALIGNED(ring->slots, RBIPC_CACHE_LINE);
+  const rbipc_slot_t *slots = RBIPC_SLOTS(ring);
   uint32_t count = 0;
 
   while (count < max_count && sub->cursor < head) {

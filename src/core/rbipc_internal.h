@@ -84,6 +84,11 @@ struct rbipc_ring {
   uint32_t help_slot_index; /**< Assigned index in cooperative helper array. */
 };
 
+/* Resolves the slot descriptor array with a cache-line alignment hint. The
+ * hint is a no-op on compilers without __builtin_assume_aligned. */
+#define RBIPC_SLOTS(ring) \
+  ((rbipc_slot_t *)RBIPC_ASSUME_ALIGNED((ring)->slots, RBIPC_CACHE_LINE))
+
 /**
  * @brief Bounded, null-terminating string copy without insecure C runtime
  * warnings.

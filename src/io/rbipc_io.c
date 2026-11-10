@@ -371,8 +371,7 @@ int rbipc_reserve_write_timeout(rbipc_ring_t *RBIPC_RESTRICT ring, uint32_t len,
   rbipc_shm_header_t *hdr = ring->hdr;
   const uint32_t mask = ring->cached_capacity_mask;
   const uint32_t cap = hdr->capacity;
-  rbipc_slot_t *slots =
-      (rbipc_slot_t *)RBIPC_ASSUME_ALIGNED(ring->slots, RBIPC_CACHE_LINE);
+  rbipc_slot_t *slots = RBIPC_SLOTS(ring);
 
   rbipc_sync_state_t sync_state;
   rbipc_sync_state_init(&sync_state, timeout_ns);
@@ -584,8 +583,7 @@ int rbipc_read_acquire_timeout(rbipc_ring_t *RBIPC_RESTRICT ring,
 
   rbipc_shm_header_t *hdr = ring->hdr;
   const uint32_t mask = ring->cached_capacity_mask;
-  rbipc_slot_t *slots =
-      (rbipc_slot_t *)RBIPC_ASSUME_ALIGNED(ring->slots, RBIPC_CACHE_LINE);
+  rbipc_slot_t *slots = RBIPC_SLOTS(ring);
   rbipc_sync_state_t sync_state;
   rbipc_sync_state_init(&sync_state, timeout_ns);
 
