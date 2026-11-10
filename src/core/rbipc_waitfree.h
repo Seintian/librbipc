@@ -29,6 +29,12 @@ extern "C" {
 #define RBIPC_HELP_MAX_PEERS 64U
 #define RBIPC_HELP_FAST_TRIES 32U
 
+/**
+ * @def RBIPC_HELP_WAIT_ROUNDS_MULT
+ * @brief Multiplier applied to RBIPC_HELP_MAX_PEERS to bound cooperative wait rounds.
+ */
+#define RBIPC_HELP_WAIT_ROUNDS_MULT 4U
+
 enum rbipc_help_state {
   RBIPC_HELP_IDLE = 0,
   RBIPC_HELP_POSTED = 1,

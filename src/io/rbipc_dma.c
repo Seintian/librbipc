@@ -49,11 +49,11 @@ bool rbipc_dma_available(void) {
   unsigned int eax = 0, ebx = 0, ecx = 0, edx = 0;
   int supported = 0;
   if (__get_cpuid_count(7, 0, &eax, &ebx, &ecx, &edx)) {
-    /* ECX bit 27: MOVDIR64B */
-    /* ECX bit 29: ENQCMD */
-    if ((ecx & (1U << 27U)) && (ecx & (1U << 29U))) {
+    /* ECX bit 27: MOVDIR64B, ECX bit 29: ENQCMD */
+    if ((ecx & RBIPC_CPUID_ECX_MOVDIR64B_BIT) &&
+        (ecx & RBIPC_CPUID_ECX_ENQCMD_BIT)) {
       /* Verify that /dev/dsa work queues exist */
-      if (access("/dev/dsa", F_OK) == 0) {
+      if (access(RBIPC_DSA_DEV_DIR, F_OK) == 0) {
         supported = 1;
       }
     }
@@ -91,7 +91,7 @@ static _Atomic int g_dsa_wq_state = 0; /* 0 = uninitialized, 1 = ready, -1 = fai
 static int rbipc_dsa_wq_init(rbipc_dsa_wq_t *wq) {
   /* Locate the first work-queue device node. The accel-config driver exposes
    * one character device per configured work queue under /dev/dsa/. */
-  const char *wq_path = "/dev/dsa/wq0.0";
+  const char *wq_path = RBIPC_DSA_WQ_PATH;
   int fd = open(wq_path, O_RDWR | O_CLOEXEC);
   if (fd < 0) {
     return -1;
@@ -99,7 +99,8 @@ static int rbipc_dsa_wq_init(rbipc_dsa_wq_t *wq) {
 
   /* The submission portal is the WQ's MMIO region, exposed via mmap on the
    * device fd. The portal size is one page. */
-  void *portal = mmap(NULL, 4096U, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
+  void *portal = mmap(NULL, RBIPC_DSA_PORTAL_SIZE, PROT_READ | PROT_WRITE,
+                      MAP_SHARED, fd, 0);
   if (portal == MAP_FAILED) {
     close(fd);
     return -1;
@@ -168,10 +169,10 @@ static int rbipc_dma_dispatch(rbipc_dsa_wq_t *wq, void *dst, const void *src,
   rbipc_dma_desc_t desc;
   memset(&desc, 0, sizeof(desc));
 
-  /* MEMMOVE opcode (0x03). Request completion record (RCR) so the hardware
+  /* MEMMOVE opcode. Request completion record (RCR) so the hardware
    * writes the completion record on completion. */
-  desc.op = 0x03U;
-  desc.flags = 0x0008U; /* IDXD_OP_FLAG_RCR */
+  desc.op = RBIPC_DSA_OP_MEMMOVE;
+  desc.flags = RBIPC_DSA_FLAG_RCR; /* IDXD_OP_FLAG_RCR */
   desc.completion_addr = (uint64_t)(uintptr_t)&wq->completion;
   desc.src_addr = (uint64_t)(uintptr_t)src;
   desc.dst_addr = (uint64_t)(uintptr_t)dst;

@@ -16,6 +16,7 @@
 
 #include "rbipc.h"
 #include "rbipc_uintr.h"
+#include "rbipc_arch.h"
 
 #if defined(__x86_64__)
 #include <cpuid.h>
@@ -42,7 +43,7 @@ bool rbipc_uintr_available(void) {
   bool supported = false;
   if (__get_cpuid_count(7, 0, &eax, &ebx, &ecx, &edx)) {
     /* EDX bit 5: UINTR (User Interrupts) */
-    if (edx & (1U << 5U)) {
+    if (edx & RBIPC_CPUID_EDX_UINTR_BIT) {
       supported = true;
     }
   }

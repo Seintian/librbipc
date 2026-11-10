@@ -61,6 +61,42 @@
 #define FUTEX_WAITV_MAX 128
 #endif
 
+/**
+ * @def RBIPC_U64_LOW32_OFFSET
+ * @brief Byte offset of the low 32 bits within a 64-bit word on big-endian hosts.
+ */
+#define RBIPC_U64_LOW32_OFFSET 4U
+
+/**
+ * @def RBIPC_FUTEX_OP_SHIFT
+ * @brief Bit position of the FUTEX_WAKE_OP operation field in val3.
+ */
+#define RBIPC_FUTEX_OP_SHIFT 28U
+
+/**
+ * @def RBIPC_FUTEX_CMP_SHIFT
+ * @brief Bit position of the FUTEX_WAKE_OP comparison field in val3.
+ */
+#define RBIPC_FUTEX_CMP_SHIFT 24U
+
+/**
+ * @def RBIPC_FUTEX_OPARG_SHIFT
+ * @brief Bit position of the FUTEX_WAKE_OP operand field in val3.
+ */
+#define RBIPC_FUTEX_OPARG_SHIFT 12U
+
+/**
+ * @def RBIPC_FUTEX_OP_MASK
+ * @brief Width mask of the operation and comparison fields in val3.
+ */
+#define RBIPC_FUTEX_OP_MASK 0x0fU
+
+/**
+ * @def RBIPC_FUTEX_OPARG_MASK
+ * @brief Width mask of the operand and comparison-operand fields in val3.
+ */
+#define RBIPC_FUTEX_OPARG_MASK 0x0fffU
+
 #ifndef FUTEX_WAKE_OP
 #define FUTEX_WAKE_OP 5
 #endif

@@ -18,6 +18,7 @@
 #include "rbipc_internal.h"
 #include "rbipc_mpk.h"
 #include "rbipc_vmem.h"
+#include "rbipc_arch.h"
 
 #include <errno.h>
 #include <sys/mman.h>
@@ -54,7 +55,8 @@ bool rbipc_mpk_available(void) {
   if (__get_cpuid_count(7, 0, &eax, &ebx, &ecx, &edx)) {
     /* ECX bit 3: PKU (Protection Keys User pages) */
     /* ECX bit 4: OSPKE (OS has enabled CR4.PKE) */
-    if ((ecx & (1U << 3U)) && (ecx & (1U << 4U))) {
+    if ((ecx & RBIPC_CPUID_ECX_PKU_BIT) &&
+        (ecx & RBIPC_CPUID_ECX_OSPKE_BIT)) {
       /* Verify kernel runtime support via pkey_alloc */
       int pkey = pkey_alloc(0, 0);
       if (pkey >= 0) {
@@ -184,7 +186,7 @@ void rbipc_mpk_allow_write(const rbipc_ring_t *ring) {
   }
   /* Clear bit (2 * pkey + 1) -> Disable Write cleared for the data key only. */
   uint32_t pkru =
-      s_mpk_saved_pkru & ~(1U << (2 * (uint32_t)ring->data_pkey + 1));
+      s_mpk_saved_pkru & ~RBIPC_PKRU_WRITE_BIT(ring->data_pkey);
   rbipc_wrpkru(pkru);
 }
 

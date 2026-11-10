@@ -241,7 +241,8 @@ int rbipc_waitfree_post_and_wait(rbipc_ring_t *ring, uint64_t ticket,
   }
 
   /* Bounded cooperative wait loop */
-  for (uint32_t round = 0; round < (RBIPC_HELP_MAX_PEERS * 4); ++round) {
+  for (uint32_t round = 0;
+       round < (RBIPC_HELP_MAX_PEERS * RBIPC_HELP_WAIT_ROUNDS_MULT); ++round) {
     uint32_t st = atomic_load_explicit(&help->state, memory_order_acquire);
     if (st == RBIPC_HELP_COMPLETED) {
       atomic_store_explicit(&help->state, RBIPC_HELP_IDLE, memory_order_release);

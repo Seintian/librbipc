@@ -38,10 +38,10 @@ int rbipc_ipc_send_fds(int socket_fd, const int *fds, size_t count) {
     msg.msg_iov = &iov;
     msg.msg_iovlen = 1;
 
-    char stack_cmsg[CMSG_SPACE(8 * sizeof(int))] = {};
+    char stack_cmsg[CMSG_SPACE(RBIPC_IPC_STACK_FDS * sizeof(int))] = {};
     char *cmsg_buf = stack_cmsg;
     size_t control_len = CMSG_SPACE(count * sizeof(int));
-    if (count > 8) {
+    if (count > RBIPC_IPC_STACK_FDS) {
         cmsg_buf = (char *)malloc(control_len);
         if (RBIPC_UNLIKELY(!cmsg_buf)) {
             return RBIPC_ERR_NOMEM;
@@ -223,8 +223,8 @@ int rbipc_send_fd(int socket_fd, const rbipc_ring_t *ring) {
     }
     int event_fd = -1;
     if (rbipc_get_eventfd(ring, &event_fd) == RBIPC_OK && rbipc_is_valid_fd(event_fd)) {
-        int fds[2] = { shm_fd, event_fd };
-        return rbipc_ipc_send_fds(socket_fd, fds, 2);
+        int fds[RBIPC_IPC_MAX_FDS_PER_MSG] = { shm_fd, event_fd };
+        return rbipc_ipc_send_fds(socket_fd, fds, RBIPC_IPC_MAX_FDS_PER_MSG);
     }
     return rbipc_ipc_send_fds(socket_fd, &shm_fd, 1);
 }
@@ -244,9 +244,10 @@ int rbipc_recv_fd_ex(int socket_fd, uint32_t role_flags, rbipc_ring_t **out_ring
         return RBIPC_ERR_INVAL;
     }
 
-    int received_fds[2] = { -1, -1 };
+    int received_fds[RBIPC_IPC_MAX_FDS_PER_MSG] = { -1, -1 };
     size_t received_count = 0;
-    int rc = rbipc_ipc_recv_fds(socket_fd, received_fds, 2, &received_count);
+    int rc = rbipc_ipc_recv_fds(socket_fd, received_fds, RBIPC_IPC_MAX_FDS_PER_MSG,
+                                &received_count);
     if (RBIPC_UNLIKELY(rc != RBIPC_OK || received_count == 0)) {
         return (rc != RBIPC_OK) ? rc : RBIPC_ERR_SYS;
     }

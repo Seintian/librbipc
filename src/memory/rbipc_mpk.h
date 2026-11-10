@@ -25,6 +25,14 @@ extern "C" {
 #endif
 
 /**
+ * @def RBIPC_PKRU_WRITE_BIT(pkey)
+ * @brief PKRU bit index that disables write access for the given protection key.
+ * @details The PKRU register packs two bits per key: bit (2*pkey) gates read
+ *          access and bit (2*pkey+1) gates write access.
+ */
+#define RBIPC_PKRU_WRITE_BIT(pkey) (1U << (2U * (uint32_t)(pkey) + 1U))
+
+/**
  * @brief Read the current 32-bit PKRU register value.
  * @return Current thread PKRU register contents.
  */

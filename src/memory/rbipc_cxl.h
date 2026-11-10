@@ -15,6 +15,7 @@
 
 #include "rbipc.h"
 #include "rbipc_attr.h"
+#include "rbipc_arch.h"
 
 #include <stdbool.h>
 #include <stddef.h>
@@ -23,6 +24,24 @@
 #ifdef __cplusplus
 extern "C" {
 #endif
+
+/**
+ * @def RBIPC_CXL_SYSFS_PATH
+ * @brief sysfs directory exposing the CXL bus topology.
+ */
+#define RBIPC_CXL_SYSFS_PATH "/sys/bus/cxl"
+
+/**
+ * @def RBIPC_CXL_DAX_DEV
+ * @brief Default CXL DAX character device node.
+ */
+#define RBIPC_CXL_DAX_DEV "/dev/dax0.0"
+
+/**
+ * @def RBIPC_CXL_DEV_MODE
+ * @brief Permission mode used when creating a CXL DAX-backed ring file.
+ */
+#define RBIPC_CXL_DEV_MODE 0660
 
 #if defined(__x86_64__) || defined(_M_X64)
 #include <cpuid.h>
@@ -77,9 +96,9 @@ static inline void rbipc_clwb(const void *addr) {
     unsigned int eax = 0, ebx = 0, ecx = 0, edx = 0;
     if (__get_cpuid_count(7, 0, &eax, &ebx, &ecx, &edx)) {
       /* CPUID.(EAX=07H, ECX=0H): EBX[24] = CLWB, EBX[23] = CLFLUSHOPT */
-      if ((ebx & (1U << 24U)) != 0U) {
+      if ((ebx & RBIPC_CPUID_EBX_CLWB_BIT) != 0U) {
         cap = 2; /* CLWB supported */
-      } else if ((ebx & (1U << 23U)) != 0U) {
+      } else if ((ebx & RBIPC_CPUID_EBX_CLFLUSHOPT_BIT) != 0U) {
         cap = 1; /* CLFLUSHOPT supported */
       } else {
         cap = 0; /* Fallback to CLFLUSH */

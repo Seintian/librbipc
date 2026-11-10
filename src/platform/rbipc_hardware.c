@@ -13,6 +13,8 @@
 
 #include "rbipc_hardware.h"
 #include "rbipc_arch.h"
+#include "rbipc_dma.h"
+#include "rbipc_sync.h"
 
 #include <errno.h>
 #include <stdio.h>
@@ -41,11 +43,11 @@ static uint64_t rbipc_detect_tsc_ticks_per_ns(void) {
     uint64_t crystal = ecx;
     if (crystal == 0) {
       /* Standard nominal crystal: 24 MHz on client Core, 25 MHz on server Skylake-X */
-      crystal = 24000000ULL;
+      crystal = RBIPC_TSC_CRYSTAL_24MHZ;
     }
     uint64_t tsc_hz = (crystal * (uint64_t)ebx) / (uint64_t)eax;
     if (tsc_hz > 0) {
-      return (tsc_hz + 500000000ULL) / 1000000000ULL;
+      return (tsc_hz + (RBIPC_NSEC_PER_SEC / 2)) / RBIPC_NSEC_PER_SEC;
     }
   }
 
@@ -56,7 +58,7 @@ static uint64_t rbipc_detect_tsc_ticks_per_ns(void) {
   }
 
   /* Method 3: Linux sysfs tsc_freq_khz */
-  FILE *f = fopen("/sys/devices/system/cpu/cpu0/tsc_freq_khz", "r");
+  FILE *f = fopen(RBIPC_TSC_FREQ_SYSFS, "r");
   if (f) {
     char buf[64];
     if (fgets(buf, sizeof(buf), f)) {
@@ -79,7 +81,7 @@ static uint64_t rbipc_detect_tsc_ticks_per_ns(void) {
   uint64_t tsc1 = rbipc_rdtsc();
   __asm__ __volatile__("lfence" ::: "memory");
 
-  for (volatile int i = 0; i < 2000; i++) {
+  for (volatile int i = 0; i < RBIPC_TSC_CALIBRATION_LOOPS; i++) {
     rbipc_cpu_pause();
   }
 
@@ -89,7 +91,7 @@ static uint64_t rbipc_detect_tsc_ticks_per_ns(void) {
   clock_gettime(CLOCK_MONOTONIC, &ts2);
 
   uint64_t elapsed_ns =
-      (uint64_t)(ts2.tv_sec - ts1.tv_sec) * 1000000000ULL +
+      (uint64_t)(ts2.tv_sec - ts1.tv_sec) * RBIPC_NSEC_PER_SEC +
       (uint64_t)(ts2.tv_nsec - ts1.tv_nsec);
   if (elapsed_ns > 0 && tsc2 > tsc1) {
     uint64_t computed = (tsc2 - tsc1) / elapsed_ns;
@@ -97,11 +99,11 @@ static uint64_t rbipc_detect_tsc_ticks_per_ns(void) {
   }
 
   /* Fallback: 3 GHz */
-  return 3;
+  return RBIPC_TSC_FALLBACK_GHZ;
 #elif defined(__aarch64__)
   uint64_t freq = rbipc_arm_cntfrq();
   if (freq > 0) {
-    return (freq + 500000000ULL) / 1000000000ULL;
+    return (freq + (RBIPC_NSEC_PER_SEC / 2)) / RBIPC_NSEC_PER_SEC;
   }
   return 1;
 #else
@@ -116,16 +118,20 @@ static uint64_t rbipc_detect_tsc_ticks_per_ns(void) {
  *          default.
  */
 static uint32_t rbipc_detect_spin_count(void) {
-  uint32_t spin = 48U;
+  uint32_t spin = RBIPC_SPIN_COUNT_DEFAULT;
 #if defined(__x86_64__) || defined(_M_X64)
   unsigned int eax = 0, ebx = 0, ecx = 0, edx = 0;
   unsigned int family = 0, model = 0;
   if (__get_cpuid(1, &eax, &ebx, &ecx, &edx)) {
     family = ((eax >> 8U) & 0x0FU) + ((eax >> 20U) & 0xFFU);
     model = ((eax >> 4U) & 0x0FU) | ((eax >> 12U) & 0xF0U);
-    if (family == 6 && (model == 0x4E || model == 0x5E || model == 0x8E ||
-                        model == 0x9E || model == 0x55)) {
-      spin = 16U;
+    if (family == 6 &&
+        (model == RBIPC_CPU_MODEL_SKYLAKE_MOBILE ||
+         model == RBIPC_CPU_MODEL_SKYLAKE_DESKTOP ||
+         model == RBIPC_CPU_MODEL_KABYLAKE_MOBILE ||
+         model == RBIPC_CPU_MODEL_KABYLAKE_DESKTOP ||
+         model == RBIPC_CPU_MODEL_SKYLAKE_X)) {
+      spin = RBIPC_SPIN_COUNT_SKYLAKE;
     }
   }
 #endif
@@ -140,12 +146,12 @@ static uint32_t rbipc_detect_spin_count(void) {
 static size_t rbipc_detect_stream_threshold(size_t l2, size_t l3) {
   size_t st = 0;
   if (l3 > 0) {
-    st = (l3 * 3) / 4;
+    st = (l3 * RBIPC_L3_FRACTION_NUM) / RBIPC_L3_FRACTION_DEN;
   } else if (l2 > 0) {
     st = l2;
   }
-  if (st < (256ULL * 1024ULL)) {
-    st = 256ULL * 1024ULL;
+  if (st < RBIPC_STREAM_THRESHOLD_FLOOR) {
+    st = RBIPC_STREAM_THRESHOLD_FLOOR;
   }
   return st;
 }
@@ -216,7 +222,7 @@ static void rbipc_hardware_profile_init(void) {
       rbipc_detect_stream_threshold(s_profile.l2_cache_size, s_profile.l3_cache_size);
 
   /* Intel DSA DMA offload threshold (16 KB break-even). */
-  s_profile.dma_offload_threshold = 16384U;
+  s_profile.dma_offload_threshold = RBIPC_DMA_OFFLOAD_THRESHOLD;
 
   /* Online processors via centralized cached accessor. */
   s_profile.online_cores = rbipc_online_cores();

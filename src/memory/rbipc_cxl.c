@@ -42,8 +42,8 @@ bool rbipc_cxl_available(void) {
 
   const char *env = getenv("RBIPC_CXL_DAX_PATH");
   const bool env_ok = env && env[0] != 0 && access(env, F_OK) == 0;
-  const bool sys_ok = access("/sys/bus/cxl", F_OK) == 0 ||
-                      access("/dev/dax0.0", F_OK) == 0;
+  const bool sys_ok = access(RBIPC_CXL_SYSFS_PATH, F_OK) == 0 ||
+                      access(RBIPC_CXL_DAX_DEV, F_OK) == 0;
   const int supported = (env_ok || sys_ok) ? 1 : 0;
 
   atomic_store_explicit(&cached, supported, memory_order_relaxed);
@@ -78,14 +78,14 @@ int rbipc_create_cxl(const char *dax_path, size_t capacity, size_t slot_size,
     const char *env = getenv("RBIPC_CXL_DAX_PATH");
     if (env && env[0] != 0) {
       path = env;
-    } else if (access("/dev/dax0.0", F_OK) == 0) {
-      path = "/dev/dax0.0";
+    } else if (access(RBIPC_CXL_DAX_DEV, F_OK) == 0) {
+      path = RBIPC_CXL_DAX_DEV;
     } else {
       return RBIPC_ERR_NOTSUP;
     }
   }
 
-  int fd = open(path, O_RDWR | O_CREAT, 0660);
+  int fd = open(path, O_RDWR | O_CREAT, RBIPC_CXL_DEV_MODE);
   if (fd < 0) {
     return RBIPC_ERR_SYS;
   }

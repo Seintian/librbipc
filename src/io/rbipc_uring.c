@@ -111,7 +111,7 @@ bool rbipc_uring_available(void) {
   }
 
   struct rbipc_io_uring_params p = {0};
-  long fd = syscall(SYS_io_uring_setup, 2, &p);
+  long fd = syscall(SYS_io_uring_setup, RBIPC_URING_DEFAULT_ENTRIES, &p);
   bool supported = (fd >= 0);
   if (supported) {
     close((int)fd);

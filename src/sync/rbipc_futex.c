@@ -33,9 +33,9 @@ void rbipc_ns_to_timespec(uint64_t ns, struct timespec * RBIPC_RESTRICT ts) {
     if (RBIPC_UNLIKELY(rbipc_is_null(ts))) {
         return;
     }
-    uint64_t sec = ns / 1000000000ULL;
+    uint64_t sec = ns / RBIPC_NSEC_PER_SEC;
     ts->tv_sec = (time_t)sec;
-    ts->tv_nsec = (long)(ns - (sec * 1000000000ULL));
+    ts->tv_nsec = (long)(ns - (sec * RBIPC_NSEC_PER_SEC));
 }
 
 /**
@@ -72,7 +72,7 @@ int rbipc_futex_wake(_Atomic uint32_t *uaddr, int count) {
 static inline const uint32_t *rbipc_futex_low32_addr(const _Atomic uint64_t *slot_seq) {
     const char *base = (const char *)slot_seq;
 #if defined(__BYTE_ORDER__) && (__BYTE_ORDER__ == __ORDER_BIG_ENDIAN__)
-    return (const uint32_t *)(base + 4U);
+    return (const uint32_t *)(base + RBIPC_U64_LOW32_OFFSET);
 #else
     return (const uint32_t *)base;
 #endif
@@ -312,8 +312,11 @@ int rbipc_futex_wake_op(_Atomic uint32_t *uaddr1, int val1,
   if (RBIPC_UNLIKELY(rbipc_is_null(uaddr1) || rbipc_is_null(uaddr2))) {
     return -EINVAL;
   }
-  uint32_t val3 = (((op & 0x0fU) << 28U) | ((cmp & 0x0fU) << 24U) |
-                   ((oparg & 0x0fffU) << 12U) | (cmparg & 0x0fffU));
+  uint32_t val3 =
+      (((op & RBIPC_FUTEX_OP_MASK) << RBIPC_FUTEX_OP_SHIFT) |
+       ((cmp & RBIPC_FUTEX_OP_MASK) << RBIPC_FUTEX_CMP_SHIFT) |
+       ((oparg & RBIPC_FUTEX_OPARG_MASK) << RBIPC_FUTEX_OPARG_SHIFT) |
+       (cmparg & RBIPC_FUTEX_OPARG_MASK));
   long ret = syscall(SYS_futex, (uint32_t *)uaddr1, FUTEX_WAKE_OP, val1, val2,
                      (uint32_t *)uaddr2, val3);
   if (ret < 0) {

@@ -25,6 +25,12 @@
 extern "C" {
 #endif
 
+/**
+ * @def RBIPC_URING_DEFAULT_ENTRIES
+ * @brief Default submission queue depth used when probing io_uring availability.
+ */
+#define RBIPC_URING_DEFAULT_ENTRIES 2U
+
 #ifdef __cplusplus
 }
 #endif

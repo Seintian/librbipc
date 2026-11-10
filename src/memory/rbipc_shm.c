@@ -242,7 +242,8 @@ bool rbipc_shm_hugetlb_available(void) {
  *          to the portable permission bits otherwise.
  */
 RBIPC_INLINE mode_t rbipc_shm_resolve_mode(mode_t mode) {
-  return (mode == 0) ? RBIPC_DEFAULT_SHM_MODE : (mode & (mode_t)07777U);
+  return (mode == 0) ? RBIPC_DEFAULT_SHM_MODE
+                     : (mode & (mode_t)RBIPC_SHM_PERM_MASK);
 }
 
 /**

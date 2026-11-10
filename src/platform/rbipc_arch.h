@@ -54,6 +54,96 @@ RBIPC_INLINE RBIPC_NODISCARD uint64_t rbipc_clock_monotonic_ns(void) {
 #define RBIPC_PAGE_SIZE_DEFAULT 4096U
 
 /**
+ * @def RBIPC_KB
+ * @brief Number of bytes in one kibibyte.
+ */
+#define RBIPC_KB 1024ULL
+
+/**
+ * @def RBIPC_PAGE_SIZE_16K
+ * @brief 16 KiB page size threshold (Android/Apple 16 KB base pages).
+ */
+#define RBIPC_PAGE_SIZE_16K 16384U
+
+/**
+ * @def RBIPC_PAGE_SIZE_64K
+ * @brief 64 KiB page size threshold (ARM/PowerPC 64 KB base pages).
+ */
+#define RBIPC_PAGE_SIZE_64K 65536U
+
+/**
+ * @def RBIPC_HUGE_PAGE_32MB
+ * @brief 32 MiB huge page size (16 KB base page systems).
+ */
+#define RBIPC_HUGE_PAGE_32MB (32ULL * 1024ULL * 1024ULL)
+
+/**
+ * @def RBIPC_HUGE_PAGE_512MB
+ * @brief 512 MiB huge page size (64 KB base page systems).
+ */
+#define RBIPC_HUGE_PAGE_512MB (512ULL * 1024ULL * 1024ULL)
+
+/**
+ * @def RBIPC_MEMINFO_HUGEPAGESIZE_PREFIX
+ * @brief /proc/meminfo key prefix for the huge page size line.
+ */
+#define RBIPC_MEMINFO_HUGEPAGESIZE_PREFIX "Hugepagesize:"
+
+/**
+ * @def RBIPC_MEMINFO_HUGEPAGESIZE_PREFIX_LEN
+ * @brief Byte length of RBIPC_MEMINFO_HUGEPAGESIZE_PREFIX.
+ */
+#define RBIPC_MEMINFO_HUGEPAGESIZE_PREFIX_LEN 13U
+
+/**
+ * @def RBIPC_CPUID_ECX_WAITPKG_BIT
+ * @brief CPUID leaf 7, ECX bit 5: Intel WAITPKG (UMONITOR/UMWAIT/TPAUSE).
+ */
+#define RBIPC_CPUID_ECX_WAITPKG_BIT (1U << 5U)
+
+/**
+ * @def RBIPC_CPUID_ECX_PKU_BIT
+ * @brief CPUID leaf 7, ECX bit 3: Protection Keys for User pages (PKU).
+ */
+#define RBIPC_CPUID_ECX_PKU_BIT (1U << 3U)
+
+/**
+ * @def RBIPC_CPUID_ECX_OSPKE_BIT
+ * @brief CPUID leaf 7, ECX bit 4: OS has enabled CR4.PKE (OSPKE).
+ */
+#define RBIPC_CPUID_ECX_OSPKE_BIT (1U << 4U)
+
+/**
+ * @def RBIPC_CPUID_ECX_MOVDIR64B_BIT
+ * @brief CPUID leaf 7, ECX bit 27: MOVDIR64B instruction.
+ */
+#define RBIPC_CPUID_ECX_MOVDIR64B_BIT (1U << 27U)
+
+/**
+ * @def RBIPC_CPUID_ECX_ENQCMD_BIT
+ * @brief CPUID leaf 7, ECX bit 29: ENQCMD/ENQCMDS instructions.
+ */
+#define RBIPC_CPUID_ECX_ENQCMD_BIT (1U << 29U)
+
+/**
+ * @def RBIPC_CPUID_EDX_UINTR_BIT
+ * @brief CPUID leaf 7, EDX bit 5: User Interrupts (UINTR).
+ */
+#define RBIPC_CPUID_EDX_UINTR_BIT (1U << 5U)
+
+/**
+ * @def RBIPC_CPUID_EBX_CLWB_BIT
+ * @brief CPUID leaf 7, EBX bit 24: CLWB (cache line write back).
+ */
+#define RBIPC_CPUID_EBX_CLWB_BIT (1U << 24U)
+
+/**
+ * @def RBIPC_CPUID_EBX_CLFLUSHOPT_BIT
+ * @brief CPUID leaf 7, EBX bit 23: CLFLUSHOPT instruction.
+ */
+#define RBIPC_CPUID_EBX_CLFLUSHOPT_BIT (1U << 23U)
+
+/**
  * @brief Query system virtual memory page size with atomic process-local caching.
  *
  * @details Queries sysconf(_SC_PAGESIZE) on first invocation and caches the result
@@ -96,7 +186,8 @@ RBIPC_INLINE RBIPC_NODISCARD size_t rbipc_huge_page_size(void) {
   if (fp) {
     char line[128];
     while (fgets(line, sizeof(line), fp)) {
-      if (strncmp(line, "Hugepagesize:", 13) == 0) {
+      if (strncmp(line, RBIPC_MEMINFO_HUGEPAGESIZE_PREFIX,
+                  RBIPC_MEMINFO_HUGEPAGESIZE_PREFIX_LEN) == 0) {
         /*
          * /proc/meminfo lines use the form "Hugepagesize:       2048 kB".
          *
@@ -110,9 +201,12 @@ RBIPC_INLINE RBIPC_NODISCARD size_t rbipc_huge_page_size(void) {
          */
         errno = 0;
         char *end = NULL;
-        unsigned long kb = strtoul(line + 13, &end, 10);
+        unsigned long kb =
+            strtoul(line + RBIPC_MEMINFO_HUGEPAGESIZE_PREFIX_LEN, &end, 10);
 
-        if (errno != ERANGE && end != (line + 13) && *end != '\0') {
+        if (errno != ERANGE &&
+            end != (line + RBIPC_MEMINFO_HUGEPAGESIZE_PREFIX_LEN) &&
+            *end != '\0') {
           /* Skip optional trailing whitespace before validating the unit. */
           char *unit = end;
           while (*unit == ' ' || *unit == '\t') {
@@ -122,7 +216,7 @@ RBIPC_INLINE RBIPC_NODISCARD size_t rbipc_huge_page_size(void) {
           if ((unit[0] == 'k' || unit[0] == 'K') && unit[1] == 'B' &&
               unit[2] == '\0' && kb > 0UL &&
               kb <= (SIZE_MAX >> 10UL)) {
-            hps = (size_t)kb * 1024ULL;
+            hps = (size_t)kb * RBIPC_KB;
             break;
           }
         }
@@ -132,12 +226,12 @@ RBIPC_INLINE RBIPC_NODISCARD size_t rbipc_huge_page_size(void) {
   }
   if (hps == 0) {
     size_t base_ps = rbipc_page_size();
-    if (base_ps >= 65536U) {
-      hps = 512ULL * 1024ULL * 1024ULL; /* 512 MB for 64 KB ARM/PowerPC */
-    } else if (base_ps >= 16384U) {
-      hps = 32ULL * 1024ULL * 1024ULL;  /* 32 MB for 16 KB Android/Apple */
+    if (base_ps >= RBIPC_PAGE_SIZE_64K) {
+      hps = RBIPC_HUGE_PAGE_512MB; /* 512 MB for 64 KB ARM/PowerPC */
+    } else if (base_ps >= RBIPC_PAGE_SIZE_16K) {
+      hps = RBIPC_HUGE_PAGE_32MB;  /* 32 MB for 16 KB Android/Apple */
     } else {
-      hps = 2ULL * 1024ULL * 1024ULL;   /* 2 MB standard x86/ARM */
+      hps = RBIPC_HUGE_PAGE_2MB;   /* 2 MB standard x86/ARM */
     }
   }
   atomic_store_explicit(&s_huge_page_size, hps, memory_order_release);
@@ -245,7 +339,7 @@ RBIPC_INLINE RBIPC_NODISCARD bool rbipc_cpu_has_waitpkg(void) {
   unsigned int eax = 0, ebx = 0, ecx = 0, edx = 0;
   int res = 0;
   if (__get_cpuid_count(7, 0, &eax, &ebx, &ecx, &edx)) {
-    res = ((ecx & (1U << 5U)) != 0U) ? 1 : 0;
+    res = ((ecx & RBIPC_CPUID_ECX_WAITPKG_BIT) != 0U) ? 1 : 0;
   }
   atomic_store_explicit(&cached, res, memory_order_release);
   return res == 1;

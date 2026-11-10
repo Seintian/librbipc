@@ -43,6 +43,36 @@ extern "C" {
 #define RBIPC_DMA_OFFLOAD_THRESHOLD 16384U
 
 /**
+ * @def RBIPC_DSA_DEV_DIR
+ * @brief Directory where the accel-config driver exposes DSA work-queue nodes.
+ */
+#define RBIPC_DSA_DEV_DIR "/dev/dsa"
+
+/**
+ * @def RBIPC_DSA_WQ_PATH
+ * @brief First DSA work-queue character device node.
+ */
+#define RBIPC_DSA_WQ_PATH "/dev/dsa/wq0.0"
+
+/**
+ * @def RBIPC_DSA_PORTAL_SIZE
+ * @brief Size in bytes of the DSA work-queue MMIO submission portal (one page).
+ */
+#define RBIPC_DSA_PORTAL_SIZE 4096U
+
+/**
+ * @def RBIPC_DSA_OP_MEMMOVE
+ * @brief DSA descriptor opcode for a memory move operation.
+ */
+#define RBIPC_DSA_OP_MEMMOVE 0x03U
+
+/**
+ * @def RBIPC_DSA_FLAG_RCR
+ * @brief DSA descriptor flag requesting a completion record write (IDXD_OP_FLAG_RCR).
+ */
+#define RBIPC_DSA_FLAG_RCR 0x0008U
+
+/**
  * @def RBIPC_DMA_COMPLETION_STATUS_SUCCESS
  * @brief DSA completion record status value indicating a successful operation.
  */

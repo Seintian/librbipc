@@ -23,6 +23,12 @@
 #include <stdint.h>
 
 /**
+ * @def RBIPC_SHM_PERM_MASK
+ * @brief Mask of the portable permission bits (rwxrwxrwx) in a mode_t value.
+ */
+#define RBIPC_SHM_PERM_MASK 07777U
+
+/**
  * @struct rbipc_layout_t
  * @brief Precomputed geometric memory layout offsets and partition boundaries.
  */

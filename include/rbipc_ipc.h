@@ -28,6 +28,18 @@ extern "C" {
 #define RBIPC_IPC_MAX_FDS 253U /**< Maximum fds transmissible via SCM_RIGHTS (Linux SCM_MAX_FD). */
 
 /**
+ * @def RBIPC_IPC_STACK_FDS
+ * @brief Maximum number of fds handled on the stack before heap allocation is used.
+ */
+#define RBIPC_IPC_STACK_FDS 8U
+
+/**
+ * @def RBIPC_IPC_MAX_FDS_PER_MSG
+ * @brief Maximum number of fds transmitted per ring descriptor message (shm + eventfd).
+ */
+#define RBIPC_IPC_MAX_FDS_PER_MSG 2U
+
+/**
  * @brief Transmit a raw file descriptor across a UNIX domain stream or datagram
  * socket.
  *
